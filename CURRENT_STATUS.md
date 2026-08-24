@@ -102,6 +102,49 @@ outage survivable.
 Detailed acceptance evidence and the reclassified P1 list are in
 `PRODUCTION_READINESS_REVIEW.md` under **PM review v11**.
 
+## PILOT-G1 is closed - and my previous diagnosis was wrong
+
+Airbyte **1.8.5 on Helm chart V2 2.0.17**, auth enabled, external Postgres,
+Calico enforcing, **workload-launcher Running**. Evidence:
+[evidence/rc1-topology.md](evidence/rc1-topology.md).
+
+```
+chart      : airbyte-2.0.17  (app 1.8.5)  deployed
+auth       : ENABLED -- Config API answers 401 without credentials
+database   : external, outside the cluster, 66 tables
+in-cluster postgres : none
+workload-launcher   : 1/1 Running
+```
+
+**I reported this as blocked upstream. It was not - it was my own workaround.**
+The bootloader failed on a missing secret key, I installed with `--no-hooks` to
+get past it, and the bootloader *is* the migration. Then `airbyte-auth-secrets`
+did not exist, so I hand-wrote it with invented credentials - and every
+subsequent `401 at DataplaneApi.initializeDataplane` was the server correctly
+rejecting values it had never issued. The server creates that secret itself,
+with all six credential keys; I had been overwriting it and blaming Airbyte.
+
+What unlocked it is a values path absent from the chart's documented values:
+`global.auth.instanceAdmin.password`. I found it by rendering the template with
+`--set` on each candidate and checking which key in the secret took a value.
+
+Six chart-V2 traps are now written into
+[values-certification-v2.yaml](deploy/kubernetes/airbyte/values-certification-v2.yaml)
+so the next person does not repeat the afternoon.
+
+The lesson worth keeping: when a workaround produces new symptoms, suspect the
+workaround before the upstream.
+
+### Gates
+
+| Gate | |
+|---|---|
+| **G1** | **Closed** |
+| G2 | Evidence v2, binding, internal registry with digests. Remaining: clean Linux runner with public upstream blocked |
+| G3 | Unblocked by G1; the paired restore drill has not been run |
+| G4 | Timeout/cancel and `status` exit code done. Golden path, worker restart and alerting on this topology have not been run |
+| G5 | Legal |
+
 ## PM v12 - three of four technical P0s closed
 
 | Finding | State |
