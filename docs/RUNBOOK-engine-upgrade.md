@@ -85,6 +85,46 @@ one that admits a gap, because nobody re-checks a `true`.
 
 ---
 
+## Airbyte with auth enabled: the one manual step
+
+Chart V2 2.0.17 (Airbyte app 1.8.5) with `auth.enabled: true` was stood up and
+is the target topology — see `deploy/kubernetes/airbyte/values-certification-v2.yaml`,
+which carries six traps that are not in the chart's documented values.
+
+**One step cannot be automated from the deployment side**, and pretending
+otherwise is how a pilot stalls on its first morning.
+
+AppBI authenticates to the Config API with an Airbyte **Application**'s client
+credentials. Applications are created by a signed-in operator; nothing in the
+chart, the Helm values, or the Kubernetes secrets creates one:
+
+- `/api/v1/applications/token` rejects the instance admin's email and password
+- it also rejects the `instance-admin-client-id` / `-client-secret` the server
+  writes into `airbyte-auth-secrets` — those are for internal service-to-service
+  use, not for this endpoint
+- the `application` table stays empty until somebody creates one
+
+So the sequence for a new Airbyte deployment is:
+
+```bash
+# 1. Complete first-time setup (once, unauthenticated while incomplete).
+kubectl -n airbyte exec deploy/airbyte-server --   curl -fsS -X POST http://localhost:8001/api/v1/instance_configuration/setup   -H 'Content-Type: application/json'   -d '{"email":"<ops>","anonymousDataCollection":false,"initialSetupComplete":true,"organizationName":"<org>"}'
+
+# 2. Sign in to the Airbyte UI as the instance admin and create an Application.
+#    The server serves the UI itself from 1.8 onward -- there is no separate
+#    webapp image, and `airbyte/webapp:1.8.5` does not exist on Docker Hub.
+#    Reach it over a port-forward; do NOT expose it publicly.
+kubectl -n airbyte port-forward deploy/airbyte-server 8001:8001
+
+# 3. Put the Application's credentials where AppBI reads them.
+kubectl -n appbi create secret generic appbi-secrets   --from-literal=AIRBYTE_CLIENT_ID='<application client id>'   --from-literal=AIRBYTE_CLIENT_SECRET='<application client secret>'   ...
+```
+
+This is the same shape as issuing an API key in any managed service: a one-time
+human action, recorded here so it is a scheduled step rather than a surprise.
+`production.py doctor` fails the deployment if the credentials are absent or if
+the engine reports `auth: none`, so a deployment cannot quietly skip it.
+
 ## Kubernetes — exercised, and what it cost
 
 Airbyte **1.8.5** was brought up on a kind cluster (Kubernetes 1.30.4) via the

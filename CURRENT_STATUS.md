@@ -142,7 +142,7 @@ workaround before the upstream.
 | **G1** | **Closed** |
 | G2 | Evidence v2, binding, internal registry with digests. Remaining: clean Linux runner with public upstream blocked |
 | G3 | Unblocked by G1; the paired restore drill has not been run |
-| G4 | Timeout/cancel and `status` exit code done. Golden path, worker restart and alerting on this topology have not been run |
+| G4 | Timeout/cancel and `status` exit code done. The golden path on this topology needs one manual step first: an Airbyte **Application** must be created by a signed-in operator, because nothing in the chart, values or secrets creates one and the instance-admin credentials are rejected by the token endpoint. Recorded in [RUNBOOK-engine-upgrade.md](docs/RUNBOOK-engine-upgrade.md); `doctor` fails a deployment that skips it |
 | G5 | Legal |
 
 ## PM v12 - three of four technical P0s closed
