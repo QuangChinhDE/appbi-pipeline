@@ -3814,3 +3814,147 @@ cho khách hàng, sau đó tắt và lưu credential vào secret manager. Cách 
 Không cần quay lại săn lỗi nhỏ tổng quát. Sáu bước trên là đường trực tiếp tới
 pilot production; mỗi finding đều có khả năng làm deployment không khởi động,
 không chạy được connector, hoặc không thể tái lập trên máy khác.
+
+---
+
+# Dev — PM v12: ba P0 đóng, một P0 chặn ở upstream (2026-08-24)
+
+## P0-REL-012 — bearer auth end-to-end: ĐÓNG
+
+Trước: bearer chỉ có trong adapter. Config schema, `_secret_env`,
+`verify_engine`, `doctor`, `readiness.py` và cả hai file env example vẫn chỉ
+biết Basic — nghĩa là production **không truyền được** `AIRBYTE_CLIENT_ID/SECRET`
+vào Pod, nên phần adapter mới hoàn toàn không dùng được.
+
+Đã nối đủ đường:
+
+| Điểm | Trạng thái |
+|---|---|
+| `readiness.py` | validate cả hai scheme; production **không có credential nào** → refuse; đặt **cả hai** scheme → refuse (adapter ưu tiên client credentials, cặp Basic thừa sẽ đánh lừa người đọc config sau này); nửa cặp → refuse |
+| `production.yaml.example` | `mode: client_credentials` + `client_id_ref`/`client_secret_ref` |
+| `.env.production.example` | `AIRBYTE_CLIENT_ID` / `AIRBYTE_CLIENT_SECRET`, ghi rõ Basic chỉ dùng cho 0.59.x |
+| `_secret_env` | bind thành `secretKeyRef` cho Pod |
+| `validate()` | `engine.auth` bắt buộc; mode phải hợp lệ; ref phải là secret reference |
+| `verify_engine` | lấy bearer từ `/api/v1/applications/token` rồi mới probe — trước đó probe không auth nên đọc 401 thành "sai version/không reachable" |
+
+Rendered-manifest test chứng minh credential tới đúng Pod:
+
+```text
+AIRBYTE_CLIENT_ID        <- appbi-secrets/AIRBYTE_CLIENT_ID
+AIRBYTE_CLIENT_SECRET    <- appbi-secrets/AIRBYTE_CLIENT_SECRET
+```
+
+## P1-AUTH-001 — test protocol thật: ĐÓNG
+
+`backend/tests/test_engine_auth.py`, 6 test chạy trọn luồng qua
+`httpx.MockTransport` — không phải kiểm tra class/tuple/source text nữa:
+
+- token POST đúng route, đúng body JSON `client_id`/`client_secret`
+- bearer header đúng, và token **được tái sử dụng** (1 fetch cho 2 call)
+- 401 → refresh **đúng một lần**, rồi để 401 đứng nguyên
+- token hết hạn rồi hồi phục → retry thành công
+- credential sai → message chỉ đúng nguyên nhân ("Application", không phải password)
+- 200 nhưng thiếu `access_token` → error, không gửi `Bearer None`
+
+## P0-CI-001 — CI certify đúng target: ĐÓNG
+
+```diff
+- AIRBYTE_CHART_VERSION: "1.8.5"          # chart V1, deprecated
+- helm repo add airbyte .../helm-charts   # V1
+- values-certification.yaml               # auth TẮT
++ AIRBYTE_CHART_VERSION: "2.0.17"
++ AIRBYTE_APP_VERSION:   "1.8.5"
++ helm repo add airbyte .../charts        # V2
++ values-certification-v2.yaml            # auth BẬT
+```
+
+`values-certification-v2.yaml` ghi lại bốn cái bẫy đã mất một buổi rehearsal
+để học, để lần sau không ai mất lại.
+
+## P0-REL-013 — Git provenance: ĐÓNG
+
+```text
+branch : rc1-production-rehearsal
+commit : 0ac5740348e238c2a6e02e63a98af5d68e9b18c0
+dirty  : 0
+```
+
+`.env` và secret **không** vào commit; `.gitignore` mở rộng cho mọi
+`evidence-*.json`, `mirror-lock.json` và `.serena/`. Image được build lại từ
+clean tree và product tự khai đúng commit đó:
+
+```text
+/admin/compatibility build.sha = 0ac5740348e238c2a6e02e63a98af5d68e9b18c0
+git rev-parse HEAD             = 0ac5740348e238c2a6e02e63a98af5d68e9b18c0
+```
+
+Lỗi test PM gặp (`239 pass, 1 fail`) là do assertion của tôi đọc `Settings()`
+— tức là đọc luôn `.env` của máy đang chạy. Đã sửa để đọc **default của field**.
+Giờ pass với mọi `.env`.
+
+Repo mới `git init` tại chỗ, chưa có remote — cần trỏ về đúng remote của tổ
+chức trước khi push.
+
+## P0-PLAT-001 — workload-launcher: CHƯA ĐÓNG, và lý do nằm ở upstream
+
+Đã đi đúng hướng PM chốt (Secret + chart values, **không** seed DB Airbyte):
+
+1. Tìm ra đúng values chart hỗ trợ:
+   `global.controlPlane.bootstrap.dataPlane.{secretName,clientIdSecretKey,clientSecretSecretKey}`
+   và `global.auth.dataPlane.{clientIdSecretKey,clientSecretSecretKey}`.
+2. Tạo Secret, upgrade release. Launcher **đã nhận** biến:
+   `DATAPLANE_CLIENT_ID <- airbyte-auth-secrets/dataplane-client-id`.
+3. Restart server để nó đăng ký credential.
+
+Kết quả:
+
+```text
+dataplane                     = 1 row   (group đã tạo)
+dataplane_client_credentials  = 0 rows  (credential KHÔNG được đăng ký)
+launcher                      = CrashLoopBackOff
+  Caused by: ClientException: Client error : 401 Unauthorized
+    at DataplaneApi.initializeDataplane
+```
+
+Đường bootstrap qua webapp mà PM cho phép **cũng đóng**:
+
+```text
+docker pull airbyte/webapp:1.8.5
+  -> not found
+```
+
+Chart 2.0.17 khi bật `webapp.enabled: true` tham chiếu một image không được
+publish. Nên với **community edition + auth bật + app 1.8.5**, hiện không có
+đường nào trong tầm dev để đăng ký dataplane credential mà không ghi thẳng vào
+DB của Airbyte — thứ PM đã cấm, và tôi đồng ý là nên cấm.
+
+**Không có launcher thì không có connector pod, nên golden path trên topology
+production vẫn chưa chạy.** Đây là thứ cần quyết định ở mức vận hành/upstream,
+không phải code:
+
+- hỏi Airbyte về đường đăng ký dataplane cho community edition có auth; hoặc
+- chọn app version có `airbyte/webapp` được publish để dùng đúng đường bootstrap
+  PM đã cho phép, rồi certify lại version đó.
+
+Tôi **không** đề nghị tắt auth để có một kết quả sync xanh.
+
+## Verification
+
+```text
+pytest                              246 passed, 18 skipped   (trước: 240)
+RUN_CORE_LIVE=1 live Postgres       6 passed
+engine auth protocol (MockTransport) 6 passed
+pip-audit / npm audit               clean
+git                                 clean tree, commit 0ac5740
+product build.sha == git HEAD       khớp
+```
+
+## Trạng thái năm gate
+
+| Gate | |
+|---|---|
+| G1 | topology đã dựng (chart V2 2.0.17 / app 1.8.5 / auth enforced / 2 external Postgres / Calico). **Chặn** ở dataplane credential |
+| G2 | evidence v2 + binding + registry nội bộ có digest. Còn clean runner với upstream bị chặn |
+| G3 | chặn sau G1 |
+| G4 | timeout/cancel + `status` exit code xong. Phần trên Airbyte thật chặn sau G1 |
+| G5 | legal |

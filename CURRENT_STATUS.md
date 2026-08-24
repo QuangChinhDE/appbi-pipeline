@@ -102,6 +102,47 @@ outage survivable.
 Detailed acceptance evidence and the reclassified P1 list are in
 `PRODUCTION_READINESS_REVIEW.md` under **PM review v11**.
 
+## PM v12 - three of four technical P0s closed
+
+| Finding | State |
+|---|---|
+| **P0-REL-012** bearer auth on the deploy path | **Closed.** Readiness validates both schemes and refuses production with no credentials or with both; the config schema, `.env.production.example`, `_secret_env`, `validate()`, `verify_engine` and `doctor` all speak client credentials. A render test proves `AIRBYTE_CLIENT_ID`/`AIRBYTE_CLIENT_SECRET` reach the Pod |
+| **P1-AUTH-001** real protocol tests | **Closed.** Six `MockTransport` tests execute the flow: token POST shape, bearer header, token reuse, one refresh on 401, retry cap, unregistered-credential message, missing-token response |
+| **P0-CI-001** CI certifies the wrong target | **Closed.** Chart `2.0.17` + app `1.8.5` from the V2 repo, with `values-certification-v2.yaml` and auth enabled |
+| **P0-REL-013** Git provenance | **Closed.** Branch `rc1-production-rehearsal`, commit `0ac5740`, clean tree, no `.env` or secret committed. Image rebuilt from that commit; `/admin/compatibility` reports the same SHA as `git rev-parse HEAD`. The repo has no remote yet — point it at the organisation's before pushing |
+| **P0-PLAT-001** workload-launcher | **Not closed, and blocked upstream.** See below |
+
+The failing test PM saw was mine: the assertion read `Settings()`, which reads
+the machine's `.env`. It now reads the field default and passes with any `.env`.
+
+### Why the launcher is still down
+
+Followed the path PM chose — Kubernetes Secret plus supported chart values, no
+writing to Airbyte's own tables:
+
+```
+dataplane                     = 1 row    (group created)
+dataplane_client_credentials  = 0 rows   (credentials never registered)
+launcher: CrashLoopBackOff -> 401 at DataplaneApi.initializeDataplane
+```
+
+The webapp bootstrap route PM allowed as a fallback is also closed:
+`docker pull airbyte/webapp:1.8.5` → **not found**. Chart 2.0.17 references an
+image that is not published, so enabling the webapp cannot work either.
+
+For community edition + auth enabled + app 1.8.5 there is currently no path
+within dev's control that does not write directly to Airbyte's schema, which is
+exactly what the decision forbids — and I agree it should.
+
+This needs an operational call: ask Airbyte how a dataplane registers under
+community auth, or pick an app version whose `airbyte/webapp` image exists and
+recertify that version. **No launcher means no connector pods, so the golden
+path on the production topology still has not run.** I did not turn auth off to
+get a green sync.
+
+Verification: 246 tests, 6 live Postgres, 6 auth-protocol, both audits clean,
+clean tree, product build SHA matches HEAD.
+
 ## RC1 target-topology rehearsal - two P0s only this could find
 
 AppBI and Airbyte were stood up on the topology PILOT-G1 asks for: Helm **chart
