@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: appbi
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # /metrics carries no authentication because it is meant to be scraped on
+    # the cluster network. It must never be routed from here — the rules below
+    # expose /api and the UI only, and there is a test asserting the Compose
+    # edge does the same.
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location /metrics { deny all; return 404; }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: appbi.example.internal
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: {name: appbi-api, port: {number: 8000}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: appbi-frontend, port: {number: 3000}}
+  tls:
+    - hosts: [appbi.example.internal]
+      secretName: appbi-tls

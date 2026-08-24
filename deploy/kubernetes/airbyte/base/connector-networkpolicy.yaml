@@ -1,0 +1,107 @@
+# Egress policy for CONNECTOR pods, which run in Airbyte's namespace.
+#
+# This directory is deliberately separate from base/ and overlays/. Everything
+# there is the product's own workload and is applied with the product. This is
+# not: it constrains pods launched by Airbyte's workload launcher, in a
+# namespace the product does not own and does not deploy. Whoever operates the
+# Airbyte release applies this, and applying it with the wrong namespace does
+# nothing at all -- a NetworkPolicy silently matches no pods.
+#
+#   kubectl -n <airbyte-namespace> apply -f connector-networkpolicy.yaml
+#
+# Requires a CNI that ENFORCES NetworkPolicy. kind's default CNI accepts these
+# objects and ignores them, which is worse than having no policy: it looks
+# applied. Verified under Calico -- see docs/RUNBOOK-egress.md.
+---
+# The connector pods themselves. `airbyte=job-pod` is what the workload
+# launcher labels them with; the control-plane pods (server, worker,
+# workload-launcher, temporal) do NOT carry it and are deliberately untouched.
+# Constraining those would break the engine, not the connectors.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airbyte-connector-egress
+  labels:
+    app.kubernetes.io/part-of: appbi-integration
+    app.kubernetes.io/component: connector-egress
+spec:
+  podSelector:
+    matchLabels:
+      airbyte: job-pod
+  policyTypes: [Egress]
+  egress:
+    # 1. DNS. Without this nothing resolves and every failure below looks like
+    #    the destination being down. Selector is on kube-system's own labels --
+    #    never let a label transformer rewrite this one.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+
+    # 2. Airbyte's own control plane, in this namespace. A connector pod that
+    #    cannot reach the workload API never reports its result: the job does
+    #    not fail, it hangs until the attempt times out. This is the rule
+    #    people omit and then spend an afternoon on.
+    - to:
+        - podSelector: {}
+      ports:
+        - {protocol: TCP, port: 8001}   # server, Config API
+        - {protocol: TCP, port: 8007}   # workload-api-server
+        - {protocol: TCP, port: 9000}   # object store (MinIO), for logs+state
+        - {protocol: TCP, port: 7233}   # temporal
+
+    # 3. The data plane: the databases and warehouses connectors actually read
+    #    and write. REPLACE THIS CIDR. The value below is deliberately not a
+    #    real subnet, so an unedited copy fails closed rather than opening
+    #    egress somewhere unintended.
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/24
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 3306}
+        - {protocol: TCP, port: 1433}
+
+    # 4. Outbound HTTPS for SaaS connectors, with the ranges that must never be
+    #    reachable carved out. 169.254.169.254 is the cloud metadata endpoint
+    #    and the first thing an SSRF through a connector goes for; the RFC1918
+    #    exclusions stop a connector reaching the rest of the private network
+    #    just because it was allowed to reach the internet.
+    #
+    #    A deployment whose sources are all internal should delete this rule
+    #    entirely rather than narrow it. `ipBlock` cannot express hostnames --
+    #    per-host allowlisting needs an egress gateway (Istio, Cilium).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16   # link-local, incl. cloud metadata
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 80}
+---
+# Nothing may connect *to* a connector pod. Connectors are outbound-only by
+# nature: the launcher starts them and reads their output. Anything dialling in
+# is either a mistake or an attack.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airbyte-connector-no-ingress
+  labels:
+    app.kubernetes.io/part-of: appbi-integration
+    app.kubernetes.io/component: connector-egress
+spec:
+  podSelector:
+    matchLabels:
+      airbyte: job-pod
+  policyTypes: [Ingress]
+  ingress: []

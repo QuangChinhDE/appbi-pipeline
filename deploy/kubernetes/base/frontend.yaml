@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: appbi-frontend
+spec:
+  selector: {app.kubernetes.io/name: appbi-frontend}
+  ports:
+    - {name: http, port: 3000, targetPort: 3000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appbi-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app.kubernetes.io/name: appbi-frontend}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: appbi-frontend}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: frontend
+          image: appbi-pipeline-frontend
+          # Explicit, not inherited. Kubernetes picks the default from the
+          # tag name — `Always` for `:latest`, `IfNotPresent` otherwise — so
+          # the behaviour silently changes with how the image is tagged.
+          # Version tags here are immutable; re-pushing one is the bug, not
+          # something to defend against with a pull on every start.
+          imagePullPolicy: IfNotPresent
+          env:
+            # No API URL of any kind, deliberately.
+            #
+            # The client calls `/api/v1` on its own origin (hard-coded in
+            # `frontend/src/lib/api.ts`), and the Ingress routes `/api` to the
+            # API Service before it ever reaches this pod. Same origin is what
+            # keeps the session cookie working and keeps the engine
+            # unreachable from a browser.
+            #
+            # `API_INTERNAL_URL` exists for the Next.js rewrite used in Compose,
+            # where there is no ingress doing the split. It is not set here
+            # because the rewrite is never exercised — and an env var that is
+            # read by nothing is worse than none, since the next person assumes
+            # changing it does something. A `NEXT_PUBLIC_API_BASE` was set here
+            # and read nowhere at all.
+            - {name: NODE_ENV, value: production}
+          ports:
+            - {name: http, containerPort: 3000}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            # Next.js writes its cache here; the root filesystem is read-only.
+            - {name: cache, mountPath: /app/.next/cache}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: appbi-frontend
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: appbi-frontend}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+      ports:
+        - {protocol: TCP, port: 3000}
+  egress:
+    # DNS only. Server-side rendering here calls nothing: the browser talks to
+    # /api through the ingress, so the frontend pod needs no route to the API.
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}

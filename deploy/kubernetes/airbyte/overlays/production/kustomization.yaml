@@ -1,0 +1,19 @@
+# The environment's real values for Airbyte's connector policy.
+#
+# Copy this directory per environment. The release gate renders it and refuses
+# to record a certification while a repository placeholder survives — the same
+# rule the product overlay is held to, because a connector egress rule that
+# still allows 10.0.0.0/24 is a bigger problem than a product one.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: airbyte
+
+resources:
+  - ../../base
+
+patches:
+  - path: data-plane-cidr.yaml
+    target:
+      kind: NetworkPolicy
+      name: airbyte-connector-egress

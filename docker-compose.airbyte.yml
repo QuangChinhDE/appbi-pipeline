@@ -1,0 +1,270 @@
+# Airbyte self-managed, pinned — the production engine.
+#
+# This is what `ENGINE_TYPE=AIRBYTE_API` talks to. Airbyte owns connector
+# execution: job orchestration, retries, state, logs, worker isolation and
+# compatibility with its own connector ecosystem. The product owns UX, policy,
+# permissions, audit, scheduling and the domain model, and reaches Airbyte only
+# through `IntegrationEngineAdapter`.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.airbyte.yml up -d
+#
+# Two rules this file exists to enforce:
+#
+#   * Every image is pinned. `AIRBYTE_VERSION` is one variable so the platform
+#     moves as a set; a mixed-version Airbyte is not a supported configuration.
+#   * The Airbyte API is on the internal network only. The browser never talks
+#     to it (guardrail 1), and nothing outside the adapter does either.
+#
+# Airbyte keeps its own metadata database. The product must never read it
+# (guardrail 2), so it gets a separate database on the same server rather than
+# sharing tables.
+
+x-airbyte-env: &airbyte-env
+  AIRBYTE_VERSION: ${AIRBYTE_VERSION:-0.59.1}
+  AIRBYTE_EDITION: community
+  DATABASE_HOST: postgres
+  DATABASE_PORT: "5432"
+  DATABASE_DB: airbyte
+  DATABASE_USER: ${POSTGRES_USER:-appbi}
+  DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-appbi}
+  DATABASE_URL: jdbc:postgresql://postgres:5432/airbyte
+  CONFIG_DATABASE_USER: ${POSTGRES_USER:-appbi}
+  CONFIG_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-appbi}
+  CONFIG_DATABASE_URL: jdbc:postgresql://postgres:5432/airbyte
+  # Airbyte refuses to boot if these do not match the version it ships with.
+  CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION: "0.40.23.002"
+  JOBS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION: "0.29.15.001"
+  TEMPORAL_HOST: airbyte-temporal:7233
+  TRACKING_STRATEGY: logging
+  # Connectors run as sibling containers of the Airbyte worker, on the network
+  # that has no access to this product's API or Redis.
+  WORKSPACE_ROOT: /tmp/workspace
+  LOCAL_ROOT: /tmp/airbyte_local
+  # These name the volume as the *host daemon* knows it, because the worker
+  # passes them to `docker run` for the connector container. Compose prefixes
+  # volumes with the project name, so the bare names create empty volumes
+  # instead — the connector then starts and dies on a missing
+  # `source_config.json`, which reads like a connector bug.
+  WORKSPACE_DOCKER_MOUNT: ${COMPOSE_PROJECT_NAME:-appbi-pipeline}_airbyte_workspace
+  LOCAL_DOCKER_MOUNT: ${COMPOSE_PROJECT_NAME:-appbi-pipeline}_airbyte_local
+  HACK_LOCAL_ROOT_PARENT: /tmp
+  JOB_MAIN_CONTAINER_CPU_REQUEST: ""
+  JOB_MAIN_CONTAINER_MEMORY_REQUEST: ""
+  DOCKER_NETWORK: appbi-pipeline_connectors
+  # Log storage. MinIO stands in for S3 so a local staging deployment needs no
+  # cloud account; production points these at real object storage.
+  STORAGE_TYPE: MINIO
+  STORAGE_BUCKET_LOG: airbyte-storage
+  STORAGE_BUCKET_STATE: airbyte-storage
+  STORAGE_BUCKET_WORKLOAD_OUTPUT: airbyte-storage
+  STORAGE_BUCKET_ACTIVITY_PAYLOAD: airbyte-storage
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
+  MINIO_ENDPOINT: http://airbyte-minio:9000
+  S3_PATH_STYLE_ACCESS: "true"
+  MICRONAUT_ENVIRONMENTS: control-plane
+  # Version note — why 0.59.1 and not something current.
+  #
+  # Airbyte's execution plane became Kubernetes-only, and it happened in stages.
+  # Verified against the real images, not from documentation:
+  #
+  #   1.8.5   bootloader needs a k8s namespace for auth secrets
+  #           (AB_AUTH_SECRET_CREATION_ENABLED turns that off) and then again to
+  #           register a dataplane — no flag for the second one.
+  #   0.64.7  bootloader, server, temporal and the Config API all run fine in
+  #           Compose, but every connector job is routed through the workload
+  #           launcher, which resolves `kubernetes.default.svc` and has no
+  #           Docker mode. Grepping the jars finds no flag to opt out.
+  #   0.59.1  predates the workload launcher entirely: zero workload jars, and
+  #           the worker starts connector containers on the Docker daemon.
+  #
+  # So this Compose stack pins 0.59.1. It exists to certify the AIRBYTE_API
+  # adapter against a real Airbyte — the Config API surface it speaks
+  # (`/api/v1/sources/create`, `/scheduler/.../check_connection`,
+  # `/connections/sync`, `/jobs/get`) is unchanged in later versions, so a bug
+  # found here is a real bug.
+  #
+  # A production deployment should run a current Airbyte on Kubernetes via
+  # abctl or the Helm chart. That is an infrastructure decision, and this file
+  # is not a substitute for it.
+  WORKER_ENVIRONMENT: docker
+  CONFIG_ROOT: /data
+  JOB_ERROR_REPORTING_STRATEGY: logging
+  METRIC_CLIENT: ""
+  WEBAPP_URL: http://localhost:8080
+  # The worker calls the server back for job configuration. Without this it
+  # fails dependency injection before it can register with Temporal, which
+  # surfaces as a Micronaut error rather than a missing setting.
+  # host:port, not a URL. This version parses the part after the colon as the
+  # port, so a scheme makes it read "//airbyte-server" as a number and the
+  # worker dies during dependency injection before it registers with Temporal.
+  INTERNAL_API_HOST: airbyte-server:8001
+  CONTAINER_ORCHESTRATOR_IMAGE: airbyte/container-orchestrator:${AIRBYTE_VERSION:-0.59.1}
+
+services:
+  # Runs Airbyte's own schema migrations, then exits. Everything else waits for
+  # it: starting a server against an unmigrated database produces failures that
+  # look like bugs.
+  airbyte-bootloader:
+    image: airbyte/bootloader:${AIRBYTE_VERSION:-0.59.1}
+    container_name: appbi-airbyte-bootloader
+    environment: *airbyte-env
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [appbi]
+    restart: "no"
+
+  # Airbyte's own Temporal build, not the upstream one: it ships the dynamic
+  # config file Airbyte's workflows expect, and the stock temporalio image
+  # exits on startup without it.
+  airbyte-temporal:
+    image: airbyte/temporal:${AIRBYTE_VERSION:-0.59.1}
+    container_name: appbi-airbyte-temporal
+    environment:
+      DB: postgresql
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-appbi}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-appbi}
+      # The file this image actually ships. Airbyte's published compose used
+      # `development.yaml`, which does not exist here — Temporal then exits
+      # before it ever listens, and every dependent service reports a DNS
+      # failure that looks like a networking problem.
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [appbi]
+
+  airbyte-minio:
+    image: minio/minio:${MINIO_VERSION:-RELEASE.2023-11-20T22-40-07Z}
+    container_name: appbi-airbyte-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
+    volumes:
+      - airbyte_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [appbi]
+
+  # Airbyte writes job logs and state to object storage and expects the bucket
+  # to exist. Without it every job fails with an S3 404 that reads like a
+  # permissions problem, so the bucket is created as part of bringing the stack
+  # up rather than as a step in a runbook.
+  airbyte-storage-init:
+    image: minio/mc:${MINIO_MC_VERSION:-RELEASE.2024-11-21T17-21-54Z}
+    container_name: appbi-airbyte-storage-init
+    entrypoint: >-
+      sh -c "mc alias set local http://airbyte-minio:9000
+      ${MINIO_ROOT_USER:-minio} ${MINIO_ROOT_PASSWORD:-minio123}
+      && mc mb --ignore-existing local/airbyte-storage"
+    depends_on:
+      airbyte-minio: {condition: service_healthy}
+    networks: [appbi]
+    restart: "no"
+
+  # The Config API. This is the only Airbyte surface the product talks to, and
+  # it is reachable on the internal network only — no host port is published.
+  airbyte-server:
+    image: airbyte/server:${AIRBYTE_VERSION:-0.59.1}
+    container_name: appbi-airbyte-server
+    environment:
+      <<: *airbyte-env
+      AIRBYTE_ROLE: server
+      HTTP_IDLE_TIMEOUT: 20m
+    volumes:
+      - airbyte_workspace:/tmp/workspace
+      - airbyte_local:/tmp/airbyte_local
+    depends_on:
+      airbyte-bootloader: {condition: service_completed_successfully}
+      airbyte-storage-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8001/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+    networks: [appbi]
+
+  # Runs the syncs. In this version the worker starts connector containers on
+  # the Docker daemon directly, which is why the socket belongs here rather
+  # than in the product's API and worker.
+  airbyte-worker:
+    image: airbyte/worker:${AIRBYTE_VERSION:-0.59.1}
+    container_name: appbi-airbyte-worker
+    environment:
+      <<: *airbyte-env
+      AIRBYTE_ROLE: worker
+      SYNC_JOB_MAX_ATTEMPTS: "3"
+      SYNC_JOB_MAX_TIMEOUT_DAYS: "3"
+    # Runs as root so it can open the Docker socket. On Docker Desktop the
+    # socket is root-owned and the image's own user is not in that group, so
+    # the worker starts, accepts a job, and then reports "Could not find image"
+    # — the permission error never reaches the message.
+    #
+    # This does not widen anything: a process holding the Docker socket already
+    # has root on the host. It is the reason the socket lives here and not in
+    # the product's containers.
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - airbyte_workspace:/tmp/workspace
+      - airbyte_local:/tmp/airbyte_local
+    depends_on:
+      airbyte-bootloader: {condition: service_completed_successfully}
+      airbyte-temporal: {condition: service_started}
+    networks: [appbi, connectors]
+
+  airbyte-cron:
+    image: airbyte/cron:${AIRBYTE_VERSION:-0.59.1}
+    container_name: appbi-airbyte-cron
+    environment: *airbyte-env
+    depends_on:
+      airbyte-bootloader: {condition: service_completed_successfully}
+    networks: [appbi]
+
+  # The product now points at Airbyte instead of running connectors itself.
+  #
+  # AIRBYTE_WORKSPACE_ID is left to the environment on purpose: which workspace
+  # a deployment writes into is a decision, not a default, and a UUID inherited
+  # from someone else's Airbyte would pass every check and then create customer
+  # connections in the wrong tenant.
+  #
+  # A bootloader-initialised Airbyte has exactly one workspace, so this staging
+  # overlay turns on AIRBYTE_WORKSPACE_AUTO, which resolves that one and refuses
+  # the moment there is more than one to choose from. Set AIRBYTE_WORKSPACE_ID
+  # to pin it — required in production, where the auto flag is off.
+  # See docs/RUNBOOK-airbyte-workspace.md.
+  api:
+    environment:
+      ENGINE_TYPE: AIRBYTE_API
+      AIRBYTE_API_URL: http://airbyte-server:8001
+      AIRBYTE_WORKSPACE_ID: ${AIRBYTE_WORKSPACE_ID:-}
+      AIRBYTE_WORKSPACE_AUTO: ${AIRBYTE_WORKSPACE_AUTO:-true}
+    depends_on:
+      airbyte-server: {condition: service_healthy}
+
+  worker:
+    environment:
+      ENGINE_TYPE: AIRBYTE_API
+      AIRBYTE_API_URL: http://airbyte-server:8001
+      AIRBYTE_WORKSPACE_ID: ${AIRBYTE_WORKSPACE_ID:-}
+      AIRBYTE_WORKSPACE_AUTO: ${AIRBYTE_WORKSPACE_AUTO:-true}
+    depends_on:
+      airbyte-server: {condition: service_healthy}
+
+  migrate:
+    environment:
+      ENGINE_TYPE: AIRBYTE_API
+      AIRBYTE_API_URL: http://airbyte-server:8001
+      AIRBYTE_WORKSPACE_ID: ${AIRBYTE_WORKSPACE_ID:-}
+      AIRBYTE_WORKSPACE_AUTO: ${AIRBYTE_WORKSPACE_AUTO:-true}
+
+volumes:
+  airbyte_workspace:
+  airbyte_local:
+  airbyte_minio:

@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Linear-inspired token set, identical to AppBI's so the two products share one
+ * visual language. Light is the default; `.dark` on <html> flips it.
+ */
+@layer base {
+  :root {
+    --surface-0: 247 248 248;
+    --surface-1: 255 255 255;
+    --surface-2: 243 244 245;
+    --surface-3: 233 235 238;
+    --surface-inverse: 8 9 10;
+    --overlay: 0 0 0;
+
+    --text-primary: 8 9 10;
+    --text-secondary: 60 65 73;
+    --text-tertiary: 107 111 118;
+    --text-quaternary: 138 143 152;
+    --text-on-brand: 255 255 255;
+
+    --brand: 94 106 210;
+    --brand-hover: 113 112 255;
+    --brand-active: 130 143 255;
+    --brand-soft: 238 239 252;
+
+    --success: 39 166 68;
+    --success-soft: 16 185 129;
+    --warning: 217 119 6;
+    --danger: 220 38 38;
+    --info: 37 99 235;
+
+    --border-subtle: 8 9 10;
+    --border-standard: 8 9 10;
+    --border-strong: 208 214 224;
+    --border-line: 230 230 230;
+  }
+
+  .dark {
+    --surface-0: 8 9 10;
+    --surface-1: 15 16 17;
+    --surface-2: 25 26 27;
+    --surface-3: 40 40 44;
+    --surface-inverse: 247 248 248;
+
+    --text-primary: 247 248 248;
+    --text-secondary: 208 214 224;
+    --text-tertiary: 138 143 152;
+    --text-quaternary: 98 102 109;
+
+    --brand-soft: 30 32 56;
+
+    --border-strong: 35 37 42;
+    --border-line: 32 34 36;
+  }
+
+  * {
+    border-color: rgb(var(--border-line));
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: rgb(var(--surface-0));
+    color: rgb(var(--text-primary));
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Status must never be carried by colour alone (section 38). Every badge
+     pairs its colour with a label or icon; this only tunes the focus ring. */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(94 106 210 / 0.18);
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-surface-2;
+  }
+
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.35),
+      transparent
+    );
+    animation: shimmer 1.4s infinite;
+    transform: translateX(-100%);
+  }
+
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Scrollbars: thin and quiet, matching the information-dense layout. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--text-quaternary) / 0.35);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-tertiary) / 0.5);
+  background-clip: content-box;
+}

@@ -1,0 +1,30 @@
+# Point the product at an Airbyte running on Kubernetes, without changing the
+# Compose stack that certifies 0.59.1.
+#
+# Why this file exists: certification against 1.x has to be against a real
+# Kubernetes deployment -- 0.59.x is the last line that shipped Compose, so a
+# Compose-only matrix cannot say anything about the platform production will
+# actually run. The product stays where it is; only the engine moves.
+#
+#   kind create cluster --name appbi-cert
+#   helm install airbyte airbyte/airbyte --version <x.y.z> -n airbyte
+#   kubectl -n airbyte patch svc airbyte-airbyte-server-svc \
+#     -p '{"spec":{"type":"NodePort","ports":[{"port":8001,"nodePort":30801}]}}'
+#   docker network connect appbi-pipeline_appbi <kind-node-container>
+#
+# The last step is the one that is easy to miss: the product reaches the engine
+# over the node's address on the Compose network, and connector pods reach the
+# demo database the same way in reverse. Both directions are real network, not
+# a port-forward -- a forwarded socket is a single connection and measuring
+# through one reports the tunnel's latency as the engine's.
+services:
+  api:
+    environment:
+      ENGINE_TYPE: AIRBYTE_API
+      AIRBYTE_API_URL: ${AIRBYTE_K8S_URL:-http://appbi-cert-control-plane:30801}
+      AIRBYTE_WORKSPACE_ID: ${AIRBYTE_K8S_WORKSPACE_ID:-}
+  worker:
+    environment:
+      ENGINE_TYPE: AIRBYTE_API
+      AIRBYTE_API_URL: ${AIRBYTE_K8S_URL:-http://appbi-cert-control-plane:30801}
+      AIRBYTE_WORKSPACE_ID: ${AIRBYTE_K8S_WORKSPACE_ID:-}

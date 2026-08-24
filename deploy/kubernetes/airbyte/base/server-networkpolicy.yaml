@@ -1,0 +1,45 @@
+# Who may reach Airbyte's Config API.
+#
+# The adapter is the only thing in this product that speaks to it, and the
+# browser must never reach it at all (guardrail 1). That is an architectural
+# claim; without this it is only a convention, and a convention is one
+# `kubectl port-forward` or one helpful ingress away from being false.
+#
+# Deliberately NOT an egress policy on the server: Airbyte's control plane
+# talks to its own database, object store, Temporal and the Kubernetes API, and
+# a wrong guess there breaks the engine rather than securing it. Constrain who
+# calls in; leave what Airbyte calls out to Airbyte.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airbyte-server-ingress
+  labels:
+    app.kubernetes.io/part-of: appbi-integration
+    app.kubernetes.io/component: engine-boundary
+spec:
+  podSelector:
+    matchLabels:
+      airbyte: server
+  policyTypes: [Ingress]
+  ingress:
+    # 1. The product's API and worker. Nothing else in the product needs it,
+    #    and the frontend explicitly must not have it.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: appbi
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [appbi-api, appbi-worker]
+      ports:
+        - {protocol: TCP, port: 8001}
+
+    # 2. Airbyte's own components in this namespace. The worker, cron and
+    #    workload launcher all call the server; omitting this does not fail
+    #    loudly, it makes syncs stop being scheduled.
+    - from:
+        - podSelector: {}
+      ports:
+        - {protocol: TCP, port: 8001}

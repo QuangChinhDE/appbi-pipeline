@@ -1,0 +1,71 @@
+# One machine, one command, everything local.
+#
+#   python scripts/production.py install --config deploy/demo.yaml
+#
+# This is the profile for a laptop, a sales demo, or a first look at the
+# product. It brings up Postgres, Redis, the API, the worker, the frontend and
+# a proxy, generates the encryption key and JWT secret, waits for the stack to
+# be genuinely ready, and prints where to go.
+#
+# It is NOT a production topology and `production.py` will not let it pretend
+# to be one: an in-container database with no managed backups, no TLS, and the
+# embedded connector runner rather than a separately operated Airbyte. Setting
+# `app_env: production` here is refused outright, because the easiest way to
+# end up running a demo in production is to make it convenient.
+#
+# For production use deploy/production.yaml.example.
+
+profile: single-host-demo
+app_env: local
+
+product:
+  registry: local
+  image: appbi-pipeline-backend
+  # Pinned like everything else. The demo builds from source, so this records
+  # what was built rather than selecting an image to pull.
+  tag: 1.0.0
+  namespace: appbi
+
+demo:
+  # The embedded engine runs official Airbyte connector images on the host
+  # Docker daemon. Seven containers rather than fourteen: enough to click
+  # through the whole product and run a real sync, without an Airbyte
+  # deployment alongside it.
+  compose_files:
+    - docker-compose.yml
+    - docker-compose.embedded.yml
+  api_port: 8010
+  proxy_port: 8080
+
+engine:
+  type: AIRBYTE_EMBEDDED
+  # The embedded runner is the product's own executor, so there is no separate
+  # deployment to pin or reach. Version and workspace are recorded to satisfy
+  # the same validation the production profile gets -- one code path, so the
+  # demo cannot drift away from the checks that matter.
+  platform_version: "0.59.1"
+  workspace_id: 00000000-0000-0000-0000-000000000000
+
+datastores:
+  # In-container, created by Compose. Named as references for the same reason:
+  # the validator treats both profiles alike.
+  database_url_ref: env://DATABASE_URL
+  redis_url_ref: env://REDIS_URL
+
+secrets:
+  # Generated into .env on first install and kept on later runs, so `install`
+  # twice does not orphan a database full of credentials nobody can decrypt.
+  encryption_key_ref: env://SECRET_ENCRYPTION_KEY
+  jwt_secret_ref: env://JWT_SECRET
+
+operator:
+  # The seeded demo account. Fine here precisely because this profile refuses
+  # to be production.
+  email: admin@appbi.local
+  password_ref: env://APPBI_DEMO_PASSWORD
+
+release:
+  # A demo produces no release artifact unless someone has run the e2e suite.
+  # Listed rather than omitted so the install says why it is skipping it.
+  evidence:
+    - evidence-e2e.json

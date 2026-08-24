@@ -1,0 +1,211 @@
+# AppBI Data Integration Platform — single Docker project.
+#
+# Everything the product needs runs here: Postgres (product DB + the demo
+# source/warehouse databases), Redis, the Product API, the background Worker
+# that actually executes syncs, the Next.js frontend and an nginx edge.
+#
+# Connector execution is delegated to an IntegrationEngineAdapter, chosen by
+# ENGINE_TYPE. This base file deliberately grants no Docker socket to anything,
+# so on its own it brings up the product against whatever engine you point it
+# at. Pick one of the two overlays:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.airbyte.yml up
+#       AIRBYTE_API — a real self-managed Airbyte runs the connectors. This is
+#       the deployment shape production targets.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.embedded.yml up
+#       AIRBYTE_EMBEDDED — the product's own Worker runs official Airbyte
+#       connector images on the host Docker daemon over the Airbyte Protocol.
+#       Convenient for local work; the overlay is where the socket is mounted,
+#       because handing the daemon to an internet-facing API is not something
+#       to do by default.
+#
+# Either way the connectors are real Airbyte images speaking the real protocol.
+# Nothing here is mocked.
+
+name: appbi-pipeline
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-local}
+  DATABASE_URL: postgresql+asyncpg://appbi:${POSTGRES_PASSWORD:-appbi}@postgres:5432/appbi_integration
+  DATABASE_URL_SYNC: postgresql+psycopg://appbi:${POSTGRES_PASSWORD:-appbi}@postgres:5432/appbi_integration
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+  SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY in .env}
+  # --- engine ---
+  ENGINE_TYPE: ${ENGINE_TYPE:-AIRBYTE_EMBEDDED}
+  ENGINE_WORKSPACE_DIR: /engine/workspace
+  ENGINE_LOG_DIR: /engine/logs
+  ENGINE_DOCKER_NETWORK: ${ENGINE_DOCKER_NETWORK:-appbi-pipeline_connectors}
+  ENGINE_WORKSPACE_VOLUME: appbi-pipeline_engine_workspace
+  # Used only when ENGINE_TYPE=AIRBYTE_API (point at a real Airbyte deployment)
+  AIRBYTE_API_URL: ${AIRBYTE_API_URL:-}
+  AIRBYTE_API_USERNAME: ${AIRBYTE_API_USERNAME:-}
+  AIRBYTE_API_PASSWORD: ${AIRBYTE_API_PASSWORD:-}
+  AIRBYTE_WORKSPACE_ID: ${AIRBYTE_WORKSPACE_ID:-}
+  # --- policy ---
+  MAX_CONCURRENT_RUNS_GLOBAL: ${MAX_CONCURRENT_RUNS_GLOBAL:-4}
+  MAX_CONCURRENT_RUNS_PER_WORKSPACE: ${MAX_CONCURRENT_RUNS_PER_WORKSPACE:-3}
+  MIN_SCHEDULE_INTERVAL_SECONDS: ${MIN_SCHEDULE_INTERVAL_SECONDS:-300}
+  RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-7200}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: appbi-pipeline-postgres
+    environment:
+      POSTGRES_USER: appbi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-appbi}
+      POSTGRES_DB: appbi_integration
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Loopback only. Publishing a database on every interface is how a laptop
+      # on a conference network becomes a database server.
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appbi -d appbi_integration"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Also on the connector network: a Postgres source is *supposed* to reach
+    # this, with credentials. The API and Redis are not, which is the point of
+    # the split.
+    networks: [appbi, connectors]
+
+  redis:
+    image: redis:7-alpine
+    container_name: appbi-pipeline-redis
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [appbi]
+
+  # migrate, api and worker are the same image with different commands. They
+  # share an explicit tag so one build serves all three: with Compose's default
+  # per-service tags, rebuilding `api` leaves `migrate` on the previous image,
+  # and the next deploy runs its migrations from stale code without saying so.
+  migrate:
+    build:
+      context: ./backend
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-}
+    image: appbi-pipeline-backend
+    container_name: appbi-pipeline-migrate
+    environment: *backend-env
+    command: ["python", "-m", "app.bootstrap"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [appbi]
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-}
+    image: appbi-pipeline-backend
+    container_name: appbi-pipeline-api
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: product-api
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+       "--proxy-headers", "--forwarded-allow-ips", "*"]
+    volumes:
+      # No Docker socket. A container that can reach the daemon can start
+      # another one with the host filesystem mounted, and the production engine
+      # (AIRBYTE_API) never needs it — Airbyte's workers run the connectors.
+      # Local demo mode adds it back via docker-compose.embedded.yml.
+      - engine_workspace:/engine/workspace
+      - engine_logs:/engine/logs
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    ports:
+      # Loopback only, and deliberately. nginx is the public entry point; this
+      # port exists for scripts and debugging on the host. Bound to every
+      # interface it also exposes /metrics, which carries no authentication
+      # because it is meant to be scraped on an internal network.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [appbi]
+
+  worker:
+    build:
+      context: ./backend
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-}
+    image: appbi-pipeline-backend
+    container_name: appbi-pipeline-worker
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: product-worker
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      # See the API service: the socket is a local-demo overlay, not a default.
+      - engine_workspace:/engine/workspace
+      - engine_logs:/engine/logs
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [appbi]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+    container_name: appbi-pipeline-frontend
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      api: {condition: service_started}
+    ports:
+      # Loopback only: reachable through nginx, which is the intended route.
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    networks: [appbi]
+
+  proxy:
+    image: nginx:1.27-alpine
+    container_name: appbi-pipeline-proxy
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - frontend
+    ports:
+      - "${PROXY_PORT:-8080}:80"
+    networks: [appbi]
+
+volumes:
+  pgdata:
+  engine_workspace:
+    name: appbi-pipeline_engine_workspace
+  engine_logs:
+
+networks:
+  appbi:
+    name: appbi-pipeline_appbi
+  # Connector containers run here. Nothing that holds a session, a secret or an
+  # admin endpoint is attached, so a connector pointed at an internal hostname
+  # finds nothing to talk to (see app/core/egress.py).
+  connectors:
+    name: appbi-pipeline_connectors

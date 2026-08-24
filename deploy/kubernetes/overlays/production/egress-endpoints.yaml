@@ -1,0 +1,8 @@
+# Where this deployment's database and cache actually live.
+#
+# Narrow these. A /8 here allows most of the VPC and makes the policy
+# decorative — the point of deny-by-default is lost the moment one rule is
+# wide enough to cover everything you were trying to exclude.
+- op: replace
+  path: /spec/egress/2/to/0/ipBlock/cidr
+  value: 10.42.7.0/28          # <- the managed Postgres / Redis subnet

@@ -1,0 +1,382 @@
+# CI gates for the integration domain (spec section 61).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly, so the AIRBYTE_API lane below runs without holding up a merge.
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+      - name: Unit + structural contract tests
+        working-directory: backend
+        run: python -m pytest tests -q
+      - name: Kubernetes manifests are valid
+        run: |
+          # Schema-validated offline: there is no cluster in CI, and a manifest
+          # that only parses as YAML can still be rejected by the API server.
+          RELEASE=https://github.com/yannh/kubeconform/releases/download/v0.6.7
+          curl -sL "$RELEASE/kubeconform-linux-amd64.tar.gz" | tar xz kubeconform
+          ./kubeconform -strict -summary -kubernetes-version 1.30.0 deploy/kubernetes/base/*.yaml
+          # The overlay is what production applies, and rendering is where the
+          # interesting bugs live: a `commonLabels` transformer silently
+          # rewrote the kube-dns selector in a NetworkPolicy while every
+          # source-level check stayed green. Assertions on the rendered output
+          # are in backend/tests/test_operations.py.
+          kubectl kustomize deploy/kubernetes/base > /dev/null
+          kubectl kustomize deploy/kubernetes/overlays/production \
+            | ./kubeconform -strict -summary -kubernetes-version 1.30.0 -
+          # Airbyte's namespace policy is a separate overlay with its own
+          # placeholder CIDR. It shipped unrendered and ungated once; the
+          # release gate checks it now, and so does this.
+          kubectl kustomize deploy/kubernetes/airbyte/overlays/production \
+            | ./kubeconform -strict -summary -kubernetes-version 1.30.0 -
+
+      - name: Secret scan
+        run: |
+          # Nothing that looks like a credential may be committed.
+          ! grep -rInE "(password|secret|token)\s*[:=]\s*['\"][^'\"]{8,}" \
+              --include=*.py --include=*.ts --include=*.tsx \
+              backend/app frontend/src \
+            | grep -v "airbyte_secret" \
+            | grep -v "demo_" \
+            | grep -v "REPLACE_ME"
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Typecheck
+        working-directory: frontend
+      - name: Dependency vulnerabilities (frontend, runtime only)
+        working-directory: frontend
+        run: |
+          # Runtime dependencies only: a dev-only advisory does not ship, and
+          # gating on it teaches people to pass --force, which is how a major
+          # version arrives unannounced. High and critical fail; anything
+          # lower is reported and does not block.
+          npm audit --omit=dev --audit-level=high
+
+      - name: Dependency vulnerabilities (backend)
+        run: |
+          pip install -q pip-audit
+          # Same rule, and the same reason it is a separate step: a backend
+          # advisory and a frontend one need different owners.
+          pip-audit -r backend/requirements.txt --strict
+
+        run: npm run typecheck
+      - name: i18n coverage (EN/VI parity, no hardcoded copy)
+        working-directory: frontend
+        run: node ../scripts/check-i18n.mjs src
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # Release candidates only: the real engine, real connector images, real sync.
+  engine-contract:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Boot the stack
+        run: |
+          cp .env.example .env
+          python -c "import base64,os;print('SECRET_ENCRYPTION_KEY='+base64.urlsafe_b64encode(os.urandom(32)).decode())" >> .env
+          docker compose up -d --build
+      - name: Pull pinned connector images
+        run: bash scripts/pull-connectors.sh
+      - name: Adapter contract suite (upgrade gate)
+        run: |
+          docker compose run --rm --entrypoint "" api \
+            sh -c "pip install -q pytest pytest-asyncio && RUN_ENGINE_CONTRACT=1 python -m pytest tests/test_adapter_contract.py -q"
+      - name: Live UAT suite
+        run: |
+          python scripts/e2e.py --source postgres
+          python scripts/verify.py
+      - name: Bootstrap builds the schema and leaves no drift
+        run: |
+          docker compose exec -T postgres psql -U appbi -d postgres \
+            -c "CREATE DATABASE ci_migration_check OWNER appbi;"
+          # Through `app.bootstrap`, which is what production runs -- not
+          # `alembic upgrade` alone. The two diverged: startup applied its own
+          # DDL after the migrations and dropped an index the models declare,
+          # so a database reporting itself at head failed the drift check.
+          # Calling Alembic directly could never have seen that.
+          docker compose run --rm --entrypoint "" \
+            -e DATABASE_URL="postgresql+asyncpg://appbi:appbi@postgres:5432/ci_migration_check" \
+            -e DATABASE_URL_SYNC="postgresql+psycopg://appbi:appbi@postgres:5432/ci_migration_check" \
+            -e SEED_DEMO_DATA=false \
+            -e BOOTSTRAP_ADMIN_EMAIL=ci@example.com \
+            -e BOOTSTRAP_ADMIN_PASSWORD="ci-Bootstrap-Secret-1" \
+            api python -m app.bootstrap
+          DATABASE_URL_SYNC="postgresql+psycopg://appbi:appbi@localhost:55433/ci_migration_check" \
+            python scripts/check-schema-drift.py
+
+      - name: Supply chain — version, lock, egress (repo-level)
+        run: |
+          pip install -q pytest pytest-asyncio pydantic pydantic-settings
+          python scripts/build-connector-lock.py --verify
+      - name: Adversarial API audit
+        run: python scripts/audit-api.py
+      - name: Adversarial UI audit
+        working-directory: frontend
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+          cp ../scripts/audit-ui.mjs .
+          node audit-ui.mjs
+      - name: Behavioural audit
+        working-directory: frontend
+        # Copied in: ESM resolves playwright from the script's own directory.
+        run: |
+          cp ../scripts/audit-behaviour.mjs .
+          node audit-behaviour.mjs
+
+  # The engine production actually runs on. The job above proves the adapter
+  # boundary using the product's own executor; this one proves the same contract
+  # against a real self-managed Airbyte, which is the only thing that can catch
+  # "Airbyte disagrees with our reading of its API".
+  #
+  # Nightly rather than per-PR: it pulls the platform images and several
+  # connectors, so it costs minutes, not seconds. A red night blocks a release,
+  # not a merge.
+  airbyte-api-contract:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot the product against a self-managed Airbyte
+        run: |
+          cp .env.example .env
+          python -c "import base64,os;print('SECRET_ENCRYPTION_KEY='+base64.urlsafe_b64encode(os.urandom(32)).decode())" >> .env
+          docker compose -f docker-compose.yml -f docker-compose.airbyte.yml up -d --build
+
+      - name: Wait for Airbyte to accept work
+        run: |
+          # The bootloader migrates Airbyte's own database before the server is
+          # useful, so "container started" is not the signal to wait for.
+          for i in $(seq 1 60); do
+            if docker exec appbi-airbyte-server curl -fsS http://localhost:8001/api/v1/health >/dev/null 2>&1; then
+              echo "airbyte ready after ${i} attempts"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Airbyte did not become ready"
+          docker compose -f docker-compose.yml -f docker-compose.airbyte.yml logs --tail 100 airbyte-server airbyte-bootloader
+          exit 1
+
+      - name: Pull the connector images this Airbyte pins
+        run: |
+          # Airbyte decides the tag in this mode, so the product's lock file is
+          # not the list to pull from. Ask the deployment what it will run.
+          docker exec appbi-airbyte-server curl -fsS -X POST \
+            http://localhost:8001/api/v1/source_definitions/list \
+            -H 'Content-Type: application/json' -d '{}' > sources.json
+          docker exec appbi-airbyte-server curl -fsS -X POST \
+            http://localhost:8001/api/v1/destination_definitions/list \
+            -H 'Content-Type: application/json' -d '{}' > destinations.json
+          python scripts/pull-engine-images.py sources.json destinations.json
+
+      - name: Adapter contract suite against Airbyte
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.airbyte.yml \
+            run --rm --entrypoint "" -e RUN_ENGINE_CONTRACT=1 api \
+            sh -c "pip install -q pytest pytest-asyncio && python -m pytest tests/test_adapter_contract.py -q"
+
+      - name: End-to-end through the product API
+        run: |
+          # --evidence is what the release gate reads. Without it the gate
+          # refuses to record, which is the point: an artifact that asserts its
+          # own evidence is not evidence.
+          python scripts/e2e.py --source postgres --engine airbyte-api \
+            --evidence evidence-e2e.json
+
+      - name: Egress policy holds
+        run: python scripts/verify-egress.py
+
+      - name: Record the certification artifact
+        run: |
+          # A green run that leaves no record is not a release gate: by the time
+          # anyone ships, nobody can say which Airbyte, which connector versions
+          # or which commit was actually proven.
+          COOKIE=$(curl -s -i -X POST http://localhost:8010/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"admin@appbi.local","password":"Admin@12345"}' \
+            | grep -i '^set-cookie:' | sed 's/^[Ss]et-[Cc]ookie: //' | cut -d';' -f1)
+          APPBI_COOKIE="$COOKIE" python scripts/release-gate.py record \
+            --out certification.json --evidence evidence-e2e.json
+          python scripts/release-gate.py check certification.json
+
+      - name: Publish the certification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: airbyte-api-certification
+          path: |
+            certification.json
+            evidence-e2e.json
+          if-no-files-found: warn
+
+      - name: Record what failed
+        if: failure()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.airbyte.yml \
+            logs --tail 200 api worker airbyte-server airbyte-worker
+
+  # The platform production actually runs on. The lane above certifies the
+  # Config API against 0.59.1 — the last Airbyte line that shipped Compose — so
+  # on its own it says nothing about 1.x, about the workload plane, or about
+  # connectors running as pods. This one does.
+  #
+  # It is what caught /api/v1/workspaces/list returning 404 on 1.8.5.
+  #
+  # Scheduled rather than per-PR: it builds a cluster, installs a Helm release
+  # and pulls several hundred megabytes of connector images.
+  airbyte-k8s-contract:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Chart version and app version are NOT the same number. Chart V2
+      # 2.0.17 ships Airbyte app 1.8.5, and the V1 repository this lane
+      # used is deprecated -- so the old pin certified packaging that
+      # production will not use.
+      AIRBYTE_CHART_VERSION: "2.0.17"
+      AIRBYTE_APP_VERSION: "1.8.5"
+      KIND_CLUSTER: appbi-cert
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: appbi-cert
+          node_image: kindest/node:v1.30.4
+
+      - name: Install Airbyte
+        run: |
+          helm repo add airbyte https://airbytehq.github.io/charts   # V2
+          helm repo update
+          # The same values the recorded certification used, read from the
+          # repo rather than inlined here: a lane that installs a slightly
+          # different Airbyte than the runbook is not reproducing anything.
+          helm install airbyte airbyte/airbyte \
+            --version "$AIRBYTE_CHART_VERSION" \
+            --namespace airbyte --create-namespace \
+            --values deploy/kubernetes/airbyte/values-certification-v2.yaml \
+            --timeout 30m --wait=false
+
+      - name: Wait for the server to answer
+        run: |
+          # The bootloader migrates Airbyte's database before the server is
+          # useful, so "pod created" is not the signal to wait for.
+          kubectl -n airbyte wait --for=condition=ready pod -l airbyte=server --timeout=30m
+          kubectl -n airbyte get pods
+
+      - name: Give the product and the engine a real network path
+        run: |
+          kubectl -n airbyte patch svc airbyte-airbyte-server-svc -p \
+            '{"spec":{"type":"NodePort","ports":[{"port":8001,"targetPort":8001,"nodePort":30801,"name":"http"}]}}'
+          cp .env.example .env
+          python -c "import base64,os;print('SECRET_ENCRYPTION_KEY='+base64.urlsafe_b64encode(os.urandom(32)).decode())" >> .env
+          docker compose up -d --build postgres redis
+          # Both directions cross this link: the product calls the Config API,
+          # and connector pods call the demo database. A port-forward would
+          # carry the first and not the second.
+          docker network connect appbi-pipeline_appbi "${KIND_CLUSTER}-control-plane"
+
+      - name: The API surface the adapter needs still exists
+        run: |
+          python scripts/verify-engine-api.py --in-network appbi-pipeline_appbi \
+            --url "http://${KIND_CLUSTER}-control-plane:30801"
+
+      - name: Pull the connector images this Airbyte pins, onto the cluster
+        run: |
+          # Without this the first check times out while a pod pulls 500MB, and
+          # the product reports ENGINE_UNAVAILABLE — which reads as a broken
+          # engine rather than a cold one.
+          for side in source destination; do
+            kubectl -n airbyte exec deploy/airbyte-server -- \
+              curl -fsS -X POST "http://localhost:8001/api/v1/${side}_definitions/list" \
+              -H 'Content-Type: application/json' -d '{}' > "${side}s.json"
+          done
+          python scripts/pull-engine-images.py \
+            --into-kind "${KIND_CLUSTER}-control-plane" sources.json destinations.json
+
+      - name: Boot the product against the Kubernetes Airbyte
+        run: |
+          WORKSPACE=$(kubectl -n airbyte exec deploy/airbyte-server -- \
+            curl -fsS -X POST http://localhost:8001/api/v1/workspaces/list_by_organization_id \
+            -H 'Content-Type: application/json' \
+            -d '{"organizationId":"00000000-0000-0000-0000-000000000000"}' \
+            | python -c "import json,sys;print(json.load(sys.stdin)['workspaces'][0]['workspaceId'])")
+          echo "AIRBYTE_K8S_WORKSPACE_ID=$WORKSPACE" >> .env
+          echo "AIRBYTE_K8S_URL=http://${KIND_CLUSTER}-control-plane:30801" >> .env
+          docker compose -f docker-compose.yml -f docker-compose.k8s-cert.yml up -d --build api worker
+          for i in $(seq 1 60); do
+            curl -fsS "http://localhost:8010/readyz?deep=1" && break || sleep 10
+          done
+
+      - name: End to end, with connectors running as pods
+        run: |
+          # The connector runs in the cluster, where the Compose service name
+          # `postgres` does not resolve. Hand it an address.
+          PGIP=$(docker inspect appbi-pipeline-postgres \
+            --format '{{(index .NetworkSettings.Networks "appbi-pipeline_appbi").IPAddress}}')
+          python scripts/e2e.py --source postgres --engine airbyte-api \
+            --demo-host "$PGIP" --evidence evidence-e2e-k8s.json
+
+      - name: Connector egress policy applies in Airbyte's namespace
+        run: |
+          kubectl -n airbyte apply -k deploy/kubernetes/airbyte/overlays/production
+          kubectl -n airbyte get networkpolicy
+
+      - name: Record the certification artifact
+        run: |
+          COOKIE=$(curl -s -i -X POST http://localhost:8010/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"admin@appbi.local","password":"Admin@12345"}' \
+            | grep -i '^set-cookie:' | sed 's/^[Ss]et-[Cc]ookie: //' | cut -d';' -f1)
+          APPBI_COOKIE="$COOKIE" python scripts/release-gate.py record \
+            --out certification-k8s.json --evidence evidence-e2e-k8s.json
+          python scripts/release-gate.py check certification-k8s.json
+
+      - name: Publish the certification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: airbyte-k8s-certification
+          path: |
+            certification-k8s.json
+            evidence-e2e-k8s.json
+          if-no-files-found: warn
+
+      - name: Record what failed
+        if: failure()
+        run: |
+          kubectl -n airbyte get pods
+          kubectl -n airbyte logs deploy/airbyte-server --tail 120 || true
+          kubectl -n airbyte logs deploy/airbyte-workload-launcher --tail 120 || true
+          docker compose logs --tail 120 api worker || true

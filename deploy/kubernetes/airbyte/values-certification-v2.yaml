@@ -1,0 +1,67 @@
+# Helm values for certifying against Airbyte on chart V2.
+#
+#   chart 2.0.17  ->  app 1.8.5
+#
+# These two are different numbers and the V1 chart repository is deprecated, so
+# a lane pinned to "1.8.5" as a chart version was certifying packaging that
+# production will not use.
+#
+# Unlike values-certification.yaml, **auth is enabled here**. That file exists
+# to prove the adapter contract and says so; running only that way is how the
+# product shipped an adapter that could not authenticate against any
+# production Airbyte at all.
+#
+# Four things this file encodes that cost a rehearsal to learn:
+#
+#   1. `global.secrets` does NOT add arbitrary keys to the chart's secret. The
+#      secret has a fixed key set; pointing instanceAdmin at a key that is not
+#      in it leaves the bootloader in CreateContainerConfigError.
+#   2. The bootloader is a Helm hook and is deleted when it fails, so there is
+#      nothing left to inspect. Install with --no-hooks and run it as a plain
+#      Pod when debugging.
+#   3. The database field is `name:`, not `database:`, and the chart's default
+#      database name is `db-airbyte`.
+#   4. Temporal defaults to requiring TLS against an external Postgres and
+#      fails with `pq: SSL is not enabled on the server`.
+#
+# The host below is a placeholder: an external database is the point, so there
+# is no sensible default.
+global:
+  edition: community
+  airbyteUrl: http://airbyte.rc1.internal
+  auth:
+    enabled: true
+    instanceAdmin:
+      firstName: RC1
+      lastName: Operator
+      # Keys inside the chart's OWN secret, populated by global.secrets below.
+      # Chart 2.0.17 has no secretName here: the chart reads the secret it
+      # creates, so pointing at an external one silently reads nothing and the
+      # bootloader ends in CreateContainerConfigError. It is a Helm hook, so it
+      # is deleted on failure and there is nothing left to patch afterwards.
+      emailSecretKey: instance-admin-email
+      passwordSecretKey: instance-admin-password
+  secrets:
+    instance-admin-email: ops@acme.io
+    instance-admin-password: REPLACE_ME
+    database-password: airbyte_rc1
+  database:
+    type: external
+    host: EXTERNAL_POSTGRES_HOST
+    port: 5432
+    name: airbyte
+    user: airbyte
+    secretName: airbyte-config-secrets
+    passwordSecretKey: database-password
+  storage:
+    type: minio
+postgresql:
+  enabled: true
+minio:
+  enabled: true
+webapp:
+  enabled: true
+server:
+  resources: {requests: {cpu: 100m, memory: 512Mi}}
+worker:
+  resources: {requests: {cpu: 100m, memory: 512Mi}}

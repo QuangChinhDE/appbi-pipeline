@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The environment-specific half. The base carries placeholders that are
+# deliberately wrong — `10.0.0.0/24` for the database subnet is not anyone's
+# real network — so that applying the base by mistake fails closed rather than
+# opening egress somewhere unintended.
+#
+#   kubectl apply -k deploy/kubernetes/overlays/production
+#
+# Copy this directory per environment. A test refuses to let the base's
+# placeholder CIDR reach a rendered overlay.
+namespace: appbi
+
+resources:
+  - ../../base
+
+patches:
+  - path: egress-endpoints.yaml
+    target:
+      kind: NetworkPolicy
+      name: appbi-egress
+
+  - path: engine-endpoint.yaml
+    target:
+      kind: ConfigMap
+      name: appbi-config
+
+images:
+  - name: appbi-pipeline-backend
+    newName: registry.internal/appbi/backend
+    newTag: "1.0.0"        # the exact version in the certification artifact
+  - name: appbi-pipeline-frontend
+    newName: registry.internal/appbi/frontend
+    newTag: "1.0.0"

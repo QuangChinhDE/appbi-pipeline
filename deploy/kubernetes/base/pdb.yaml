@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: appbi-api
+spec:
+  # Node drains must not take the control plane offline. With replicas: 2 this
+  # allows one to move at a time.
+  minAvailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: appbi-api}

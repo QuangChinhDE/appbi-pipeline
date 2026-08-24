@@ -1,0 +1,160 @@
+{
+  "consistent": false,
+  "engine_reachable": true,
+  "checked": 30,
+  "present": 0,
+  "foreign": 17,
+  "missing": [
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "53728e1e-e622-412f-ac6b-6ac5030f1337",
+      "name": "AB Postgres Source"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "3e4915c7-e14b-4000-959e-f60749b24917",
+      "name": "AB Postgres Warehouse"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "2553e259-8a97-4a1e-8cc1-fe66547dee19",
+      "name": "AB Shop Sync"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "6c633ebc-62f4-4b04-af98-61da2649c27c",
+      "name": "Demo Postgres 71710"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "1b5f89de-fa6e-48c7-91f0-97323f3a8973",
+      "name": "Demo Postgres 71976"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "5f1a7c7e-4fb8-4e7e-bbfb-f4f2af6cf5ca",
+      "name": "Demo Postgres 71982"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "2ef5aaf3-929b-4e7f-9e48-003392536bcc",
+      "name": "Demo Warehouse 71976"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "80c6fa97-5aff-4910-97ae-5508652b8714",
+      "name": "Demo Warehouse 71982"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "6d6db8f8-d7cd-4420-b294-da2f7ce9a184",
+      "name": "Demo pipeline 71976"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "ce8f513d-6391-4425-8d52-5506639acdeb",
+      "name": "Demo pipeline 71982"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "5d713abb-7a33-4c45-8cbf-8f04a1da3ad6",
+      "name": "Built Posts via Airbyte"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "7d73908b-0757-4814-8fc0-c00373bb5f76",
+      "name": "Built Posts -> Warehouse"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "6b1044a7-07e2-4d46-97bd-8522157ba35e",
+      "name": "Demo Postgres 73456"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "0920b2e1-b9b2-4e82-b1fd-9a6888da5cd4",
+      "name": "Demo Warehouse 73456"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "0bd81d05-e90d-4bb3-9cbf-5fa41f5d4ade",
+      "name": "Demo pipeline 73456"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "bd0eb3d3-564f-4f25-b0ea-e8f027adb920",
+      "name": "Demo Postgres 78642"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "161fe238-b119-4b27-b796-8de447aaa299",
+      "name": "Demo Warehouse 78642"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "2889f17b-b6f6-4a17-a387-45659cef4c81",
+      "name": "Demo pipeline 78642"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "b1d4935f-1292-4211-8750-9063f5fdab26",
+      "name": "Demo Postgres 81371"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "f2f84b6b-4612-4027-8f47-88f9c8e0b97d",
+      "name": "Demo Warehouse 81371"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "40049d16-5d37-4545-9b91-2b502a983a2d",
+      "name": "Demo pipeline 81371"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "ee5bfb44-42f6-4f59-824b-6731a053aa6e",
+      "name": "Demo Postgres 88442"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "e99feb47-bb2c-4a70-b070-982ea5db9a55",
+      "name": "Demo Warehouse 88442"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "57b01d2d-2e53-4e58-b823-3e41d976dfe5",
+      "name": "Demo pipeline 88442"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "14efd216-3ae1-47cb-a01c-7582564cbd5c",
+      "name": "Demo Postgres 89784"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "86f60769-3f26-4777-8576-6dc10825e6e6",
+      "name": "Demo Warehouse 89784"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "084d205f-83d5-4c18-9ed2-d3926aed3b37",
+      "name": "Demo pipeline 89784"
+    },
+    {
+      "resource_type": "SOURCE",
+      "resource_id": "164533a0-1c8a-4850-ab93-1f75b7148919",
+      "name": "Demo Postgres 90201"
+    },
+    {
+      "resource_type": "DESTINATION",
+      "resource_id": "7af5bf82-f727-4159-ac94-47234e4fedb5",
+      "name": "Demo Warehouse 90201"
+    },
+    {
+      "resource_type": "PIPELINE",
+      "resource_id": "1328b336-3b61-4fd6-80ac-4e9c1b157ef6",
+      "name": "Demo pipeline 90201"
+    }
+  ],
+  "detail": "30 of 30 resources are not on this engine (17 more belong to another engine implementation and were not checked). This is what a database restored beside a different deployment looks like: recreate them, or point the product back at the deployment the backup was taken from."
+}

@@ -1,0 +1,218 @@
+# Compatibility matrix (spec section 60).
+#
+# This file is the human-readable record of what this product version was built
+# and tested against. The live values are served by
+# GET /api/v1/admin/compatibility and rendered in Settings -> Engine.
+#
+# Rule: never deploy `latest`. Every version below is pinned, and an upgrade is
+# gated on the adapter contract suite (section 29.3).
+
+product_version: "1.0.0"
+
+adapter:
+  contract_version: "1"
+  # Both implementations satisfy backend/app/adapters/base.py.
+  implementations:
+    - id: AIRBYTE_EMBEDDED
+      module: app.adapters.airbyte_protocol
+      protocol: airbyte-protocol
+      description: >-
+        Runs official Airbyte connector images on the host Docker daemon over
+        the Airbyte Protocol (spec/check/discover/read/write), including the
+        refresh protocol (generation_id / minimum_generation_id / sync_id).
+      default: true
+    - id: AIRBYTE_API
+      module: app.adapters.airbyte_api
+      protocol: airbyte-config-api-v1
+      description: Delegates to an existing self-managed Airbyte deployment.
+      # Certified by running the product against a real Airbyte, not by reading
+      # its API docs. What "certified" means here is listed under
+      # airbyte_api_certification below — anything not listed was not run.
+      tested_platform_versions:
+        - "0.59.1"   # Docker Compose, staging
+        - "1.8.5"    # Kubernetes via the official Helm chart
+
+# What was actually exercised against a self-managed Airbyte, and on what date.
+# This is the evidence behind `tested_platform_versions`; an entry here means a
+# run was observed end to end, not that the code path exists.
+airbyte_api_certification:
+  platform_version: "0.59.1"
+  deployment: docker-compose.airbyte.yml (staging, single host)
+  date: "2026-08-23"
+  verified:
+    source_create_and_check: true      # source-postgres 3.8.5, HEALTHY / PASSED
+    destination_create_and_check: true # destination-postgres 2.0.10
+    discover: true                     # 3 streams, 18 fields, pk + sync modes
+    connection_create: true            # 3 streams, mixed full_refresh / incremental
+    sync_full_refresh: true            # 2700 records, 453,605 bytes, row counts match source
+    job_status_and_stats: true         # totals and per-stream stats mapped
+    job_logs: true                     # paginated, ANSI stripped
+    sync_incremental_second_pass: true # 0 rows re-read; the cursor persists
+    cancel: true                       # CANCEL_REQUESTED -> CANCELLED, RUN_CANCELLED
+    declarative_builder_test: true     # check + discover on the shared runner
+    declarative_connector_publish: true # registered as a custom source
+                                        # definition, then used as a real
+                                        # source: HEALTHY / PASSED
+  # Which connector versions actually ran. In AIRBYTE_API mode the engine picks
+  # them, so these are routinely NOT the versions this product locks in
+  # connector-lock.json — and a single "version" column would state the wrong
+  # one with confidence. Both are reported live at GET /admin/compatibility as
+  # `bundled_image` and `engine_image`, with `version_matches_engine` saying
+  # whether they agree.
+  #
+  # Measured on the certification run, not copied from the lock file:
+  connector_versions_observed:
+    source-postgres:        {bundled: "3.8.5",  engine_ran: "3.4.1"}
+    destination-postgres:   {bundled: "3.0.17", engine_ran: "2.0.10"}
+    source-faker:           {bundled: "7.2.1",  engine_ran: "6.1.0"}
+    source-declarative-manifest: {bundled: "7.28.2", engine_ran: "7.28.2"}
+  connector_version_note: >-
+    The declarative runner is the one that matches, because the product chooses
+    it: a built connector is a config on an image this product pins. For every
+    other connector the deployment decides, which is why an upgrade of Airbyte
+    can change connector behaviour with no change here — and why the release
+    gate records what actually ran rather than what was locked.
+
+  notes: >-
+    The platform pin is explained in docker-compose.airbyte.yml. The Config API
+    surface the adapter speaks is unchanged in later releases, so a defect found
+    on this version is a real defect; a version-specific defect in a later
+    release would not be caught here, which is what the nightly contract lane
+    is for.
+
+# The same eleven operations, against the platform production actually runs.
+#
+# Kept as a second block rather than replacing the one above: they certify
+# different things and both are true. 0.59.1 is what the Compose lane proves on
+# every nightly; 1.8.5 is what the Kubernetes lane proves, and it is the one
+# that matters for a production deployment. A single block would have to pick
+# one, and picking either would overstate.
+airbyte_api_certification_kubernetes:
+  platform_version: "1.8.5"
+  deployment: Helm chart 1.8.5, community edition, Kubernetes 1.30.4 (kind)
+  date: "2026-08-23"
+  connectors_run_as: kubernetes pods in Airbyte's namespace, via the workload launcher
+  verified:
+    source_create_and_check: true       # source-postgres 3.6.35, HEALTHY / PASSED
+    destination_create_and_check: true  # destination-postgres 2.4.5
+    discover: true                      # streams, primary keys, sync modes
+    connection_create: true
+    sync_full_refresh: true             # 2507 records, 429,904 bytes; 500 + 2007 matches source
+    job_status_and_stats: true          # totals and per-stream stats mapped
+    job_logs: true                      # 285 lines; see the note below
+    sync_incremental_second_pass: true  # 0 rows re-read; the cursor persists
+    cancel: true                        # CANCEL_REQUESTED -> CANCELLED
+    declarative_builder_test: true      # check + discover on the cluster's runner
+    declarative_connector_publish: true # registered, then used as a real source
+
+  # Measured on the run, not copied from anywhere. Note that 1.8.5 pins
+  # different connector versions again -- the engine decides, and it decides
+  # differently per platform release.
+  connector_versions_observed:
+    source-postgres:        {bundled: "3.8.5",  engine_ran: "3.6.35"}
+    destination-postgres:   {bundled: "3.0.17", engine_ran: "2.4.5"}
+    source-faker:           {bundled: "7.2.1",  engine_ran: "6.2.24"}
+    source-declarative-manifest: {bundled: "7.28.2", engine_ran: "7.28.2"}
+
+  # What this run found that the 0.59.1 lane could not have. Recorded because a
+  # matrix that lists only successes teaches nobody why the lane exists.
+  differences_from_0_59_1:
+    - id: workspaces_list_removed
+      detail: >-
+        /api/v1/workspaces/list answers 404 on 1.8.5. Replaced by
+        /api/v1/workspaces/list_by_organization_id (needs organizationId; the
+        community default organization is all-zeroes) and
+        /api/v1/workspaces/list_paginated (needs an explicit pagination block --
+        omitting it is a 500, not a default). The adapter tries all three and
+        declares them in ALTERNATIVE_ROUTE_GROUPS so the endpoint probe treats a
+        404 on one member as a version difference rather than a broken adapter.
+      resolved: true
+    - id: structured_job_logs
+      detail: >-
+        Attempt logs moved from `logLines` (list of strings) to `events` (list of
+        objects with timestamp/level/logSource/message). `logLines` is still
+        present and empty, so an adapter reading only it reports a job with no
+        logs -- no error anywhere, and a blank log view exactly when someone is
+        debugging a failure. The adapter now reads both shapes and does not
+        switch on the `version` field, since an attempt may carry either.
+      resolved: true
+    - id: cold_cluster_looks_like_an_engine_fault
+      detail: >-
+        A connector pod pulling a 500MB image outlasts the product's check
+        timeout, and the product reports ENGINE_UNAVAILABLE. The engine is
+        healthy. Pre-pull with
+        `scripts/pull-engine-images.py --into-kind <node>` before certifying.
+      resolved: true
+
+  notes: >-
+    Reproduced by the airbyte-k8s-contract CI lane; the manual sequence is in
+    docs/RUNBOOK-engine-upgrade.md. The product ran in Compose against the
+    in-cluster engine over a NodePort on a shared Docker network -- not a
+    port-forward, which carries one connection and reports its own latency as
+    the engine's.
+
+connectors:
+  source-postgres:
+    image: airbyte/source-postgres
+    pinned_version: "3.8.5"
+    certification: SUPPORTED
+    verified:
+      check: true
+      discover: true
+      full_refresh: true
+      incremental_cursor: true
+      append_dedup: true
+      credential_rotation: true
+      error_mapping: true
+  source-faker:
+    image: airbyte/source-faker
+    pinned_version: "7.2.1"
+    certification: SUPPORTED
+    verified:
+      check: true
+      discover: true
+      full_refresh: true
+      incremental_cursor: true
+      append_dedup: true
+  destination-postgres:
+    image: airbyte/destination-postgres
+    pinned_version: "3.0.17"
+    certification: SUPPORTED
+    verified:
+      check: true
+      overwrite: true
+      append: true
+      append_dedup: true
+      refresh_generations: true
+  source-file:
+    image: airbyte/source-file
+    pinned_version: "0.6.0"
+    certification: BETA
+    verified:
+      check: true
+      discover: true
+      full_refresh: true
+
+runtime:
+  postgres: "16-alpine"
+  redis: "7-alpine"
+  python: "3.11"
+  node: "20"
+  nginx: "1.27-alpine"
+
+release_gates:
+  # Section 44 / Appendix D. Unchecked items are deliberately unchecked.
+  - id: LIC-001
+    description: Airbyte licensing approved for the intended delivery model
+    status: NOT_CLEARED
+    note: >-
+      Required before any commercial/hosted release. This build is for internal
+      and PoC use only.
+  - id: CONTRACT-001
+    description: 15 adapter contract scenarios green against the pinned engine
+    status: PASSING
+    command: RUN_ENGINE_CONTRACT=1 pytest tests/test_adapter_contract.py
+  - id: UAT-001..015
+    description: Live UAT suite
+    status: PASSING
+    command: python scripts/verify.py

@@ -1,0 +1,37 @@
+# Local / demo overlay: runs connector images on this machine's Docker daemon.
+#
+# The base compose file deliberately gives no service access to the Docker
+# socket. A container that can talk to the daemon can start another container
+# with the host filesystem mounted, so that access is root on the host by
+# another name — and the production engine (`AIRBYTE_API`) never needs it,
+# because Airbyte's own workers run the connectors there.
+#
+# This overlay exists so a developer can still run a real sync locally without
+# standing up an Airbyte deployment. Using it is a deliberate act:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.embedded.yml up -d
+#
+# `.env.example` sets COMPOSE_FILE so a local checkout picks it up automatically;
+# a production environment simply does not set that variable.
+#
+# Never apply this overlay to an environment that runs untrusted connector
+# images or holds real customer data.
+
+services:
+  api:
+    environment:
+      ENGINE_TYPE: AIRBYTE_EMBEDDED
+    volumes:
+      # check / discover are bounded inline calls, so the API needs the daemon
+      # too in this mode.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  worker:
+    environment:
+      ENGINE_TYPE: AIRBYTE_EMBEDDED
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  migrate:
+    environment:
+      ENGINE_TYPE: AIRBYTE_EMBEDDED

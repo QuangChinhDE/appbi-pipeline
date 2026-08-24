@@ -1,0 +1,79 @@
+# Prometheus alerting rules for the control plane.
+#
+# Shipped as a file rather than a snippet in prose, so it can be applied and
+# reviewed like anything else. Load it with a `rule_files:` entry, or apply it
+# as a PrometheusRule if you run the operator (the `groups` block is the same).
+#
+# The division these rules encode: **infrastructure alerts page, data alerts do
+# not.** A pipeline failing because a customer revoked a password is the data
+# owner's problem and reaches them through the product's own alert rules. The
+# engine being unreachable for ten minutes is on-call's problem and belongs
+# here. Merging the two teaches people to ignore the pager.
+#
+# Every rule has a `for:`. Without it, `appbi_engine_reachable` dropping during
+# a routine Airbyte restart pages someone at 3am for a deploy.
+groups:
+  - name: appbi-control-plane
+    rules:
+      - alert: AppBIEngineUnreachable
+        expr: appbi_engine_reachable == 0
+        for: 10m
+        labels: {severity: page, service: appbi}
+        annotations:
+          summary: "Integration engine unreachable for 10 minutes"
+          description: >-
+            The product is up but nothing can sync. Users can still read run
+            history and configuration; new and scheduled syncs will queue.
+          runbook_url: "docs/RUNBOOK-oncall.md#engine-unreachable"
+
+      - alert: AppBIMetricsDegraded
+        expr: appbi_metrics_up == 0
+        for: 10m
+        labels: {severity: ticket, service: appbi}
+        annotations:
+          summary: "Metrics scrape is answering but cannot collect"
+          description: >-
+            Usually the database. The endpoint deliberately returns 200 with
+            this gauge at 0 rather than 500, so the scrape itself stays up.
+          runbook_url: "docs/RUNBOOK-oncall.md"
+
+      - alert: AppBIRunStuck
+        expr: appbi_oldest_active_run_seconds > 14400
+        for: 15m
+        labels: {severity: ticket, service: appbi}
+        annotations:
+          summary: "A sync has been active for over four hours"
+          description: >-
+            Either the worker died mid-run (heartbeat_at will lag started_at)
+            or the job is genuinely long. Check before cancelling — a large
+            first full refresh legitimately takes hours.
+          runbook_url: "docs/RUNBOOK-oncall.md#runs-stuck-active"
+
+      - alert: AppBIFailureWave
+        # `appbi_runs_total` is a gauge — it is a row count read at scrape
+        # time, and RUNNING goes down as well as up. `increase()` is for
+        # counters and would misread it, so this is an explicit delta.
+        expr: >-
+          appbi_runs_total{status="FAILED"}
+          - (appbi_runs_total{status="FAILED"} offset 1h) > 10
+        for: 5m
+        labels: {severity: ticket, service: appbi}
+        annotations:
+          summary: "More than 10 sync failures in the last hour"
+          description: >-
+            Group by error_code before assuming infrastructure: one dominant
+            code is a platform problem, a spread across many is normal
+            operation and belongs to the data owners.
+          runbook_url: "docs/RUNBOOK-oncall.md#a-wave-of-failures"
+
+      - alert: AppBIQueueBacklog
+        expr: appbi_runs_active > 20
+        for: 30m
+        labels: {severity: ticket, service: appbi}
+        annotations:
+          summary: "Sustained queue backlog"
+          description: >-
+            Runs are queuing faster than they drain. Either concurrency limits
+            (MAX_CONCURRENT_RUNS_*) are too tight for the schedule, or the
+            engine is slow. Over quota a run waits as QUEUED and is never
+            failed, so this is the only signal that it is happening.

@@ -1,0 +1,35 @@
+# Hardened egress: connectors reach the data plane and nothing else.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.airbyte.yml \
+#                  -f docker-compose.egress.yml up -d
+#
+# What this changes and why it is the only thing that changes.
+#
+# The product refuses private targets before a connector is saved, and that is a
+# useful guardrail — it turns a mistake into a clear message in the editor. It
+# is not a boundary. It runs in the product, and in AIRBYTE_API mode the product
+# is not the process making the request: Airbyte's worker starts the connector,
+# and nothing in this codebase runs inside it. Redirects, retries and DNS that
+# resolves differently at request time all happen past that check.
+#
+# The layer that does hold is the network. Marking `connectors` internal removes
+# the route off the bridge entirely, so a connector can open a socket to what is
+# attached to that network and to nothing else: not the product API, not Redis,
+# not the Docker host, not the cloud metadata endpoint, not the internet.
+#
+# What it costs: SaaS connectors stop working. This profile suits a deployment
+# whose sources are internal databases. If you need both — outbound calls to
+# named third parties, nothing else — that is an allowlist, and an allowlist
+# belongs in a host firewall or an egress gateway rather than here. Airbyte
+# 0.59 has no supported way to inject HTTP_PROXY into a connector container
+# (verified against the worker jars: there is no JOB_DEFAULT_ENV mechanism), so
+# a forward proxy cannot be imposed on connectors at this layer at all.
+# docs/RUNBOOK-egress.md has the firewall rules for that case.
+#
+# Verify rather than assume:
+#   python scripts/verify-egress.py --expect-internet-blocked
+
+networks:
+  connectors:
+    name: appbi-pipeline_connectors
+    internal: true

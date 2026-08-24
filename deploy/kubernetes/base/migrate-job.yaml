@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: appbi-migrate
+spec:
+  # A completed Job is NOT re-run by `kubectl apply`, and a Job's pod template
+  # is immutable -- so applying a new image over a finished Job is rejected
+  # outright. This file used to carry a `kustomize.toolkit.fluxcd.io/force`
+  # annotation, which means something only to Flux and nothing to the `kubectl
+  # apply -k` this project actually uses. The effect was a deploy that looked
+  # clean while the schema stayed behind.
+  #
+  # `scripts/production.py` deletes this Job, applies it alone, and waits for
+  # completion before rolling out anything that depends on the schema. Applying
+  # this directory by hand does not do that: use the orchestrator, or delete
+  # the Job yourself first.
+  backoffLimit: 2
+  # Keep a finished Job around long enough to read its logs after a deploy, and
+  # not so long that a namespace fills with them.
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: appbi-migrate}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: migrate
+          image: appbi-pipeline-backend
+          # Explicit, not inherited. Kubernetes picks the default from the
+          # tag name — `Always` for `:latest`, `IfNotPresent` otherwise — so
+          # the behaviour silently changes with how the image is tagged.
+          # Version tags here are immutable; re-pushing one is the bug, not
+          # something to defend against with a pull on every start.
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.bootstrap"]
+          envFrom:
+            - configMapRef: {name: appbi-config}
+            - secretRef: {name: appbi-secrets}
+            # The one-time bootstrap admin, and only here: this is the only
+            # container that runs `seed()`. Optional, because after the first
+            # sign-in the Secret should be deleted and every later deploy must
+            # still work -- bootstrap does nothing once a user exists.
+            - secretRef: {name: appbi-bootstrap, optional: true}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,76 @@
+# What the product's pods may reach, and what may reach them.
+#
+# This constrains the *product*. It does not constrain connectors: those run in
+# Airbyte's namespace, launched by Airbyte's workers, and the policy that limits
+# them belongs there. docs/RUNBOOK-egress.md has the measured Compose
+# equivalent and says plainly that the Kubernetes version is not yet exercised.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: appbi-default-deny
+spec:
+  # Deny first, allow explicitly. A policy that starts permissive and subtracts
+  # is one forgotten rule away from allowing everything.
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: appbi-api-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: appbi-api}
+  policyTypes: [Ingress]
+  ingress:
+    # The ingress controller, and Prometheus for /metrics. Nothing else reaches
+    # the API directly — not other namespaces, not the worker.
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: monitoring}
+      ports:
+        - {protocol: TCP, port: 8000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: appbi-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [appbi-api, appbi-worker, appbi-migrate]
+  policyTypes: [Egress]
+  egress:
+    # DNS. Without this every other rule fails in a way that looks like the
+    # destination being down rather than the policy.
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+
+    # Airbyte's Config API. The only engine traffic the product makes.
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: airbyte}
+      ports:
+        - {protocol: TCP, port: 8001}
+
+    # Postgres and Redis. Replace these CIDRs with the ones your managed
+    # instances actually sit in — a /8 here would allow most of the VPC.
+    - to:
+        - ipBlock: {cidr: 10.0.0.0/24}      # <- database subnet
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 6379}
+
+  # Deliberately absent: any rule permitting general outbound. The product
+  # calls nothing on the internet. Connectors do, and they do not run here.

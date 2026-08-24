@@ -1,0 +1,130 @@
+# Production deployment config. Copy to deploy/production.yaml and fill in.
+#
+#   python scripts/production.py install --config deploy/production.yaml
+#
+# This file is the whole deployment, so review it like code. It holds no
+# secrets: every credential is a *reference* that Kubernetes resolves at pod
+# start, and `production.py` refuses a literal value here. That refusal is not
+# style — a config file gets committed, pasted into tickets, and screenshotted.
+#
+# Every `<...>` below is a placeholder and every one of them stops the install
+# until it is replaced. There is no partial-credit mode.
+
+profile: external-airbyte-k8s
+
+kubernetes:
+  # Omit to use the current kubectl context. Naming it means a tired operator
+  # cannot deploy production into staging by forgetting to switch.
+  context: <your-production-context>
+
+product:
+  # Never a floating tag. An image that changes under a certification
+  # invalidates it, and nothing would report that.
+  registry: <registry.example.com>/appbi
+  image: backend
+  tag: 1.0.0
+  namespace: appbi
+  overlay: deploy/kubernetes/overlays/production
+  # The URL users actually reach. `production.py` checks readiness through it,
+  # so pointing it at localhost proves the wrong thing.
+  api_url: https://<appbi.example.com>
+  ingress_tls: true
+
+engine:
+  type: AIRBYTE_API
+  url: https://<airbyte.internal.example.com>
+  # Must be one of the versions in compatibility.yaml, and must match what the
+  # engine reports about itself. Checked against both.
+  platform_version: "1.8.5"
+  # Helm chart V2. The chart version and the Airbyte app version are NOT the
+  # same number -- app 1.8.5 ships as chart 2.0.17 -- and the V1 repository is
+  # deprecated. Recording both is the only way an artifact can say what was
+  # deployed.
+  chart:
+    repository: oci://ghcr.io/airbytehq/helm-charts
+    name: airbyte
+    version: "2.0.17"
+  namespace: airbyte
+  # Verify with: python scripts/airbyte-workspace.py verify --id <uuid>
+  # A valid UUID from a *different* Airbyte passes every startup check and then
+  # creates customer connections in someone else's tenant.
+  workspace_id: <workspace-uuid>
+  # Airbyte's certification profile runs with auth disabled. Production must
+  # not; doctor fails the deployment if the engine reports auth mode "none".
+  auth:
+    # Airbyte 1.x with auth enabled answers HTTP Basic with 401 -- including
+    # the instance admin's own email and password. It expects a bearer token
+    # obtained from /api/v1/applications/token with an Application's client
+    # credentials, which you create in Airbyte and paste into the Secret below.
+    #
+    # `basic` is still accepted here and only works against 0.59.x.
+    mode: client_credentials
+    client_id_ref: secret://appbi-secrets/AIRBYTE_CLIENT_ID
+    client_secret_ref: secret://appbi-secrets/AIRBYTE_CLIENT_SECRET
+  connector_policy_overlay: deploy/kubernetes/airbyte/overlays/production
+  # Airbyte's own database. Present only so the two can be compared: the
+  # product refuses to share one. See docs/ADR-001-database-topology.md.
+  database_url_ref: secret://airbyte-secrets/DATABASE_URL
+
+datastores:
+  # Managed instances, outside the cluster. deploy/kubernetes/ ships no
+  # Postgres and no Redis on purpose.
+  database_url_ref: secret://appbi-secrets/DATABASE_URL
+  # The sync driver, used by Alembic and by the init containers that wait for
+  # the schema. Same database, different URL scheme; it is a separate key
+  # because psycopg and asyncpg do not share one.
+  database_url_sync_ref: secret://appbi-secrets/DATABASE_URL_SYNC
+  redis_url_ref: secret://appbi-secrets/REDIS_URL
+
+secrets:
+  # References only. `secret://` is resolved by Kubernetes at pod start and not
+  # by the installer: a process that can read every secret is a bigger target
+  # than the deployment it installs. The installer does verify that each named
+  # Secret and key exists in the cluster before applying anything -- a missing
+  # key does not fail an apply, it leaves Pods in CreateContainerConfigError,
+  # which reads like an image problem.
+  encryption_key_ref: secret://appbi-secrets/SECRET_ENCRYPTION_KEY
+  jwt_secret_ref: secret://appbi-secrets/JWT_SECRET
+
+  # A fresh production database has NO account. `SEED_DEMO_DATA` is false and
+  # is now honoured, so nothing creates one -- bootstrap refuses to start
+  # rather than inventing a login with a password from this repository.
+  #
+  # These create exactly one platform admin, which must change its password
+  # before it can do anything else. Delete the Secret once that has happened.
+  bootstrap_admin_email_ref: secret://appbi-bootstrap/BOOTSTRAP_ADMIN_EMAIL
+  bootstrap_admin_password_ref: secret://appbi-bootstrap/BOOTSTRAP_ADMIN_PASSWORD
+
+operator:
+  # Used only to call the product's own admin endpoints during install
+  # (reconcile, the release artifact). Leave the email out to skip that and
+  # pass APPBI_COOKIE instead.
+  email: <ops@example.com>
+  password_ref: env://APPBI_OPERATOR_PASSWORD
+
+# The pilot's launch scope. Not a marketing statement -- `mirror.py` refuses to
+# mirror a connector with no certified version, and the product refuses to make
+# a BETA connector selectable, so this list is what the deployment can actually
+# do.
+pilot:
+  connectors:
+    - source-postgres
+    - destination-postgres
+  # source-faker is a test fixture. It is deliberately absent: it would be
+  # mirrored and offered as a production connector, which it is not.
+  first_user: <the internal team or design partner>
+  support_window: <e.g. business hours, Asia/Bangkok>
+  max_concurrent_runs: 2
+
+mirror:
+  # Every artefact a fresh install or a restore needs, by digest. A running
+  # deployment survives losing Docker Hub; a rebuild does not.
+  registry: <registry.example.com>/appbi-mirror
+
+release:
+  # What the release artifact is built from. Produced by:
+  #   python scripts/e2e.py --engine airbyte-api --evidence evidence-e2e.json
+  # An install with no evidence still deploys, and says loudly that it is not a
+  # release.
+  evidence:
+    - evidence-e2e.json

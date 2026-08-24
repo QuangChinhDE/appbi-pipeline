@@ -1,0 +1,6 @@
+# The Airbyte this environment talks to, and the workspace it owns.
+# AIRBYTE_WORKSPACE_ID stays in the Secret — it differs per environment and a
+# copied one puts customer connections in the wrong tenant.
+- op: replace
+  path: /data/AIRBYTE_API_URL
+  value: http://airbyte-airbyte-server-svc.airbyte.svc.cluster.local:8001

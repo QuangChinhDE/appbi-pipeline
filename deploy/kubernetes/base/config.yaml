@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: appbi-config
+data:
+  # Non-secret configuration only. Everything with a credential in it lives in
+  # the `appbi-secrets` Secret, created out of band — see README.md.
+  APP_ENV: "production"
+  LOG_LEVEL: "INFO"
+
+  # Production runs on Airbyte. The embedded runner reproduces none of the job,
+  # retry, isolation or upgrade semantics Airbyte provides, and the API refuses
+  # to start with APP_ENV=production and ENGINE_TYPE=AIRBYTE_EMBEDDED.
+  ENGINE_TYPE: "AIRBYTE_API"
+  AIRBYTE_API_URL: "http://airbyte-airbyte-server-svc.airbyte.svc.cluster.local:8001"
+
+  # Off in production: which tenant receives customer data is a decision, not a
+  # default. AIRBYTE_WORKSPACE_ID is in the Secret.
+  AIRBYTE_WORKSPACE_AUTO: "false"
+
+  # Both lenient on purpose. READINESS_REQUIRE_ENGINE would make /readyz fail
+  # during an engine outage, which removes every pod from the Service and turns
+  # a partial outage into a total one. STARTUP_REQUIRE_ENGINE would crash-loop
+  # while Airbyte is still booting. See docs/RUNBOOK-oncall.md.
+  READINESS_REQUIRE_ENGINE: "false"
+  STARTUP_REQUIRE_ENGINE: "false"
+
+  # A connector may not be pointed at a private address. This is a guardrail in
+  # the product, not a boundary — the boundary is the NetworkPolicy in Airbyte's
+  # namespace, because Airbyte's workers make the requests.
+  EGRESS_ALLOW_PRIVATE: "false"
+  ALLOW_DERIVED_ENCRYPTION_KEY: "false"
+
+  # No demo identities. This was already false and had no effect: `seed()` did
+  # not read it, so production got admin@appbi.local and three more accounts
+  # sharing a password published in this repository. It is honoured now, and
+  # the API refuses to start with APP_ENV=production and this set to true.
+  #
+  # The consequence is that a fresh production database has NO account until
+  # BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD are supplied as a one-time
+  # secret. That is deliberate: bootstrap refuses rather than inventing a login.
+  SEED_DEMO_DATA: "false"
+
+  # The session cookie carries the whole session, and the default is false.
+  # Without this a deployment behind TLS still issues a cookie a browser will
+  # send over plain HTTP. Startup refuses production without it.
+  COOKIE_SECURE: "true"
+
+  # No datastore configuration here — DATABASE_URL and REDIS_URL are in the
+  # Secret, and they must point at instances of the product's own. ADR-001
+  # explains why sharing an instance with Airbyte erodes the boundary that
+  # keeps the engine replaceable; the API enforces the database-level half of
+  # it at startup.
