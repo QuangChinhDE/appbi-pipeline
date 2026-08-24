@@ -1,50 +1,51 @@
-# Helm values for certifying against Airbyte on chart V2.
+# Airbyte on Helm chart V2, with auth enabled. This is the file that produced a
+# working target topology; `values-certification.yaml` (chart V1, auth off) only
+# ever proved the adapter contract.
 #
 #   chart 2.0.17  ->  app 1.8.5
 #
-# These two are different numbers and the V1 chart repository is deprecated, so
-# a lane pinned to "1.8.5" as a chart version was certifying packaging that
-# production will not use.
+# Six things this encodes, every one of which cost a failed install to learn.
+# None of them are in the chart's documented values.
 #
-# Unlike values-certification.yaml, **auth is enabled here**. That file exists
-# to prove the adapter contract and says so; running only that way is how the
-# product shipped an adapter that could not authenticate against any
-# production Airbyte at all.
+#   1. `global.auth.instanceAdmin.password` is what populates the chart's own
+#      secret. The documented `passwordSecretKey` only NAMES a key and puts no
+#      value in it, and `global.secrets` does not add keys at all. With the key
+#      named but empty the bootloader dies in CreateContainerConfigError -- and
+#      it is a Helm hook, so it is deleted on failure with nothing to inspect.
+#   2. Do NOT install with `--no-hooks` to work around that. The bootloader is
+#      the migration; skipping it leaves an empty schema.
+#   3. `postgresql.enabled` must be false or the chart's in-cluster database
+#      silently wins over the external one configured below.
+#   4. The database field is `name:`, not `database:`.
+#   5. Temporal defaults to requiring TLS against an external Postgres and dies
+#      with `pq: SSL is not enabled on the server`. Set POSTGRES_TLS_ENABLED and
+#      SQL_TLS_ENABLED to false in the env ConfigMap, or terminate TLS properly.
+#   6. Do NOT hand-write `airbyte-auth-secrets`. The server creates it, with the
+#      dataplane and instance-admin credentials it generates itself. Writing it
+#      by hand leaves the workload-launcher unable to register its dataplane
+#      (401 at DataplaneApi.initializeDataplane), which means no connector pods
+#      and therefore no syncs. This was the longest-running failure in the
+#      rehearsal and it was self-inflicted.
 #
-# Four things this file encodes that cost a rehearsal to learn:
-#
-#   1. `global.secrets` does NOT add arbitrary keys to the chart's secret. The
-#      secret has a fixed key set; pointing instanceAdmin at a key that is not
-#      in it leaves the bootloader in CreateContainerConfigError.
-#   2. The bootloader is a Helm hook and is deleted when it fails, so there is
-#      nothing left to inspect. Install with --no-hooks and run it as a plain
-#      Pod when debugging.
-#   3. The database field is `name:`, not `database:`, and the chart's default
-#      database name is `db-airbyte`.
-#   4. Temporal defaults to requiring TLS against an external Postgres and
-#      fails with `pq: SSL is not enabled on the server`.
-#
-# The host below is a placeholder: an external database is the point, so there
-# is no sensible default.
+# The host below is a placeholder: an external database is the point.
 global:
   edition: community
   airbyteUrl: http://airbyte.rc1.internal
+  # No dataplane block. `controlPlane.bootstrap.dataPlane` looks like the way
+  # to supply those credentials and is not: the server generates its own
+  # service account regardless and publishes it into `airbyte-auth-secrets`.
   auth:
     enabled: true
     instanceAdmin:
       firstName: RC1
       lastName: Operator
-      # Keys inside the chart's OWN secret, populated by global.secrets below.
-      # Chart 2.0.17 has no secretName here: the chart reads the secret it
-      # creates, so pointing at an external one silently reads nothing and the
-      # bootloader ends in CreateContainerConfigError. It is a Helm hook, so it
-      # is deleted on failure and there is nothing left to patch afterwards.
-      emailSecretKey: instance-admin-email
-      passwordSecretKey: instance-admin-password
-  secrets:
-    instance-admin-email: ops@acme.io
-    instance-admin-password: REPLACE_ME
-    database-password: airbyte_rc1
+      # `password` -- not `passwordSecretKey`. The documented key only NAMES a
+      # key; it does not put a value in it, and `global.secrets` does not add
+      # keys to the chart's secret at all. With the key named but empty the
+      # bootloader dies in CreateContainerConfigError, and it is a Helm hook so
+      # it is deleted on failure with nothing left to inspect.
+      email: ops@acme.io
+      password: REPLACE_ME
   database:
     type: external
     host: EXTERNAL_POSTGRES_HOST
@@ -55,12 +56,14 @@ global:
     passwordSecretKey: database-password
   storage:
     type: minio
+# The external Postgres above is the point of this topology; the chart's
+# in-cluster database must stay off or it silently wins.
 postgresql:
-  enabled: true
+  enabled: false
 minio:
   enabled: true
 webapp:
-  enabled: true
+  enabled: false
 server:
   resources: {requests: {cpu: 100m, memory: 512Mi}}
 worker:
