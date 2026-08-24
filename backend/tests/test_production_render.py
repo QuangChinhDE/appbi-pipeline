@@ -144,8 +144,11 @@ def test_secret_references_become_explicit_key_bindings() -> None:
     # Client credentials, not Basic: Airbyte 1.x answers Basic with 401, so a
     # production deployment that only binds the Basic pair cannot talk to its
     # engine at all.
+    # No REDIS_URL: nothing in the product imports a Redis client, so it left
+    # V1 rather than staying as a container and a managed service that exist
+    # only to satisfy a config key.
     for variable in ("SECRET_ENCRYPTION_KEY", "JWT_SECRET", "DATABASE_URL",
-                     "REDIS_URL", "AIRBYTE_CLIENT_ID", "AIRBYTE_CLIENT_SECRET"):
+                     "DATABASE_URL_SYNC", "AIRBYTE_CLIENT_ID", "AIRBYTE_CLIENT_SECRET"):
         assert variable in bound, sorted(bound)
         assert bound[variable]["name"] and bound[variable]["key"]
 

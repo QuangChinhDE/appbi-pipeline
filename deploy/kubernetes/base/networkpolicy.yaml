@@ -64,13 +64,12 @@ spec:
       ports:
         - {protocol: TCP, port: 8001}
 
-    # Postgres and Redis. Replace these CIDRs with the ones your managed
+    # Postgres and the datastore. Replace these CIDRs with the ones your managed
     # instances actually sit in — a /8 here would allow most of the VPC.
     - to:
         - ipBlock: {cidr: 10.0.0.0/24}      # <- database subnet
       ports:
         - {protocol: TCP, port: 5432}
-        - {protocol: TCP, port: 6379}
 
   # Deliberately absent: any rule permitting general outbound. The product
   # calls nothing on the internet. Connectors do, and they do not run here.

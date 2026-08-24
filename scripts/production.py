@@ -199,12 +199,23 @@ def validate(config: dict, *, strict: bool) -> list[str]:
         _require(config, "engine.connector_policy_overlay")
         _require(config, "datastores.database_url_ref")
 
+        # Fatal, not a warning. The Config API carries connector credentials in
+        # request bodies and the product's own API carries session cookies; a
+        # warning here is a warning nobody reads on the one deployment that
+        # needed it.
         if str(config["engine"]["url"]).startswith("http://"):
-            warnings.append(
-                "engine.url is plain HTTP; the Config API carries connector "
-                "credentials in request bodies")
+            raise Stop(
+                "engine.url is plain HTTP. The Config API carries connector "
+                "credentials in request bodies. Use HTTPS, or terminate TLS in "
+                "the mesh and say so explicitly with --allow-insecure.")
+        if str((config.get("product") or {}).get("api_url") or "").startswith("http://"):
+            raise Stop(
+                "product.api_url is plain HTTP. Session cookies are issued "
+                "with Secure, so a browser will not send them over it -- users "
+                "would be unable to stay signed in.")
         if not (config.get("product") or {}).get("ingress_tls"):
-            warnings.append("product.ingress_tls is not set")
+            raise Stop("product.ingress_tls is not true; production ingress "
+                       "must terminate TLS")
         auth = (config.get("engine") or {}).get("auth") or {}
         mode = str(auth.get("mode", "")).lower()
         if not auth:
@@ -609,12 +620,31 @@ def render_from_config(config: dict, workdir: Path) -> Path:
 
     (generated / "config.yaml").write_text(yaml_dump(config_patch), encoding="utf-8")
 
-    for name in ("appbi-api", "appbi-worker"):
-        if env_patch:
+    if secret_env:
+        for name in ("appbi-api", "appbi-worker"):
             (generated / f"env-{name}.yaml").write_text(yaml_dump(env_patch), encoding="utf-8")
             kustomization["patches"].append(
                 {"path": f"env-{name}.yaml",
                  "target": {"kind": "Deployment", "name": name}})
+
+        # The migration Job runs bootstrap, so it needs the same runtime
+        # credentials plus the one-time admin. It kept a hard-coded
+        # `secretRef: appbi-secrets`, so a config naming a different Secret
+        # left the Job reading the old one while preflight passed.
+        migrate_env = list(secret_env) + _bootstrap_env(config)
+        (generated / "env-migrate.yaml").write_text(
+            yaml_dump([
+                {"op": "replace",
+                 "path": "/spec/template/spec/containers/0/env",
+                 "value": migrate_env},
+                # Drop the blanket secretRef; the ConfigMap entry stays.
+                {"op": "remove",
+                 "path": "/spec/template/spec/containers/0/envFrom/1"},
+            ]),
+            encoding="utf-8")
+        kustomization["patches"].append(
+            {"path": "env-migrate.yaml",
+             "target": {"kind": "Job", "name": "appbi-migrate"}})
 
     host = product.get("ingress_host") or _host_of(product.get("api_url"))
     if host:
@@ -664,6 +694,27 @@ def _host_of(url: str | None) -> str:
     return urlparse(str(url)).hostname or ""
 
 
+def _bootstrap_env(config: dict) -> list[dict]:
+    """The one-time bootstrap admin, bound only onto the migration Job.
+
+    Optional at the Pod level: the runbook says to delete the Secret after the
+    first sign-in, and every later upgrade must still run. `optional: true` is
+    what makes a deleted Secret a no-op instead of a failed Job.
+    """
+    secrets = config.get("secrets") or {}
+    env: list[dict] = []
+    for variable, field in (("BOOTSTRAP_ADMIN_EMAIL", "bootstrap_admin_email_ref"),
+                            ("BOOTSTRAP_ADMIN_PASSWORD", "bootstrap_admin_password_ref")):
+        reference = str(secrets.get(field) or "")
+        if not reference.startswith("secret://"):
+            continue
+        name, _, key = reference[len("secret://"):].partition("/")
+        env.append({"name": variable,
+                    "valueFrom": {"secretKeyRef": {"name": name, "key": key,
+                                                   "optional": True}}})
+    return env
+
+
 def _secret_env(config: dict) -> list[dict]:
     """Bind every `secret://` the config names to a `secretKeyRef`.
 
@@ -677,7 +728,6 @@ def _secret_env(config: dict) -> list[dict]:
         "JWT_SECRET": ("secrets", "jwt_secret_ref"),
         "DATABASE_URL": ("datastores", "database_url_ref"),
         "DATABASE_URL_SYNC": ("datastores", "database_url_sync_ref"),
-        "REDIS_URL": ("datastores", "redis_url_ref"),
         # Airbyte 1.x with auth enabled rejects HTTP Basic, including the
         # instance admin's own login, so a production deployment binds client
         # credentials. Basic stays for 0.59.x.
@@ -727,16 +777,59 @@ def assert_rendered_matches(config: dict, rendered: Path) -> None:
     if namespaces != {str(product["namespace"])}:
         problems.append(f"namespaces {sorted(namespaces)} != {product['namespace']!r}")
 
-    expected_image = f"{str(product['registry']).rstrip('/')}/" \
-                     f"{product.get('image', 'backend')}:{product['tag']}"
+    registry = str(product["registry"]).rstrip("/")
+    tag = str(product["tag"])
     images = {
         container["image"]
         for document in documents
         for spec in _pod_specs(document)
         for container in spec.get("containers", []) + spec.get("initContainers", [])
     }
-    if expected_image not in images:
-        problems.append(f"{expected_image!r} is not among the rendered images {sorted(images)}")
+    # Both images, not just the backend. The frontend was never asserted, so a
+    # deployment could ship a backend from the release and a UI from wherever
+    # the overlay happened to point.
+    for role, default in (("image", "backend"), ("frontend_image", "frontend")):
+        expected = f"{registry}/{product.get(role, default)}:{tag}"
+        if expected not in images:
+            problems.append(f"{expected!r} is not among the rendered images "
+                            f"{sorted(images)}")
+    foreign = sorted(i for i in images if not i.startswith(registry + "/"))
+    if foreign:
+        problems.append(f"images from a registry the config does not name: {foreign}")
+
+    # Every credential the config declares must arrive as a secretKeyRef on the
+    # workloads that need it. Preflight used to confirm the Secret existed while
+    # the Pod read a different one entirely.
+    # Name -> (secret, key), not just the variable name. Comparing names alone
+    # passed a config that pointed the same variable at a different Secret.
+    declared = {entry["name"]: (entry["valueFrom"]["secretKeyRef"]["name"],
+                                entry["valueFrom"]["secretKeyRef"]["key"])
+                for entry in _secret_env(config)}
+    for document in documents:
+        if document.get("metadata", {}).get("name") not in ("appbi-api", "appbi-worker"):
+            continue
+        name = document["metadata"]["name"]
+        for spec in _pod_specs(document):
+            container = spec["containers"][0]
+            bound = {
+                e["name"]: (e["valueFrom"]["secretKeyRef"].get("name"),
+                            e["valueFrom"]["secretKeyRef"].get("key"))
+                for e in container.get("env", [])
+                if (e.get("valueFrom") or {}).get("secretKeyRef")
+            }
+            for variable, target in sorted(declared.items()):
+                if variable not in bound:
+                    problems.append(f"{name} does not bind {variable}")
+                elif bound[variable] != target:
+                    problems.append(
+                        f"{name} binds {variable} to {bound[variable]}, but the "
+                        f"config says {target}")
+            blanket = [f["secretRef"].get("name")
+                       for f in container.get("envFrom", []) if "secretRef" in f]
+            if blanket:
+                problems.append(
+                    f"{name} still has a blanket secretRef {blanket}; it binds "
+                    "whatever Secret carries that name regardless of the config")
 
     for document in documents:
         if document.get("kind") == "ConfigMap" and document["metadata"]["name"] == "appbi-config":
@@ -750,12 +843,30 @@ def assert_rendered_matches(config: dict, rendered: Path) -> None:
                 problems.append("COOKIE_SECURE is not true in the rendered ConfigMap")
             if str(data.get("SEED_DEMO_DATA", "")).lower() != "false":
                 problems.append("SEED_DEMO_DATA is not false in the rendered ConfigMap")
+            # The workspace decides which Airbyte tenant receives customer
+            # data. A valid id from the wrong deployment passes every other
+            # check and then creates connections in someone else's tenant.
+            if data.get("AIRBYTE_WORKSPACE_ID") != str(engine["workspace_id"]):
+                problems.append(
+                    f"the rendered workspace {data.get('AIRBYTE_WORKSPACE_ID')!r} "
+                    f"is not {engine['workspace_id']!r}")
 
-        if document.get("kind") == "Ingress" and product.get("ingress_host"):
-            hosts = [rule.get("host") for rule in document["spec"].get("rules", [])]
-            if str(product["ingress_host"]) not in hosts:
-                problems.append(f"ingress hosts {hosts} do not include "
-                                f"{product['ingress_host']!r}")
+        if document.get("kind") == "Ingress":
+            # From `api_url` when `ingress_host` is absent -- the example config
+            # carries only the former, so keying off `ingress_host` alone left
+            # the ingress unchecked on any deployment that followed the docs.
+            wanted = str(product.get("ingress_host") or _host_of(product.get("api_url")))
+            if wanted:
+                hosts = [rule.get("host") for rule in document["spec"].get("rules", [])]
+                if wanted not in hosts:
+                    problems.append(f"ingress hosts {hosts} do not include {wanted!r}")
+                # The certificate too: patching only the rule leaves TLS
+                # requested for the example hostname.
+                for entry in document["spec"].get("tls", []):
+                    if wanted not in (entry.get("hosts") or []):
+                        problems.append(
+                            f"ingress TLS hosts {entry.get('hosts')} do not "
+                            f"include {wanted!r}")
 
     text = rendered.read_text(encoding="utf-8")
     for token in PLACEHOLDERS:
@@ -860,6 +971,14 @@ def install_k8s(config: dict) -> None:
         rendered = render_from_config(config, workdir)
         assert_rendered_matches(config, rendered)
 
+        # Placeholders, checked on what will actually be applied. The source
+        # overlay is *supposed* to contain them; checking there refused every
+        # install before the renderer could replace them.
+        leftover = static_gates(config, rendered=rendered)
+        if leftover:
+            raise Stop("the rendered manifests still carry placeholders:", *leftover)
+        ok("no placeholder survived into the rendered manifests")
+
         namespace = str(product["namespace"])
 
         # 1. Migrations, alone, and finished, before anything reads the schema.
@@ -903,6 +1022,53 @@ def install_k8s(config: dict) -> None:
             "what users actually reach. Set it to the ingress URL.")
     wait_for(f"{base}/readyz", label="the API is serving")
     wait_for(f"{base}/readyz?deep=1", label="the engine answered")
+
+    step("engine identity, from inside the product's own Pod")
+    verify_engine_in_pod(config)
+
+
+def verify_engine_in_pod(config: dict) -> None:
+    """Ask the product what engine it is talking to, over the path it uses.
+
+    The pre-deploy probe cannot do this. Production holds its credentials in
+    Kubernetes secrets and `resolve_secret()` deliberately refuses to read them
+    -- an installer that can read every secret is a bigger target than the
+    deployment it installs. So that probe runs unauthenticated and, against an
+    auth-enabled Airbyte, reads 401 and reports the engine as the wrong version
+    or unreachable.
+
+    The Pod has the credentials, the network path and the adapter. Asking it is
+    the only check that proves the combination the runtime actually uses.
+    """
+    namespace = str(config["product"]["namespace"])
+    engine = config["engine"]
+
+    result = kubectl(
+        config, "-n", namespace, "exec", "deploy/appbi-api", "--",
+        "python", "-c",
+        "import json,urllib.request;"
+        "print(urllib.request.urlopen("
+        "'http://127.0.0.1:8000/readyz?deep=1', timeout=30).read().decode())",
+        capture=True, check=False)
+    if result.returncode != 0:
+        raise Stop("could not reach the product's own Pod to verify the engine",
+                   (result.stderr or result.stdout).strip()[:300])
+    try:
+        report = json.loads(result.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise Stop("the Pod's readiness output was not JSON",
+                   result.stdout.strip()[:300])
+
+    if not (report.get("dependencies") or {}).get("engine", {}).get("ok"):
+        raise Stop(
+            "the product cannot reach its engine from inside the cluster",
+            json.dumps(report)[:400],
+            "On an auth-enabled Airbyte this is usually the Application "
+            "credential: see docs/RUNBOOK-engine-upgrade.md.")
+    if report.get("engine_type") != str(engine.get("type", "AIRBYTE_API")):
+        raise Stop(f"the Pod reports engine {report.get('engine_type')!r}, "
+                   f"config says {engine.get('type')!r}")
+    ok(f"the Pod reaches engine {report.get('engine_type')} over its own path")
 
 
 def _extract(rendered: Path, out: Path, *, kinds: set[str], names: set[str]) -> Path:
@@ -1062,17 +1228,25 @@ def record_artifact(config: dict, cookie: str | None, out: Path) -> bool:
 
 # ── commands ─────────────────────────────────────────────────────────────────
 
-def static_gates(config: dict) -> list[str]:
-    """Everything that can be decided without touching the cluster.
+def static_gates(config: dict, rendered: Path | None = None) -> list[str]:
+    """Everything decidable without the cluster, checked on the right artefact.
 
-    Run *before* migration and rollout. Previously the release gate ran after
-    `install_k8s()`, so a deployment with `LIC-001: NOT_CLEARED` migrated the
-    database and rolled out new Pods, and only then exited 1. The exit code was
-    right and the deployment had already happened.
+    Two ordering bugs lived here.
 
-    Anything needing the live system -- reconcile, evidence, the artifact --
-    stays after, as a second gate. It cannot move earlier: it describes what was
-    deployed.
+    The first was running this *after* `install_k8s()`, so a deployment with
+    `LIC-001: NOT_CLEARED` migrated the database and rolled out Pods and only
+    then exited 1. The exit code was right and the deployment had happened.
+
+    The second was checking the **source** overlay for placeholders. That
+    overlay is supposed to contain `registry.internal` and
+    `appbi.example.internal` -- they are the deliberately-wrong values that make
+    an unedited `kubectl apply -k` fail closed. Checking them there meant every
+    install refused before `render_from_config()` had a chance to replace them,
+    so a correct config could never get past its own gate.
+
+    Placeholders are a property of what will be applied, so they are checked on
+    the rendered manifests. Licence and on-call need no manifests at all, so
+    they are checked first -- before anything is rendered or pulled.
     """
     import importlib.util
 
@@ -1084,13 +1258,14 @@ def static_gates(config: dict) -> list[str]:
     problems: list[str] = []
     problems += gate.check_release_gates()
     problems += gate.check_oncall_assigned()
-    overlay = (config.get("product") or {}).get("overlay")
-    if overlay:
-        problems += gate.check_deployment_placeholders(str(overlay), label="the product")
-    policy = (config.get("engine") or {}).get("connector_policy_overlay")
-    if policy:
-        problems += gate.check_deployment_placeholders(str(policy),
-                                                       label="the connector policy")
+
+    if rendered is not None:
+        text = rendered.read_text(encoding="utf-8")
+        for token in PLACEHOLDERS:
+            if token in ("<", "REPLACE_ME") or token not in text:
+                continue
+            problems.append(
+                f"{token!r} is still in the rendered manifests")
     return problems
 
 

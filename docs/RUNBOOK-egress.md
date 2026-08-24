@@ -28,7 +28,6 @@ Result on the default profile (Airbyte 0.59.1 Compose staging, 2026-08-23):
 | Target | Result | |
 |---|---|---|
 | `appbi-pipeline-api:8000` | blocked | the product's own API |
-| `appbi-pipeline-redis:6379` | blocked | the job queue |
 | `appbi-airbyte-server:8001` | blocked | the engine's control API |
 | `appbi-pipeline-postgres:5432` | **reachable** | intended: the databases connectors read and write |
 | `1.1.1.1:443` | **reachable** | intended: SaaS connectors need outbound |

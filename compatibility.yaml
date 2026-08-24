@@ -214,5 +214,17 @@ release_gates:
     command: RUN_ENGINE_CONTRACT=1 pytest tests/test_adapter_contract.py
   - id: UAT-001..015
     description: Live UAT suite
-    status: PASSING
+    # NOT_PROVEN, not PASSING. One rolled-up status over fifteen BA scenarios
+    # hid that `verify.py` covers only some of them, and that UAT-007 was
+    # accepting `SUCCEEDED` after a cancel as a pass -- so a sync that finished
+    # before the cancel landed was being reported as proof cancellation works.
+    #
+    # The script now reports that case as inconclusive and exits non-zero.
+    # Restoring a status here needs per-scenario evidence with its own run id,
+    # on the target topology, not a single green line from one command.
+    status: NOT_PROVEN
     command: python scripts/verify.py
+    note: >-
+      UAT-007 (cancel) is inconclusive on a dataset that syncs faster than the
+      cancel can land. It needs a run large enough to still be syncing when
+      cancel is issued.

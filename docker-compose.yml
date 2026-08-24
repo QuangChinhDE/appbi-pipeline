@@ -29,7 +29,6 @@ x-backend-env: &backend-env
   APP_ENV: ${APP_ENV:-local}
   DATABASE_URL: postgresql+asyncpg://appbi:${POSTGRES_PASSWORD:-appbi}@postgres:5432/appbi_integration
   DATABASE_URL_SYNC: postgresql+psycopg://appbi:${POSTGRES_PASSWORD:-appbi}@postgres:5432/appbi_integration
-  REDIS_URL: redis://redis:6379/0
   JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
   SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY in .env}
   # --- engine ---
@@ -75,17 +74,6 @@ services:
     # the split.
     networks: [appbi, connectors]
 
-  redis:
-    image: redis:7-alpine
-    container_name: appbi-pipeline-redis
-    command: ["redis-server", "--appendonly", "no", "--save", ""]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [appbi]
-
   # migrate, api and worker are the same image with different commands. They
   # share an explicit tag so one build serves all three: with Compose's default
   # per-service tags, rebuilding `api` leaves `migrate` on the previous image,
@@ -128,7 +116,6 @@ services:
       - engine_logs:/engine/logs
     depends_on:
       postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
     ports:
       # Loopback only, and deliberately. nginx is the public entry point; this
@@ -162,7 +149,6 @@ services:
       - engine_logs:/engine/logs
     depends_on:
       postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
     networks: [appbi]
 

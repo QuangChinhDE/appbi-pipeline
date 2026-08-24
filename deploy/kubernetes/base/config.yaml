@@ -46,7 +46,7 @@ data:
   # send over plain HTTP. Startup refuses production without it.
   COOKIE_SECURE: "true"
 
-  # No datastore configuration here — DATABASE_URL and REDIS_URL are in the
+  # No datastore configuration here — DATABASE_URL is in the
   # Secret, and they must point at instances of the product's own. ADR-001
   # explains why sharing an instance with Airbyte erodes the boundary that
   # keeps the engine replaceable; the API enforces the database-level half of

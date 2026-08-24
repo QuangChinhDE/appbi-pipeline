@@ -45,7 +45,6 @@ class Settings(BaseSettings):
     # --- storage ---
     database_url: str = "postgresql+asyncpg://appbi:appbi@localhost:5432/appbi_integration"
     database_url_sync: str = "postgresql+psycopg://appbi:appbi@localhost:5432/appbi_integration"
-    redis_url: str = "redis://localhost:6379/0"
 
     # --- auth ---
     jwt_secret: str = "dev-jwt-secret-change-me"

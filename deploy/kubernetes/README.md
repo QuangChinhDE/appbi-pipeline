@@ -97,10 +97,10 @@ validation:
 | | |
 |---|---|
 | **Here** | API deployment + service, worker deployment, migration job, config, NetworkPolicies, PodDisruptionBudget, ingress |
-| **Not here** | Postgres, Redis, Airbyte |
+| **Not here** | Postgres, Airbyte |
 
-Those three are deliberately absent. Postgres and Redis should be managed
-services in production — running a database as a `Deployment` with an
+Both are deliberately absent. Postgres should be a managed service in
+production — running a database as a `Deployment` with an
 `emptyDir` is the kind of thing that looks fine until the node reschedules.
 Airbyte is its own deployment with its own Helm chart and its own lifecycle;
 this product only needs to reach its API.
@@ -117,7 +117,6 @@ kubectl -n appbi create secret generic appbi-secrets \
   --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
   --from-literal=DATABASE_URL='postgresql+asyncpg://user:pw@postgres.internal:5432/appbi' \
   --from-literal=DATABASE_URL_SYNC='postgresql+psycopg://user:pw@postgres.internal:5432/appbi' \
-  --from-literal=REDIS_URL='redis://redis.internal:6379/0' \
   --from-literal=AIRBYTE_WORKSPACE_ID='<from scripts/airbyte-workspace.py list>'
 
 # 2b. The one-time bootstrap admin. A fresh production database has no account

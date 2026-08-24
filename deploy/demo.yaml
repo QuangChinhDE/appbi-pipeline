@@ -50,7 +50,6 @@ datastores:
   # In-container, created by Compose. Named as references for the same reason:
   # the validator treats both profiles alike.
   database_url_ref: env://DATABASE_URL
-  redis_url_ref: env://REDIS_URL
 
 secrets:
   # Generated into .env on first install and kept on later runs, so `install`

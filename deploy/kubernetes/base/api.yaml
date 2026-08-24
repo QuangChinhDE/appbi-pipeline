@@ -78,7 +78,12 @@ spec:
                   "or has failed; check `kubectl logs job/appbi-migrate`.")
           envFrom:
             - configMapRef: {name: appbi-config}
-            - secretRef: {name: appbi-secrets}
+            # No blanket secretRef. It bound whichever Secret happened to be
+            # called `appbi-secrets`, so a config naming a different Secret
+            # passed preflight and the Pod still read the old one. Every
+            # credential is now an explicit `secretKeyRef` that the renderer
+            # writes from the config -- a missing key fails the Pod instead of
+            # arriving empty.
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -103,7 +108,12 @@ spec:
             - {name: SERVICE_NAME, value: product-api}
           envFrom:
             - configMapRef: {name: appbi-config}
-            - secretRef: {name: appbi-secrets}
+            # No blanket secretRef. It bound whichever Secret happened to be
+            # called `appbi-secrets`, so a config naming a different Secret
+            # passed preflight and the Pod still read the old one. Every
+            # credential is now an explicit `secretKeyRef` that the renderer
+            # writes from the config -- a missing key fails the Pod instead of
+            # arriving empty.
           ports:
             - {name: http, containerPort: 8000}
           livenessProbe:

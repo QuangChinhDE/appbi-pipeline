@@ -166,8 +166,14 @@ function OneOfField({ name, schema, value, onChange, required, path, secretsConf
   secretsConfigured?: Record<string, boolean>;
 }) {
   const { t } = useI18n();
-  const branches = schema.oneOf ?? [];
-  const current = (value ?? schema.default ?? {}) as Record<string, unknown>;
+  // Memoised because both are `??` expressions: a fresh array/object every
+  // render would change the dependencies of the two useMemos below on every
+  // render, which makes them memos in name only.
+  const branches = React.useMemo(() => schema.oneOf ?? [], [schema.oneOf]);
+  const current = React.useMemo(
+    () => (value ?? schema.default ?? {}) as Record<string, unknown>,
+    [value, schema.default],
+  );
 
   const discriminator = React.useMemo(() => {
     for (const branch of branches) {

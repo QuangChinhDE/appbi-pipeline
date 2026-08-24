@@ -44,6 +44,56 @@ DATABASE = os.getenv("POSTGRES_DB", "appbi_integration")
 USER = os.getenv("POSTGRES_USER", "appbi")
 
 
+# How to reach the database being backed up. `docker` is right for the demo
+# stack and useless in production, where Postgres is a managed instance with no
+# container to exec into -- `production.py upgrade` called this and had no
+# option but `--skip-backup`, which is how an upgrade ends up with no rollback
+# point.
+#
+# `pg_dump` is the production provider: it needs only a connection string, so it
+# works against RDS, Cloud SQL, a managed Postgres or a container alike. It does
+# require the client binary, and saying so is better than failing inside a
+# subprocess.
+PROVIDER = os.getenv("BACKUP_PROVIDER", "docker" if os.getenv("POSTGRES_CONTAINER") else "auto")
+
+
+def dump_command() -> tuple[list[str], str]:
+    """The command that produces the dump, and a label for the metadata."""
+    provider = PROVIDER
+    url = os.getenv("DATABASE_URL_SYNC") or os.getenv("DATABASE_URL") or ""
+
+    if provider == "auto":
+        provider = "pg_dump" if url and shutil.which("pg_dump") else "docker"
+
+    if provider == "pg_dump":
+        if not url:
+            raise SystemExit(
+                "BACKUP_PROVIDER=pg_dump needs DATABASE_URL_SYNC (or "
+                "DATABASE_URL) so it knows what to connect to.")
+        if not shutil.which("pg_dump"):
+            raise SystemExit(
+                "pg_dump is not on PATH. Install the Postgres client, or run "
+                "this from an image that has it -- a managed database has no "
+                "container to exec into.")
+        # psycopg-style URLs carry a driver suffix pg_dump does not understand.
+        dsn = url.replace("postgresql+psycopg://", "postgresql://")
+        dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
+        return (["pg_dump", "--clean", "--if-exists", "--dbname", dsn], "pg_dump")
+
+    if provider == "docker":
+        if not shutil.which("docker"):
+            raise SystemExit(
+                "BACKUP_PROVIDER=docker but docker is not on PATH. Production "
+                "uses a managed database: set DATABASE_URL_SYNC and "
+                "BACKUP_PROVIDER=pg_dump.")
+        return (["docker", "exec", CONTAINER, "pg_dump",
+                 "-U", USER, "-d", DATABASE, "--clean", "--if-exists"],
+                f"docker exec {CONTAINER}")
+
+    raise SystemExit(f"unknown BACKUP_PROVIDER {provider!r}; "
+                     "expected 'pg_dump', 'docker' or 'auto'")
+
+
 def key_fingerprint() -> str | None:
     """Identify the KEK without recording it.
 
@@ -70,12 +120,12 @@ def cmd_dump(args: argparse.Namespace) -> int:
     dump_path = out_dir / f"appbi-{stamp}.sql.gz"
     meta_path = out_dir / f"appbi-{stamp}.json"
 
-    print(f"dumping {DATABASE} from {CONTAINER} ...", flush=True)
     # --clean --if-exists so the restore is idempotent against a database that
     # already has objects; without it a partial restore leaves a mixture of old
     # and new and nothing says so.
-    result = run(["docker", "exec", CONTAINER, "pg_dump",
-                  "-U", USER, "-d", DATABASE, "--clean", "--if-exists"])
+    command, provider = dump_command()
+    print(f"dumping via {provider} ...", flush=True)
+    result = run(command)
     if result.returncode != 0:
         print(result.stderr.decode(errors="replace")[:800], file=sys.stderr)
         return 1
@@ -87,6 +137,9 @@ def cmd_dump(args: argparse.Namespace) -> int:
     fingerprint = key_fingerprint()
     meta = {
         "created_at": datetime.now(timezone.utc).isoformat(),
+        # Which provider produced it. A restore drill that does not know this
+        # cannot tell a managed-instance dump from a container one.
+        "provider": provider,
         "database": DATABASE,
         "bytes": dump_path.stat().st_size,
         "sha256": digest,

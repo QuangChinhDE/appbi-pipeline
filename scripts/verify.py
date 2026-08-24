@@ -42,12 +42,28 @@ class Client:
         return payload
 
 
-RESULTS: list[tuple[str, bool, str]] = []
+# `bool | None`: None means inconclusive -- the scenario did not run.
+RESULTS: list[tuple[str, bool | None, str]] = []
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     RESULTS.append((name, ok, detail))
     print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" -- {detail}" if detail else ""), flush=True)
+
+
+def inconclusive(name: str, detail: str) -> None:
+    """The scenario did not run, so it neither passed nor failed.
+
+    Recorded as a distinct outcome because the alternative is what UAT-007 did:
+    it accepted `SUCCEEDED` after a cancel as a pass, so a sync that finished
+    before the cancel landed was reported as proof that cancellation works.
+    That is worse than a failure -- a failure gets investigated.
+
+    An inconclusive result is not a pass. The summary refuses to claim the
+    suite passed while any remain.
+    """
+    RESULTS.append((name, None, detail))
+    print(f"[----] {name} -- INCONCLUSIVE: {detail}", flush=True)
 
 
 def wait_terminal(client: Client, run_id: str, timeout: int = 600):
@@ -114,8 +130,22 @@ def main() -> None:
         check("double cancel is idempotent (no error)", status2 == 200,
               f"-> {again['status']}")
         terminal = wait_terminal(admin, live["id"], timeout=300)
-        check("cancelled run reaches a terminal state", terminal["status"] in
-              ("CANCELLED", "SUCCEEDED", "FAILED"), terminal["status"])
+        if terminal["status"] == "CANCELLED":
+            # BA UAT-007: CANCEL_REQUESTED -> CANCELLED after the engine
+            # confirms. Only this proves cancellation.
+            check("UAT-007 cancel: run reaches CANCELLED", True, terminal["status"])
+        elif terminal["status"] == "SUCCEEDED":
+            # The sync finished before the cancel took effect. Nothing about
+            # cancellation was exercised, so nothing can be claimed. Use a
+            # dataset large enough that the sync is still running when the
+            # cancel is issued.
+            inconclusive("UAT-007 cancel: run reaches CANCELLED",
+                         "the sync completed before the cancel took effect; "
+                         "cancellation was never exercised. Re-run against a "
+                         "dataset that is still syncing when cancel is issued.")
+        else:
+            check("UAT-007 cancel: run reaches CANCELLED", False,
+                  f"ended {terminal['status']}, expected CANCELLED")
 
         # ---- UAT-006 proper: retry the cancelled run -----------------------
         if terminal["status"] in ("CANCELLED", "FAILED"):
@@ -216,10 +246,22 @@ def main() -> None:
           f"status={status}")
 
     # ---- summary ------------------------------------------------------------
-    failed = [name for name, ok, _ in RESULTS if not ok]
-    print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
+    # Three outcomes, and the third is why: `ok is None` means the scenario
+    # did not run. Counting those as passes is what let UAT-007 report that
+    # cancellation worked when the sync had simply finished first.
+    passed = [name for name, ok, _ in RESULTS if ok is True]
+    failed = [name for name, ok, _ in RESULTS if ok is False]
+    skipped = [name for name, ok, _ in RESULTS if ok is None]
+
+    print(f"\n{len(passed)}/{len(RESULTS)} checks passed, "
+          f"{len(failed)} failed, {len(skipped)} inconclusive")
     if failed:
         print("failing:", ", ".join(failed))
+    if skipped:
+        print("inconclusive:", ", ".join(skipped))
+        print("An inconclusive scenario has no evidence, so this run cannot "
+              "be cited as UAT coverage for it.")
+    if failed or skipped:
         sys.exit(1)
 
 

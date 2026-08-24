@@ -39,12 +39,12 @@ spec:
           command: ["python", "-m", "app.bootstrap"]
           envFrom:
             - configMapRef: {name: appbi-config}
+            # Placeholder secretRef. The renderer replaces this container's
+            # env with explicit `secretKeyRef` entries taken from the config,
+            # including the one-time bootstrap admin, and removes this entry.
+            # Applying the base directly leaves it, which is why the base is
+            # not deployable on its own.
             - secretRef: {name: appbi-secrets}
-            # The one-time bootstrap admin, and only here: this is the only
-            # container that runs `seed()`. Optional, because after the first
-            # sign-in the Secret should be deleted and every later deploy must
-            # still work -- bootstrap does nothing once a user exists.
-            - secretRef: {name: appbi-bootstrap, optional: true}
           resources:
             requests: {cpu: 100m, memory: 256Mi}
             limits: {memory: 512Mi}

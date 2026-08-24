@@ -27,6 +27,25 @@ repo_only = pytest.mark.skipif(
 )
 
 
+def _filled_production_config() -> dict:
+    """The shipped example with its placeholders answered."""
+    import yaml
+
+    text = (ROOT / "deploy" / "production.yaml.example").read_text(encoding="utf-8")
+    for token, value in (
+        ("<your-production-context>", "prod-eu"),
+        ("<registry.example.com>", "registry.acme.io"),
+        ("<appbi.example.com>", "appbi.acme.io"),
+        ("<airbyte.internal.example.com>", "airbyte.internal.acme.io"),
+        ("<workspace-uuid>", "8b8a2621-7f31-46f3-82e6-36774a9ff3a6"),
+        ("<ops@example.com>", "ops@acme.io"),
+        ("<the internal team or design partner>", "Internal Data Team"),
+        ("<e.g. business hours, Asia/Bangkok>", "business hours, Asia/Bangkok"),
+    ):
+        text = text.replace(token, value)
+    return yaml.safe_load(text)
+
+
 def _production_module():
     spec = importlib.util.spec_from_file_location(
         "production", ROOT / "scripts" / "production.py")
@@ -587,3 +606,196 @@ def test_the_adapter_can_authenticate_against_an_auth_enabled_airbyte() -> None:
     # endpoint, which is a worse outage than the 401.
     retry = flow[flow.index("if response.status_code == 401"):]
     assert retry.count("self._fetch()") == 1, retry
+
+
+# ── PM v14: installer, CI and UAT truth ──────────────────────────────────────
+
+@repo_only
+def test_placeholders_are_checked_on_the_rendered_output_not_the_source() -> None:
+    """The gate refused every install, including correct ones.
+
+    The source overlay is *supposed* to contain `registry.internal` and
+    `appbi.example.internal` -- they are the deliberately-wrong values that make
+    an unedited `kubectl apply -k` fail closed. Checking them there meant the
+    gate fired before `render_from_config()` could replace them, so a fully
+    correct config could never get past its own preflight.
+    """
+    installer = (ROOT / "scripts" / "production.py").read_text(encoding="utf-8")
+    gates = installer[installer.index("def static_gates("):installer.index("def cmd_install(")]
+
+    assert "rendered: Path | None = None" in gates, (
+        "placeholders belong to the manifests that will be applied")
+    assert "check_deployment_placeholders" not in gates, (
+        "the source-overlay placeholder check must not run pre-render")
+    # Licence and on-call need no manifests, so they still run first.
+    assert "check_release_gates" in gates
+    assert "check_oncall_assigned" in gates
+
+    body = installer[installer.index("def install_k8s("):installer.index("def verify_engine_in_pod(")]
+    assert "static_gates(config, rendered=rendered)" in body
+    assert body.index("static_gates(config, rendered=rendered)") < body.index('"apply"')
+
+
+@repo_only
+def test_no_workload_reads_a_secret_the_config_did_not_name() -> None:
+    """envFrom secretRef bound whatever Secret carried that name.
+
+    A config naming a different Secret passed preflight and the Pod still read
+    the old one. The migration Job was worse: it hard-coded both the runtime
+    and the bootstrap Secret.
+    """
+    import yaml
+
+    base = ROOT / "deploy" / "kubernetes" / "base"
+    for name in ("api.yaml", "worker.yaml"):
+        for document in yaml.safe_load_all((base / name).read_text(encoding="utf-8")):
+            if not document or document.get("kind") != "Deployment":
+                continue
+            for container in document["spec"]["template"]["spec"]["containers"]:
+                blanket = [f for f in container.get("envFrom", []) if "secretRef" in f]
+                assert not blanket, f"{name} still has {blanket}"
+
+    installer = (ROOT / "scripts" / "production.py").read_text(encoding="utf-8")
+    assert "def _bootstrap_env" in installer
+    assert '"target": {"kind": "Job", "name": "appbi-migrate"}' in installer, (
+        "the migration Job credentials must come from the config too")
+    # The bootstrap Secret is deleted after first use, so its absence must not
+    # break later upgrades.
+    bootstrap = installer[installer.index("def _bootstrap_env("):
+                          installer.index("def _secret_env(")]
+    assert '"optional": True' in bootstrap
+
+
+@repo_only
+def test_plain_http_and_missing_tls_are_fatal_in_production() -> None:
+    """They were warnings, on a strict production profile.
+
+    The Config API carries connector credentials in request bodies and the
+    product issues Secure session cookies -- over plain HTTP users cannot stay
+    signed in at all. A warning is the wrong severity for both.
+    """
+    import copy
+
+    module = _production_module()
+    base = _filled_production_config()
+    assert module.validate(copy.deepcopy(base), strict=True) == []
+
+    for mutate in (
+        lambda c: c["engine"].update(url="http://airbyte.internal"),
+        lambda c: c["product"].update(api_url="http://appbi.acme.io"),
+        lambda c: c["product"].update(ingress_tls=False),
+    ):
+        config = copy.deepcopy(base)
+        mutate(config)
+        with pytest.raises(SystemExit):
+            module.validate(config, strict=True)
+
+
+@repo_only
+def test_the_engine_is_verified_from_inside_the_product_pod() -> None:
+    """The pre-deploy probe cannot verify an auth-enabled engine.
+
+    Production credentials live in Kubernetes secrets and `resolve_secret()`
+    refuses to read them on purpose, so that probe runs unauthenticated and
+    reads 401 as "wrong version" or "unreachable". The Pod has the credentials,
+    the network path and the adapter.
+    """
+    installer = (ROOT / "scripts" / "production.py").read_text(encoding="utf-8")
+    assert "def verify_engine_in_pod" in installer
+    body = installer[installer.index("def verify_engine_in_pod("):
+                     installer.index("def _extract(")]
+    assert '"exec", "deploy/appbi-api"' in body
+    assert "readyz?deep=1" in body
+    # And it runs after the rollout, since it needs a running Pod.
+    flow = installer[installer.index("def install_k8s("):installer.index("def verify_engine_in_pod(")]
+    assert flow.index('"rollout"') < flow.index("verify_engine_in_pod(config)")
+
+
+@repo_only
+def test_backup_has_a_provider_that_works_without_docker() -> None:
+    """production.py upgrade called a backup that only did `docker exec`.
+
+    A managed database has no container to exec into, so the only way past it
+    was --skip-backup: an upgrade with no rollback point.
+    """
+    backup = (ROOT / "scripts" / "backup.py").read_text(encoding="utf-8")
+    assert "def dump_command" in backup
+    assert "BACKUP_PROVIDER" in backup
+    body = backup[backup.index("def dump_command("):backup.index("def key_fingerprint(")]
+    assert 'provider == "pg_dump"' in body
+    # psycopg/asyncpg URLs carry a driver suffix pg_dump does not understand.
+    assert 'replace("postgresql+psycopg://"' in body
+    assert 'replace("postgresql+asyncpg://"' in body
+    assert '"provider": provider' in backup
+
+
+@repo_only
+def test_the_uat_cancel_check_cannot_pass_on_success() -> None:
+    """PM ran it, got SUCCEEDED after a cancel, and the script said PASS.
+
+    BA UAT-007 requires CANCEL_REQUESTED -> CANCELLED. A sync that finished
+    before the cancel landed exercised nothing, so it is inconclusive -- which
+    is a third outcome, not a pass.
+    """
+    verify = (ROOT / "scripts" / "verify.py").read_text(encoding="utf-8")
+    assert "def inconclusive" in verify
+    assert '"CANCELLED", "SUCCEEDED", "FAILED"' not in verify, (
+        "SUCCEEDED after a cancel must never count as a pass")
+    body = verify[verify.index("UAT-007"):]
+    assert 'terminal["status"] == "CANCELLED"' in body
+    assert "inconclusive(" in body
+    # An inconclusive run must not exit 0, or CI reports coverage it lacks.
+    assert "if failed or skipped:" in verify
+
+
+@repo_only
+def test_the_uat_gate_no_longer_claims_a_rolled_up_pass() -> None:
+    """One PASSING line covered fifteen BA scenarios the script partly covers."""
+    import yaml
+
+    document = yaml.safe_load(
+        (ROOT / "compatibility.yaml").read_text(encoding="utf-8"))
+    uat = next(g for g in document["release_gates"] if g["id"].startswith("UAT-"))
+    assert uat["status"] == "NOT_PROVEN", uat
+
+
+@repo_only
+def test_the_ci_workflow_is_structurally_valid() -> None:
+    """A split step left Typecheck with no command and a duplicate `run` key.
+
+    The parser kept the second `run`, so the backend audit step silently became
+    `npm run typecheck` at the repository root: two checks disabled by one edit,
+    both still reporting success.
+    """
+    import yaml
+
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+
+    for job_name, job in workflow["jobs"].items():
+        for step in job.get("steps", []):
+            if "name" not in step:
+                continue
+            assert "run" in step or "uses" in step, (
+                f"{job_name} / {step['name']} has neither run nor uses")
+
+    frontend = [s.get("name") for s in workflow["jobs"]["frontend"]["steps"]]
+    assert "Lint" in frontend, "next lint with no config exits 0 without linting"
+    assert "Typecheck" in frontend
+    # The backend audit has its own job now, so a frontend failure cannot hide it.
+    assert "backend-audit" in workflow["jobs"]
+    audit = " ".join(str(s.get("run", ""))
+                     for s in workflow["jobs"]["backend-audit"]["steps"])
+    assert "pip-audit" in audit
+
+
+@repo_only
+def test_the_frontend_has_a_lint_configuration_that_runs() -> None:
+    import json
+
+    package = json.loads(
+        (ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))
+    assert (ROOT / "frontend" / ".eslintrc.json").exists()
+    assert "eslint" in package["devDependencies"]
+    # Without --max-warnings 0 a warning count grows quietly and never fails.
+    assert "--max-warnings 0" in package["scripts"]["lint"]

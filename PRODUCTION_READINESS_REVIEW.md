@@ -8,7 +8,7 @@
 >
 > **Trang thai hien tai trong block nay la historical** (cap nhat 2026-08-23,
 > sau vong Sprint 5 / K8s manifest). Sau do dev da certify them Airbyte 1.8.5
-> tren Kubernetes; doc `CURRENT_STATUS.md` va muc PM v8 o cuoi file truoc khi
+> tren Kubernetes; doc `CURRENT_STATUS.md` va muc PM v14 o cuoi file truoc khi
 > ra quyet dinh release.
 >
 > **Gate P0 cua PM - `AIRBYTE_API` chay that tren Airbyte self-managed: DA DAT.**
@@ -4050,3 +4050,655 @@ tạo ra triệu chứng mới, nghi ngờ workaround trước khi nghi ngờ up
 | G3 | mở khoá được rồi (cần topology chạy được sync) — chưa chạy |
 | G4 | timeout/cancel + `status` exit code xong. Golden path + restart + alert trên topology này: chưa chạy |
 | G5 | legal |
+
+---
+
+# PM review v13 - teardown và clean-room (2026-08-24)
+
+## Quyết định
+
+**Chưa xóa Docker/cluster RC1. Chưa build production.** Dev đã đóng đúng phần
+Airbyte control/workload plane, nhưng chưa đóng production topology của toàn bộ
+sản phẩm. Xóa bây giờ làm mất môi trường duy nhất đang có thể dùng để tạo
+Application, chạy golden path và tạo backup có dữ liệu thực.
+
+## Những gì PM xác nhận
+
+```text
+Git branch                    rc1-production-rehearsal
+HEAD                          a1d13959652d2a7fbe159fe36a9a5f832bce7f25
+working tree                  clean
+Git remote                    chưa có
+backend tests                 246 passed, 18 skipped
+live Postgres, đúng container 6 passed
+Airbyte server/UI             HTTP 200 qua port-forward
+Airbyte workload-launcher     1/1 Running
+AppBI workloads trong K8s     không có
+deploy/production.yaml        không có
+```
+
+Tài liệu Airbyte 1.8 chính thức xác nhận Application phải được tạo bởi operator
+đang đăng nhập tại `Settings > Account > Applications`, sau đó dùng
+`client_id/client_secret` để lấy bearer token. Vì vậy one-time UI step là hợp
+lệ; nó không phải lý do để tắt auth hoặc ghi thẳng vào database Airbyte.
+
+## Finding quyết định việc teardown
+
+| Mức | Finding | Hệ quả |
+|---|---|---|
+| P0-G1-APP | Namespace `appbi` chỉ có Secret, không có migrate/API/worker/frontend. Compose hiện tại là demo embedded. | Chưa chứng minh AppBI và Airbyte cùng chạy trên target K8s; G1 đầy đủ vẫn mở. |
+| P0-G4-AUTH | Application credential chưa được tạo và không có golden-path sync trên topology auth-enabled. | Adapter mới chỉ được chứng minh bằng mock/unit, chưa bằng hành vi read/write thật với auth. |
+| P0-OPS-DOCTOR | `_engine_bearer()` trả rỗng cho `secret://`, nhưng `verify_engine()` vẫn gọi Airbyte trực tiếp. Cấu hình mẫu production dùng chính `secret://`. | `doctor` có thể báo lỗi dù Pod đang có credential hợp lệ; tuyên bố "doctor chặn nếu bỏ qua" chưa đủ chính xác. |
+| P0-CI-V2 | Workflow cài thẳng `values-certification-v2.yaml` còn `REPLACE_ME` và external DB placeholder, rồi gọi protected API không bearer. | Lane V2 chưa phải bằng chứng clean runner có thể tái lập. |
+| P0-G2-ARTIFACT | Không có Git remote; registry `localhost:5001` nằm trong container `rc1-registry` trên cùng máy. | Xóa máy/container sẽ xóa cả nơi được gọi là source/artifact store; máy thứ hai không thể clone/pull độc lập. |
+| P1-RUNBOOK | Runbook dùng `kubectl create secret ... ...`; secret đã tồn tại và dấu `...` không phải command chạy được. | Operator vẫn phải tự suy đoán cách cập nhật secret mà không làm mất 7 key hiện có. |
+
+## Thứ tự thực thi tiếp theo
+
+1. Giữ cluster hiện tại. Port-forward Airbyte, operator đăng nhập và tạo
+   Application `AppBI RC1` theo UI chính thức.
+2. Lưu credential vào một Secret riêng, ví dụ `appbi-airbyte-auth`, rồi trỏ
+   `client_id_ref/client_secret_ref` của production config vào đó. Không đưa
+   secret vào shell history, Git hoặc evidence.
+3. Dev sửa `doctor` để post-deploy verification chạy trong AppBI Pod hoặc đọc
+   `/admin/compatibility` + `/readyz?deep=1`; không yêu cầu installer đọc toàn bộ
+   Kubernetes Secret.
+4. Tạo `deploy/production.yaml` không commit, thay toàn bộ placeholder, dùng
+   registry/digest thật và chạy `production.py install` để namespace `appbi` có
+   migrate Completed, API/worker/frontend Running và deep-ready 200.
+5. Trên đúng deployment đó chạy 11/11, Postgres full refresh, incremental zero
+   re-read, long cancel/timeout, worker restart và alert delivery.
+6. Sau khi có data/run/secret mapping thật, chạy paired AppBI + Airbyte backup,
+   phá dữ liệu test, restore và chạy lại một sync.
+7. Cấu hình Git remote và registry bền vững bên ngoài máy, push branch và mọi
+   image theo digest. Sau đó mới record evidence v2 cho commit RC mới.
+
+## Clean-room acceptance
+
+Clean-room là vòng **sau** các bước trên. Nó phải xóa đúng project Compose,
+cluster `appbi-rc1`, `rc1-pg-airbyte`, `rc1-pg-appbi`, `rc1-redis`,
+`rc1-registry`, network/volume của chúng, image AppBI/Airbyte/connector liên
+quan và build cache. Tuyệt đối không dùng `docker system prune -a` trên máy này
+vì còn project `appbi-ai` và nhiều project khác.
+
+Pass chỉ khi một máy/runner sạch:
+
+1. clone được commit từ remote;
+2. pull image từ registry bền vững khi public upstream bị chặn;
+3. chạy một entry point rehearsal, chỉ dừng đúng một lần cho bước tạo
+   Application qua UI rồi resume;
+4. dựng đủ AppBI + Airbyte + external stores, không dùng cache cũ;
+5. doctor xanh, deep-ready 200 và golden path incremental/cancel xanh;
+6. evidence trỏ đúng commit, product digest, chart/app version, workspace và
+   run ids.
+
+Đây là vòng kiểm tra đáng làm trước pilot. Nhưng phải giữ topology hiện tại cho
+đến khi nó tạo ra golden-path và restore evidence; nếu không clean-room chỉ lặp
+lại việc dựng Airbyte, chưa lặp lại việc dựng sản phẩm.
+
+---
+
+# PM review v14 - master production readiness audit (2026-08-24)
+
+## 1. Phạm vi và kết luận
+
+Vòng này review code, rendered manifest, luồng release, CI, trạng thái Docker/K8s
+thật, tài liệu BA, bằng chứng local và tài liệu Airbyte chính thức. Báo cáo của
+dev chỉ được dùng làm đầu mối; kết luận bên dưới dựa trên code và lệnh PM đã tự
+chạy.
+
+```text
+Product direction / adapter boundary       ACCEPTED
+Embedded demo on this workstation          HEALTHY
+Airbyte 1.8.5 adapter contract             ACCEPTED, narrow scope
+Production installer                       FAILING
+Exact target-topology golden path          NOT RUN
+Release CI / immutable artifact            FAILING / MISSING
+Backup and operational readiness           NOT PROVEN on target
+Legal/commercial release                    BLOCKED
+External production pilot                  NO-GO
+Broad GA / all Airbyte connectors           NO-GO and not the current scope
+```
+
+Đây không còn là một danh sách bug mở vô hạn. Feature freeze tiếp tục; chỉ làm
+những gate P0 bên dưới. Khi mỗi P0 có artifact và owner ký, PM có thể ra một
+quyết định GO duy nhất mà không review lại từ đầu.
+
+## 2. Bằng chứng PM tự kiểm tra
+
+| Hạng mục | Kết quả quan sát |
+|---|---|
+| Git | branch `rc1-production-rehearsal`, HEAD `a1d13959652d2a7fbe159fe36a9a5f832bce7f25`, không có remote; chỉ hai file PM review đang dirty |
+| Backend | `246 passed, 18 skipped`; 12 live adapter tests và 6 live Postgres tests không chạy trong lệnh mặc định |
+| API audit | `python scripts/audit-api.py` chạy xong với `0 findings` |
+| Live verifier | Incremental pass, nhưng cancel request kết thúc `SUCCEEDED` và vẫn được tính PASS |
+| Frontend | typecheck PASS, build 21 pages PASS, i18n `794/794`, runtime npm audit 0 high; build ghi `Skipping linting` |
+| Lint | `npm run lint` mở interactive setup và thoát mà không lint; repo không có ESLint config/dependency |
+| FE tests | không có unit/component test file hay test runner trong `frontend/package.json` |
+| Backend dependency audit | `pip-audit -r backend/requirements.txt --strict` không tìm thấy CVE đã biết tại thời điểm review |
+| Connector lock | `connector lock OK (4 entries)`; đây là lock của bundled/embedded images, không ép Airbyte API chạy cùng tag |
+| Compose | demo AppBI đang chạy với API/worker/frontend/proxy/Postgres/Redis; `doctor` kết luận NOT PRODUCTION READY |
+| K8s Airbyte | chart V2 `2.0.17`, app `1.8.5`; control plane và workload launcher Running trong kind/Calico lab |
+| K8s AppBI | namespace `appbi` chỉ có `appbi-secrets` và `appbi-bootstrap`; không có workload/service/ingress/policy |
+| Engine credential | `application` table trong Airbyte DB có `0` row; AppBI Secret có Basic user/password, không có client id/secret |
+| Release files | không có `deploy/production.yaml`, `certification*.json` hay `mirror-lock.json` |
+| Evidence files | `evidence-e2e*.json` là schema v1 (`produced_by`, `engine`, `operations`), không có deployment/build/run binding và đang bị Git ignore |
+| Kustomize source overlay | render trực tiếp vẫn ra `registry.internal/...:1.0.0`, `appbi.example.internal`, CIDR mẫu `10.42.7.0/28` |
+| Local footprint | 112 images, 65.17 GB; volumes 33.55 GB; build cache 20.93 GB. RC1 lab và demo cùng đang chạy |
+
+## 3. P0 - bắt buộc trước external production pilot
+
+### P0-01 - legal, license, notices và delivery model
+
+**Finding:** `compatibility.yaml:203-210` vẫn ghi `LIC-001: NOT_CLEARED` và chỉ
+cho internal/PoC. Sản phẩm này là một UI/control plane data integration dùng
+Airbyte bên dưới, nên cần phân loại chính xác delivery model; đổi tên container
+hoặc không hiện logo Airbyte cho customer không làm thay đổi license.
+
+Airbyte ghi public repo/connectors theo ELv2, protocol theo MIT, và FAQ nói rõ
+không được host rồi bán nó như ELT/ETL tool hoặc expose trực tiếp Airbyte UI/API;
+ELv2 cũng không cho xóa/che notice. Nguồn chính thức:
+
+- https://github.com/airbytehq/airbyte/blob/master/docs/community/licenses/README.md
+- https://github.com/airbytehq/airbyte/blob/master/docs/community/licenses/license-faq.md
+
+**Đóng gate khi:** legal ký văn bản cho đúng mô hình bán hàng/hosting, danh sách
+license connector/platform được lưu cùng release, có `LICENSE/NOTICE/third-party`
+artifact và `LIC-001=PASS`. Dev không tự đổi status này.
+
+### P0-02 - release scope và version policy
+
+**Finding:** BA yêu cầu top 3-5 connector gần production
+(`BA_AppBI_Data_Integration_Airbyte.md:1952-1965`), nhưng pilot config chỉ có
+`source-postgres` và `destination-postgres`; `source-faker` là fixture. UI có
+654 connector metadata nhưng chỉ 3 selectable; đây không đồng nghĩa 654 connector
+được production support.
+
+`compatibility.yaml:90-152` là integration certification cũ: product chạy Compose
+qua NodePort, không phải full target topology. Dòng `deployment: Helm chart
+1.8.5` cũng sai cách gọi; mapping đúng là chart `2.0.17` -> app `1.8.5`.
+Airbyte release page hiện coi 2.0 là line mới hơn và 2.1+ chỉ support chart V2:
+https://github.com/airbytehq/airbyte/releases
+
+**PM recommendation để lên sớm:** freeze `1.8.5` cho pilot PostgreSQL-only, với
+security/support exception có hạn; không đổi engine ngay trước pilot. Tạo milestone
+certify 2.x/current sau pilot. Nếu security không chấp nhận 1.8.5, recertify 2.x
+trở thành P0.
+
+**Đóng gate khi:** một release scope file ghi product commit/version, chart/app,
+K8s, connector/tag/digest, data volume, concurrency, tenant count, support window
+và ngày hết hạn của version exception. UI/backend chỉ offer đúng scope đó.
+
+### P0-03 - Airbyte Application credential và auth-enabled path
+
+**Finding:** workload launcher Running không chứng minh AppBI auth. AppBI 1.8.5
+cần Application `client_id/client_secret`; upstream hướng dẫn tạo Application
+trong UI và đổi token tại `/api/v1/applications/token`:
+https://github.com/airbytehq/airbyte/blob/master/docusaurus/platform_versioned_docs/version-1.8/using-airbyte/configuring-api-access.md
+
+Current lab có `0` Application, và K8s Secret không có hai key client credential.
+Vì vậy G1/G4 chưa đóng.
+
+**Đóng gate khi:** operator tạo Application bằng flow supported; secret manager
+lưu credential; Pod AppBI lấy bearer token, refresh sau 401, và gọi thành công
+`instance_configuration`, workspace, source/destination list. Bằng chứng không
+được chứa secret. Không tắt auth và không seed thẳng Airbyte DB.
+
+### P0-04 - sửa one-command production installer thành luồng chạy được
+
+**Finding 1:** `scripts/production.py:1065-1094` check placeholder trên source
+overlay trước render. Source overlay có chủ ý chứa `registry.internal` và
+`appbi.example.internal`; với config example, install luôn refuse trước khi
+`render_from_config()` có cơ hội thay giá trị.
+
+**Finding 2:** `scripts/production.py:931-965` verify engine trước deploy, nhưng
+`resolve_secret()` tại `1013-1024` có chủ ý trả rỗng cho `secret://`. Production
+config dùng chính kiểu ref này, nên probe auth-enabled sẽ 401. Comment nói sẽ
+post-deploy verify trong Pod, nhưng install không có bước đó.
+
+**Finding 3:** renderer thêm `env` explicit cho API/worker, nhưng
+`deploy/kubernetes/base/api.yaml:79-106` và `worker.yaml:77-100` vẫn giữ
+`envFrom: appbi-secrets`. Migration Job tại `migrate-job.yaml:40-47` vẫn hard-code
+`appbi-secrets` và `appbi-bootstrap`. Config có thể trỏ đến Secret khác, preflight
+pass, nhưng Pod/Job vẫn đọc tên cũ. Bootstrap check chỉ check Secret tồn tại,
+không check email/password keys.
+
+**Finding 4:** `assert_rendered_matches()` chỉ assert backend image, không assert
+frontend image/digest, workspace, all secret refs, CIDR/policy và TLS host khi
+config chỉ có `api_url`.
+
+**Finding 5:** `validate()` chỉ warning cho plain HTTP/TLS missing
+(`scripts/production.py:202-207`) ngay cả production strict. `upgrade` gọi
+`scripts/backup.py dump`, nhưng backup script chỉ `docker exec
+appbi-pipeline-postgres` (`scripts/backup.py:42-78`). Production upgrade sẽ fail
+hoặc phải dùng `--skip-backup`.
+
+**Đóng gate khi:** `production.py install/upgrade/doctor/status/rollback` cùng
+dùng một rendered release artifact; static gate chạy trên rendered output;
+post-deploy engine verification chạy trong AppBI Pod; mọi Secret/ConfigMap/image/
+CIDR/host/digest khớp config; TLS/HTTP sai là fatal; production backup provider
+hoạt động. Test phải gọi real `kubectl` và run trên cluster sạch.
+
+### P0-05 - full production-shaped topology
+
+**Finding:** Airbyte đang ở K8s, AppBI không ở K8s. External stores là container
+trên cùng laptop; Airbyte storage là MinIO trong kind; cluster một node; không có
+ingress-nginx/monitoring namespace. Đây là lab tốt, không phải topology đạt SLO.
+
+**Đóng gate khi:** cùng một environment có AppBI API/worker/frontend/migrate,
+Airbyte, auth, TLS ingress, enforcing CNI, hai Postgres production riêng, object
+storage durable external, secret manager, registry durable và monitoring. Không
+cho Compose AppBI, NodePort hoặc MinIO trong kind tính là production proof.
+
+### P0-06 - authenticated golden path và UAT đúng tiêu chí
+
+**Finding:** `scripts/verify.py:101-118` chấp nhận `CANCELLED`, `SUCCEEDED` hoặc
+`FAILED` sau cancel. PM chạy thật và nhận `SUCCEEDED`, nhưng script vẫn PASS.
+BA UAT-007 tại `BA...md:1897-1900` yêu cầu `CANCEL_REQUESTED -> CANCELLED` sau
+engine confirm. `compatibility.yaml:215-218` lại gắn UAT-001..015 PASSING bằng
+script này, trong khi script chỉ cover một phần.
+
+**Đóng gate khi:** trên exact target, chạy create/test source và destination,
+discover, full refresh với row count, incremental với cursor state, failure,
+retry lineage, pause/schedule, delete dependency, tenant isolation, secret leak,
+engine down, schema break, RBAC, upgrade regression và cancel thật sự
+`CANCELLED`. UAT matrix 15 dòng phải có run/evidence ID riêng; không gom một
+status PASSING.
+
+### P0-07 - repair CI/CD và clean runner
+
+**Finding:** `.github/workflows/ci.yml:70-88` có Typecheck step không `run/uses`.
+Step backend dependency audit có hai key `run`; YAML parser giữ key sau là
+`npm run typecheck` tại repo root, làm mất `pip-audit`. Workflow không có lint.
+
+Lane V2 tại `ci.yml:278-364` cài thẳng values có `REPLACE_ME` và
+`EXTERNAL_POSTGRES_HOST`, không provision external DB, sau đó gọi API đã bật auth
+bằng curl không bearer. Product vẫn chạy Compose qua NodePort. Do đó câu
+"reproduced by CI" trong `compatibility.yaml:147-152` không đúng hiện tại.
+
+**Đóng gate khi:** workflow qua action/YAML validation, mỗi step có đúng owner
+và working directory; backend/unit/live DB/adapter, FE lint/type/component/build,
+dependency/IaC/image scans, Kustomize validation và auth-enabled target E2E xanh
+từ remote clean checkout. Scheduled lane phải publish artifact và red lane phải
+block release.
+
+### P0-08 - immutable supply chain và khả năng sống khi upstream bị chặn
+
+**Finding:** base/runtime images đang pin bằng mutable tag, không digest:
+`python:3.11-slim-bookworm`, `node:20-alpine`, `postgres:16-alpine`,
+`redis:7-alpine`, `nginx:1.27-alpine`. Product K8s renderer dùng `newTag`, và
+`IfNotPresent`; hai node có thể chạy hai image khác nhau nếu tag bị move.
+
+`scripts/mirror.py:86-117` tự chế danh sách `airbyte/<component>:1.8.5`, trong
+khi chart thật còn `temporalio`, MinIO, builder và các image khác. Nó coi Helm
+chart như Docker image `airbyte/airbyte:2.0.17`, không phải chart OCI/tgz. Không
+có `mirror-lock.json`; local registry chết cùng laptop.
+
+**Đóng gate khi:** artifact store/registry bền vững chứa:
+
+1. AppBI source commit và signed release archive;
+2. product images multi-arch by digest;
+3. Helm chart OCI/tgz by digest;
+4. mọi platform image lấy từ `helm template` của exact values;
+5. launch-scope connector images by digest;
+6. base images và package/wheel/npm cache nếu yêu cầu rebuild offline;
+7. SBOM, vulnerability report, signature/provenance, licenses/notices;
+8. backup của registry/artifact store.
+
+Clean runner phải cài khi DNS/route đến GitHub, Docker Hub, GHCR và Airbyte
+registry bị block. Chạy deployment chỉ dùng digest; tag chỉ để người đọc.
+
+### P0-09 - evidence v2 và release artifact
+
+**Finding:** current E2E JSON là schema v1, không bind build/deployment/run;
+certification và mirror lock không tồn tại. No Git remote nên image/build SHA
+không có provenance ngoài máy local.
+
+**Đóng gate khi:** `scripts/e2e.py --evidence` tạo schema 2 trên exact release;
+`release-gate.py record` và `check` xanh; artifact lưu durable ngoài cluster và
+bind commit, dirty=false, image digest, chart digest/app version, K8s target,
+workspace fingerprint, connector digests, run IDs, row counts, security/DR/
+load evidence và approvals. Artifact quá hạn hoặc sai deployment phải fail.
+
+### P0-10 - connector version enforcement
+
+**Finding:** standard Airbyte connector được resolve theo
+`dockerRepository -> definitionId` (`airbyte_api/adapter.py:459-515`). Product
+đọc engine `dockerImageTag` để hiển thị (`catalog.py:246-250`) nhưng
+`require_usable()` tại `144-167` không chặn mismatch với certified version.
+Connector lock của AppBI không buộc Airbyte chạy version đó.
+
+**Đóng gate khi:** Airbyte definitions của hai pilot connector trỏ vào internal
+registry và exact digest/tag; auto-update policy được tắt/kiểm soát; preflight
+so sánh engine effective version/digest với release scope và fail nếu drift.
+Nâng connector phải qua check/discover/full/incremental/cancel/regression riêng.
+
+### P0-11 - distributed consistency và engine orphan
+
+**Finding:** create source tại `services/actors.py:341-385` gọi engine trước, sau
+đó mới flush actor/mapping/audit. Create pipeline tại
+`services/pipelines.py:356-380` cũng vậy. Nếu Product DB commit fail sau engine
+success, Airbyte giữ resource/credential không có mapping. Reconcile hiện chỉ
+biết những row đã có mapping, nên không tìm được orphan không mapping.
+
+**Đóng gate khi:** dùng transactional outbox/saga ledger hoặc durable operation
+record được tạo trước engine call; compensation retry idempotent; reconciliation
+list engine resources theo workspace/tag ownership và báo/quarantine orphan.
+Fault-injection test phải kill DB/worker tại mỗi boundary create/update/delete và
+không để credential orphan im lặng.
+
+### P0-12 - coordinated backup, restore và rollback
+
+**Finding:** `scripts/backup.py` chỉ cover local Product DB và nói rõ không cover
+Airbyte DB (`lines 21-23`). Production cần paired backup của Product DB, Airbyte
+DB, object storage/log/state, KEK, runtime secrets/config và release artifacts.
+RPO 24h/RTO 2h trong runbook mới là target; target-topology restore chưa chạy.
+`production.py rollback` chỉ in hướng dẫn, chưa redeploy previous digest; migration
+rollback compatibility N -> N-1 chưa được prove.
+
+**Đóng gate khi:** backup scheduled, encrypted, off-host, immutable/retained và
+có metric age/success; restore vào environment khác; decrypt tất cả credential;
+reconcile mappings; run một sync; đạt RPO/RTO. Previous product digest redeploy
+trên schema sau migration và previous Airbyte chart rollback được drill.
+
+### P0-13 - security launch review
+
+**Đã tốt:** envelope encryption và KEK rotation; bootstrap admin one-time;
+session version sau password change; backend RBAC/workspace checks; secret/API
+audit local; product/connector NetworkPolicy deny-first.
+
+**Còn thiếu:** image/IaC scan, SBOM/signing; production startup không tự fail nếu
+JWT/KEK dùng dev default khi ai bypass installer; logout chỉ xóa cookie và JWT
+đã lấy cắp vẫn sống tới 12h; no MFA/SSO; login lock theo account có thể bị dùng
+để lock user; no IP/global limiter; member invite để admin đặt password min 8,
+không dùng full policy/forced reset; SameSite=Lax là CSRF control duy nhất;
+Uvicorn trust mọi forwarded IP (`--forwarded-allow-ips=*`); secret store read/
+delete query bằng `ref` mà không nhận workspace ID.
+
+**Đóng gate khi:** security owner threat-model tenant, auth, CSRF, SSRF/egress,
+secret lifecycle và proxy chain; implement hoặc chấp nhận có văn bản cho từng
+control; adversarial tests và scan artifacts xanh. External pilot tối thiểu cần
+network-restricted admin users, full invite reset flow, rate limit ở edge, exact
+trusted proxies, prod-default refusal và tenant-bound secret access.
+
+### P0-14 - observability, paging và operator
+
+**Finding:** `/metrics` chỉ có engine reachability, run/pipeline gauges và oldest
+active run. `deploy/monitoring/alerts.yaml` là rule file, không có PrometheusRule
+deployment, scraper, Alertmanager receiver hay dashboard. Runbook URL là relative
+repo path. `docs/RUNBOOK-oncall.md:12-16` còn 5 `TO BE ASSIGNED`. Product alert
+enum có EMAIL/WEBHOOK nhưng `services/alerts.py` chỉ tạo in-app notification;
+không có dispatcher.
+
+**Đóng gate khi:** target có metrics collector/dashboard/log store/alert router;
+primary và secondary nhận một page test và acknowledge; data owner nhận failure
+qua channel thật. Thêm API RED/p95, adapter op latency/error, worker heartbeat,
+scheduler lag, queue wait, reconcile lag, DB pool, backup age/success, catalog
+refresh và alert-delivery metrics. Runbook URL phải mở được từ alert.
+
+### P0-15 - capacity, HA và SLO baseline
+
+**Finding:** không có load/soak/chaos test. Worker chỉ 1 replica, Recreate, không
+probe/PDB; scheduler không lock due pipeline. Claim dùng `SKIP LOCKED`, nhưng quota
+là `count` rồi update (`services/runs.py:161-178,345-373`), không atomic trên
+nhiều worker. DB pool hard-code 10+20 mỗi process; 2 API + worker có thể mở tới
+khoảng 90 connection. Không có CPU limit, HPA, topology spread/anti-affinity;
+kind một node không prove HA. List runs có N+1 query pattern. SLO BA tại
+`BA...md:1804-1817` chưa được đo.
+
+**Đóng gate khi:** PM/product chốt pilot load; 24h soak + node/pod/worker/engine/
+DB interruption drill; API p95 <=700ms, reconcile p95 <30s, alert <60s và DB
+connection budget được đo. Một worker có thể được chấp nhận cho pilot nếu SLO và
+manual recovery rõ ràng; trước GA cần leader election/distributed scheduler,
+atomic capacity reservation và worker HA.
+
+### P0-16 - retention, privacy và storage growth
+
+**Finding:** không có purge/retention cho runs, attempts, logs, audit,
+notifications, schema snapshots, deleted resources hay secrets. Worker janitor
+chỉ retry pending delete, timeout/recover và alert; DB sẽ tăng vô hạn. BA có
+custom retention/privacy requirement và audit retention cần được chốt.
+
+**Đóng gate khi:** data classification và retention matrix được phê duyệt;
+scheduled purge/archive có audit; customer deletion/export policy; backup
+retention phù hợp; load test storage growth và restore data đã archive.
+
+### P0-17 - product acceptance và release documentation
+
+**Finding:** BA Release DoD tại `BA...md:1952-1965` và go-live checklist tại
+`2888-2901` chưa đạt. `docs/` có ops runbook nhưng không có User Guide,
+Postgres connector setup guide, end-user troubleshooting, admin guide đầy đủ
+hay public API guide. FE component tests/accessibility baseline thiếu.
+
+**Đóng gate khi:** 15 UAT artifacts, FE component tests cho dynamic form/RBAC/
+status/wizard/error, lint non-interactive, keyboard/accessibility scan và manual
+review, User Guide, source/destination Postgres setup, troubleshooting, admin,
+incident và API docs nếu API public. Không còn P0/P1 trong pilot scope.
+
+### P0-18 - clean-room release rehearsal
+
+**Finding:** repo không có remote; registry/DB/cluster nằm cùng laptop. Xóa ngay
+bây giờ sẽ xóa environment duy nhất có thể dùng để đóng auth/golden/DR. Cũng
+không được dùng `docker system prune -a` vì máy còn `appbi-ai`.
+
+**Đóng gate khi:** sau khi lấy golden và DR evidence, dùng script teardown theo
+project label để xóa đúng RC1/AppBI resources. Một runner Linux thứ hai bắt đầu
+từ remote clone, không `.env`, image, cache hay volume; upstream bị block; một
+entry point có thể pause cho Application UI step và resume; install, doctor,
+golden, restore và evidence đều pass. `appbi-ai` không bị chạm tới.
+
+## 4. P1 - bắt buộc trước broad GA
+
+P1 không chặn một pilot nội bộ rất nhỏ nếu có risk acceptance và control bù, nhưng
+chặn broad GA:
+
+| ID | Việc cần làm | Lý do / evidence |
+|---|---|---|
+| P1-01 | Bỏ Redis khỏi V1 config, Compose, K8s, network, requirements và docs | `redis_url` chỉ được khai báo; không có code import/use client Redis. Giảm một managed service/container và một secret không cần thiết. |
+| P1-02 | Tách backend production image khỏi embedded/test image | `backend/Dockerfile` cài Docker CLI, copy tests và không có `USER`; K8s ép non-root nhưng image vẫn lớn, Compose chạy root. Dùng multi-stage/minimal runtime, không Docker CLI/tests cho AIRBYTE_API. |
+| P1-03 | Worker/scheduler HA | Thêm worker health/heartbeat, PDB, leader election cho scheduler, atomic quota/capacity và multi-replica recovery. |
+| P1-04 | Enterprise auth | SSO/OIDC, MFA cho privileged role, password reset/invite token, session revocation/logout, IP/device audit và break-glass procedure. |
+| P1-05 | API performance | Sửa N+1, pagination/DB indexes theo query plan, configurable pool/timeouts và load dashboard. |
+| P1-06 | Connector egress theo tenant/destination | Rule hiện cho mọi public HTTP/HTTPS. PostgreSQL-only pilot nên xóa rule Internet; SaaS GA cần egress gateway/FQDN policy và DNS logging. |
+| P1-07 | Ingress hardening | Prove ingress-nginx cho phép `server-snippet`; thêm cert-manager/issuer, security headers, request/rate/timeouts, WAF policy và no-direct-service path. |
+| P1-08 | FE quality gate | ESLint CLI/config, unit/component/E2E runner pinned trong package lock, accessibility/performance budget; không `npm i --no-save playwright` trong release lane. |
+| P1-09 | API contract governance | Export OpenAPI artifact, breaking-change diff và client compatibility gate. |
+| P1-10 | Connector portfolio | Certify 3-5 connector combinations thực sự có khách hàng, mỗi combination có limits/runbook/owner; không offer full catalog theo metadata. |
+| P1-11 | Airbyte 2.x/current upgrade | Re-run auth, API contract, connector pins, migration, DR và rollback; duy trì release cadence và EOL watch. |
+| P1-12 | Multi-AZ/platform HA | Managed multi-zone K8s/DB/object store, PDB/topology spread, disruption/failover drill phù hợp SLO 99.9. |
+
+## 5. Hướng container và một lệnh production
+
+Yêu cầu "nhìn chỉ một AppBI" nên được giải quyết ở hai tầng:
+
+1. **Customer surface:** chỉ AppBI domain/UI/API; không expose Airbyte URL, UI,
+   ID hay API. Code adapter hiện đi đúng hướng.
+2. **Technical operations:** AppBI và Airbyte là hai release/namespace riêng.
+   Pod/image/SBOM/runbook/compatibility phải giữ tên upstream và exact version để
+   debug, patch và đáp ứng license. Không đổi tên để che dependency.
+
+Production không nên là một container lớn. Một sync platform tối thiểu có web,
+API, worker, migration, engine control plane, connector jobs, databases và object
+storage. Docker Desktop sẽ không phải màn hình vận hành production; managed
+services nằm ngoài máy và K8s gom workload theo namespace/release.
+
+Entry point đề xuất:
+
+```text
+python scripts/production.py install  --config deploy/production.yaml
+python scripts/production.py resume   --config deploy/production.yaml
+python scripts/production.py status   --config deploy/production.yaml
+python scripts/production.py doctor   --config deploy/production.yaml
+python scripts/production.py upgrade  --config deploy/production.yaml
+python scripts/production.py rollback --artifact <certification.json>
+python scripts/production.py teardown --environment <rc1-only>
+```
+
+`install` phải là state machine idempotent:
+
+```text
+preflight -> verify immutable infra/artifacts -> install/verify engine
+          -> WAITING_FOR_APPLICATION_CREDENTIAL (one supported human step)
+resume    -> deploy migration -> API/worker/frontend -> deep readiness
+          -> golden smoke -> release evidence -> GO/FAIL
+```
+
+Nội dung managed infrastructure có thể do Terraform/Helm/platform team sở hữu;
+orchestrator chỉ validate và gọi module, không gom tất cả vào một Docker image.
+
+## 6. Thứ tự thực thi ngắn nhất để lên pilot
+
+| Thứ tự | Owner | Deliverable / exit condition |
+|---|---|---|
+| 1 | Founder/Product + Legal | Delivery model và `LIC-001` được ký; pilot scope PostgreSQL-only, load/support/risk acceptance được chốt |
+| 2 | Dev | Sửa P0-04 installer, P0-06 cancel/UAT truth và P0-07 CI; không thêm feature |
+| 3 | Operator/Dev | Tạo Airbyte Application, bind client credential, deploy AppBI vào RC1 K8s và lấy authenticated golden evidence |
+| 4 | Dev + DBA/SRE | Đóng saga/orphan control, paired backup/restore/rollback, retention và monitoring delivery |
+| 5 | Security/SRE | Threat review, scans/SBOM/signature, capacity/soak/failure drill, on-call page test |
+| 6 | Release engineer | Push remote + durable registry/artifacts; clean-room upstream-blocked install; record/check certification v2 |
+| 7 | PM/Product | Đối chiếu 18 P0 rows và BA UAT; ký GO cho controlled pilot, không GO cho all connectors |
+
+## 7. Định nghĩa artifact cuối cùng
+
+Một release đủ điều kiện PM review phải giao một bundle/link duy nhất chứa:
+
+- Git commit/tag và clean-tree proof;
+- product backend/frontend image digest và signatures;
+- Airbyte app/chart digest, rendered platform image digests;
+- connector definitions/image digests của launch scope;
+- production config đã redact và rendered manifest hash;
+- evidence schema v2 + release-gate artifact;
+- UAT 001-015 matrix với run IDs;
+- vulnerability/IaC/image scans, SBOM và license notices;
+- load/soak/SLO report;
+- paired backup/restore/rollback report và RPO/RTO;
+- dashboard/alert delivery screenshot/event IDs;
+- named on-call và approvals legal/security/DBA/SRE/PM.
+
+Không có bundle này thì một máy đang chạy xanh vẫn chỉ là environment, không phải
+một production release có thể tái lập và cứu hộ khi có sự cố.
+
+---
+
+# Dev — PM v14, bước 2: installer, CI, UAT cancel (2026-08-25)
+
+Đúng phạm vi PM giao ở bước 2: **sửa installer, CI và UAT cancel; không thêm
+feature.** Cộng thêm hai mục PM liệt kê là quyết định phạm vi (Redis, catalog
+scope). Không đụng tới P0 cần legal/infra.
+
+## P0-07 — CI
+
+Finding của PM chính xác, và lỗi là do một lần edit của tôi: step Typecheck bị
+tách làm đôi, `run` của nó rơi xuống step backend audit, tạo **key `run` trùng**.
+Parser giữ key sau, nên `pip-audit` bị thay bằng `npm run typecheck` chạy ở
+repo root. **Hai check bị tắt bởi một lần sửa, và cả hai vẫn báo xanh.**
+
+| | Trước | Sau |
+|---|---|---|
+| Typecheck | không có `run` | `npm run typecheck` trong `frontend` |
+| Backend audit | bị `run` trùng nuốt mất | job `backend-audit` riêng |
+| Lint | không tồn tại | `.eslintrc.json` + `next lint --max-warnings 0` |
+
+`npm run lint` trước đó mở interactive setup rồi thoát — **exit 0 mà không lint
+gì**. Giờ có config thật, và nó bắt được hai lỗi thật ngay lần chạy đầu:
+
+- `ActorListPage.tsx` gán biến tên `module` (bundler rewrite nó) → đổi tên
+- `DynamicConnectorForm.tsx` ba `useMemo` có dependency đổi mỗi render vì
+  `branches`/`current` là biểu thức `??` → memo hoá
+
+Test mới parse workflow và assert **mọi step có `run` hoặc `uses`** — lỗi cấu
+trúc đó sẽ không lặp lại im lặng.
+
+## P0-06 — UAT cancel
+
+`verify.py` chấp nhận `CANCELLED | SUCCEEDED | FAILED` sau cancel. PM chạy thật,
+nhận `SUCCEEDED`, script vẫn PASS. BA UAT-007 yêu cầu
+`CANCEL_REQUESTED -> CANCELLED`.
+
+Giờ có **ba** kết quả, và cái thứ ba là điểm chính:
+
+| Kết thúc | Kết luận |
+|---|---|
+| `CANCELLED` | PASS |
+| `SUCCEEDED` | **INCONCLUSIVE** — sync xong trước khi cancel kịp; không có gì được kiểm chứng |
+| khác | FAIL |
+
+Inconclusive không phải pass: summary in riêng, và exit code **non-zero**, nên
+CI không thể coi lần chạy đó là coverage cho UAT-007.
+
+`compatibility.yaml` cũng sửa: `UAT-001..015` từ `PASSING` → **`NOT_PROVEN`**.
+Một dòng status gộp cho mười lăm kịch bản BA chính là thứ đã che việc script chỉ
+cover một phần. Release gate hiện chặn cả LIC-001 lẫn UAT.
+
+## P0-04 — installer
+
+Năm finding, sửa cả năm.
+
+**1. Thứ tự check placeholder.** Gate chạy trên **source overlay**, nơi
+`registry.internal` và `appbi.example.internal` **cố ý** tồn tại để một
+`kubectl apply -k` chưa sửa fail closed. Nên mọi install đều bị từ chối trước
+khi renderer kịp thay giá trị — kể cả config hoàn toàn đúng. Giờ licence/on-call
+chạy trước khi render, còn placeholder được check **trên rendered output** ngay
+trước khi apply.
+
+**2. Verify engine.** Probe trước deploy không thể xác thực với Airbyte có auth:
+credential nằm trong Kubernetes secret và `resolve_secret()` cố ý không đọc
+`secret://`. Thêm `verify_engine_in_pod()` chạy **sau rollout**, exec vào chính
+Pod AppBI và đọc `/readyz?deep=1` — đường mà runtime thật sự dùng.
+
+**3. Secret binding.** `envFrom: appbi-secrets` bind bất kỳ Secret nào trùng
+tên, nên config trỏ Secret khác vẫn pass preflight còn Pod đọc Secret cũ.
+Migration Job còn hard-code cả Secret runtime lẫn bootstrap. Đã bỏ blanket
+`secretRef` khỏi api/worker; renderer sinh `secretKeyRef` cho từng key, kể cả
+cho migration Job, và bootstrap Secret là `optional: true` để upgrade sau khi
+xoá nó vẫn chạy.
+
+**4. `assert_rendered_matches`.** Trước chỉ assert backend image. Giờ assert cả
+frontend image, từ chối image từ registry không khai trong config, so
+`secretKeyRef` theo **(secret, key)** chứ không chỉ theo tên biến, assert
+workspace id, ingress host **và TLS host**. Đo bằng cách làm sai từng thứ:
+
+```text
+different registry     caught      secret ref moved      caught
+different tag          caught      engine url moved      caught
+different workspace    caught      ingress host moved    caught
+```
+
+Ba trong số đó (workspace, secret target, ingress host) do chính bài test này
+tìm ra sau khi tôi tưởng đã xong.
+
+**5. TLS và backup.** Plain HTTP và thiếu TLS từ warning → **fatal** ở strict:
+Config API mang credential trong body, và cookie phiên phát ra có `Secure` nên
+qua HTTP người dùng không đăng nhập được. Backup thêm provider `pg_dump` chạy
+bằng connection string — database managed không có container để `docker exec`,
+nên `upgrade` trước đây chỉ còn đường `--skip-backup`, tức upgrade không có điểm
+rollback.
+
+## Redis rời khỏi V1
+
+Không dòng code nào import Redis client (`redis_url` khai trong settings,
+`redis==5.2.1` trong requirements, phần còn lại là `rediscover` và comment).
+Đã bỏ khỏi Compose, settings, requirements, NetworkPolicy, egress verifier,
+config production/demo và cả hai file env. Demo chạy **5 container thay vì 6**,
+`/readyz?deep=1` vẫn 200, login và API vẫn hoạt động. Bớt một container và một
+managed service phải vận hành.
+
+## Verification
+
+```text
+backend pytest                255 passed, 18 skipped   (trước: 246)
+FE lint                       No ESLint warnings or errors  (trước: không chạy)
+FE typecheck / i18n           PASS / 794 keys
+pip-audit / npm audit         clean
+kustomize x3                  render sạch
+CI workflow                   mọi step có run hoặc uses; backend-audit là job riêng
+release gate                  chặn LIC-001 + UAT-001..015
+demo không Redis              5 container, deep-ready 200
+```
+
+## Không làm vòng này, và tại sao
+
+P0-01 legal, P0-03 Airbyte Application credential (thao tác người trong UI),
+P0-05 topology đầy đủ, P0-08 supply chain bền vững, P0-12..18 — đều cần legal,
+hạ tầng ngoài laptop, hoặc một người thao tác. PM đã xếp chúng ở bước 1, 3, 4, 5
+chứ không phải bước 2.

@@ -74,7 +74,6 @@ datastores:
   # the schema. Same database, different URL scheme; it is a separate key
   # because psycopg and asyncpg do not share one.
   database_url_sync_ref: secret://appbi-secrets/DATABASE_URL_SYNC
-  redis_url_ref: secret://appbi-secrets/REDIS_URL
 
 secrets:
   # References only. `secret://` is resolved by Kubernetes at pod start and not

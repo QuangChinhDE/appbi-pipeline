@@ -1,0 +1,7 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "@next/next/no-html-link-for-pages": ["error", "src/app"]
+  },
+  "ignorePatterns": ["node_modules/", ".next/", "audit-*.mjs", "probe*.mjs", "shoot.mjs", "builder-*.mjs"]
+}

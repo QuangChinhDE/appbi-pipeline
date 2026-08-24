@@ -246,7 +246,9 @@ def test_connectors_run_on_their_own_network() -> None:
     from app.core.config import settings
     assert settings.engine_docker_network == "appbi-pipeline_connectors"
 
-    for service in ("api", "worker", "redis"):
+    # Redis is gone from V1 -- nothing imported a client, so it was a container
+    # and a managed service that existed only to satisfy a config key.
+    for service in ("api", "worker"):
         attached = compose["services"][service].get("networks") or []
         assert "connectors" not in attached, (
             f"{service} is reachable from the connector network")

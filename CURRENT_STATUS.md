@@ -3,7 +3,7 @@
 One page. `PRODUCTION_READINESS_REVIEW.md` is the full review log and reads
 chronologically; this is where it has got to.
 
-**Updated:** 2026-08-24 (PM review v12 - Git and production release decision)
+**Updated:** 2026-08-24 (PM review v14 - final production gate audit)
 
 ---
 
@@ -11,14 +11,159 @@ chronologically; this is where it has got to.
 
 ```
 Architecture / API direction        accepted
-P0 - real Airbyte integration       closed, evidence below
-P0 - Airbyte adapter on Kubernetes  accepted narrowly: 1.8.5, 11/11 operations
+Core demo / embedded path           healthy on this machine
+Airbyte adapter integration         accepted narrowly: 1.8.5 contract evidence
 Single-host demo                    PASS on this machine; not a production proof
-Production core                     ACCEPTED for feature freeze and rehearsal
+Exact production topology           NOT RUN end to end
+Production installer                BLOCKED by gate/auth/secret binding defects
+CI/CD release lane                  BROKEN / NOT REPRODUCIBLE
 Cross-machine/offline install       NOT PROVEN
-Controlled production pilot         CONDITIONAL NO-GO: five launch gates below
+Controlled production pilot         NO-GO: P0 launch gates below
 Broad GA / all connectors           NOT IN CURRENT LAUNCH SCOPE
 ```
+
+## PM v14 - final production decision
+
+**Decision as of commit `a1d1395`: NO-GO for production and NO-GO for an
+external customer pilot.** This is a useful release candidate and the product
+direction is sound, but there is not yet a deployable, reproducible and
+recoverable release. Feature work should remain frozen until the P0 gates below
+are closed on one exact release.
+
+The most important observed facts are:
+
+1. Airbyte chart V2 `2.0.17` / app `1.8.5` is running in the RC1 kind cluster,
+   but namespace `appbi` has only Secrets. AppBI API, worker, frontend,
+   migration, ingress and policies are not deployed there.
+2. Airbyte's `application` table has `0` rows. The AppBI Secret contains Basic
+   username/password and does not contain `AIRBYTE_CLIENT_ID` or
+   `AIRBYTE_CLIENT_SECRET`. `workload-launcher Running` proves Airbyte's own
+   data plane, not AppBI authentication.
+3. `scripts/production.py install` cannot currently complete from the example
+   production contract. Static gates inspect placeholder-bearing source
+   overlays before rendering; pre-deploy engine verification cannot resolve
+   `secret://`; API/worker/migrate still retain hard-coded `envFrom` Secret
+   names; upgrade backup only targets a local Docker Postgres.
+4. The GitHub Actions frontend job is malformed: the Typecheck step has no
+   action, and duplicate YAML `run` keys turn the backend dependency audit into
+   `npm run typecheck` at repository root. The V2 Airbyte lane also installs a
+   values file containing placeholders and calls an auth-enabled API without a
+   bearer token.
+5. No `deploy/production.yaml`, `certification*.json` or `mirror-lock.json`
+   exists. The two local E2E JSON files are evidence v1 and are ignored by Git.
+   There is no Git remote, and the RC1 registry is a local container.
+6. Current verification is good but narrower than the release claim: backend
+   `246 passed, 18 skipped`; API adversarial audit `0 findings`; FE typecheck,
+   build and i18n pass; runtime npm/pip audits are clean. FE lint is not
+   configured, there are no FE component tests, and the live cancel verifier
+   marks `SUCCEEDED` after cancel as PASS even though BA UAT-007 requires
+   `CANCELLED`.
+7. Redis is configured, deployed and listed as required, but no application
+   code imports or uses a Redis client. It should be removed from V1 rather
+   than operated without a purpose.
+
+### P0 launch gates
+
+| Gate | Must be true before first external production traffic |
+|---|---|
+| P0-01 Legal | Legal clears `LIC-001` in writing for the actual hosted/commercial model, including ELv2, connector licenses, notices and branding. White-labeling the customer UI is not a license decision. |
+| P0-02 Release scope | Freeze one target: AppBI version/commit, Airbyte app/chart, Kubernetes version, two production connectors, capacity and support window. Correct `compatibility.yaml`; do not claim all 654 connectors or UAT 001-015. |
+| P0-03 Engine credential | Operator creates an Airbyte Application, stores client credentials in the approved secret manager, and AppBI obtains/refreshes bearer tokens from inside its Pod. No auth-off fallback and no direct DB seeding. |
+| P0-04 Installer | Fix source-overlay gate ordering, Pod/Job secret binding, frontend image assertion, secret verification and production backup provider. `install`, `upgrade`, `doctor`, `status` and rollback rehearsal must use the same rendered release. |
+| P0-05 Exact topology | Deploy AppBI and Airbyte together on the target K8s topology with TLS, enforcing CNI, external separate Postgres systems and durable external object storage. No Compose AppBI or NodePort may count as proof. |
+| P0-06 Golden path | Run check, discover, create, full refresh, incremental, true cancel, timeout, worker restart, engine outage and alert delivery through auth-enabled AppBI. Warehouse counts and cursor state must be asserted. |
+| P0-07 CI | Repair workflow syntax, make all mandatory lanes green from a remote clean checkout, and run the auth-enabled V2 lane without placeholders or unauthenticated calls. Add lint and FE tests. |
+| P0-08 Immutable supply chain | Build/push product images by digest; mirror the Helm chart, rendered Airbyte platform images and only launch-scope connectors by digest. Generate SBOM, vulnerability report, signature/provenance and a durable `mirror-lock` artifact. |
+| P0-09 Offline continuity | A second clean Linux runner with no local cache and public upstream blocked must clone from the company remote, pull only internal artifacts, install, restore and run the golden path. |
+| P0-10 Evidence | Regenerate evidence schema v2 on the exact deployment and record a certification artifact bound to commit, product image digests, engine/chart, workspace fingerprint and real run IDs. `release-gate check` must pass. |
+| P0-11 Data consistency | Add an outbox/saga or an equivalent durable compensation ledger for engine create/update versus Product DB commit. Reconciliation must detect untracked engine orphans containing customer credentials. |
+| P0-12 Backup/DR/rollback | Automate coordinated, encrypted and off-host backup of AppBI DB, Airbyte DB, Airbyte object storage, KEK/secrets/config and release artifacts. Execute paired restore and previous-digest rollback on the target topology within approved RPO/RTO. |
+| P0-13 Security | Complete threat/tenant/secret review; scan container images and IaC; fail production on default JWT/KEK; decide CSRF, rate limiting, proxy trust and member-invite controls; test connector egress against the real destinations. |
+| P0-14 Operations | Deploy metrics collection and alert routing, not only rule YAML. Name primary/secondary on-call, deliver a real page, verify runbooks, and add worker/scheduler/backup/API latency signals. |
+| P0-15 Capacity/SLO | Define pilot load and execute load plus 24-hour soak and failure drills. Prove DB connection budget, queue/reconcile lag, API p95, restart behavior and storage growth under that load. |
+| P0-16 Retention/privacy | Approve and implement retention, purge/archive, customer deletion/export and backup-retention rules for runs, logs, audit, notifications, schemas, soft-deleted objects and secrets. |
+| P0-17 Product acceptance | Run and record all BA UAT 001-015 accurately, security acceptance, accessibility baseline and top-connector setup. Publish user, connector, troubleshooting and admin guides. |
+| P0-18 Clean-room | After preserving golden/DR evidence, tear down only RC1/AppBI assets and reinstall on a second clean runner with upstream blocked, leaving `appbi-ai` untouched. |
+
+### Fastest safe release path
+
+1. Close legal and choose a small internal/design-partner pilot: PostgreSQL to
+   PostgreSQL, low concurrency, capped dataset and named support hours.
+2. Fix the installer and CI before doing any more feature work.
+3. Create the Airbyte Application, deploy AppBI into the existing RC1 cluster,
+   and run the authenticated golden path plus paired restore while the lab is
+   still available.
+4. Push source and immutable artifacts to durable company systems, then destroy
+   only AppBI/RC1 resources and perform the clean-room rehearsal from zero.
+5. Release the pilot only when every P0 row has a linked artifact and owner
+   approval. Move to GA only after the P1 list in
+   `PRODUCTION_READINESS_REVIEW.md` is closed.
+
+Production should have one operator entry point, not one giant container. The
+entry point should be resumable across `preflight -> engine bootstrap -> manual
+Application credential -> product deploy -> migrate -> smoke -> evidence`.
+Managed databases, registry, object storage and Airbyte remain separately
+operated dependencies. Removing unused Redis and moving lab services off
+Docker Desktop will make the local view smaller; renaming or hiding Airbyte in
+technical evidence, SBOMs and runbooks is not acceptable.
+
+## PM v13 - do not tear down the RC1 topology yet
+
+Dev's latest work is accepted **for the Airbyte engine layer**: chart V2
+`2.0.17` runs app `1.8.5`, auth is enforced, the bootloader migrated the
+external database, Calico is enforcing and `workload-launcher` is Running.
+Creating an Application in the Airbyte UI is the documented upstream flow and
+is an acceptable one-time operator step.
+
+It does **not** close the original G1 or make this a production build yet:
+
+1. The live `appbi` namespace contains no AppBI workload. Only Airbyte is
+   running in Kubernetes; the visible AppBI API/worker/frontend are still the
+   Compose demo using `AIRBYTE_EMBEDDED`.
+2. There is no filled `deploy/production.yaml`, so
+   `production.py install --config deploy/production.yaml` cannot be run.
+3. The Application has not been created, AppBI has not authenticated to this
+   Airbyte, and no golden-path sync has run on the target topology.
+4. `production.py doctor` cannot prove a `secret://` client credential by
+   calling Airbyte directly: the CLI deliberately cannot read Kubernetes
+   Secret values, so its direct probe is unauthenticated. The post-deploy proof
+   must run through/in the AppBI Pod or use product compatibility/readiness.
+5. The V2 CI lane is not runnable as a clean proof yet: its values still carry
+   external-database/credential placeholders while later steps call protected
+   Airbyte APIs without bearer auth.
+6. Git is now real and the tree is clean at `a1d1395`, but no remote is
+   configured. The registry is also a local `rc1-registry` container. Neither
+   source nor artifacts are available to a second clean machine.
+
+**Decision:** keep the current RC1 cluster and its `rc1-*` datastores/registry
+until the operator creates the Application, AppBI is deployed into Kubernetes,
+G4 runs, and a meaningful paired backup is taken. Running G3 before a real sync
+would only restore an almost-empty rehearsal.
+
+Pre-teardown order:
+
+1. Create the Airbyte Application via the current internal port-forward and
+   store it in a dedicated Kubernetes Secret/secret manager.
+2. Fix the `doctor` secret-bound verification and make the UI runbook command
+   executable/idempotent; the current `create secret ... ...` example is not.
+3. Fill a non-committed `deploy/production.yaml`, deploy AppBI API/worker/
+   frontend/migration to the `appbi` namespace and prove deep readiness.
+4. Run 11/11 adapter operations, full refresh, incremental zero re-read, long
+   cancel/timeout, worker restart and alert delivery.
+5. Run paired AppBI + Airbyte backup/restore after that data exists.
+6. Configure the organisation Git remote and push the RC branch; push images by
+   digest to a durable registry outside the machine.
+
+Only then tear down Compose, the kind cluster, `rc1-*` containers, their
+volumes, local AppBI/Airbyte images and build cache, while leaving `appbi-ai`
+untouched. The clean-room pass must start from a fresh clone with no `.env`, no
+local image/cache/volume and public upstream blocked. A single rehearsal entry
+point may pause for the documented Application UI step and resume afterward.
+
+Independent verification: `246 passed, 18 skipped`; all 6 live-Postgres tests
+pass when given the actual container connection. The same live command fails
+with the current `.env`, so the reproducible test command/config still needs to
+be recorded.
 
 ## PM v12 - Git and production release decision
 
@@ -101,6 +246,30 @@ outage survivable.
 
 Detailed acceptance evidence and the reclassified P1 list are in
 `PRODUCTION_READINESS_REVIEW.md` under **PM review v11**.
+
+## PM v14 step 2 - installer, CI and UAT cancel
+
+PM's step 2 was scoped to dev: fix the installer, CI and the UAT cancel check,
+no new features. Done, plus the two scope decisions PM listed.
+
+| | |
+|---|---|
+| **CI** | A step I split earlier left Typecheck with no command and its `run` on the backend-audit step, creating a duplicate key. The parser kept the second, so `pip-audit` silently became `npm run typecheck` at the repo root — **two checks disabled by one edit, both still green**. Typecheck restored, backend audit is its own job, and a test now asserts every step has `run` or `uses` |
+| **Lint** | `npm run lint` opened an interactive prompt and exited 0 without linting. Real config now, `--max-warnings 0`, and it immediately found two genuine defects: a variable named `module` that bundlers rewrite, and three `useMemo` hooks whose dependencies changed every render |
+| **UAT cancel** | `SUCCEEDED` after a cancel counted as PASS. Three outcomes now, and the third is the point: a sync that finished first is **inconclusive**, printed separately and exiting non-zero. `UAT-001..015` moved from `PASSING` to `NOT_PROVEN` — one rolled-up status over fifteen BA scenarios is what hid this |
+| **Installer** | Placeholders were checked on the source overlay, where they belong on purpose — so every install was refused before the renderer could replace them. Now licence/on-call run pre-render and placeholders run on the rendered output. Engine identity is verified from inside the AppBI Pod after rollout, because the pre-deploy probe cannot authenticate. Blanket `envFrom: appbi-secrets` is gone from api, worker and the migration Job; every credential is an explicit `secretKeyRef` from the config. Plain HTTP and missing TLS are fatal, not warnings. Backup has a `pg_dump` provider that works against a managed database |
+| **Redis** | Removed from V1. Nothing imported a client — it was a container and a managed service satisfying a config key. Demo runs on 5 containers, deep-ready 200 |
+
+Three of the seven rendered-manifest mismatches (workspace, secret target,
+ingress host) were found by the test I wrote for the first four.
+
+Verification: 255 tests (was 246), lint clean, typecheck, i18n 794/794, both
+audits clean, three Kustomize targets, release gate blocking on LIC-001 and
+UAT-001..015.
+
+Not touched this round, and deliberately: legal, the Airbyte Application
+credential (a human action in the UI), full topology, durable supply chain, and
+the operational drills. PM placed those in steps 1, 3, 4 and 5.
 
 ## PILOT-G1 is closed - and my previous diagnosis was wrong
 

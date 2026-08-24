@@ -41,14 +41,12 @@ class Target:
     why: str
 
 
-# The product's own plane. A connector reaching any of these could call the API
-# with a stolen session, read the job queue, or talk to the control database.
+# The product's own plane. A connector reaching either of these could call the
+# API with a stolen session or drive the engine directly.
 CONTROL_PLANE = [
     Target("product API", "appbi-pipeline-api", 8000, False,
            "a connector that can call the product API can act as the product"),
-    Target("redis", "appbi-pipeline-redis", 6379, False,
-           "the job queue; reaching it means forging or reading work"),
-    Target("airbyte server", "appbi-airbyte-server", 8001, False,
+    Target("engine API", "appbi-airbyte-server", 8001, False,
            "the engine's own control API"),
 ]
 

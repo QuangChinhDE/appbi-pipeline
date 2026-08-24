@@ -29,7 +29,7 @@ export function ActorListPage({ kind }: { kind: ActorKind }) {
 
   const isSource = kind === 'source';
   const api = isSource ? sourceApi : destinationApi;
-  const module = isSource ? 'sources' : 'destinations';
+  const permissionModule = isSource ? 'sources' : 'destinations';
   const basePath = isSource ? '/sources' : '/destinations';
 
   const [search, setSearch] = React.useState('');
@@ -83,7 +83,7 @@ export function ActorListPage({ kind }: { kind: ActorKind }) {
       onSearchChange={setSearch}
       searchPlaceholder={t('common.search')}
       action={
-        can(module, 'create') ? (
+        can(permissionModule, 'create') ? (
           <Link href={`${basePath}/new`}>
             <Button variant="primary" leadingIcon={<Plus className="h-3.5 w-3.5" />}>
               {isSource ? t('sources.add') : t('destinations.add')}
@@ -143,7 +143,7 @@ export function ActorListPage({ kind }: { kind: ActorKind }) {
             : t(isSource ? 'sources.emptyTitle' : 'destinations.emptyTitle')}
           description={debounced || health || connectorKey ? undefined : (isSource ? t('sources.empty') : t('destinations.empty'))}
           action={
-            can(module, 'create') && !debounced ? (
+            can(permissionModule, 'create') && !debounced ? (
               <Link href={`${basePath}/new`}>
                 <Button variant="primary" leadingIcon={<Plus className="h-3.5 w-3.5" />}>
                   {isSource ? t('sources.add') : t('destinations.add')}
