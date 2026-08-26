@@ -77,3 +77,37 @@ groups:
             (MAX_CONCURRENT_RUNS_*) are too tight for the schedule, or the
             engine is slow. Over quota a run waits as QUEUED and is never
             failed, so this is the only signal that it is happening.
+
+      - alert: AppBIEngineOperationStuck
+        # Not "compensation happened" -- that is the system working. This fires
+        # when an operation has been unresolved long enough that several sweeps
+        # have failed to settle it, which means the engine is holding a
+        # resource with customer credentials that the product cannot reach.
+        expr: appbi_engine_operation_oldest_open_seconds > 900
+        for: 10m
+        labels: {severity: page, service: appbi}
+        annotations:
+          summary: "An engine operation has been unresolved for over 15 minutes"
+          description: >-
+            The product and the engine disagree about a resource. A create that
+            reached the engine but not the database leaves credentials on the
+            engine that no product row points at, so this is a data-exposure
+            signal and not only a consistency one. Check
+            `appbi_engine_operations_total{state="COMPENSATION_REQUIRED"}` and
+            `{state="FAILED"}`, then the worker's `outbox.*` log events for the
+            product resource ids involved.
+          runbook_url: "docs/RUNBOOK-oncall.md#an-engine-operation-is-stuck"
+
+      - alert: AppBIEngineCompensationFailed
+        # Compensation that has given up. Always a human.
+        expr: appbi_engine_operations_total{state="FAILED"} > 0
+        for: 5m
+        labels: {severity: page, service: appbi}
+        annotations:
+          summary: "Engine compensation exhausted its retries"
+          description: >-
+            The sweeper could not remove an orphaned engine resource after
+            repeated attempts, or the adapter cannot look one up by product id.
+            The resource still holds customer credentials. Find it by the
+            `[appbi:<product-resource-id>]` marker in its name on the engine.
+          runbook_url: "docs/RUNBOOK-oncall.md#an-engine-operation-is-stuck"

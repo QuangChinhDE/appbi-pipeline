@@ -59,6 +59,13 @@ export interface CurrentUser {
   workspaces: WorkspaceSummary[];
   role: string | null;
   permissions: PermissionMap;
+  /**
+   * Set for an account created from the bootstrap one-time secret, or invited
+   * by somebody else. Until it is cleared, every product route answers
+   * `403 PASSWORD_CHANGE_REQUIRED` -- so the app has to route on this rather
+   * than discover it one failed request at a time.
+   */
+  password_change_required: boolean;
 }
 
 export interface Connector {
@@ -92,6 +99,11 @@ export interface Connector {
 export interface ConnectorDetail extends Connector {
   spec_schema: JsonSchema;
   spec_source: string;
+  /** Known only for connectors this product defines; null for Airbyte images,
+   *  where the stream list comes from a discover against real credentials. */
+  stream_count: number | null;
+  /** The tables this connector reads, when known without a discover. */
+  stream_names: string[];
 }
 
 export interface JsonSchema {
@@ -105,6 +117,9 @@ export interface JsonSchema {
   const?: unknown;
   default?: unknown;
   format?: string;
+  /** Explicit multi-line hint. The renderer never infers this from how
+   *  long the description is — good help text should not change the widget. */
+  multiline?: boolean;
   minimum?: number;
   maximum?: number;
   pattern?: string;
@@ -267,8 +282,29 @@ export interface PipelineStreamView {
   destination_sync_mode: string;
   cursor_fields: string[];
   primary_key_fields: string[][];
+  selected_fields: string[] | null;
   field_count: number;
-  fields: { name: string; type: string; nullable: boolean }[];
+  /**
+   * The full field tree, nested objects included. `path` is the dotted route
+   * and `depth` the indent level -- computed server-side, because a field
+   * legitimately named `a.b` would otherwise be drawn as if it were nested.
+   */
+  fields: { name: string; type: string; nullable: boolean; path: string; depth: number }[];
+  last_sync: StreamSyncState | null;
+}
+
+export interface StreamSyncState {
+  status: string;
+  records_loaded: number;
+  bytes_loaded: number;
+  synced_at: string | null;
+}
+
+export interface ConnectionStateView {
+  supported: boolean;
+  state: Record<string, unknown>[];
+  fetched_at: string | null;
+  unavailable_reason: string | null;
 }
 
 export interface PipelineMetrics {

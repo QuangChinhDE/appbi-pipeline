@@ -29,6 +29,8 @@ placeholder for a year because nothing ever forces the question.
 | `AppBIRunStuck` | page during business hours, ticket otherwise | data is late, nothing is broken |
 | `AppBIFailureWave` | page | a shared cause — credentials, network, engine upgrade |
 | `AppBIQueueBacklog` | ticket | work is arriving faster than it drains |
+| `AppBIEngineOperationStuck` | page | the engine may hold customer credentials the product cannot reach |
+| `AppBIEngineCompensationFailed` | page | automatic cleanup gave up; an orphaned credential is sitting there |
 | a product alert rule (per pipeline) | never pages | belongs to the data owner |
 
 Names come from `deploy/monitoring/alerts.yaml`, which is the source of truth.
@@ -239,3 +241,65 @@ curl -s -H "Cookie: $SESSION" http://localhost:8010/api/v1/admin/compatibility \
 a different tag than the product locked. That is expected in API mode, and it
 is also the first thing to check when a connector starts behaving differently
 with no change on our side.
+
+## An engine operation is stuck
+
+Fired by `AppBIEngineOperationStuck` or `AppBIEngineCompensationFailed`.
+
+**Why this pages.** Creating a source is two writes to two systems, and the
+engine goes first. If the product's transaction does not commit, the engine is
+left holding a resource that contains the customer's credentials and that no
+product row points at. It appears in no list in AppBI, and reconciliation
+cannot tell it apart from a resource another deployment owns. This is a
+credential-exposure signal, not only a consistency one.
+
+**What the system already tried.** The sweeper runs in every worker once a
+minute. For each unresolved operation it checks whether the product row exists:
+
+- product row present → the request did commit, only the ledger's closing
+  write was lost. It closes the operation and does nothing to the engine.
+- product row absent → it deletes the engine resource and marks the operation
+  `COMPENSATED`.
+
+It gives up after eight attempts and marks the operation `FAILED`, which is the
+second alert.
+
+**Find the affected resources.**
+
+```sql
+select id, resource_type, product_resource_id, state, attempts, engine_ref,
+       last_error, updated_at
+  from engine_operations
+ where state in ('PENDING', 'ENGINE_CREATED', 'COMPENSATION_REQUIRED', 'FAILED')
+ order by updated_at;
+```
+
+The worker also logs `outbox.compensation_failed`, `outbox.compensation_exhausted`
+and `outbox.no_lookup` with the same ids.
+
+**Find it on the engine.** The Config API has no external-id field, so the
+adapter writes the product id into the resource *name* when it creates it.
+Search the Airbyte workspace for:
+
+```
+[appbi:<product_resource_id>]
+```
+
+That marker is the only correlation that exists. A resource carrying it with no
+matching row in AppBI is an orphan.
+
+**Resolve it.**
+
+1. Confirm there is no product row: `select id from sources where id = '<product_resource_id>'`
+   (and the same for `destinations`, `pipelines`).
+2. If there is none, delete the engine resource — it holds credentials nobody
+   can use or rotate through the product.
+3. Rotate the credential at the source system. It was reachable by anyone with
+   engine access for as long as the orphan existed.
+4. Mark the operation resolved:
+   `update engine_operations set state = 'COMPENSATED', last_error = null where id = '<id>';`
+
+**If `outbox.no_lookup` appears,** the configured adapter cannot look a resource
+up by product id, so compensation cannot be automated at all for that engine.
+That is a deployment-configuration problem: check `ENGINE_TYPE` and the adapter
+in use before clearing the row.

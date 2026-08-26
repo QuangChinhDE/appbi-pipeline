@@ -16,6 +16,9 @@ export const qk = {
   destination: (ws: string, id: string) => ['workspace', ws, 'destination', id] as const,
   pipelines: (ws: string, filters?: unknown) => ['workspace', ws, 'pipelines', filters] as const,
   pipeline: (ws: string, id: string) => ['workspace', ws, 'pipeline', id] as const,
+  // Not workspace-scoped: it is fetched from the engine on demand and never
+  // part of the pipeline payload, so it must not be invalidated with it.
+  pipelineState: (id: string) => ['pipeline-state', id] as const,
   schemaDiff: (ws: string, id: string) => ['workspace', ws, 'pipeline', id, 'schema-diff'] as const,
   runs: (ws: string, filters?: unknown) => ['workspace', ws, 'runs', filters] as const,
   run: (ws: string, id: string) => ['workspace', ws, 'run', id] as const,

@@ -3,7 +3,7 @@
 #   python scripts/production.py install --config deploy/demo.yaml
 #
 # This is the profile for a laptop, a sales demo, or a first look at the
-# product. It brings up Postgres, Redis, the API, the worker, the frontend and
+# product. It brings up Postgres, the API, the worker, the frontend and
 # a proxy, generates the encryption key and JWT secret, waits for the stack to
 # be genuinely ready, and prints where to go.
 #

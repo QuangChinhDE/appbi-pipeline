@@ -21,6 +21,7 @@ from app.schemas.common import ActorRef, HealthBlock, UserRef
 from app.schemas.domain import (
     ActorDetail, ActorView, ConnectorDetail, ConnectorView, PipelineDetail, PipelineMetrics,
     PipelineStreamView, PipelineView, RunAttemptView, RunDetail, RunError, RunRef, RunStreamStat,
+    StreamSyncState,
     RunView, ScheduleConfig,
 )
 from app.services import actors as actor_service, pipelines as pipeline_service, schema_service
@@ -83,8 +84,17 @@ def connector_view(connector: ConnectorDefinition) -> ConnectorView:
 
 def connector_detail(connector: ConnectorDefinition) -> ConnectorDetail:
     base = connector_view(connector).model_dump()
+    manifest = connector.declarative_manifest or {}
+    streams = manifest.get("streams")
+    names = [
+        (manifest.get("definitions", {}).get("streams", {}).get(
+            str(ref.get("$ref", "")).rsplit("/", 1)[-1], {}) or {}).get("name", "")
+        for ref in (streams or [])
+    ]
     return ConnectorDetail(**base, spec_schema=connector.spec_schema,
-                           spec_source=connector.spec_source)
+                           spec_source=connector.spec_source,
+                           stream_count=len(streams) if streams else None,
+                           stream_names=[n for n in names if n])
 
 
 def actor_view(
@@ -210,8 +220,16 @@ def pipeline_view(
     )
 
 
-def stream_view(stream: PipelineStream) -> PipelineStreamView:
+def stream_view(
+    stream: PipelineStream,
+    last_sync: StreamSyncState | None = None,
+) -> PipelineStreamView:
+    # `field_count` stays the top-level count: it is the denominator for field
+    # *selection*, which happens per top-level field. `fields` carries the full
+    # tree, because the mapping view asks a different question -- what actually
+    # lands in the destination -- and `account_export: object` does not answer it.
     fields = schema_service.field_list(stream.json_schema or {})
+    tree = schema_service.field_tree(stream.json_schema or {})
     return PipelineStreamView(
         id=stream.id,
         name=stream.stream_name,
@@ -221,8 +239,13 @@ def stream_view(stream: PipelineStream) -> PipelineStreamView:
         destination_sync_mode=stream.destination_sync_mode.value,
         cursor_fields=list(stream.cursor_fields or []),
         primary_key_fields=[list(pk) for pk in (stream.primary_key_fields or [])],
+        selected_fields=(
+            list(stream.selected_fields)
+            if stream.selected_fields is not None else None
+        ),
         field_count=len(fields),
-        fields=fields,
+        fields=tree,
+        last_sync=last_sync,
     )
 
 
@@ -234,12 +257,17 @@ def pipeline_detail(
     recent: list[PipelineRun],
     snapshot_at=None,
     schema_change_pending: bool = False,
+    stream_sync: dict[tuple[str | None, str], StreamSyncState] | None = None,
 ) -> PipelineDetail:
+    stream_sync = stream_sync or {}
     return PipelineDetail(
         **base.model_dump(),
-        streams=[stream_view(s) for s in sorted(
-            pipeline.streams, key=lambda s: (s.namespace or "", s.stream_name)
-        )],
+        streams=[
+            stream_view(s, stream_sync.get((s.namespace, s.stream_name)))
+            for s in sorted(
+                pipeline.streams, key=lambda s: (s.namespace or "", s.stream_name)
+            )
+        ],
         metrics=PipelineMetrics(**metrics),
         recent_runs=[run_ref(r) for r in recent if r is not None],
         active_schema_snapshot_id=pipeline.active_schema_snapshot_id,

@@ -243,7 +243,7 @@ function RunList({
 function OnboardingChecklist({ state }: { state: Record<string, boolean> }) {
   const { t } = useI18n();
   const steps = [
-    { key: 'has_source', label: t('overview.onboarding.source'), href: '/sources/new' },
+    { key: 'has_source', label: t('overview.onboarding.source'), href: '/sources/new?journey=1' },
     { key: 'has_destination', label: t('overview.onboarding.destination'), href: '/destinations/new' },
     { key: 'has_pipeline', label: t('overview.onboarding.pipeline'), href: '/pipelines/new' },
     { key: 'has_successful_run', label: t('overview.onboarding.run'), href: '/pipelines' },

@@ -42,12 +42,21 @@ def supported_entries() -> list[dict]:
 
 
 def runner_version() -> str:
-    """The pinned runner tag, read from the service that owns it."""
-    source = (ROOT / "backend" / "app" / "services" / "builder.py").read_text(encoding="utf-8")
-    match = re.search(r'RUNNER_VERSION\s*=\s*"([^"]+)"', source)
-    if not match:
-        sys.exit("could not find RUNNER_VERSION in the builder service")
-    return match.group(1)
+    """The pinned runner tag, read from whichever module defines it.
+
+    It used to live in `builder.py` and moved to `builder_manifest.py`. This
+    read was pinned to the old path, so the lock builder exited before writing
+    anything and the lock quietly went stale -- pinning three connectors while
+    the registry certified more. Searching the package means the next move does
+    not break it again.
+    """
+    services = ROOT / "backend" / "app" / "services"
+    for path in sorted(services.glob("builder*.py")):
+        match = re.search(r'RUNNER_VERSION\s*=\s*"([^"]+)"',
+                          path.read_text(encoding="utf-8"))
+        if match:
+            return match.group(1)
+    sys.exit("no RUNNER_VERSION found in backend/app/services/builder*.py")
 
 
 def digest_of(image: str) -> str | None:

@@ -417,6 +417,35 @@ class AirbyteApiAdapter:
                 raise
             return base
 
+        # The generic runner's spec describes its internal manifest slot, not
+        # the connector compiled into that slot. Returning it here replaces a
+        # Base connector's token/domain form with
+        # `__injected_declarative_manifest` and makes the source impossible to
+        # create through the product API. For declarative connectors the
+        # manifest remains authoritative; Airbyte is authoritative only for
+        # the runner definition and the image tag it executes.
+        if connector.declarative_manifest is not None:
+            manifest_spec = (
+                (connector.declarative_manifest.get("spec") or {})
+                .get("connection_specification") or {}
+            )
+            entry = (await self._definitions(kind)).get(connector.docker_repository) or {}
+            return ConnectorMetadata(
+                connector_key=connector.connector_key,
+                display_name=base.display_name if base else connector.connector_key,
+                connector_type="SOURCE",
+                docker_repository=connector.docker_repository,
+                version=connector.version,
+                engine_version=entry.get("dockerImageTag") or None,
+                spec_schema=base.spec_schema if base else manifest_spec,
+                category=base.category if base else "Custom",
+                icon=base.icon if base else None,
+                engine_definition_id=definition_id,
+                supports_oauth=False,
+                supports_incremental=(base.supports_incremental if base else True),
+                supported_destination_sync_modes=[],
+            )
+
         path = ("/api/v1/source_definition_specifications/get" if is_source
                 else "/api/v1/destination_definition_specifications/get")
         id_field = "sourceDefinitionId" if is_source else "destinationDefinitionId"
@@ -485,6 +514,17 @@ class AirbyteApiAdapter:
         as a null-pointer from inside Airbyte.
         """
         if connector.engine_definition_id:
+            # Descriptors read from the engine already carry an id. That is not
+            # proof that the id still points at the connector tag the product
+            # certified: Airbyte actor creation accepts only the id, and will
+            # otherwise execute whatever default tag its registry currently
+            # assigns to it.
+            entry = (await self._definitions(kind)).get(connector.docker_repository)
+            if entry is not None:
+                await self._ensure_definition_version(connector, kind, entry)
+                id_field = ("sourceDefinitionId" if kind == "SOURCE"
+                            else "destinationDefinitionId")
+                return entry[id_field]
             return connector.engine_definition_id
 
         # A connector built in the product runs on the shared runner, and the
@@ -511,8 +551,47 @@ class AirbyteApiAdapter:
                     "deployment before creating resources with it."),
             )
 
+        await self._ensure_definition_version(connector, kind, entry)
         id_field = "sourceDefinitionId" if kind == "SOURCE" else "destinationDefinitionId"
         return entry[id_field]
+
+    async def _ensure_definition_version(
+        self, connector: ConnectorDescriptor, kind: str, entry: dict,
+    ) -> None:
+        """Make the dedicated engine run the connector tag we certified.
+
+        Actor creation accepts a definition id, not an image tag. If that
+        definition points elsewhere, recording the bundled version in Product
+        DB does not pin execution; the Airbyte worker runs its own default.
+        """
+        current = entry.get("dockerImageTag")
+        if current == connector.version:
+            return
+        if not connector.version or connector.version == UNPINNED:
+            raise EngineOperationError(
+                message="Connector chưa được pin phiên bản để chạy.",
+                technical_message=(
+                    f"{connector.connector_key} requested an unpinned image tag"),
+            )
+
+        is_source = kind == "SOURCE"
+        id_field = "sourceDefinitionId" if is_source else "destinationDefinitionId"
+        path = ("/api/v1/source_definitions/update" if is_source
+                else "/api/v1/destination_definitions/update")
+        log_event(
+            logger, logging.INFO, "adapter.definition_version_update",
+            connector=connector.connector_key, repository=connector.docker_repository,
+            previous=current, target=connector.version,
+        )
+        await self._post(path, {
+            id_field: entry[id_field],
+            "dockerImageTag": connector.version,
+            # Airbyte 1.x scopes definition updates to a workspace. Older
+            # releases accepted this payload without the id, while 1.8.x
+            # dereferences it and returns a 500 when it is absent.
+            "workspaceId": await self._resolve_workspace(),
+        })
+        entry["dockerImageTag"] = connector.version
 
     # ── connectors built in the product ──────────────────────────────────
     # A built connector has no image of its own. Airbyte runs it the same way
@@ -549,6 +628,7 @@ class AirbyteApiAdapter:
         existing = await self._definitions("SOURCE")
         entry = existing.get(connector.docker_repository)
         if entry is not None:
+            await self._ensure_definition_version(connector, "SOURCE", entry)
             return entry["sourceDefinitionId"]
 
         log_event(logger, logging.INFO, "adapter.runner_definition_create",
@@ -725,23 +805,63 @@ class AirbyteApiAdapter:
 
         return RUNNER_REPOSITORY, RUNNER_VERSION
 
+    # The Airbyte Config API has no field for an external id: it generates its
+    # own `sourceId` and gives us nothing to correlate against afterwards. The
+    # name is the only value we control, so the product id is carried there.
+    #
+    # This is not cosmetic. Without it, a process that dies between Airbyte's
+    # HTTP 200 and the ledger write leaves a resource holding the customer's
+    # credentials that nothing can ever find again -- not by id, because the id
+    # was never returned; not by name, because names are not unique; not by
+    # reconcile, which cannot tell it from a resource another deployment owns.
+    _MARKER = " [appbi:{product_resource_id}]"
+
+    @classmethod
+    def _engine_name(cls, request: EngineActorRequest) -> str:
+        return f"{request.name}{cls._MARKER.format(product_resource_id=request.product_resource_id)}"
+
     async def create_source(self, request: EngineActorRequest) -> EngineResourceRef:
         data = await self._post("/api/v1/sources/create", {
             "workspaceId": await self._resolve_workspace(),
             "sourceDefinitionId": await self._definition_id(request.connector, "SOURCE"),
             "connectionConfiguration": self._config_for(
                 request.connector, request.configuration),
-            "name": request.name,
+            "name": self._engine_name(request),
         })
         return EngineResourceRef(ref=data["sourceId"], engine_type=self.engine_type,
                                  version=request.connector.version)
+
+    async def find_by_product_id(self, resource_type: str,
+                                 product_resource_id: str) -> str | None:
+        """Recover the engine ref by the marker embedded in the resource name.
+
+        Only ever called on the recovery path, where the alternative is an
+        orphaned credential. It lists rather than gets, because there is
+        nothing to get by.
+        """
+        marker = self._MARKER.format(product_resource_id=product_resource_id)
+        workspace_id = await self._resolve_workspace()
+        listings = {
+            "SOURCE": ("/api/v1/sources/list", "sources", "sourceId"),
+            "DESTINATION": ("/api/v1/destinations/list", "destinations", "destinationId"),
+            "PIPELINE": ("/api/v1/connections/list", "connections", "connectionId"),
+        }
+        if resource_type not in listings:
+            return None
+        path, collection, id_field = listings[resource_type]
+
+        data = await self._post(path, {"workspaceId": workspace_id})
+        for entry in (data or {}).get(collection, []):
+            if marker in str(entry.get("name", "")):
+                return str(entry.get(id_field) or "") or None
+        return None
 
     async def update_source(self, ref: str, request: EngineActorRequest) -> EngineResourceRef:
         await self._post("/api/v1/sources/update", {
             "sourceId": ref,
             "connectionConfiguration": self._config_for(
                 request.connector, request.configuration),
-            "name": request.name,
+            "name": self._engine_name(request),
         })
         return EngineResourceRef(ref=ref, engine_type=self.engine_type, version=request.connector.version)
 
@@ -785,7 +905,7 @@ class AirbyteApiAdapter:
             "destinationDefinitionId": await self._definition_id(
                 request.connector, "DESTINATION"),
             "connectionConfiguration": request.configuration,
-            "name": request.name,
+            "name": self._engine_name(request),
         })
         return EngineResourceRef(ref=data["destinationId"], engine_type=self.engine_type,
                                  version=request.connector.version)
@@ -794,7 +914,7 @@ class AirbyteApiAdapter:
         await self._post("/api/v1/destinations/update", {
             "destinationId": ref,
             "connectionConfiguration": request.configuration,
-            "name": request.name,
+            "name": self._engine_name(request),
         })
         return EngineResourceRef(ref=ref, engine_type=self.engine_type, version=request.connector.version)
 
@@ -879,7 +999,7 @@ class AirbyteApiAdapter:
     # ── connections ──────────────────────────────────────────────────────
     async def create_connection(self, request: EngineConnectionRequest) -> EngineResourceRef:
         payload = {
-            "name": request.name,
+            "name": self._engine_name(request),
             "sourceId": request.source_ref,
             "destinationId": request.destination_ref,
             "status": "active",
@@ -898,7 +1018,7 @@ class AirbyteApiAdapter:
     async def update_connection(self, ref: str, request: EngineConnectionRequest) -> EngineResourceRef:
         payload = {
             "connectionId": ref,
-            "name": request.name,
+            "name": self._engine_name(request),
             "status": "active",
             "scheduleType": "manual",
             "syncCatalog": self._sync_catalog(request),
@@ -935,6 +1055,11 @@ class AirbyteApiAdapter:
                 entry["config"]["cursorField"] = stream.cursor_field
             if stream.primary_key:
                 entry["config"]["primaryKey"] = stream.primary_key
+            if stream.selected_fields is not None:
+                entry["config"]["fieldSelectionEnabled"] = True
+                entry["config"]["selectedFields"] = [
+                    {"fieldPath": [field]} for field in stream.selected_fields
+                ]
             streams.append(entry)
         return {"streams": streams}
 
@@ -1037,6 +1162,58 @@ class AirbyteApiAdapter:
             message = clean_line(str(event.get("message") or ""))
             lines.append(f"{prefix} {message}".strip() if prefix else message)
         return lines
+
+    async def connection_state(self, ref: str) -> list[dict] | None:
+        """Ask Airbyte what cursor the next sync will resume from.
+
+        `/api/v1/state/get` answers one of three shapes depending on how the
+        connection checkpoints -- `streamState` (per stream), `globalState`
+        (one shared cursor, CDC), or `state` (the legacy single blob). They are
+        flattened to a list here so the product has one shape and the caller
+        does not learn Airbyte's vocabulary.
+
+        A pipeline that has never completed a sync answers with no state at
+        all, and that is an empty list rather than an error: "not checkpointed
+        yet" is a real answer.
+        """
+        body = await self._post("/api/v1/state/get", {"connectionId": ref})
+        if not isinstance(body, dict):
+            return []
+        if body.get("streamState"):
+            return list(body["streamState"])
+        if body.get("globalState"):
+            return [body["globalState"]]
+        if body.get("state"):
+            return [{"streamDescriptor": None, "streamState": body["state"]}]
+        return []
+
+    async def set_connection_state(self, ref: str, state: list[dict]) -> bool:
+        """Write the cursor back, in whichever shape this connection uses.
+
+        Airbyte stores state as one of three shapes and rejects a payload in
+        the wrong one. The shape is not the caller's business -- the product
+        speaks in a flat list -- so it is read back from the connection rather
+        than guessed, and the list is folded into the same `stateType` the
+        connection already has.
+
+        An empty list is a real instruction: "forget the cursor", which makes
+        the next incremental run read from the beginning. It is sent as such
+        rather than treated as a no-op.
+        """
+        current = await self._post("/api/v1/state/get", {"connectionId": ref})
+        state_type = (current or {}).get("stateType") or "stream"
+
+        payload: dict[str, Any] = {"stateType": state_type, "connectionId": ref}
+        if state_type == "global":
+            payload["globalState"] = state[0] if state else {}
+        elif state_type == "legacy":
+            payload["state"] = state[0].get("streamState", {}) if state else {}
+        else:
+            payload["streamState"] = state
+
+        await self._post("/api/v1/state/create_or_update",
+                         {"connectionId": ref, "connectionState": payload})
+        return True
 
     async def get_job_logs(self, ref: str, *, cursor: int = 0, limit: int = 500) -> EngineLogResult:
         data = await self._post("/api/v1/jobs/get_debug_info", {"id": int(ref)})

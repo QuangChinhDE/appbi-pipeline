@@ -71,6 +71,15 @@ async def list_runs(
         session, ctx, pipeline_id=pipeline_id, status=status, trigger_type=trigger_type,
         error_category=error_category, since=since, until=until, limit=limit, offset=offset,
     )
+    # The pipeline was already cached per page; the user was not, so a page of
+    # runs triggered by different people issued one query each.
+    triggered_ids = {run.triggered_by for run in rows if run.triggered_by}
+    users = {
+        user.id: user
+        for user in (await session.scalars(
+            select(User).where(User.id.in_(triggered_ids)))).all()
+    } if triggered_ids else {}
+
     pipeline_cache: dict[uuid.UUID, ActorRef | None] = {}
     items: list[RunView] = []
     for run in rows:
@@ -78,9 +87,9 @@ async def list_runs(
             pipeline_cache[run.pipeline_id] = await _pipeline_ref(
                 session, await session.get(Pipeline, run.pipeline_id)
             )
-        user = await session.get(User, run.triggered_by) if run.triggered_by else None
         items.append(run_view(ctx, run, pipeline_ref=pipeline_cache[run.pipeline_id],
-                              triggered_by=user, is_stale=run_service.is_stale(run)))
+                              triggered_by=users.get(run.triggered_by),
+                              is_stale=run_service.is_stale(run)))
     return Paginated[RunView](
         items=items,
         page=PageInfo(has_more=offset + len(items) < total, total=total,

@@ -115,6 +115,52 @@ async def _collect() -> list[str]:
              for status, count in sorted(pipeline_rows, key=lambda r: r[0].value)],
         ))
 
+        # Engine-operation ledger. An open operation means the product and the
+        # engine may disagree, and the engine side of that disagreement is a
+        # resource holding customer credentials. Logging it was not enough:
+        # nothing paged, and nothing showed how long it had been true.
+        from app.models.outbox import EngineOperation, EngineOperationState
+
+        ledger_rows = (await session.execute(
+            select(EngineOperation.state, func.count())
+            .group_by(EngineOperation.state)
+        )).all()
+        by_state = {state: float(count) for state, count in ledger_rows}
+        blocks.append(_render(
+            "appbi_engine_operations_total",
+            "Engine operations by ledger state", "gauge",
+            [(f'{{state="{state}"}}', by_state.get(state, 0.0))
+             for state in (EngineOperationState.PENDING,
+                           EngineOperationState.ENGINE_CREATED,
+                           EngineOperationState.COMMITTED,
+                           EngineOperationState.COMPENSATION_REQUIRED,
+                           EngineOperationState.COMPENSATED,
+                           EngineOperationState.FAILED)],
+        ))
+        blocks.append(_render(
+            "appbi_engine_operations_open",
+            "Engine operations not yet resolved either way", "gauge",
+            [("", sum(by_state.get(state, 0.0)
+                      for state in EngineOperationState.OPEN))],
+        ))
+
+        # Age of the oldest unresolved one. The count alone cannot separate
+        # "three sagas in flight right now", which is healthy, from "three
+        # stuck since Tuesday", which is an orphaned credential.
+        oldest = (await session.execute(
+            select(func.min(EngineOperation.updated_at))
+            .where(EngineOperation.state.in_(EngineOperationState.OPEN))
+        )).scalar()
+        from app.core.db import utcnow as _utcnow
+
+        blocks.append(_render(
+            "appbi_engine_operation_oldest_open_seconds",
+            "Age of the oldest unresolved engine operation; 0 when none",
+            "gauge",
+            [("", 0.0 if oldest is None
+              else max(0.0, (_utcnow() - oldest).total_seconds()))],
+        ))
+
     return blocks
 
 

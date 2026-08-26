@@ -152,12 +152,16 @@ async def list_connectors(
     type: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query()] = None,
     category: Annotated[str | None, Query()] = None,
+    selectable: Annotated[bool, Query(
+        description="Only connectors this deployment offers. The create "
+                    "wizard uses this; the admin catalogue does not.")] = False,
     limit: Annotated[int | None, Query(ge=1, le=1000)] = None,
 ) -> list[ConnectorView]:
     ctx.require(Module.CONNECTORS, Action.VIEW)
     rows = await catalog.list_connectors(
         session, connector_type=type, query=q, category=category,
-        include_hidden=ctx.is_platform_admin, limit=limit,
+        include_hidden=ctx.is_platform_admin and not selectable,
+        selectable_only=selectable, limit=limit,
     )
     return [connector_view(row) for row in rows]
 

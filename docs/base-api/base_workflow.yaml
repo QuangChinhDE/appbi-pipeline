@@ -1,0 +1,2350 @@
+version: 3.9.6
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - workflow
+
+definitions:
+  streams:
+    job:
+      type: DeclarativeStream
+      name: job
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page_id
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 0
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: jobs/get
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - jobs
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/job'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1000Y
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config[''updated_from''] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: request_parameter
+        cursor_granularity: PT1S
+        cursor_datetime_formats:
+          - '%s'
+    stage:
+      type: DeclarativeStream
+      name: stage
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: workflow/stages
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+          request_body_data:
+            id: '{{ stream_partition.id }}'
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - stages
+        partition_router:
+          type: SubstreamPartitionRouter
+          parent_stream_configs:
+            - type: ParentStreamConfig
+              stream:
+                $ref: '#/definitions/streams/workflow'
+              parent_key: id
+              partition_field: id
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/stage'
+    workflow:
+      type: DeclarativeStream
+      name: workflow
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page_id
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 20
+            start_from_page: 0
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: workflows/get
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - workflows
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/workflow'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1000Y
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config[''updated_from''] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT1S
+        cursor_datetime_formats:
+          - '%s'
+  base_requester:
+    type: HttpRequester
+    url_base: https://workflow.base.vn/extapi/v1/
+
+streams:
+  - $ref: '#/definitions/streams/workflow'
+  - $ref: '#/definitions/streams/job'
+  - $ref: '#/definitions/streams/stage'
+
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required:
+      - access_token
+      - updated_from
+    properties:
+      access_token:
+        type: string
+        order: 0
+        title: access_token
+        airbyte_secret: true
+      updated_from:
+        type: number
+        order: 1
+        title: updated_from
+    additionalProperties: true
+
+metadata:
+  testedStreams:
+    stage:
+      hasRecords: true
+      streamHash: 83598bc89b6167f566eac3b4b50140d8782c90a0
+      hasResponse: true
+      primaryKeysAreUnique: true
+      primaryKeysArePresent: true
+      responsesAreSuccessful: true
+    workflow:
+      hasRecords: true
+      streamHash: 424a6fd4b45088ea439ccd84dd2872e358cd981c
+      hasResponse: true
+      primaryKeysAreUnique: true
+      primaryKeysArePresent: true
+      responsesAreSuccessful: true
+  autoImportSchema:
+    job: true
+    stage: true
+    workflow: true
+
+schemas:
+  job:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      acl:
+        type: object
+      hid:
+        type: string
+      data:
+        type: object
+        properties:
+          files:
+            type: number
+          posts:
+            type: number
+          gen_list:
+            type: array
+            items:
+              type: object
+              properties:
+                type:
+                  type: string
+                id:
+                  type: string
+                gen:
+                  type: number
+                link:
+                  type: string
+                name:
+                  type: string
+          gen_prev:
+            type: object
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+              gen:
+                type: number
+              link:
+                type: string
+              name:
+                type: string
+          attachment:
+            type: object
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+              hid:
+                type: string
+              link:
+                type: string
+              name:
+                type: string
+          last_assignee:
+            type: string
+          first_assignee:
+            type:
+              - number
+              - string
+          forward_source:
+            type: number
+          deadline_assign:
+            type: number
+          stages_assignee:
+            type: array
+            items:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                stage_id:
+                  type: string
+                username:
+                  type: string
+          remind_assign_users:
+            type: array
+          deadline_by_timesheet:
+            type: number
+      form:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            url:
+              type: string
+            name:
+              type: string
+            index:
+              type: number
+            title:
+              type: number
+            value:
+              type: string
+            display:
+              type: string
+            enabled:
+              type: number
+            options:
+              type: array
+              items:
+                type: string
+            file_fid:
+              type: string
+            file_url:
+              type: string
+            required:
+              type:
+                - number
+                - string
+            stage_id:
+              type:
+                - number
+                - string
+            file_name:
+              type: string
+            placeholder:
+              type:
+                - 'null'
+                - string
+            stage_index:
+              type: number
+      link:
+        type: string
+      name:
+        type: string
+      tags:
+        type: array
+        items:
+          type: string
+      color:
+        type: string
+      cover:
+        anyOf:
+          - type: string
+          - type: object
+            properties:
+              link:
+                type: string
+      files:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            fid:
+              type: string
+            src:
+              type: string
+            url:
+              type: string
+            name:
+              type: string
+            size:
+              type:
+                - number
+                - string
+            image:
+              type:
+                - number
+                - string
+            since:
+              type: number
+            origin:
+              type: number
+            new_fid:
+              type: string
+            download:
+              type: string
+            username:
+              type: string
+            dimension:
+              type: array
+              items:
+                type: number
+            ext_download:
+              type: string
+            is_templated:
+              type: number
+      moves:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            past:
+              type: number
+            job_id:
+              type: string
+            user_id:
+              type:
+                - number
+                - string
+            duration:
+              type: number
+            mover_id:
+              type: string
+            stage_id:
+              type: string
+            username:
+              type: string
+            stage_end:
+              type: number
+            stage_start:
+              type:
+                - number
+                - string
+            from_stage_id:
+              type: string
+            skip_holidays:
+              type: string
+            stage_deadline:
+              type:
+                - number
+                - string
+            assignee_timesheet:
+              type: array
+              items:
+                type: array
+                items:
+                  type: array
+                  items:
+                    type: number
+            actual_time_by_duration:
+              type: number
+            actual_time_by_timesheet:
+              type: number
+      since:
+        type: string
+      state:
+        type: string
+      stats:
+        type: object
+        properties:
+          files:
+            type: number
+          likes:
+            type: number
+          notes:
+            type: number
+          posts:
+            type: number
+      title:
+        type: string
+      todos:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            link:
+              type: string
+            name:
+              type: string
+            status:
+              type: string
+            deadline:
+              type:
+                - number
+                - string
+            stage_id:
+              type: string
+            username:
+              type: string
+      token:
+        type: string
+      owners:
+        type: array
+      status:
+        type: string
+      content:
+        type: string
+      keyword:
+        type: string
+      results:
+        type: array
+      starred:
+        type: string
+      user_id:
+        type: string
+      deadline:
+        type: string
+      stage_id:
+        type: string
+      username:
+        type: string
+      finish_at:
+        type: string
+      followers:
+        type: array
+        items:
+          type: string
+      on_failed:
+        type: object
+        properties:
+          note:
+            type: string
+          since:
+            type: number
+          stage_id:
+            type: string
+          failed_name:
+            type: string
+          failed_reason_id:
+            type: string
+      system_id:
+        type: string
+      creator_id:
+        type: string
+      is_archive:
+        type: string
+      form_origin:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+            index:
+              type: number
+            title:
+              type: number
+            value:
+              type: string
+            display:
+              type: string
+            enabled:
+              type: number
+            options:
+              type: array
+              items:
+                type: string
+            required:
+              type:
+                - number
+                - string
+            stage_id:
+              type:
+                - number
+                - string
+            placeholder:
+              type:
+                - 'null'
+                - string
+            stage_index:
+              type: number
+      last_update:
+        type: string
+      stage_start:
+        type: string
+      workflow_id:
+        type: string
+      counter_code:
+        type: string
+      stage_export:
+        type: object
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+          name:
+            type: string
+          metatype:
+            type: string
+          workflow_id:
+            type: string
+      content_short:
+        type: string
+      counter_value:
+        type: string
+      to_sign_token:
+        type: string
+      first_assignee:
+        type:
+          - number
+          - string
+      stage_deadline:
+        type: string
+      deadline_assign:
+        type: number
+      workflow_export:
+        type: object
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+          name:
+            type: string
+      counter_keywords:
+        type: string
+      creator_username:
+        type: string
+      remind_assign_users:
+        type: array
+      deadline_by_timesheet:
+        type: number
+    additionalProperties: true
+  stage:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+    properties:
+      id:
+        type: string
+      acl:
+        type:
+          - object
+          - 'null'
+        properties:
+          managed:
+            type:
+              - number
+              - 'null'
+          followed:
+            type:
+              - number
+              - 'null'
+      hid:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      todos:
+        type:
+          - array
+          - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      owners:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      review:
+        type:
+          - object
+          - 'null'
+        properties:
+          enabled:
+            type:
+              - number
+              - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      backward:
+        type:
+          - object
+          - 'null'
+        properties:
+          option:
+            type:
+              - number
+              - string
+              - 'null'
+          stages:
+            type:
+              - array
+              - 'null'
+          allow_assignee_previous_stage:
+            type:
+              - number
+              - string
+              - 'null'
+      duration:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      webhooks:
+        type:
+          - object
+          - 'null'
+        properties:
+          events:
+            type:
+              - object
+              - 'null'
+            properties:
+              jobIn:
+                type:
+                  - array
+                  - 'null'
+                items:
+                  type:
+                    - string
+                    - 'null'
+              jobBack:
+                type:
+                  - array
+                  - 'null'
+              jobNext:
+                type:
+                  - array
+                  - 'null'
+                items:
+                  type:
+                    - string
+                    - 'null'
+              jobReassign:
+                type:
+                  - array
+                  - 'null'
+          server_token:
+            type:
+              - string
+              - 'null'
+          transformers:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - object
+                - 'null'
+              properties:
+                key:
+                  type:
+                    - string
+                    - 'null'
+                value:
+                  type:
+                    - string
+                    - 'null'
+          process_enabled:
+            type:
+              - number
+              - 'null'
+      followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      reviewers:
+        type:
+          - array
+          - 'null'
+      assignment:
+        type:
+          - object
+          - 'null'
+        properties:
+          type:
+            type:
+              - string
+              - 'null'
+          followers:
+            type:
+              - array
+              - 'null'
+      more_todos:
+        type:
+          - string
+          - 'null'
+      real_order:
+        type:
+          - string
+          - 'null'
+      sla_assign:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type:
+          - string
+          - 'null'
+      workflow_id:
+        type:
+          - string
+          - 'null'
+      skip_holidays:
+        type:
+          - string
+          - 'null'
+      condition_vars:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            key:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            label:
+              type:
+                - string
+                - 'null'
+            options:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+            metatype:
+              type:
+                - string
+                - 'null'
+            stage_id:
+              type:
+                - number
+                - string
+                - 'null'
+            placeholder:
+              type:
+                - string
+                - 'null'
+      duration_hours:
+        type:
+          - string
+          - 'null'
+      reassign_stage:
+        type:
+          - number
+          - 'null'
+      required_todos:
+        type:
+          - string
+          - 'null'
+      review_enabled:
+        type:
+          - number
+          - 'null'
+      following_teams:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            dbk:
+              type:
+                - string
+                - 'null'
+            data:
+              type:
+                - object
+                - 'null'
+            link:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            path:
+              type:
+                - string
+                - 'null'
+            about:
+              type:
+                - string
+                - 'null'
+            color:
+              type:
+                - string
+                - 'null'
+            image:
+              type:
+                - string
+                - 'null'
+            since:
+              type:
+                - string
+                - 'null'
+            token:
+              type:
+                - string
+                - 'null'
+            status:
+              type:
+                - string
+                - 'null'
+            counter:
+              type:
+                - object
+                - 'null'
+            user_id:
+              type:
+                - string
+                - 'null'
+            __cached:
+              type:
+                - number
+                - 'null'
+            metatype:
+              type:
+                - string
+                - 'null'
+            username:
+              type:
+                - string
+                - 'null'
+            __deleted:
+              type:
+                - number
+                - 'null'
+            parent_id:
+              type:
+                - string
+                - 'null'
+            system_id:
+              type:
+                - string
+                - 'null'
+            num_people:
+              type:
+                - string
+                - 'null'
+      group_followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      workflow_export:
+        type:
+          - object
+          - 'null'
+        properties:
+          type:
+            type:
+              - string
+              - 'null'
+          id:
+            type:
+              - string
+              - 'null'
+          name:
+            type:
+              - string
+              - 'null'
+      default_followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      deadline_adjustable:
+        type:
+          - string
+          - 'null'
+      conditional_sla_data:
+        type:
+          - object
+          - 'null'
+        properties:
+          conditions:
+            type:
+              - array
+              - 'null'
+      review_by_job_assignee:
+        type:
+          - number
+          - 'null'
+      conditional_assignee_data:
+        type:
+          - object
+          - 'null'
+      conditional_followers_data:
+        type:
+          - object
+          - 'null'
+        properties:
+          conditions:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - object
+                - 'null'
+              properties:
+                rule:
+                  type:
+                    - object
+                    - 'null'
+                  properties:
+                    id:
+                      type:
+                        - string
+                        - 'null'
+                    nodes:
+                      type:
+                        - array
+                        - 'null'
+                      items:
+                        type:
+                          - object
+                          - 'null'
+                        properties:
+                          type:
+                            type:
+                              - string
+                              - 'null'
+                          id:
+                            type:
+                              - string
+                              - 'null'
+                          field:
+                            type:
+                              - string
+                              - 'null'
+                          value:
+                            type:
+                              - string
+                              - 'null'
+                          formula:
+                            type:
+                              - string
+                              - 'null'
+                          operator:
+                            type:
+                              - string
+                              - 'null'
+                          parent_id:
+                            type:
+                              - string
+                              - 'null'
+                          input_type:
+                            type:
+                              - string
+                              - 'null'
+                    condition:
+                      type:
+                        - string
+                        - 'null'
+                followers:
+                  type:
+                    - array
+                    - 'null'
+                  items:
+                    type:
+                      - string
+                      - 'null'
+          output_rule:
+            type:
+              - string
+              - 'null'
+      setup_conditional_assignee:
+        type:
+          - number
+          - 'null'
+      allow_assignee_job_reassign:
+        type:
+          - number
+          - 'null'
+      current_deadline_adjustable:
+        type:
+          - number
+          - 'null'
+      remove_last_assignee_following:
+        type:
+          - number
+          - 'null'
+      remove_deadline_uncompleted_todo:
+        type:
+          - number
+          - 'null'
+    additionalProperties: true
+  workflow:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      acl:
+        type:
+          - object
+          - 'null'
+        properties:
+          view:
+            type:
+              - number
+              - 'null'
+          member:
+            type:
+              - number
+              - 'null'
+          managed:
+            type:
+              - number
+              - 'null'
+          staged_managed:
+            type:
+              - number
+              - 'null'
+          staged_followed:
+            type:
+              - number
+              - 'null'
+      hid:
+        type:
+          - string
+          - 'null'
+      set:
+        type:
+          - object
+          - 'null'
+        properties:
+          id:
+            type:
+              - string
+              - 'null'
+          name:
+            type:
+              - string
+              - 'null'
+          refid:
+            type:
+              - string
+              - 'null'
+      data:
+        type:
+          - object
+          - 'null'
+        properties:
+          done:
+            type:
+              - string
+              - 'null'
+          active:
+            type:
+              - string
+              - 'null'
+          failed:
+            type:
+              - string
+              - 'null'
+          display:
+            type:
+              - number
+              - string
+              - 'null'
+          category:
+            type:
+              - string
+              - 'null'
+          templates:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - object
+                - 'null'
+              properties:
+                id:
+                  type:
+                    - string
+                    - 'null'
+                fid:
+                  type:
+                    - string
+                    - 'null'
+                name:
+                  type:
+                    - string
+                    - 'null'
+                stages:
+                  type:
+                    - array
+                    - 'null'
+                enabled:
+                  type:
+                    - number
+                    - 'null'
+                position_qrcode:
+                  type:
+                    - string
+                    - 'null'
+          __sworkflow:
+            type:
+              - object
+              - 'null'
+            properties:
+              export_excel:
+                type:
+                  - string
+                  - 'null'
+              remove_workflow:
+                type:
+                  - string
+                  - 'null'
+              export_excel_reviewer:
+                type:
+                  - string
+                  - 'null'
+          sign_enable:
+            type:
+              - number
+              - string
+              - 'null'
+          sign_owners:
+            type:
+              - array
+              - 'null'
+          sign_stages:
+            type:
+              - array
+              - 'null'
+          template_id:
+            type:
+              - string
+              - 'null'
+          auto_archive:
+            type:
+              - object
+              - 'null'
+            properties:
+              default_reason:
+                type:
+                  - string
+                  - 'null'
+              done_after_days:
+                type:
+                  - string
+                  - 'null'
+              archive_done_jobs:
+                type:
+                  - number
+                  - 'null'
+              failed_after_days:
+                type:
+                  - number
+                  - string
+                  - 'null'
+              archive_failed_jobs:
+                type:
+                  - number
+                  - 'null'
+          cover_enable:
+            type:
+              - number
+              - string
+              - 'null'
+          disable_noti:
+            type:
+              - object
+              - 'null'
+            properties:
+              done_job:
+                type:
+                  - array
+                  - 'null'
+                items:
+                  type:
+                    - string
+                    - 'null'
+              create_job:
+                type:
+                  - array
+                  - 'null'
+                items:
+                  type:
+                    - string
+                    - 'null'
+              failed_job:
+                type:
+                  - array
+                  - 'null'
+                items:
+                  type:
+                    - string
+                    - 'null'
+          __hf_template:
+            type:
+              - number
+              - 'null'
+          not_show_done:
+            type:
+              - number
+              - string
+              - 'null'
+          print_options:
+            type:
+              - object
+              - 'null'
+            properties:
+              allow_job:
+                type:
+                  - number
+                  - 'null'
+              allow_job_comment:
+                type:
+                  - number
+                  - 'null'
+              allow_pdf_template:
+                type:
+                  - number
+                  - 'null'
+              allow_attach_qrcode:
+                type:
+                  - number
+                  - 'null'
+              allow_custom_qrcode:
+                type:
+                  - number
+                  - 'null'
+              allow_word_template:
+                type:
+                  - number
+                  - 'null'
+              allow_qrcode_template:
+                type:
+                  - number
+                  - 'null'
+          counter_current:
+            type:
+              - number
+              - 'null'
+          archive_done_jobs:
+            type:
+              - number
+              - 'null'
+          custom_field_editable:
+            type:
+              - number
+              - string
+              - 'null'
+          deadline_by_timesheet:
+            type:
+              - number
+              - string
+              - 'null'
+          counter_request_enable:
+            type:
+              - string
+              - 'null'
+          counter_request_owners:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - string
+                - 'null'
+          allow_auto_add_follower:
+            type:
+              - string
+              - 'null'
+          allow_todo_add_follower:
+            type:
+              - string
+              - 'null'
+          allow_create_tasks_wework:
+            type:
+              - number
+              - string
+              - 'null'
+          block_remove_default_todo:
+            type:
+              - number
+              - string
+              - 'null'
+          block_todo_in_finished_job:
+            type:
+              - number
+              - string
+              - 'null'
+          deadline_todo_by_timesheet:
+            type:
+              - number
+              - string
+              - 'null'
+          allow_stage_owner_edit_todo:
+            type:
+              - number
+              - string
+              - 'null'
+          allow_stage_owner_remove_job:
+            type:
+              - number
+              - string
+              - 'null'
+          allow_print_qrcode_all_status:
+            type:
+              - number
+              - string
+              - 'null'
+          allow_add_confirmer_as_follower:
+            type:
+              - string
+              - 'null'
+          qrcode_position_of_custom_field:
+            type:
+              - string
+              - 'null'
+          donot_allow_edit_from_second_stage:
+            type:
+              - number
+              - string
+              - 'null'
+          qrcode_position_of_attachment_file:
+            type:
+              - string
+              - 'null'
+          allow_stage_owner_edit_job_deadline:
+            type:
+              - number
+              - string
+              - 'null'
+          not_allow_edit_comment_at_last_stage:
+            type:
+              - number
+              - string
+              - 'null'
+          allow_select_qrcode_position_custom_field:
+            type:
+              - number
+              - string
+              - 'null'
+          allow_select_qrcode_position_attachment_file:
+            type:
+              - number
+              - string
+              - 'null'
+      form:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            version:
+              type:
+                - number
+                - 'null'
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            extra:
+              anyOf:
+                - type: string
+                - type: object
+                  properties:
+                    id:
+                      type: string
+                    export:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        since:
+                          type: string
+                        teams:
+                          type: array
+                        avatar:
+                          type: string
+                        status:
+                          type: string
+                        appname:
+                          type: string
+                        user_id:
+                          type: string
+                        category:
+                          type: string
+                        metatype:
+                          type: string
+                        username:
+                          type: string
+                        followers:
+                          type: array
+                          items:
+                            type: string
+                        is_public:
+                          type: string
+                        system_id:
+                          type: string
+                        description:
+                          type: string
+                        is_template:
+                          type: string
+                        last_update:
+                          type: string
+                        instructions:
+                          type: string
+                    input_data:
+                      type: array
+                      items:
+                        type: string
+                    instruction:
+                      type: string
+                    data_generation:
+                      type: string
+            columns:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+            disable:
+              type:
+                - number
+                - 'null'
+            enabled:
+              type:
+                - number
+                - 'null'
+            options:
+              anyOf:
+                - type: string
+                - type: array
+                  items:
+                    type: string
+            multiple:
+              type:
+                - number
+                - 'null'
+            required:
+              type:
+                - number
+                - string
+                - 'null'
+            stage_id:
+              type:
+                - number
+                - string
+                - 'null'
+            stage_io:
+              type:
+                - string
+                - 'null'
+            placeholder:
+              type:
+                - string
+                - 'null'
+            confidential:
+              type:
+                - object
+                - 'null'
+              properties:
+                enable:
+                  type:
+                    - number
+                    - 'null'
+                view_users:
+                  type:
+                    - array
+                    - 'null'
+                view_stages_manager:
+                  type:
+                    - array
+                    - 'null'
+                view_stages_assignee:
+                  type:
+                    - array
+                    - 'null'
+            condition_rule:
+              type:
+                - string
+                - 'null'
+            condition_status:
+              type:
+                - number
+                - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      path:
+        type:
+          - string
+          - 'null'
+      tags:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            key:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            color:
+              type:
+                - string
+                - 'null'
+      alias:
+        type:
+          - string
+          - 'null'
+      refid:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      stats:
+        type:
+          - object
+          - 'null'
+        properties:
+          done:
+            type:
+              - number
+              - string
+              - 'null'
+          active:
+            type:
+              - number
+              - string
+              - 'null'
+          failed:
+            type:
+              - number
+              - string
+              - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      owners:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      stages:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            owners:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+            metatype:
+              type:
+                - string
+                - 'null'
+            followers:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+      status:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      display:
+        type:
+          - number
+          - 'null'
+      options:
+        type:
+          - object
+          - 'null'
+        properties:
+          export_excel:
+            type:
+              - string
+              - 'null'
+          remove_workflow:
+            type:
+              - string
+              - 'null'
+          export_excel_reviewer:
+            type:
+              - string
+              - 'null'
+      privacy:
+        type:
+          - string
+          - 'null'
+      duration:
+        type:
+          - string
+          - 'null'
+      forwards:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type:
+                - string
+                - 'null'
+            auto:
+              type:
+                - number
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            since:
+              type:
+                - number
+                - 'null'
+            stage_id:
+              type:
+                - number
+                - string
+                - 'null'
+            stage_type:
+              type:
+                - string
+                - 'null'
+            follower_type:
+              type:
+                - string
+                - 'null'
+            assignment_type:
+              type:
+                - string
+                - 'null'
+      keywords:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      webhooks:
+        type:
+          - object
+          - 'null'
+      followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      is_reatable:
+        type:
+          - boolean
+          - 'null'
+      is_viewable:
+        type:
+          - boolean
+          - 'null'
+      last_update:
+        type: string
+      sign_enable:
+        type:
+          - number
+          - 'null'
+      sign_owners:
+        type:
+          - array
+          - 'null'
+      sign_stages:
+        type:
+          - array
+          - 'null'
+      auto_archive:
+        type:
+          - string
+          - 'null'
+      cover_enable:
+        type:
+          - number
+          - 'null'
+      disable_noti:
+        type:
+          - object
+          - 'null'
+        properties:
+          done_job:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - string
+                - 'null'
+          create_job:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - string
+                - 'null'
+          failed_job:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - string
+                - 'null'
+      doc_template:
+        type:
+          - array
+          - 'null'
+      doc_templates:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type:
+                - string
+                - 'null'
+            fid:
+              type:
+                - string
+                - 'null'
+            url:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            stages:
+              type:
+                - array
+                - 'null'
+            enabled:
+              type:
+                - number
+                - 'null'
+            position_qrcode:
+              type:
+                - string
+                - 'null'
+      not_show_done:
+        type:
+          - number
+          - 'null'
+      print_options:
+        type:
+          - object
+          - 'null'
+        properties:
+          allow_job:
+            type:
+              - number
+              - 'null'
+          allow_job_comment:
+            type:
+              - number
+              - 'null'
+          allow_pdf_template:
+            type:
+              - number
+              - 'null'
+          allow_attach_qrcode:
+            type:
+              - number
+              - 'null'
+          allow_custom_qrcode:
+            type:
+              - number
+              - 'null'
+          allow_word_template:
+            type:
+              - number
+              - 'null'
+          allow_qrcode_template:
+            type:
+              - number
+              - 'null'
+      counter_adjust:
+        type:
+          - number
+          - 'null'
+      counter_enable:
+        type:
+          - number
+          - 'null'
+      duration_hours:
+        type:
+          - number
+          - 'null'
+      failed_reasons:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            key:
+              type:
+                - string
+                - 'null'
+            value:
+              type:
+                - string
+                - 'null'
+      viewable_teams:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      counter_current:
+        type:
+          - number
+          - 'null'
+      creatable_teams:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      email_templates:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            cc:
+              type:
+                - array
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            to:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+            body:
+              type:
+                - string
+                - 'null'
+            from:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            event:
+              type:
+                - string
+                - 'null'
+            stages:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+            subject:
+              type:
+                - string
+                - 'null'
+            attachments:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - string
+                  - 'null'
+      forward_manager:
+        type:
+          - string
+          - 'null'
+      counter_template:
+        type:
+          - string
+          - 'null'
+      duration_setting:
+        type:
+          - string
+          - 'null'
+      incoming_webhook:
+        type:
+          - string
+          - 'null'
+      auto_archive_conf:
+        type:
+          - object
+          - 'null'
+        properties:
+          default_reason:
+            type:
+              - string
+              - 'null'
+          done_after_days:
+            type:
+              - string
+              - 'null'
+          archive_done_jobs:
+            type:
+              - number
+              - 'null'
+          failed_after_days:
+            type:
+              - number
+              - string
+              - 'null'
+          archive_failed_jobs:
+            type:
+              - number
+              - 'null'
+      conditional_stage:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type:
+                - string
+                - 'null'
+            conditions:
+              type:
+                - array
+                - 'null'
+              items:
+                type:
+                  - object
+                  - 'null'
+                properties:
+                  rule:
+                    type:
+                      - object
+                      - 'null'
+                    properties:
+                      id:
+                        type:
+                          - string
+                          - 'null'
+                      nodes:
+                        type:
+                          - array
+                          - 'null'
+                        items:
+                          type:
+                            - object
+                            - 'null'
+                          properties:
+                            type:
+                              type:
+                                - string
+                                - 'null'
+                            id:
+                              type:
+                                - string
+                                - 'null'
+                            field:
+                              type:
+                                - string
+                                - 'null'
+                            value:
+                              type:
+                                - string
+                                - 'null'
+                            formula:
+                              type:
+                                - string
+                                - 'null'
+                            operator:
+                              type:
+                                - string
+                                - 'null'
+                            parent_id:
+                              type:
+                                - string
+                                - 'null'
+                            input_type:
+                              type:
+                                - string
+                                - 'null'
+                      condition:
+                        type:
+                          - string
+                          - 'null'
+                  stage:
+                    type:
+                      - string
+                      - 'null'
+            output_rule:
+              type:
+                - string
+                - 'null'
+      counter_follow_setup:
+        type:
+          - number
+          - 'null'
+      custom_field_editable:
+        type:
+          - number
+          - 'null'
+      deadline_by_timesheet:
+        type:
+          - number
+          - 'null'
+      allow_auto_add_follower:
+        type:
+          - number
+          - string
+          - 'null'
+      allow_todo_add_follower:
+        type:
+          - number
+          - string
+          - 'null'
+      allow_create_tasks_wework:
+        type:
+          - number
+          - string
+          - 'null'
+      block_remove_default_todo:
+        type:
+          - number
+          - 'null'
+      block_todo_in_finished_job:
+        type:
+          - number
+          - 'null'
+      deadline_todo_by_timesheet:
+        type:
+          - number
+          - 'null'
+      allow_stage_owner_edit_todo:
+        type:
+          - number
+          - 'null'
+      allow_stage_owner_remove_job:
+        type:
+          - number
+          - 'null'
+      allow_print_qrcode_all_status:
+        type:
+          - number
+          - 'null'
+      allow_add_confirmer_as_follower:
+        type:
+          - number
+          - 'null'
+      qrcode_position_of_custom_field:
+        type:
+          - string
+          - 'null'
+      donot_allow_edit_from_second_stage:
+        type:
+          - number
+          - 'null'
+      qrcode_position_of_attachment_file:
+        type:
+          - string
+          - 'null'
+      allow_stage_owner_edit_job_deadline:
+        type:
+          - number
+          - 'null'
+      not_allow_edit_comment_at_last_stage:
+        type:
+          - number
+          - 'null'
+      allow_select_qrcode_position_custom_field:
+        type:
+          - number
+          - 'null'
+      allow_select_qrcode_position_attachment_file:
+        type:
+          - number
+          - 'null'
+    additionalProperties: true

@@ -23,6 +23,7 @@ from app.core.errors import NotFoundError, ValidationError
 from app.core.logging import log_event
 from app.core.params import as_enum
 from app.models.engine import ConnectorDefinition
+from app.models.integration import Destination, Source
 from app.models.enums import Certification, ConnectorStatus, ConnectorType
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ async def seed_catalog(session: AsyncSession) -> int:
                     spec_schema=metadata.spec_schema,
                     spec_hash=spec_hash(metadata.spec_schema),
                     spec_source="BUNDLED",
+                    declarative_manifest=metadata.declarative_manifest,
                     certification=Certification(
                         certifications.get(metadata.connector_key, "BETA")
                     ),
@@ -87,10 +89,59 @@ async def seed_catalog(session: AsyncSession) -> int:
             existing.certification = Certification(
                 certifications.get(metadata.connector_key, existing.certification.value)
             )
-            if existing.spec_source == "BUNDLED":
+            # `version` is a pin, not part of the spec. It is the image tag
+            # the adapter pushes into the engine when it creates a resource,
+            # so it has to stay bundled-authoritative no matter where the spec
+            # came from. Refreshing it only in the BUNDLED branch meant that
+            # once a row's spec had been read back from the engine, the
+            # bundled pin could never win again: the engine bootloader's drift
+            # became permanent product state, and `_ensure_definition_version`
+            # then faithfully pushed that drift back into the engine on every
+            # resource creation -- undoing `airbyte-connector-pin` minutes
+            # after it ran. What the engine actually offers is a separate
+            # observation and lives in `engine_version`, which
+            # `refresh_from_engine` owns; this column is the product's.
+            existing.version = metadata.version
+            if existing.spec_source == "BUNDLED" or metadata.declarative_manifest is not None:
                 existing.spec_schema = metadata.spec_schema
                 existing.spec_hash = spec_hash(metadata.spec_schema)
-                existing.version = metadata.version
+                # The manifest *is* the connector, for the ones this product
+                # defines itself. Overwriting it here is what makes "fix the
+                # Base API logic once and every workspace has it" true: the
+                # code in `app/connectors` is the source of truth and a deploy
+                # re-seeds it. A Connector Builder project has
+                # `spec_source != BUNDLED` and is never touched.
+                existing.declarative_manifest = metadata.declarative_manifest
+                existing.spec_source = "BUNDLED"
+
+    # Remove connectors this build no longer ships.
+    #
+    # `seed_catalog` only ever inserted and updated, so trimming the bundled
+    # catalogue left every dropped connector sitting in the database: still
+    # listed, still rendering as a locked card, still claiming a version
+    # nothing pins any more. An upsert-only sync quietly turns the catalogue
+    # into the union of every version ever deployed.
+    #
+    # Two things are never pruned. A connector built in the product has
+    # `spec_source != "BUNDLED"` and was never ours to remove. And a connector
+    # some source or destination still uses stays, because deleting it would
+    # orphan a working resource -- it is disabled instead, which is visible and
+    # reversible.
+    shipped = {metadata.connector_key for metadata in bundled_connectors()}
+    in_use = set((await session.scalars(select(Source.connector_key))).all())
+    in_use |= set((await session.scalars(select(Destination.connector_key))).all())
+
+    for key, row in by_key.items():
+        if key in shipped or row.spec_source != "BUNDLED":
+            continue
+        if key in in_use:
+            row.certification = Certification.BLOCKED
+            row.status = ConnectorStatus.DISABLED
+            row.disabled_reason = (
+                "Connector này không còn nằm trong phạm vi phát hành, nhưng "
+                "vẫn có kết nối đang dùng nó.")
+            continue
+        await session.delete(row)
 
     await session.flush()
     return created
@@ -103,6 +154,7 @@ async def list_connectors(
     query: str | None = None,
     category: str | None = None,
     include_hidden: bool = False,
+    selectable_only: bool = False,
     limit: int | None = None,
 ) -> list[ConnectorDefinition]:
     stmt = select(ConnectorDefinition)
@@ -126,6 +178,18 @@ async def list_connectors(
             )
         )
     rows = list((await session.scalars(stmt)).all())
+    if selectable_only:
+        # The create wizard's list. Filtered here rather than in the browser,
+        # because the browser was downloading 598 connectors (~515 KB) to show
+        # five: the launch scope is a server-side policy, so the client should
+        # never have to receive the rest to discover it cannot use them.
+        #
+        # Certification alone is not the answer -- `connector_is_offered` also
+        # honours the per-deployment beta allowlist -- so the decision runs
+        # through the same function the create path enforces.
+        rows = [row for row in rows
+                if settings.connector_is_offered(row.connector_key,
+                                                 row.certification.value)]
     order = {Certification.SUPPORTED: 0, Certification.BETA: 1,
              Certification.BLOCKED: 2, Certification.HIDDEN: 3}
     rows.sort(key=lambda r: (order.get(r.certification, 9), r.display_name.lower()))
@@ -238,7 +302,10 @@ async def refresh_specs(
         if metadata.spec_schema:
             connector.spec_schema = metadata.spec_schema
             connector.spec_hash = new_hash
-            connector.spec_source = "ENGINE"
+            # A bundled declarative manifest owns its customer-facing spec.
+            # Airbyte only sees the generic runner's internal manifest slot.
+            if connector.declarative_manifest is None:
+                connector.spec_source = "ENGINE"
         connector.supports_incremental = metadata.supports_incremental
         connector.supports_oauth = metadata.supports_oauth
         if metadata.supported_destination_sync_modes:
@@ -283,57 +350,129 @@ def _marked_secret(prop: dict) -> bool:
     return prop.get("format") == "password"
 
 
+def _spec_branches(node: dict) -> list[dict]:
+    """A spec node together with every alternative it can take.
+
+    `oneOf` is how Airbyte models "pick an auth method" or "pick a loading
+    method", and the branches nest: BigQuery's `loading_method` is a `oneOf`
+    whose GCS branch has a `credential` which is itself a `oneOf` holding the
+    HMAC secret. Flattening only the first level is what let that secret
+    through.
+    """
+    out = [node]
+    for keyword in ("oneOf", "anyOf", "allOf"):
+        for branch in node.get(keyword) or []:
+            if isinstance(branch, dict):
+                out.extend(_spec_branches(branch))
+    return out
+
+
+def _child_specs(node: dict, key: str) -> list[dict]:
+    """Every sub-spec `key` could match, across all branches."""
+    found = []
+    for branch in _spec_branches(node or {}):
+        properties = branch.get("properties") or {}
+        if key in properties and isinstance(properties[key], dict):
+            found.append(properties[key])
+    return found
+
+
+def _item_spec(node: dict) -> dict:
+    for branch in _spec_branches(node or {}):
+        items = branch.get("items")
+        if isinstance(items, dict):
+            return items
+    return {}
+
+
+def _split_node(spec: dict, value):
+    """Split one value into (non-secret, secret, whether any secret was found).
+
+    Shape is preserved on both sides so `merge_configuration` can rebuild the
+    original exactly: a dict stays a dict at the same key, a list stays a list
+    of the same length with `None` where an element held nothing secret.
+    """
+    if isinstance(value, dict):
+        config: dict = {}
+        secrets: dict = {}
+        for key, child in value.items():
+            candidates = _child_specs(spec, key)
+            # If *any* branch calls this secret, it is secret. Branches
+            # disagree in real specs, and the safe reading is the strict one.
+            if any(_marked_secret(candidate) for candidate in candidates):
+                secrets[key] = child
+                continue
+            # Recurse using the richest matching branch -- the one that
+            # actually describes children.
+            deeper = next(
+                (c for c in candidates
+                 if c.get("properties") or c.get("oneOf") or c.get("anyOf")
+                 or c.get("allOf") or c.get("items")),
+                candidates[0] if candidates else {})
+            child_config, child_secret, found = _split_node(deeper, child)
+            config[key] = child_config
+            if found:
+                secrets[key] = child_secret
+        return config, secrets, bool(secrets)
+
+    if isinstance(value, list):
+        item_spec = _item_spec(spec)
+        configs = []
+        secrets_list = []
+        found_any = False
+        for element in value:
+            element_config, element_secret, found = _split_node(item_spec, element)
+            configs.append(element_config)
+            secrets_list.append(element_secret if found else None)
+            found_any = found_any or found
+        return configs, (secrets_list if found_any else None), found_any
+
+    return value, None, False
+
+
 def split_configuration(spec: dict, payload: dict) -> tuple[dict, dict]:
     """Split a submitted form into (non-secret config, secret payload).
 
-    Secrecy is driven by the connector spec, walked recursively so nested and
-    oneOf credentials are caught too. See SECRET_MARKERS for what counts.
+    Secrecy is decided by the connector spec, walked to any depth through
+    `properties`, `oneOf`/`anyOf`/`allOf` branches and array `items`.
+
+    This used to descend exactly one level and through exactly one `oneOf`,
+    while its docstring said recursive. `destination-bigquery` puts its HMAC
+    secret at `loading_method.credential.hmac_key_secret` -- two levels down,
+    two `oneOf`s in -- so that secret was written into plain configuration,
+    stored unencrypted, and returned by an endpoint a VIEW-only role can call.
+
+    See SECRET_MARKERS for what counts as a marker; the error is deliberately
+    biased toward encrypting a field that did not need it.
     """
-    secrets: dict = {}
-    config: dict = {}
-    properties = (spec or {}).get("properties") or {}
-
-    def is_secret(key: str) -> bool:
-        prop = properties.get(key) or {}
-        if _marked_secret(prop):
-            return True
-        for branch in prop.get("oneOf") or []:
-            for sub_key, sub in (branch.get("properties") or {}).items():
-                if _marked_secret(sub) and sub_key == key:
-                    return True
-        return False
-
-    for key, value in (payload or {}).items():
-        if is_secret(key):
-            secrets[key] = value
-        elif isinstance(value, dict):
-            nested_spec = properties.get(key) or {}
-            branches = nested_spec.get("oneOf") or [nested_spec]
-            nested_secret_keys = {
-                sub_key
-                for branch in branches
-                for sub_key, sub in (branch.get("properties") or {}).items()
-                if _marked_secret(sub)
-            }
-            if nested_secret_keys & set(value.keys()):
-                config[key] = {k: v for k, v in value.items() if k not in nested_secret_keys}
-                secrets[key] = {k: v for k, v in value.items() if k in nested_secret_keys}
-            else:
-                config[key] = value
-        else:
-            config[key] = value
+    config, secrets, _ = _split_node(spec or {}, payload or {})
     return config, secrets
 
 
+def _merge_node(config, secrets):
+    if secrets is None:
+        return config
+    if isinstance(secrets, dict) and isinstance(config, dict):
+        merged = dict(config)
+        for key, value in secrets.items():
+            merged[key] = _merge_node(config.get(key), value)
+        return merged
+    if isinstance(secrets, list) and isinstance(config, list):
+        if len(secrets) == len(config):
+            return [_merge_node(item, secret)
+                    for item, secret in zip(config, secrets)]
+    return secrets
+
+
 def merge_configuration(config: dict, secrets: dict) -> dict:
-    """Rebuild the full connector configuration just before an engine call."""
-    merged = dict(config or {})
-    for key, value in (secrets or {}).items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = {**merged[key], **value}
-        else:
-            merged[key] = value
-    return merged
+    """Rebuild the full connector configuration just before an engine call.
+
+    The exact inverse of `split_configuration`, to the same depth. A merge that
+    stopped a level short of the split would hand the connector a config with a
+    hole in it, and the failure would look like a bad credential.
+    """
+    merged = _merge_node(dict(config or {}), secrets or {})
+    return merged if isinstance(merged, dict) else dict(config or {})
 
 
 def apply_spec_defaults(spec: dict, configuration: dict) -> dict:

@@ -141,7 +141,8 @@ airbyte_api_certification_kubernetes:
         A connector pod pulling a 500MB image outlasts the product's check
         timeout, and the product reports ENGINE_UNAVAILABLE. The engine is
         healthy. Pre-pull with
-        `scripts/pull-engine-images.py --into-kind <node>` before certifying.
+        `scripts/pull-engine-images.py` before certifying (the `--into-kind` variant
+        was removed with the Kubernetes path).
       resolved: true
 
   notes: >-
@@ -152,6 +153,10 @@ airbyte_api_certification_kubernetes:
     the engine's.
 
 connectors:
+  # The catalogue the product offers, and the evidence behind each claim.
+  # `scripts/build-connector-registry.py` reads certification from here, so a
+  # level written here is a level the product will advertise -- nothing is
+  # marked SUPPORTED that was not run.
   source-postgres:
     image: airbyte/source-postgres
     pinned_version: "3.8.5"
@@ -176,24 +181,56 @@ connectors:
       append_dedup: true
   destination-postgres:
     image: airbyte/destination-postgres
-    pinned_version: "3.0.17"
+    # Held below upstream on purpose. 3.x declares `supportsRefreshes` and needs
+    # the `generationId` platform 0.59.1 never sends; the sync dies at the first
+    # record with `getGenerationId(...) must not be null`. Raising this means
+    # raising the platform, which means Kubernetes.
+    pinned_version: "2.0.10"
     certification: SUPPORTED
     verified:
       check: true
       overwrite: true
       append: true
       append_dedup: true
-      refresh_generations: true
-  source-file:
-    image: airbyte/source-file
-    pinned_version: "0.6.0"
-    certification: BETA
+      # refresh_generations is deliberately absent: 2.0.10 predates the refresh
+      # protocol. Claiming it here would claim the very behaviour this pin
+      # exists to avoid.
+  source-bigquery:
+    image: airbyte/source-bigquery
+    pinned_version: "0.4.5"
+    certification: SUPPORTED
+    verified:
+      check: true          # real project base-testlab-01, service account
+      discover: true       # 164 streams
+      full_refresh: true   # 50 records read
+  destination-bigquery:
+    image: airbyte/destination-bigquery
+    # Same refresh-protocol constraint as destination-postgres.
+    pinned_version: "2.4.19"
+    certification: SUPPORTED
     verified:
       check: true
+      append: true         # 50 records written, then read back by source-bigquery
+  source-google-sheets:
+    image: airbyte/source-google-sheets
+    pinned_version: "0.12.35"
+    certification: SUPPORTED
+    verified:
+      check: true          # service account, no OAuth grant needed to read
       discover: true
-      full_refresh: true
+      full_refresh: true   # 30 records
+  destination-google-sheets:
+    image: airbyte/destination-google-sheets
+    pinned_version: "0.3.5"
+    # BETA, and the reason is specific: `spec` runs, but no `check` has ever run
+    # against a real spreadsheet, because writing needs an OAuth grant or a
+    # sheet shared with write permission. Selectable via CONNECTOR_BETA_ALLOWLIST.
+    certification: BETA
+    verified:
+      spec: true
 
 runtime:
+  engine: "airbyte 0.59.1 (docker compose, vendored)"
   postgres: "16-alpine"
   redis: "7-alpine"
   python: "3.11"

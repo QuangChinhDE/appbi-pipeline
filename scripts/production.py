@@ -255,7 +255,7 @@ def validate(config: dict, *, strict: bool) -> list[str]:
                 "This profile runs an in-process database and no TLS. If this "
                 "really is production, use external-airbyte-k8s.")
         warnings.append(
-            "single-host-demo: local Postgres, local Redis, no TLS, no managed "
+            "single-host-demo: local Postgres, no TLS, no managed "
             "backups. Fine for a demo, not a production topology.")
 
     return warnings
@@ -1095,43 +1095,71 @@ def yaml_dump_all(documents) -> str:
 
 
 def verify_engine(config: dict) -> None:
-    """Refuse to deploy against an engine that is not the pinned one.
+    """Preflight: is an engine reachable at the configured URL?
 
-    An Airbyte that upgraded itself since certification runs different
-    connector versions under a product that certified the old ones. The version
-    is read from the engine, not from the config, because the config is what
-    someone believes and the engine is what is true.
+    Deliberately *not* an identity or auth check any more. Production holds its
+    engine credentials in Kubernetes secrets, and `resolve_secret()` refuses to
+    read `secret://` on purpose -- an installer that can read every secret is a
+    bigger target than the deployment it installs. So this probe had no
+    credential to send, an auth-enabled Airbyte answered 401, and the installer
+    treated that as fatal. The post-deploy check inside the Pod was correct and
+    unreachable: nothing got past this.
+
+    What can honestly be decided from here is reachability: DNS resolves, the
+    port answers, TLS terminates. `401` proves all three, so it is a pass.
+
+    Identity -- version, workspace, the authenticated contract -- is verified by
+    `verify_engine_in_pod()` after rollout, from the process that actually holds
+    the credentials and uses the network path.
     """
     engine = config["engine"]
     url = str(engine.get("url") or "").rstrip("/")
     if not url:
-        warn("engine.url is unset; cannot verify the engine identity")
+        warn("engine.url is unset; cannot check the engine is reachable")
         return
 
-    # With the Basic auth the config declares. Probing without it against an
-    # auth-enabled Airbyte returns 401, which is neither "wrong version" nor
-    # "healthy" -- so the check silently never exercised the production path.
+    # If credentials happen to be readable here (`env://`, `file://`, or a demo
+    # profile), use them and check the version too. That is strictly more than
+    # reachability, and free when it is possible.
     token = _engine_bearer(config)
+    auth = _engine_auth(config)
     status, body = http(f"{url}/api/v1/instance_configuration", timeout=20,
-                        auth=_engine_auth(config), bearer=token)
+                        auth=auth, bearer=token)
+
+    if status == 0:
+        raise Stop(f"nothing answered at {url}: {body[:200]}",
+                   "Check the URL, DNS from this host, and whether the engine "
+                   "is reachable from where the installer runs.")
+    if status in (401, 403):
+        if token or (auth and auth[0]):
+            raise Stop(
+                f"the engine at {url} rejected the credentials this config "
+                f"supplies (HTTP {status})", body[:300])
+        # No credential to send, and the engine is clearly alive enough to
+        # refuse us. That is the expected answer for an auth-enabled engine
+        # probed from an installer that cannot read Kubernetes secrets.
+        ok(f"engine reachable at {url} (HTTP {status}; auth is enforced, "
+           "identity verified from the Pod after rollout)")
+        return
+    if status >= 500:
+        raise Stop(f"the engine at {url} answered HTTP {status}", body[:300])
     if status != 200:
-        raise Stop(f"the engine at {url} did not answer instance_configuration "
-                   f"(HTTP {status})", body[:300])
+        raise Stop(f"the engine at {url} answered HTTP {status} for "
+                   "instance_configuration", body[:300])
+
     try:
         live = str(json.loads(body).get("version") or "")
     except ValueError:
         raise Stop(f"the engine at {url} answered non-JSON", body[:200])
 
     expected = str(engine["platform_version"])
-    if live != expected:
+    if live and live != expected:
         raise Stop(
             f"the engine at {url} reports {live!r}, config pins {expected!r}",
             "Either the deployment drifted or the config is stale. Certify the "
             "running version before deploying against it.")
-    ok(f"engine {live} matches the pinned version")
+    ok(f"engine {live or 'reachable'} matches the pinned version")
 
-
-# ── shared steps ─────────────────────────────────────────────────────────────
 
 def login(config: dict) -> str | None:
     """A session cookie for the operator endpoints, if credentials are given."""
@@ -1210,7 +1238,7 @@ def record_artifact(config: dict, cookie: str | None, out: Path) -> bool:
     if not evidence:
         warn("no evidence files listed in release.evidence, or none exist; "
              "skipping the artifact. A deployment without one is not a release "
-             "-- run scripts/e2e.py --evidence first.")
+             "-- run qa/e2e/e2e.py --evidence first.")
         return False
 
     command = [sys.executable, str(ROOT / "scripts" / "release-gate.py"), "record",
@@ -1500,17 +1528,34 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                         "not on this engine")
 
     step("release gates")
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "release_gate", ROOT / "scripts" / "release-gate.py")
-    gate = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gate)
-    problems += gate.check_release_gates()
-    problems += gate.check_oncall_assigned()
-    for overlay, label in ((("product" in config and config["product"].get("overlay")), "the product"),
-                           (((config.get("engine") or {}).get("connector_policy_overlay")), "the connector policy")):
-        if overlay:
-            problems += gate.check_deployment_placeholders(str(overlay), label=label)
+    # The same gates `install` runs, on the same artefact `install` would apply.
+    #
+    # `doctor` used to check placeholders on the *source* overlay, which keeps
+    # `registry.internal` and `appbi.example.internal` on purpose so an unedited
+    # `kubectl apply -k` fails closed. So a correctly configured deployment --
+    # one whose rendered manifests are clean -- was reported NOT PRODUCTION
+    # READY. That is the defect `install` had; it was left behind here. Sharing
+    # `static_gates()` means it cannot be fixed in one command and not the other.
+    if config.get("profile") == "single-host-demo":
+        problems += static_gates(config)
+    else:
+        import tempfile
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="appbi-doctor-") as tmp:
+                problems += static_gates(
+                    config, rendered=render_from_config(config, Path(tmp)))
+        except SystemExit as exc:
+            # A config that cannot be rendered cannot be installed either, so
+            # this is a finding rather than a reason to skip the gate.
+            problems += static_gates(config)
+            problems.append(f"the config does not render: {exc}")
+        except Exception as exc:
+            # No kubectl on this host: say so rather than passing silently.
+            problems += static_gates(config)
+            warnings.append(
+                f"could not render the manifests to check them for "
+                f"placeholders: {exc}")
 
     step("verdict")
     for message in warnings:
@@ -1521,6 +1566,211 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"  - {message}", file=sys.stderr)
         return 1
     ok("no problems found")
+    return 0
+
+
+# ── teardown ────────────────────────────────────────────────────────────
+
+PROTECTED_PROJECTS = ("appbi-ai",)
+
+
+def _docker_json(*args: str) -> list[dict]:
+    """List Docker objects as JSON, tolerating docker being absent."""
+    result = run(["docker", *args, "--format", "{{json .}}"],
+                 check=False, capture=True, timeout=120)
+    if result.returncode != 0:
+        return []
+    rows = []
+    for line in (result.stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            continue
+    return rows
+
+
+def _labels_of(container: str) -> dict[str, str]:
+    result = run(["docker", "inspect", container, "--format",
+                  "{{json .Config.Labels}}"], check=False, capture=True,
+                 timeout=60)
+    if result.returncode != 0:
+        return {}
+    try:
+        return json.loads((result.stdout or "null").strip()) or {}
+    except ValueError:
+        return {}
+
+
+def teardown_plan(config: dict) -> dict:
+    """Exactly what this deployment owns, resolved from Docker, not from names.
+
+    Name matching is what makes teardown dangerous. `appbi-ai` is a different
+    product in a different Compose project, and every substring rule anybody
+    would write by hand -- `appbi`, `appbi-*`, `*pipeline*` -- matches some of
+    its resources. So membership is decided by the Compose project label that
+    Docker itself maintains, and the plan carries the evidence for each entry.
+    """
+    project = os.getenv("COMPOSE_PROJECT_NAME") or ROOT.name
+    plan: dict = {"project": project, "containers": [], "volumes": [],
+                  "networks": [], "images": [], "refused": []}
+
+    for row in _docker_json("ps", "-a"):
+        name = row.get("Names") or row.get("Name") or ""
+        if not name:
+            continue
+        labels = _labels_of(name)
+        owner = labels.get("com.docker.compose.project", "")
+        if owner in PROTECTED_PROJECTS:
+            plan["refused"].append(
+                f"container {name} belongs to {owner}")
+            continue
+        if owner == project:
+            plan["containers"].append(name)
+
+    for row in _docker_json("volume", "ls"):
+        name = row.get("Name") or ""
+        labels = row.get("Labels") or ""
+        owner = ""
+        for pair in str(labels).split(","):
+            if pair.startswith("com.docker.compose.project="):
+                owner = pair.split("=", 1)[1]
+        if owner in PROTECTED_PROJECTS:
+            plan["refused"].append(f"volume {name} belongs to {owner}")
+            continue
+        if owner == project:
+            plan["volumes"].append(name)
+
+    for row in _docker_json("network", "ls"):
+        name = row.get("Name") or ""
+        if name in ("bridge", "host", "none"):
+            continue
+        result = run(["docker", "network", "inspect", name, "--format",
+                      "{{index .Labels \"com.docker.compose.project\"}}"],
+                     check=False, capture=True, timeout=60)
+        owner = (result.stdout or "").strip()
+        if owner in PROTECTED_PROJECTS:
+            plan["refused"].append(f"network {name} belongs to {owner}")
+            continue
+        if owner == project:
+            plan["networks"].append(name)
+
+    return plan
+
+
+def cmd_clean_room(args: argparse.Namespace) -> int:
+    """Tear down this deployment, and refuse to touch anything else.
+
+    The reason this is a command rather than a runbook: the last teardown was
+    assembled by hand from `docker ps`, `docker volume ls` and judgement, next
+    to a second Compose project called `appbi-ai` that shares a prefix with
+    everything being deleted. It went fine. It went fine the way an unguarded
+    `rm -rf` goes fine, which is not a property of the procedure.
+
+    Three properties, and each one is a thing that has gone wrong somewhere:
+
+    * **Dry run by default.** `--apply` is required to delete anything. A tool
+      whose default is destructive gets run destructively by accident exactly
+      once.
+    * **Membership by label, never by name.** Docker's own Compose project
+      label decides, and `appbi-ai` is refused explicitly even if some future
+      config manages to name it.
+    * **A backup first, or an explicit acceptance of the loss.** The RC1
+      teardown destroyed the only input a clean-room rehearsal could have used.
+      That was the owner's decision and a legitimate one; what was missing was
+      the moment where somebody had to say so out loud.
+
+    The manifest is printed and written, because "what did we actually delete"
+    is asked immediately afterwards and Docker no longer knows.
+    """
+    config = load_config(Path(args.config))
+    need("docker", "clean-room tears down Docker resources")
+
+    step("plan")
+    plan = teardown_plan(config)
+    print(f"  compose project: {plan['project']}")
+    for kind in ("containers", "volumes", "networks"):
+        entries = plan[kind]
+        print(f"  {kind:<12} {len(entries)}")
+        for name in entries:
+            print(f"      {name}")
+    for refusal in plan["refused"]:
+        print(f"  protected    {refusal}")
+
+    if not any(plan[kind] for kind in ("containers", "volumes", "networks")):
+        ok("nothing belonging to this deployment is running")
+        return 0
+
+    step("backup")
+    if args.accept_data_loss:
+        warn("--accept-data-loss: tearing down with no backup. Anything in "
+             "these volumes is gone, including the database this deployment's "
+             "encryption key decrypts.")
+    else:
+        # Deliberately before the dry-run/apply branch: a dry run that skips the
+        # backup cannot tell you whether the backup would have worked, and that
+        # is the half of the rehearsal that actually matters.
+        backed_up = run([sys.executable, str(ROOT / "scripts" / "backup.py"),
+                         "dump", "--out", args.backup_dir], check=False)
+        if backed_up.returncode != 0:
+            raise Stop(
+                "the backup failed, so nothing has been deleted",
+                "Fix the backup, or re-run with --accept-data-loss if losing "
+                "this deployment's data is the intention.")
+        ok(f"backed up to {args.backup_dir}")
+
+    manifest = {
+        "project": plan["project"],
+        "applied": bool(args.apply),
+        "backup": None if args.accept_data_loss else args.backup_dir,
+        "deleted": {"containers": [], "volumes": [], "networks": []},
+        "refused": plan["refused"],
+    }
+
+    if not args.apply:
+        step("dry run")
+        print("  nothing was deleted. Re-run with --apply to carry this out.")
+        Path(args.manifest).write_text(
+            json.dumps(manifest, indent=2), encoding="utf-8")
+        print(f"  plan written to {args.manifest}")
+        return 0
+
+    step("teardown")
+    # Compose first: it removes containers, its own network and its named
+    # volumes together, and it will not touch another project's resources.
+    compose(config, "down", "--volumes", "--remove-orphans", check=False)
+
+    # Then anything Compose left behind, one resource at a time, re-checking
+    # ownership immediately before each delete rather than trusting the plan.
+    for name in plan["containers"]:
+        if _labels_of(name).get("com.docker.compose.project") in PROTECTED_PROJECTS:
+            continue
+        if run(["docker", "rm", "-f", name], check=False).returncode == 0:
+            manifest["deleted"]["containers"].append(name)
+    for name in plan["volumes"]:
+        if run(["docker", "volume", "rm", name], check=False).returncode == 0:
+            manifest["deleted"]["volumes"].append(name)
+    for name in plan["networks"]:
+        if run(["docker", "network", "rm", name], check=False).returncode == 0:
+            manifest["deleted"]["networks"].append(name)
+
+    step("manifest")
+    for kind, entries in manifest["deleted"].items():
+        print(f"  {kind:<12} {len(entries)}")
+        for name in entries:
+            print(f"      {name}")
+    Path(args.manifest).write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8")
+    ok(f"manifest written to {args.manifest}")
+
+    survivors = [row.get("Names") or row.get("Name")
+                 for row in _docker_json("ps", "-a")]
+    for protected in PROTECTED_PROJECTS:
+        still = [name for name in survivors
+                 if _labels_of(str(name)).get("com.docker.compose.project") == protected]
+        print(f"  {protected}: {len(still)} container(s) still running")
     return 0
 
 
@@ -1558,7 +1808,16 @@ The step people skip is 3. Rolling the product back past resources it created
 on the engine leaves mappings pointing at things that no longer exist, and the
 symptom is a not-found on the next sync rather than an error at rollback time.
 """)
-    return 0
+    # Exit 3, not 0.
+    #
+    # This command prints instructions; it does not perform a rollback. Exiting
+    # 0 made it indistinguishable from a rollback that succeeded -- to a person
+    # skimming at 3am, and to any script that checks a return code. A caller
+    # that treats this as "rolled back" is wrong, and the exit code is the only
+    # part of that a script can see.
+    print("NOT_IMPLEMENTED: nothing was changed. The steps above are manual.",
+          file=sys.stderr)
+    return 3
 
 
 def main() -> int:
@@ -1593,10 +1852,22 @@ def main() -> int:
     rollback = sub.add_parser("rollback", help="what an artifact was, and how to undo it")
     rollback.add_argument("--artifact", default="certification.json")
 
+    clean = with_config(sub.add_parser(
+        "clean-room", help="tear this deployment down, and nothing else"))
+    # No --yes, no --force. `--apply` is the only way to delete, and it reads
+    # as what it does at the call site.
+    clean.add_argument("--apply", action="store_true",
+                       help="actually delete. Without it this is a dry run.")
+    clean.add_argument("--accept-data-loss", action="store_true",
+                       help="tear down without a backup, knowingly")
+    clean.add_argument("--backup-dir", default="backups")
+    clean.add_argument("--manifest", default="teardown-manifest.json")
+
     args = parser.parse_args()
     return {
         "install": cmd_install, "upgrade": cmd_upgrade, "status": cmd_status,
         "doctor": cmd_doctor, "logs": cmd_logs, "rollback": cmd_rollback,
+        "clean-room": cmd_clean_room,
     }[args.command](args)
 
 

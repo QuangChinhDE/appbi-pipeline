@@ -37,7 +37,7 @@ x-airbyte-env: &airbyte-env
   TEMPORAL_HOST: airbyte-temporal:7233
   TRACKING_STRATEGY: logging
   # Connectors run as sibling containers of the Airbyte worker, on the network
-  # that has no access to this product's API or Redis.
+  # that has no access to this product's API or database.
   WORKSPACE_ROOT: /tmp/workspace
   LOCAL_ROOT: /tmp/airbyte_local
   # These name the volume as the *host daemon* knows it, because the worker
@@ -51,17 +51,27 @@ x-airbyte-env: &airbyte-env
   JOB_MAIN_CONTAINER_CPU_REQUEST: ""
   JOB_MAIN_CONTAINER_MEMORY_REQUEST: ""
   DOCKER_NETWORK: appbi-pipeline_connectors
-  # Log storage. MinIO stands in for S3 so a local staging deployment needs no
-  # cloud account; production points these at real object storage.
-  STORAGE_TYPE: MINIO
+  # Log and state storage.
+  #
+  # The stock Airbyte compose runs MinIO for this, because server and worker
+  # are separate containers and both have to read the same job logs: the
+  # worker writes them, the server serves them to the API. Object storage is
+  # how you share a filesystem between two containers that do not share one.
+  #
+  # These two already share one. `airbyte_workspace` is mounted at
+  # /tmp/workspace in both, so LOCAL storage writes to a volume both ends can
+  # see and the shared-filesystem problem MinIO solves does not exist here.
+  # That is two fewer containers and ~124 MB of RAM for no lost behaviour --
+  # verified by the golden path, incremental and cancel, not by reasoning.
+  #
+  # A deployment that splits server and worker across hosts loses that shared
+  # volume and needs real object storage again: set STORAGE_TYPE to S3 and
+  # point the bucket/credential variables at it.
+  STORAGE_TYPE: LOCAL
   STORAGE_BUCKET_LOG: airbyte-storage
   STORAGE_BUCKET_STATE: airbyte-storage
   STORAGE_BUCKET_WORKLOAD_OUTPUT: airbyte-storage
   STORAGE_BUCKET_ACTIVITY_PAYLOAD: airbyte-storage
-  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
-  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
-  MINIO_ENDPOINT: http://airbyte-minio:9000
-  S3_PATH_STYLE_ACCESS: "true"
   MICRONAUT_ENVIRONMENTS: control-plane
   # Version note — why 0.59.1 and not something current.
   #
@@ -106,7 +116,7 @@ services:
   # it: starting a server against an unmigrated database produces failures that
   # look like bugs.
   airbyte-bootloader:
-    image: airbyte/bootloader:${AIRBYTE_VERSION:-0.59.1}
+    image: airbyte/bootloader:0.59.1@sha256:1e49d554da2faf3c7ae5dd6df9c36e371d8fba95abb534dd252831f1c4bdeafa
     container_name: appbi-airbyte-bootloader
     environment: *airbyte-env
     depends_on:
@@ -118,7 +128,7 @@ services:
   # config file Airbyte's workflows expect, and the stock temporalio image
   # exits on startup without it.
   airbyte-temporal:
-    image: airbyte/temporal:${AIRBYTE_VERSION:-0.59.1}
+    image: airbyte/temporal:0.59.1@sha256:0d4bc948762784ce300eabdfc32716cc1516d057c5f5b62610826615089b61b6
     container_name: appbi-airbyte-temporal
     environment:
       DB: postgresql
@@ -133,44 +143,58 @@ services:
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
     depends_on:
       postgres: {condition: service_healthy}
-    networks: [appbi]
-
-  airbyte-minio:
-    image: minio/minio:${MINIO_VERSION:-RELEASE.2023-11-20T22-40-07Z}
-    container_name: appbi-airbyte-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
-    volumes:
-      - airbyte_minio:/data
+    # Temporal creates its own two databases and their schema on first boot.
+    # Until that finishes it listens on 7233 but serves nothing, so an open
+    # port is not readiness -- `tctl cluster health` is.
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # `$(hostname -i)`, not 127.0.0.1: the entrypoint sets BIND_ON_IP to the
+      # container's own address, so Temporal never listens on loopback and a
+      # probe there gets connection-refused from a perfectly healthy server.
+      test: ["CMD-SHELL",
+             "tctl --address $(hostname -i):7233 cluster health 2>/dev/null | grep -q SERVING"]
       interval: 10s
-      timeout: 5s
-      retries: 12
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    # Its schema setup is not atomic: if Postgres is still starting when it
+    # runs, `create` fails and the server dies on the version check. It also
+    # cannot write its own "already started" marker (the filesystem is
+    # read-only there), so a restart genuinely retries the setup instead of
+    # skipping it.
+    restart: unless-stopped
     networks: [appbi]
 
-  # Airbyte writes job logs and state to object storage and expects the bucket
-  # to exist. Without it every job fails with an S3 404 that reads like a
-  # permissions problem, so the bucket is created as part of bringing the stack
-  # up rather than as a step in a runbook.
-  airbyte-storage-init:
-    image: minio/mc:${MINIO_MC_VERSION:-RELEASE.2024-11-21T17-21-54Z}
-    container_name: appbi-airbyte-storage-init
-    entrypoint: >-
-      sh -c "mc alias set local http://airbyte-minio:9000
-      ${MINIO_ROOT_USER:-minio} ${MINIO_ROOT_PASSWORD:-minio123}
-      && mc mb --ignore-existing local/airbyte-storage"
+  # Pin the engine's connector definitions to `connector-lock.json`.
+  #
+  # This is not a convenience. Airbyte 0.59.1's bootloader re-seeds its
+  # connector definitions from Airbyte's *current* catalogue on every single
+  # start, so an old platform comes up offering brand-new connectors it cannot
+  # run. `destination-postgres` arrives as 3.x, which needs the `generationId`
+  # of the refresh protocol; this platform never sends it, and the sync dies at
+  # the first record with:
+  #
+  #     NullPointerException: getGenerationId(...) must not be null
+  #
+  # Nothing warns. The definition looks healthy and `check` passes. A pin
+  # applied by hand is undone by the next `docker compose up`, which is how
+  # this was found twice.
+  airbyte-connector-pin:
+    image: python:3.11-slim
+    container_name: appbi-airbyte-connector-pin
+    volumes:
+      - ./connector-lock.json:/lock.json:ro
+      - ./scripts/pin-engine-connectors.py:/pin.py:ro
+    command: ["python", "/pin.py", "--lock", "/lock.json",
+              "--api", "http://airbyte-server:8001"]
     depends_on:
-      airbyte-minio: {condition: service_healthy}
+      airbyte-server: {condition: service_healthy}
     networks: [appbi]
     restart: "no"
 
   # The Config API. This is the only Airbyte surface the product talks to, and
   # it is reachable on the internal network only — no host port is published.
   airbyte-server:
-    image: airbyte/server:${AIRBYTE_VERSION:-0.59.1}
+    image: airbyte/server:0.59.1@sha256:9ffbd4d6d53edc78ef57cf37f4af9dfc13e75d73b99d76f8c42f237a20237637
     container_name: appbi-airbyte-server
     environment:
       <<: *airbyte-env
@@ -181,7 +205,14 @@ services:
       - airbyte_local:/tmp/airbyte_local
     depends_on:
       airbyte-bootloader: {condition: service_completed_successfully}
-      airbyte-storage-init: {condition: service_completed_successfully}
+      # The server opens a Temporal client during bean initialisation and exits
+      # 1 if it cannot. It was missing this edge and survived on luck: the
+      # storage-init -> minio chain used to delay it long enough for Temporal
+      # to be up. Removing MinIO removed the delay, and the first cold start
+      # after that failed with `UnknownHostException: airbyte-temporal`, which
+      # reads like a network fault rather than a missing dependency.
+      airbyte-temporal: {condition: service_healthy}
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8001/api/v1/health || exit 1"]
       interval: 15s
@@ -194,7 +225,7 @@ services:
   # the Docker daemon directly, which is why the socket belongs here rather
   # than in the product's API and worker.
   airbyte-worker:
-    image: airbyte/worker:${AIRBYTE_VERSION:-0.59.1}
+    image: airbyte/worker:0.59.1@sha256:68301ad94c0b083d64c653c138f79c248ebece112dad608243f90569f135749d
     container_name: appbi-airbyte-worker
     environment:
       <<: *airbyte-env
@@ -216,28 +247,25 @@ services:
       - airbyte_local:/tmp/airbyte_local
     depends_on:
       airbyte-bootloader: {condition: service_completed_successfully}
-      airbyte-temporal: {condition: service_started}
+      # Started is not ready; see the healthcheck on that service.
+      airbyte-temporal: {condition: service_healthy}
+    restart: unless-stopped
     networks: [appbi, connectors]
 
-  airbyte-cron:
-    image: airbyte/cron:${AIRBYTE_VERSION:-0.59.1}
-    container_name: appbi-airbyte-cron
-    environment: *airbyte-env
-    depends_on:
-      airbyte-bootloader: {condition: service_completed_successfully}
-    networks: [appbi]
+  # airbyte-cron is deliberately absent.
+  #
+  # Its only scheduled job in 0.59.1 is `WorkspaceCleaner`, deleting workspace
+  # files older than 30 days -- and in this topology it does not even do that:
+  # the workspace volume is not mounted into the cron container, so every run
+  # ends in `Error invoking scheduled task ... /tmp/workspace`. It cost 513 MB
+  # of RAM to throw an exception on a timer.
+  #
+  # It also runs the definitions updater, which refreshes connector versions
+  # from Airbyte's catalogue -- the exact thing `airbyte-connector-pin` exists
+  # to undo. Removing it means one less fight over which connector version runs.
+  #
+  # Workspace files are pruned with the volume when the stack is torn down.
 
-  # The product now points at Airbyte instead of running connectors itself.
-  #
-  # AIRBYTE_WORKSPACE_ID is left to the environment on purpose: which workspace
-  # a deployment writes into is a decision, not a default, and a UUID inherited
-  # from someone else's Airbyte would pass every check and then create customer
-  # connections in the wrong tenant.
-  #
-  # A bootloader-initialised Airbyte has exactly one workspace, so this staging
-  # overlay turns on AIRBYTE_WORKSPACE_AUTO, which resolves that one and refuses
-  # the moment there is more than one to choose from. Set AIRBYTE_WORKSPACE_ID
-  # to pin it — required in production, where the auto flag is off.
   # See docs/RUNBOOK-airbyte-workspace.md.
   api:
     environment:
@@ -247,6 +275,7 @@ services:
       AIRBYTE_WORKSPACE_AUTO: ${AIRBYTE_WORKSPACE_AUTO:-true}
     depends_on:
       airbyte-server: {condition: service_healthy}
+      airbyte-connector-pin: {condition: service_completed_successfully}
 
   worker:
     environment:
@@ -256,6 +285,7 @@ services:
       AIRBYTE_WORKSPACE_AUTO: ${AIRBYTE_WORKSPACE_AUTO:-true}
     depends_on:
       airbyte-server: {condition: service_healthy}
+      airbyte-connector-pin: {condition: service_completed_successfully}
 
   migrate:
     environment:
@@ -267,4 +297,3 @@ services:
 volumes:
   airbyte_workspace:
   airbyte_local:
-  airbyte_minio:

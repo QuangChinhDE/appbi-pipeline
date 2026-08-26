@@ -7,6 +7,8 @@ from app.models.identity import Membership, User, Workspace
 from app.models.integration import (
     Destination, Pipeline, PipelineStream, PipelineStreamStat, SchemaSnapshot, Source,
 )
+from app.models.oauth import OAuthGrant
+from app.models.outbox import EngineOperation, EngineOperationState
 from app.models.ops import AlertRule, AuditEvent, Notification, Operation, SecretRecord
 from app.models.run import PipelineRun, RunAttempt
 

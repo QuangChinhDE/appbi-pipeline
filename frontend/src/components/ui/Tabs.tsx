@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -9,6 +10,7 @@ export interface TabItem {
   label: string;
   count?: number;
   disabled?: boolean;
+  href?: string;
 }
 
 export function Tabs({
@@ -16,32 +18,40 @@ export function Tabs({
 }: {
   items: TabItem[];
   value: string;
-  onChange: (id: string) => void;
+  onChange?: (id: string) => void;
   className?: string;
 }) {
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const list = listRef.current;
+    const active = list?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!list || !active) return;
+    const left = active.offsetLeft - (list.clientWidth - active.offsetWidth) / 2;
+    list.scrollTo({ left: Math.max(0, left) });
+  }, [value]);
+
   return (
     <div
+      ref={listRef}
       role="tablist"
-      className={cn('flex items-center gap-1 border-b border-[rgb(var(--border-line))]', className)}
+      className={cn(
+        'flex items-center gap-1 overflow-x-auto border-b border-[rgb(var(--border-line))]',
+        '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        className,
+      )}
     >
       {items.map((item) => {
         const active = item.id === value;
-        return (
-          <button
-            key={item.id}
-            role="tab"
-            type="button"
-            aria-selected={active}
-            disabled={item.disabled}
-            onClick={() => onChange(item.id)}
-            className={cn(
-              'relative -mb-px flex items-center gap-1.5 px-3 py-2 text-caption font-emphasis transition-colors',
-              'border-b-2 disabled:opacity-40',
-              active
-                ? 'border-brand text-text-primary'
-                : 'border-transparent text-text-tertiary hover:text-text-primary',
-            )}
-          >
+        const className = cn(
+          'relative -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2',
+          'text-caption font-emphasis transition-colors disabled:opacity-40',
+          active
+            ? 'border-brand text-text-primary'
+            : 'border-transparent text-text-tertiary hover:text-text-primary',
+        );
+        const content = (
+          <>
             {item.label}
             {item.count !== undefined && (
               <span
@@ -53,6 +63,36 @@ export function Tabs({
                 {item.count}
               </span>
             )}
+          </>
+        );
+
+        if (item.href && !item.disabled) {
+          return (
+            <Link
+              key={item.id}
+              role="tab"
+              href={item.href}
+              scroll={false}
+              aria-selected={active}
+              aria-current={active ? 'page' : undefined}
+              className={className}
+            >
+              {content}
+            </Link>
+          );
+        }
+
+        return (
+          <button
+            key={item.id}
+            role="tab"
+            type="button"
+            aria-selected={active}
+            disabled={item.disabled}
+            onClick={() => onChange?.(item.id)}
+            className={className}
+          >
+            {content}
           </button>
         );
       })}

@@ -1,0 +1,28 @@
+{
+  "platform": "airbyte",
+  "platform_version": "0.59.1",
+  "why_this_version": "The last Airbyte that runs a sync under Docker Compose. From the 0.63 line onward, connector jobs go through the workload launcher, which resolves kubernetes.default.svc and has no Docker mode.",
+  "locked_at": "2026-08-26T03:41:07Z",
+  "images": [
+    {
+      "image": "airbyte/bootloader:0.59.1",
+      "digest": "sha256:1e49d554da2faf3c7ae5dd6df9c36e371d8fba95abb534dd252831f1c4bdeafa"
+    },
+    {
+      "image": "airbyte/server:0.59.1",
+      "digest": "sha256:9ffbd4d6d53edc78ef57cf37f4af9dfc13e75d73b99d76f8c42f237a20237637"
+    },
+    {
+      "image": "airbyte/worker:0.59.1",
+      "digest": "sha256:68301ad94c0b083d64c653c138f79c248ebece112dad608243f90569f135749d"
+    },
+    {
+      "image": "airbyte/temporal:0.59.1",
+      "digest": "sha256:0d4bc948762784ce300eabdfc32716cc1516d057c5f5b62610826615089b61b6"
+    },
+    {
+      "image": "airbyte/container-orchestrator:0.59.1",
+      "digest": "sha256:80e42f51d7e749ac1326d4697163dc8ad712778b9a713275a4f67516524ae95f"
+    }
+  ]
+}

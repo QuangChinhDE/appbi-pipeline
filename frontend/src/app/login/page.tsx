@@ -17,8 +17,21 @@ export default function LoginPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
 
-  const [email, setEmail] = React.useState('admin@appbi.local');
-  const [password, setPassword] = React.useState('Admin@12345');
+  // The demo credential comes from the build environment, and is not written
+  // down here at all.
+  //
+  // It used to be a hard-coded literal, so a production build advertised an
+  // account and password on its sign-in page -- for an account production
+  // never creates. Guarding the render with a flag is not enough on its own:
+  // Next strips the branch but the string literal still ships inside the
+  // bundle, where anyone can read it. Sourcing the values from env means that
+  // with the variables unset there is nothing to strip and nothing to find.
+  const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? '';
+  const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? '';
+  const demo = demoEmail !== '' && demoPassword !== '';
+
+  const [email, setEmail] = React.useState(demoEmail);
+  const [password, setPassword] = React.useState(demoPassword);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
 
@@ -29,7 +42,9 @@ export default function LoginPage() {
     try {
       const user = await authApi.login(email, password);
       queryClient.setQueryData(qk.me(), user);
-      router.replace('/overview');
+      // A bootstrapped or invited account may not enter the product yet; the
+      // API refuses every route until the temporary password is replaced.
+      router.replace(user.password_change_required ? '/change-password' : '/overview');
     } catch (caught) {
       setError(caught);
     } finally {
@@ -83,17 +98,19 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="mt-4 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-3.5 py-2.5">
-          <p className="text-tiny uppercase tracking-[0.08em] text-text-quaternary">
-            {t('login.demoHint')}
-          </p>
-          <p className="mt-1 font-mono text-tiny text-text-secondary">
-            admin@appbi.local / Admin@12345
-          </p>
-          <p className="mt-0.5 text-tiny text-text-quaternary">
-            {t('login.otherRoles')}
-          </p>
-        </div>
+        {demo && (
+          <div className="mt-4 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-3.5 py-2.5">
+            <p className="text-tiny uppercase tracking-[0.08em] text-text-quaternary">
+              {t('login.demoHint')}
+            </p>
+            <p className="mt-1 font-mono text-tiny text-text-secondary">
+              {demoEmail} / {demoPassword}
+            </p>
+            <p className="mt-0.5 text-tiny text-text-quaternary">
+              {t('login.otherRoles')}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

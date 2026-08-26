@@ -25,9 +25,23 @@ def _load() -> dict:
     return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
 
 
+def _registry_entries() -> list[dict]:
+    """The JSON catalogue plus the connectors this product writes itself.
+
+    Base.vn connectors are Python in `app/connectors/base_vn`, compiled to a
+    declarative manifest at import. Joining them here means they are seeded,
+    listed, permissioned and synced through exactly the same path as an Airbyte
+    connector -- there is no second kind of connector for the rest of the
+    product to know about.
+    """
+    from app.connectors.base_vn import catalogue_entries
+
+    return list(_load()["connectors"]) + catalogue_entries()
+
+
 @lru_cache(maxsize=1)
 def bundled_connectors() -> list[ConnectorMetadata]:
-    entries = _load()["connectors"]
+    entries = _registry_entries()
     return [
         ConnectorMetadata(
             connector_key=entry["connector_key"],
@@ -48,13 +62,15 @@ def bundled_connectors() -> list[ConnectorMetadata]:
             supports_cdc=entry.get("supports_cdc", False),
             supports_namespaces=entry.get("supports_namespaces", True),
             supported_destination_sync_modes=entry.get("supported_destination_sync_modes", []),
+            declarative_manifest=entry.get("declarative_manifest"),
         )
         for entry in entries
     ]
 
 
 def bundled_certifications() -> dict[str, str]:
-    return {e["connector_key"]: e.get("certification", "BETA") for e in _load()["connectors"]}
+    return {e["connector_key"]: e.get("certification", "BETA")
+            for e in _registry_entries()}
 
 
 @lru_cache(maxsize=1)

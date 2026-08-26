@@ -29,6 +29,7 @@ from app.adapters.registry import close_adapter, get_adapter
 from app.core.config import settings
 from app.core.context import RequestContext
 from app.core.db import SessionLocal, engine as db_engine, utcnow
+from app.services import oauth as oauth_service
 from app.core.errors import AppError
 from app.core.logging import configure_logging, log_event, new_trace_id, trace_id_var
 from app.models.enums import (
@@ -204,12 +205,57 @@ class Worker:
             await self._sleep(settings.catalog_refresh_seconds)
 
     # ── janitor ──────────────────────────────────────────────────────────
+    async def outbox_loop(self) -> None:
+        """Put the engine and the Product DB back in agreement.
+
+        An operation left open past its SLO means the request that started it
+        is gone: the process died, the transaction rolled back, the connection
+        dropped. Whatever the engine did in the meantime is invisible to the
+        product until this runs.
+
+        Separate from the janitor deliberately. The janitor retries deletes the
+        product *asked* for; this deals with resources the product does not
+        know it has, which is a different failure and a more urgent one -- an
+        orphan holds customer credentials.
+        """
+        from app.services import outbox
+
+        while not self.stopping.is_set():
+            try:
+                counts = await outbox.sweep(get_adapter())
+                if counts["compensated"] or counts["failed"]:
+                    log_event(logger, logging.WARNING, "outbox.sweep", **counts)
+                elif counts["checked"]:
+                    log_event(logger, logging.INFO, "outbox.sweep", **counts)
+
+                # Alerting on compensation would page for the system working.
+                # What deserves a page is an operation that several sweeps have
+                # failed to resolve: an engine resource with credentials in it
+                # that nobody can reach.
+                stuck = await outbox.overdue()
+                if stuck:
+                    log_event(logger, logging.ERROR, "outbox.stuck",
+                              count=len(stuck),
+                              oldest=str(stuck[0].updated_at),
+                              resources=[str(row.product_resource_id)
+                                         for row in stuck[:10]])
+            except Exception as exc:  # noqa: BLE001
+                log_event(logger, logging.ERROR, "outbox.error", error=str(exc))
+            await self._sleep(60)
+
     async def janitor_loop(self) -> None:
         while not self.stopping.is_set():
             try:
                 async with SessionLocal() as session:
                     await self._retry_pending_deletes(session)
                     await self._freshness(session)
+                    # An OAuth consent nobody finished with is a live refresh
+                    # token attached to nothing. It expires on its own; this is
+                    # what actually removes it and the secret it references.
+                    purged = await oauth_service.purge_expired(session)
+                    if purged:
+                        log_event(logger, logging.INFO, "oauth.grants_purged",
+                                  count=purged)
                     await session.commit()
             except Exception as exc:  # noqa: BLE001
                 log_event(logger, logging.ERROR, "janitor.error", error=str(exc))
@@ -311,6 +357,7 @@ class Worker:
             asyncio.create_task(self.scheduler_loop(), name="scheduler"),
             asyncio.create_task(self.catalog_loop(), name="catalog"),
             asyncio.create_task(self.janitor_loop(), name="janitor"),
+            asyncio.create_task(self.outbox_loop(), name="outbox"),
         ]
         try:
             await asyncio.gather(*tasks)

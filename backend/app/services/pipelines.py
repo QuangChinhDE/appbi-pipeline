@@ -242,6 +242,38 @@ def _validate_streams(
         else:
             primary_key = primary_key or []
 
+        selected_fields = (
+            None if selection.selected_fields is None
+            else list(dict.fromkeys(selection.selected_fields))
+        )
+        if selected_fields is not None:
+            if not selected_fields:
+                raise ValidationError(
+                    f"Stream '{selection.name}' phải có ít nhất một trường được chọn.",
+                    details={"stream": selection.name},
+                )
+            unknown_fields = set(selected_fields) - available
+            if unknown_fields:
+                raise ValidationError(
+                    f"Stream '{selection.name}' có trường không tồn tại trong snapshot.",
+                    details={
+                        "stream": selection.name,
+                        "unknown_fields": sorted(unknown_fields),
+                    },
+                )
+            required_fields = set(cursor)
+            required_fields.update(field for key in primary_key for field in key)
+            missing_required = required_fields - set(selected_fields)
+            if missing_required:
+                raise ValidationError(
+                    f"Stream '{selection.name}' phải giữ lại cursor và primary key.",
+                    details={
+                        "stream": selection.name,
+                        "required_fields": sorted(required_fields),
+                        "missing_fields": sorted(missing_required),
+                    },
+                )
+
         resolved.append({
             "name": selection.name,
             "namespace": selection.namespace,
@@ -249,7 +281,7 @@ def _validate_streams(
             "destination_sync_mode": selection.destination_sync_mode,
             "cursor_fields": cursor,
             "primary_key_fields": primary_key,
-            "selected_fields": selection.selected_fields,
+            "selected_fields": selected_fields,
             "json_schema": entry.get("json_schema") or {},
             "schema_hash": entry.get("schema_hash"),
         })
@@ -266,6 +298,10 @@ def configured_streams(pipeline: Pipeline) -> list[ConfiguredStream]:
             destination_sync_mode=stream.destination_sync_mode.value,
             cursor_field=list(stream.cursor_fields or []),
             primary_key=[list(pk) for pk in (stream.primary_key_fields or [])],
+            selected_fields=(
+                list(stream.selected_fields)
+                if stream.selected_fields is not None else None
+            ),
         )
         for stream in pipeline.streams if stream.selected
     ]
@@ -468,8 +504,21 @@ async def update(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.U
             stream.selected_fields = entry["selected_fields"]
             stream.json_schema = entry["json_schema"]
             stream.schema_hash = entry["schema_hash"]
+        # A stream the caller turned *off* is kept, deselected. It used to be
+        # deleted, and that made the schema screen impossible to use as one:
+        # the only rows it could ever show were the enabled ones, so "hide
+        # disabled streams" could never hide anything, turning a stream off
+        # made it vanish, and turning it back on meant re-running discovery.
+        # The engine is told about selected streams only, so nothing changes
+        # for replication -- this is a product-side record of the choice.
+        offered = {(s.namespace, s.name) for s in payload.streams}
         for key, stream in existing.items():
-            if key not in keep:
+            if key in keep:
+                continue
+            if key in offered:
+                stream.selected = False
+            else:
+                # Genuinely gone from the catalogue, not merely switched off.
                 await session.delete(stream)
 
     pipeline.updated_by = ctx.user_id
@@ -504,6 +553,113 @@ async def connection_ref(session: AsyncSession, pipeline_id: uuid.UUID) -> str |
         )
     )
     return mapping.engine_resource_ref if mapping else None
+
+
+async def replication_state(
+    session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.UUID,
+) -> tuple[bool, list[dict], str | None]:
+    """`(supported, state, unavailable_reason)` — the cursor, from whoever owns it.
+
+    Which is not the same place in both modes, and that is the whole reason
+    this is a function rather than a column read:
+
+    * `AIRBYTE_API` — Airbyte owns the cursor and never hands it back on job
+      completion, so `pipelines.sync_state` stays null however many syncs run.
+      The engine has to be asked.
+    * `AIRBYTE_EMBEDDED` — the destination commits state to us and
+      `runs.py` writes it to `pipelines.sync_state`. The adapter has no
+      connection-scoped store to ask, so the column *is* the answer.
+
+    Reading only the column would show an empty panel forever on the topology
+    this product actually ships; asking only the engine would show nothing on
+    the embedded one. So: ask the engine, and fall back to what we stored.
+
+    An engine failure is returned, not raised. This backs one collapsed panel
+    on the settings page, and a diagnostic that takes the page down with it
+    when the engine is unwell is the opposite of useful -- the engine being
+    unwell is when someone opens it.
+    """
+    pipeline = await get(session, ctx, pipeline_id)
+    stored = pipeline.sync_state if isinstance(pipeline.sync_state, list) else []
+
+    ref = await connection_ref(session, pipeline_id)
+    if not ref:
+        return True, stored, (None if stored else "Pipeline chưa được tạo trên engine.")
+    try:
+        state = await get_adapter().connection_state(ref)
+    except Exception as exc:                                   # noqa: BLE001
+        log_event(logger, logging.WARNING, "pipeline.state_unavailable",
+                  pipeline_id=str(pipeline_id), error=type(exc).__name__)
+        if stored:
+            return True, stored, None
+        return True, [], "Engine không trả lời được trạng thái replication."
+    if state is None:
+        # The engine has no such concept; we may still have stored one.
+        return (True, stored, None) if stored else (False, [], None)
+    return True, list(state), None
+
+
+async def set_replication_state(
+    session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.UUID,
+    state: list[dict],
+) -> tuple[bool, list[dict]]:
+    """Replace the cursor the next incremental run resumes from.
+
+    This is a sharp tool and it is meant to be: the reason to reach for it is
+    that the cursor is *wrong* -- a source that back-dated records, a botched
+    backfill, a stream that has to be re-read from a known point. Without it
+    the only remedy is a full refresh of everything.
+
+    Two guards, both because the failure is silent otherwise:
+
+    * **Refused while a run is active.** The running sync holds its own copy of
+      the cursor and commits it at the end, so an edit made mid-run is
+      overwritten minutes later with no error anywhere. The operator would
+      conclude the feature does not work; worse, they might edit again.
+    * **Audited by content.** `pipeline.state_edited` records the cursor before
+      and after. When a later sync duplicates or skips rows, this is the only
+      record that a person changed the mark, and "what did it used to be" is
+      the first question asked.
+
+    Writes go where that engine keeps state: Airbyte's own store in API mode,
+    our `sync_state` column in embedded mode. `replication_state` reads them
+    back in the same order.
+    """
+    ctx.require(Module.PIPELINES, Action.OPERATE)
+    pipeline = await get(session, ctx, pipeline_id)
+
+    running = await active_run(session, pipeline.id)
+    if running is not None:
+        raise ValidationError(
+            "Pipeline đang chạy. Lần chạy này sẽ ghi đè con trỏ khi kết thúc, "
+            "nên hãy đợi nó xong hoặc huỷ trước khi sửa."
+        )
+
+    before = pipeline.sync_state if isinstance(pipeline.sync_state, list) else []
+    ref = await connection_ref(session, pipeline_id)
+    accepted = False
+    if ref:
+        accepted = await get_adapter().set_connection_state(ref, state)
+    if not accepted:
+        # Engines with no cursor store of their own: ours is the record, and
+        # `runs.py` hands it to the next sync.
+        pipeline.sync_state = state
+
+    pipeline.updated_by = ctx.user_id
+    await session.flush()
+    await audit.record(
+        session, ctx, "pipeline.state_edited",
+        resource_type="PIPELINE", resource_id=pipeline.id, resource_name=pipeline.name,
+        # Wrapped in an object because the audit record takes dicts, and the
+        # cursor is a list. Losing the shape here would make the trail unusable
+        # for the one question it exists to answer.
+        before={"state": before},
+        after={"state": state, "written_to": "engine" if accepted else "product"},
+    )
+    log_event(logger, logging.WARNING, "pipeline.state_edited",
+              pipeline_id=str(pipeline_id), streams=len(state),
+              written_to="engine" if accepted else "product")
+    return accepted, state
 
 
 async def set_paused(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.UUID,

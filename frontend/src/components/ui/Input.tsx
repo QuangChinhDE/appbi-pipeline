@@ -137,13 +137,21 @@ export function FieldHelp({ children }: { children?: React.ReactNode }) {
 }
 
 export function Toggle({
-  checked, onChange, label, description, disabled,
+  checked, onChange, label, description, disabled, hideLabel,
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
+  /** Always required. With `hideLabel` it becomes the accessible name. */
   label: string;
   description?: string;
   disabled?: boolean;
+  /**
+   * Visually hide the text, for a toggle in a table row that already
+   * names what is being switched. It is still announced -- a column of
+   * unlabelled switches is unusable with a screen reader, and dropping
+   * the label entirely is how that happens.
+   */
+  hideLabel?: boolean;
 }) {
   return (
     <label className={cn('flex items-start gap-3', disabled && 'opacity-60')}>
@@ -166,12 +174,14 @@ export function Toggle({
           )}
         />
       </button>
-      <span className="min-w-0">
-        <span className="block text-caption font-emphasis text-text-primary">{label}</span>
-        {description && (
-          <span className="block text-tiny leading-relaxed text-text-tertiary">{description}</span>
-        )}
-      </span>
+      {!hideLabel && (
+        <span className="min-w-0">
+          <span className="block text-caption font-emphasis text-text-primary">{label}</span>
+          {description && (
+            <span className="block text-tiny leading-relaxed text-text-tertiary">{description}</span>
+          )}
+        </span>
+      )}
     </label>
   );
 }

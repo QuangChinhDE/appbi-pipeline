@@ -8,11 +8,30 @@ __pycache__/
 node_modules/
 .next/
 e2e-shots/
+.shots/
 
 
 
 # local config and artefacts
 .env
+# Every env file except the committed examples. `.env` on its own does not
+# match `.env.test`, `.env.local` or anything else with a suffix -- which is
+# how a file full of live GCP service-account keys ends up staged by a `git
+# add -A` that looked harmless.
+.env.*
+!.env.example
+!.env.production.example
+
+# Google service-account keys and OAuth client secrets, wherever they land.
+*service-account*.json
+*client_secret*.json
+gcp-*.json
+# Local BigQuery testlab keys use the project name rather than the usual
+# service-account filename. Keep them out even when placed at the repo root.
+base-testlab-*.json
+credentials/
+secrets/
+evidence-connectors.json
 *.log
 tsconfig.tsbuildinfo
 frontend/audit-ui.mjs
@@ -37,4 +56,18 @@ sources-k8s.json
 destinations-k8s.json
 
 # Editor/agent tooling metadata, not part of the product.
+.serena/
+
+# The vendored engine: several gigabytes of image tarballs. They travel with
+# the project directory, not through git — `scripts/vendor-engine.py restore`
+# loads them on a new machine, and `engine-lock.json` (which IS committed)
+# records exactly which bytes they should be.
+vendor/engine/*.tar
+
+# Upstream data this repo downloads, not data it owns. `.cache/oss_registry.json`
+# is 6.2 MB of Airbyte's connector registry; the *output* of processing it,
+# `backend/app/resources/connector_registry.json`, is what gets committed.
+.cache/
+
+# Editor and assistant project state.
 .serena/

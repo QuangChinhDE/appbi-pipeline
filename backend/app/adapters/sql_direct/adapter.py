@@ -113,6 +113,9 @@ class _Actor:
     connector_key: str
     configuration: dict[str, Any]
     name: str
+    # Kept so a crash between create and the ledger write can still find this
+    # entry: the ref is random, so the product id is the only way back to it.
+    product_resource_id: Any = None
 
 
 @dataclass
@@ -240,9 +243,27 @@ class SqlDirectAdapter:
                   request: EngineActorRequest) -> EngineResourceRef:
         ref = f"sql-direct://{kind}/{uuid.uuid4()}"
         store[ref] = _Actor(ref=ref, connector_key=request.connector.connector_key,
-                            configuration=dict(request.configuration), name=request.name)
+                            configuration=dict(request.configuration), name=request.name,
+                            product_resource_id=request.product_resource_id)
         return EngineResourceRef(ref=ref, engine_type=self.engine_type,
                                  version=request.connector.version)
+
+    async def find_by_product_id(self, resource_type: str,
+                                 product_resource_id: str) -> str | None:
+        """This adapter mints random refs, so the registry is searched.
+
+        `_register` stores the product id alongside the ref precisely so this
+        is answerable; without it a crash between create and the ledger write
+        would strand an entry here too.
+        """
+        store = {"SOURCE": self._sources, "DESTINATION": self._destinations,
+                 "PIPELINE": getattr(self, "_connections", {})}.get(resource_type)
+        if not store:
+            return None
+        for ref, actor in store.items():
+            if str(getattr(actor, "product_resource_id", "")) == product_resource_id:
+                return ref
+        return None
 
     async def create_source(self, request: EngineActorRequest) -> EngineResourceRef:
         return self._register(self._sources, "source", request)
@@ -539,7 +560,11 @@ class SqlDirectAdapter:
                            job: _Job) -> tuple[int, int]:
         qualified = f'"{stream.namespace or "public"}"."{stream.name}"'
         target = f'"{target_schema}"."{stream.name}"'
-        columns = sorted((stream.json_schema.get("properties") or {}).keys())
+        columns = sorted(
+            stream.selected_fields
+            if stream.selected_fields is not None
+            else (stream.json_schema.get("properties") or {}).keys()
+        )
         if not columns:
             job.log(f"{stream.name}: no columns selected, skipping")
             return 0, 0
@@ -595,6 +620,20 @@ class SqlDirectAdapter:
         size = sum(len(str(value) or "") for row in payload for value in row)
         job.log(f"{stream.name}: wrote {len(rows)} row(s) to {target}")
         return len(rows), size
+
+    async def connection_state(self, ref: str) -> list[dict] | None:
+        """None: this engine keeps no connection-scoped cursor.
+
+        Explicit rather than inherited from the protocol default, because
+        `IntegrationEngineAdapter` is `runtime_checkable` and `isinstance`
+        looks for the attribute on the *instance* -- a default on the protocol
+        does not satisfy it, and the adapter silently stops being an adapter.
+        """
+        return None
+
+    async def set_connection_state(self, ref: str, state: list[dict]) -> bool:
+        """False: nothing here to write a cursor into. See `connection_state`."""
+        return False
 
     async def close(self) -> None:
         for job in list(self._jobs.values()):

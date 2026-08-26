@@ -1,0 +1,1100 @@
+version: 3.9.6
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - dept
+
+definitions:
+  streams:
+    dept:
+      type: DeclarativeStream
+      name: dept
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: system/depts
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - depts
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/dept'
+    pool:
+      type: DeclarativeStream
+      name: pool
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: pool/list
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - pools
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/pool'
+    stage:
+      type: DeclarativeStream
+      name: stage
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: num_per_page
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 50
+            start_from_page: 1
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: stage/list
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            opening_id: '{{ stream_partition.id }}'
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - stages
+        partition_router:
+          type: SubstreamPartitionRouter
+          parent_stream_configs:
+            - type: ParentStreamConfig
+              stream:
+                $ref: '#/definitions/streams/opening'
+              parent_key: id
+              partition_field: id
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/stage'
+    office:
+      type: DeclarativeStream
+      name: office
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: system/offices
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - depts
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/office'
+    contact:
+      type: DeclarativeStream
+      name: contact
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: num_per_page
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 50
+            start_from_page: 1
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: contact/list
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            pool_id: '{{ stream_partition.id }}'
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - contacts
+        partition_router:
+          type: SubstreamPartitionRouter
+          parent_stream_configs:
+            - type: ParentStreamConfig
+              stream:
+                $ref: '#/definitions/streams/pool'
+              parent_key: id
+              partition_field: id
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/contact'
+    opening:
+      type: DeclarativeStream
+      name: opening
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: num_per_page
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 50
+            start_from_page: 1
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: opening/list
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - openings
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/opening'
+    candidate:
+      type: DeclarativeStream
+      name: candidate
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: num_per_page
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 50
+            start_from_page: 1
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: candidate/list
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            opening_id: '{{ stream_partition.id }}'
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - candidates
+        partition_router:
+          type: SubstreamPartitionRouter
+          parent_stream_configs:
+            - type: ParentStreamConfig
+              stream:
+                $ref: '#/definitions/streams/opening'
+              parent_key: id
+              partition_field: id
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/candidate'
+    interview:
+      type: DeclarativeStream
+      name: interview
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: num_per_page
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 50
+            start_from_page: 1
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: interview/list
+          http_method: POST
+          request_headers:
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - interviews
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/interview'
+  base_requester:
+    type: HttpRequester
+    url_base: https://hiring.base.vn/publicapi/v2/
+
+streams:
+  - $ref: '#/definitions/streams/dept'
+  - $ref: '#/definitions/streams/office'
+  - $ref: '#/definitions/streams/pool'
+  - $ref: '#/definitions/streams/contact'
+  - $ref: '#/definitions/streams/opening'
+  - $ref: '#/definitions/streams/candidate'
+  - $ref: '#/definitions/streams/interview'
+  - $ref: '#/definitions/streams/stage'
+
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required:
+      - access_token
+    properties:
+      access_token:
+        type: string
+        order: 0
+        title: access_token
+        airbyte_secret: true
+    additionalProperties: true
+
+metadata:
+  testedStreams: {}
+  autoImportSchema:
+    dept: true
+    pool: false
+    stage: false
+    office: true
+    contact: false
+    opening: true
+    candidate: false
+    interview: false
+
+schemas:
+  dept:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      content:
+        type: string
+    additionalProperties: true
+  pool:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      hid:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+      since:
+        type: string
+      stats:
+        type: object
+        properties:
+          month:
+            type: number
+          total:
+            type:
+              - number
+              - string
+      token:
+        type: string
+      total:
+        type:
+          - 'null'
+          - string
+      owners:
+        type: array
+        items:
+          type: object
+          properties:
+            gavatar:
+              type: string
+            username:
+              type: string
+      content:
+        type: string
+      managed:
+        type: number
+      user_id:
+        type: string
+      visible:
+        type: string
+      metatype:
+        type: string
+      username:
+        type: string
+      followers:
+        type: array
+    additionalProperties: true
+  stage:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      hid:
+        type: string
+      name:
+        type: string
+      index:
+        type: string
+      order:
+        type: string
+      state:
+        type: string
+      token:
+        type: string
+      template:
+        type: object
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+      webhooks:
+        type: object
+      multi_tpl:
+        type: number
+      origin_id:
+        type: string
+      automation:
+        type: object
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+          name:
+            type: string
+          files:
+            type: array
+            items:
+              type: object
+              properties:
+                type:
+                  type: string
+                id:
+                  type: string
+                name:
+                  type: string
+          subject:
+            type: string
+          user_id:
+            type: string
+          metatype:
+            type: string
+          username:
+            type: string
+      report_key:
+        type: string
+      ext_test_ssid:
+        type: number
+      show_exceeded_warning:
+        type: number
+    additionalProperties: true
+  office:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      address:
+        type: string
+    additionalProperties: true
+  contact:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      dob:
+        type: string
+      hid:
+        type: string
+      form:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            org:
+              type: string
+            name:
+              type: string
+            since:
+              type: number
+            value:
+              type: string
+            display:
+              type: string
+            full_url:
+              type: string
+            placeholder:
+              type: string
+      name:
+        type: string
+      tags:
+        type: array
+      email:
+        type: string
+      files:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            url:
+              type: string
+            name:
+              type: string
+            download_url:
+              type: string
+      image:
+        type: string
+      ns_id:
+        type: string
+      phone:
+        type: string
+      score:
+        type: string
+      since:
+        type: string
+      stats:
+        type: object
+        properties:
+          likes:
+            type: number
+          comments:
+            type: number
+          candidates:
+            type: number
+      title:
+        type: string
+      token:
+        type: string
+      fields:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+            value:
+              type:
+                - number
+                - string
+            display:
+              type: string
+            placeholder:
+              type:
+                - 'null'
+                - string
+      gender:
+        type: string
+      address:
+        type: string
+      content:
+        type: string
+      sources:
+        type: array
+        items:
+          type: string
+      abs_link:
+        type: string
+      dob_year:
+        type: string
+      campaigns:
+        type: array
+        items:
+          type: string
+      candidate:
+        type:
+          - object
+          - 'null'
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+          name:
+            type: string
+          since:
+            type:
+              - number
+              - string
+          owners:
+            type: array
+            items:
+              type: string
+          scores:
+            type: array
+          abslink:
+            type: string
+          creator:
+            type: string
+          codename:
+            type: string
+          candidate_id:
+            type: string
+          candidate_link:
+            type: string
+          status_display:
+            type: string
+      highlight:
+        type: string
+      last_name:
+        type: string
+      source_id:
+        type: string
+      apply_time:
+        type: string
+      candidates:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+            since:
+              type:
+                - number
+                - string
+            owners:
+              type: array
+              items:
+                type: string
+            scores:
+              type: array
+            abslink:
+              type: string
+            creator:
+              type: string
+            codename:
+              type: string
+            candidate_id:
+              type: string
+            candidate_link:
+              type: string
+            status_display:
+              type: string
+      changelogs:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            data:
+              type: object
+              properties:
+                time:
+                  type: number
+                opening_id:
+                  type: string
+                candidate_id:
+                  type: string
+            name:
+              type: string
+            note:
+              type: string
+            time:
+              type: number
+            since:
+              type: number
+            action:
+              type: string
+            username:
+              type: string
+      first_name:
+        type: string
+      last_update:
+        type: string
+    additionalProperties: true
+  opening:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      etime:
+        type: string
+      since:
+        type: string
+      stime:
+        type: string
+      period:
+        type: string
+      salary:
+        type: string
+      status:
+        type: string
+      content:
+        type: string
+      dept_id:
+        type: string
+      offices:
+        type: array
+        items:
+          type: string
+      starred:
+        type: string
+      codename:
+        type: string
+      deadline:
+        type: string
+      metatype:
+        type: string
+      locations:
+        type: array
+        items:
+          type: string
+      last_update:
+        type: string
+      office_name:
+        type: string
+      company_name:
+        type: string
+      num_positions:
+        type: string
+      talent_pool_id:
+        type:
+          - number
+          - string
+    additionalProperties: true
+  candidate:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      cvs:
+        type: array
+        items:
+          type: string
+      ssn:
+        type: string
+      form:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+            scope:
+              type: string
+            value:
+              type: string
+            display:
+              type: string
+            placeholder:
+              type: string
+      name:
+        type: string
+      tags:
+        type: array
+      email:
+        type: string
+      phone:
+        type: string
+      score:
+        type: string
+      since:
+        type: string
+      title:
+        type: string
+      fields:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+            value:
+              type: string
+            display:
+              type: string
+            placeholder:
+              type:
+                - 'null'
+                - string
+      gender:
+        type: string
+      medium:
+        type: string
+      prefix:
+        type: string
+      reason:
+        type: string
+      source:
+        type: string
+      status:
+        type: string
+      address:
+        type: string
+      dob_day:
+        type: string
+      campaign:
+        type: string
+      dob_year:
+        type: string
+      metatype:
+        type: string
+      stage_id:
+        type: string
+      disp_name:
+        type: string
+      dob_month:
+        type: string
+      last_name:
+        type: string
+      reason_id:
+        type: string
+      changelogs:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            data:
+              type: object
+              properties:
+                time:
+                  type: number
+                reason:
+                  type: string
+                stage_in:
+                  type: string
+                stage_out:
+                  type: string
+                new_source:
+                  type: string
+                old_source:
+                  type:
+                    - 'null'
+                    - string
+                opening_id:
+                  type: string
+                stage_in_name:
+                  type: string
+                stage_in_state:
+                  type: string
+                stage_out_name:
+                  type: string
+                stage_out_state:
+                  type: string
+            name:
+              type: string
+            note:
+              type: string
+            time:
+              type: number
+            since:
+              type: number
+            action:
+              type: string
+            username:
+              type: string
+      first_name:
+        type: string
+      opening_id:
+        type: string
+      stage_name:
+        type: string
+      time_apply:
+        type: string
+      time_hired:
+        type: string
+      evaluations:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            note:
+              type: string
+            score:
+              type: number
+            since:
+              type: string
+            content:
+              type: string
+            user_id:
+              type: string
+            username:
+              type: string
+            recommend:
+              type: string
+            user_name:
+              type: string
+            opening_id:
+              type: string
+            competences:
+              type: array
+            opening_export:
+              type: object
+              properties:
+                type:
+                  type: string
+                id:
+                  type: string
+                name:
+                  type: string
+                owners:
+                  type: array
+                  items:
+                    type: string
+                abslink:
+                  type: string
+                creator:
+                  type: string
+                codename:
+                  type: string
+                status_display:
+                  type: string
+      last_update:
+        type: string
+      time_offered:
+        type: string
+      display_title:
+        type: string
+      time_rejected:
+        type: string
+      last_interview:
+        type: number
+      opening_export:
+        type: object
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+          name:
+            type: string
+          owners:
+            type: array
+            items:
+              type: string
+          abslink:
+            type: string
+          creator:
+            type: string
+          codename:
+            type: string
+          status_display:
+            type: string
+      assign_username:
+        type: string
+      interview_count:
+        type: number
+      last_time_stage:
+        type:
+          - number
+          - string
+      time_campaign_qualified:
+        type: string
+      last_stage_before_failed:
+        type: string
+    additionalProperties: true
+  interview:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      id:
+        type: string
+      acl:
+        type: object
+        properties:
+          view:
+            type: number
+          managed:
+            type: number
+      date:
+        type: number
+      name:
+        type: string
+      time:
+        type: string
+      token:
+        type: string
+      status:
+        type: string
+      starred:
+        type: string
+      user_id:
+        type: string
+      location:
+        type: string
+      metatype:
+        type: string
+      sendmail:
+        type:
+          - number
+          - string
+      username:
+        type: string
+      confirmed:
+        type: string
+      followers:
+        type: array
+        items:
+          type: string
+      hr_set_cf:
+        type: number
+      last_ping:
+        type: number
+      questions:
+        type: string
+      interacted:
+        type: number
+      opening_id:
+        type: string
+      candidate_id:
+        type: string
+      est_duration:
+        type:
+          - number
+          - string
+      msgthread_id:
+        type: string
+      opening_name:
+        type: string
+      candidate_name:
+        type: string
+      candidate_email:
+        type: string
+      candidate_phone:
+        type: string
+      candidate_title:
+        type: string
+      candidate_export:
+        type: object
+        properties:
+          type:
+            type: string
+          id:
+            type: string
+          link:
+            type: string
+          name:
+            type: string
+          email:
+            type: string
+          phone:
+            type: string
+          title:
+            type: string
+    additionalProperties: true

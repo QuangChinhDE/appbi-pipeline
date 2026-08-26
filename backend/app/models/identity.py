@@ -44,6 +44,11 @@ class User(Base, TimestampMixin):
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # How many times this account has been locked since it last signed in
+    # successfully. Drives exponential backoff: a flat lockout window is a
+    # denial-of-service budget against a named administrator.
+    lockout_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False)
 
     memberships: Mapped[list["Membership"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"

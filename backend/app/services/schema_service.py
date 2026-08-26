@@ -57,6 +57,71 @@ def field_list(json_schema: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+#: How far into nested objects the field tree goes.
+#:
+#: Base's `account_export` is one object with twenty-odd children, and that is
+#: the shape worth showing. Beyond a few levels the payload grows faster than
+#: the page can be read, and a self-referential schema would not terminate at
+#: all -- a mapping view that hangs the browser is worse than one that stops.
+MAX_FIELD_DEPTH = 4
+
+#: Ceiling on rows, so one pathological schema cannot make the detail endpoint
+#: the slowest thing in the product.
+MAX_FIELD_ROWS = 500
+
+
+def field_tree(json_schema: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every field a stream carries, nested objects included, depth-tagged.
+
+    `field_list` reports only the top level, because that is the grain field
+    *selection* works at. The mapping view is a different question -- "what
+    exactly lands in the destination" -- and stopping at the top level answers
+    it with `account_export: object`, which tells the reader nothing about the
+    twenty-two columns that actually appear.
+
+    `depth` is computed here rather than by splitting the name on dots in the
+    browser: a field legitimately named `a.b` would be indented as if it were
+    nested, and the resulting tree would be a lie about the schema.
+    """
+    rows: list[dict[str, Any]] = []
+
+    def walk(properties: dict[str, Any], prefix: str, depth: int) -> None:
+        for name, prop in sorted((properties or {}).items()):
+            if len(rows) >= MAX_FIELD_ROWS:
+                return
+            prop = prop if isinstance(prop, dict) else {}
+            path = f"{prefix}{name}"
+            row = _field_row(name, prop)
+            row["path"] = path
+            row["depth"] = depth
+            rows.append(row)
+
+            if depth + 1 > MAX_FIELD_DEPTH:
+                continue
+            nested = prop.get("properties")
+            if not nested and prop.get("type") == "array":
+                items = prop.get("items")
+                nested = items.get("properties") if isinstance(items, dict) else None
+            if isinstance(nested, dict):
+                walk(nested, f"{path}.", depth + 1)
+
+    walk((json_schema or {}).get("properties") or {}, "", 0)
+    return rows
+
+
+def _field_row(name: str, prop: dict[str, Any]) -> dict[str, Any]:
+    raw_type = prop.get("type")
+    if isinstance(raw_type, list):
+        type_name = next((t for t in raw_type if t != "null"), "unknown")
+        nullable = "null" in raw_type
+    else:
+        type_name = raw_type or "unknown"
+        nullable = False
+    if prop.get("format"):
+        type_name = f"{type_name} ({prop['format']})"
+    return {"name": name, "type": type_name, "nullable": nullable}
+
+
 def field_types(json_schema: dict[str, Any]) -> dict[str, str]:
     return {f["name"]: f["type"] for f in field_list(json_schema)}
 

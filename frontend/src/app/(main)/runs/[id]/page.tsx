@@ -10,6 +10,7 @@ import { runApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { formatBytes, formatDateTime, formatDuration, formatNumber } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
+import { useUrlTab } from '@/hooks/use-url-tab';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -23,6 +24,7 @@ import { ErrorRemediationCard } from '@/components/integrations/ErrorRemediation
 import { LogViewer } from '@/components/integrations/LogViewer';
 
 const ACTIVE = ['QUEUED', 'STARTING', 'RUNNING', 'CANCEL_REQUESTED'];
+const RUN_TABS = ['summary', 'attempts', 'logs'] as const;
 
 export default function RunDetailPage() {
   const params = useParams<{ id: string }>();
@@ -31,7 +33,7 @@ export default function RunDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const workspaceId = useWorkspaceId();
-  const [tab, setTab] = React.useState('summary');
+  const { tab, hrefForTab } = useUrlTab(RUN_TABS, 'summary');
 
   const { data: run, isLoading, error, refetch } = useQuery({
     queryKey: qk.run(workspaceId, runId),
@@ -61,7 +63,7 @@ export default function RunDetailPage() {
     onSuccess: (created) => {
       invalidate();
       toastSuccess(t('runs.retryCreated'), `Run ${created.short_id}`);
-      router.push(`/runs/${created.id}`);
+      router.push(`/runs/${created.id}?tab=summary`);
     },
     onError: (caught) => toastError(caught),
   });
@@ -96,7 +98,7 @@ export default function RunDetailPage() {
   return (
     <div>
       <DetailHeader
-        backHref={run.pipeline ? `/pipelines/${run.pipeline.id}` : '/runs'}
+        backHref={run.pipeline ? `/pipelines/${run.pipeline.id}?tab=jobs` : '/runs'}
         backLabel={run.pipeline?.name ?? t('runs.title')}
         title={`Run ${run.short_id}`}
         subtitle={
@@ -110,7 +112,7 @@ export default function RunDetailPage() {
             <TriggerBadge trigger={run.trigger_type} />
             {run.is_stale && <Badge variant="warning" size="sm">{t('runs.stale')}</Badge>}
             {run.retry_of_run_id && (
-              <Link href={`/runs/${run.retry_of_run_id}`}>
+              <Link href={`/runs/${run.retry_of_run_id}?tab=summary`}>
                 <Badge variant="subtle" size="sm">
                   {t('runs.retryOf')} {run.retry_of_run_id.slice(0, 8)}
                 </Badge>
@@ -161,9 +163,9 @@ export default function RunDetailPage() {
                 technicalMessage: run.error.technical_message,
                 traceId: run.trace_id,
                 onAction: run.error.remediation_action === 'UPDATE_CREDENTIALS' && run.source
-                  ? () => router.push(`/sources/${run.source!.id}`)
+                  ? () => router.push(`/sources/${run.source!.id}?tab=configuration`)
                   : run.error.remediation_action === 'REDISCOVER_SCHEMA' && run.pipeline
-                  ? () => router.push(`/pipelines/${run.pipeline!.id}`)
+                  ? () => router.push(`/pipelines/${run.pipeline!.id}?tab=schema`)
                   : undefined,
                 onRetry: run.actions.can_retry ? () => retry.mutate() : undefined,
               }}
@@ -186,11 +188,16 @@ export default function RunDetailPage() {
         <Tabs
           className="mb-4"
           value={tab}
-          onChange={setTab}
           items={[
-            { id: 'summary', label: t('runs.summary'), count: run.stream_stats.length },
-            { id: 'attempts', label: t('runs.attempts'), count: run.attempts.length },
-            { id: 'logs', label: t('runs.logs') },
+            {
+              id: 'summary', label: t('runs.summary'), count: run.stream_stats.length,
+              href: hrefForTab('summary'),
+            },
+            {
+              id: 'attempts', label: t('runs.attempts'), count: run.attempts.length,
+              href: hrefForTab('attempts'),
+            },
+            { id: 'logs', label: t('runs.logs'), href: hrefForTab('logs') },
           ]}
         />
 
@@ -244,7 +251,15 @@ export default function RunDetailPage() {
 
         {tab === 'attempts' && (
           <Card padded={false}>
-            <ol className="divide-y divide-[rgb(var(--border-line))]">
+            {run.attempts.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  title={t(isActive ? 'runs.noAttemptsRunning' : 'runs.noAttempts')}
+                  compact
+                />
+              </div>
+            ) : (
+              <ol className="divide-y divide-[rgb(var(--border-line))]">
               {run.attempts.map((attempt) => (
                 <li key={attempt.attempt_number} className="flex items-start gap-3 px-4 py-3">
                   <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface-2 text-tiny font-strong text-text-secondary">
@@ -272,7 +287,8 @@ export default function RunDetailPage() {
                   </div>
                 </li>
               ))}
-            </ol>
+              </ol>
+            )}
           </Card>
         )}
 

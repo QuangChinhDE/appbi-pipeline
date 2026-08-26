@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-drawn to match the n8n Base icon set. There is no
+     n8n-nodes-basevn-hiring repository, so this is an original glyph. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<path fill="#E8845A" d="M26 8a11 11 0 1 1 0 22 11 11 0 0 1 0-22zm0 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/>
+<path fill="#E8845A" d="M26 33c9.4 0 17 4.7 17 10.5V56H9V43.5C9 37.7 16.6 33 26 33zm0 5c-6.8 0-12 3-12 5.5V51h24v-7.5c0-2.5-5.2-5.5-12-5.5z"/>
+<path fill="#E8845A" d="M48 20h5v8h8v5h-8v8h-5v-8h-8v-5h8z"/>
+</svg>

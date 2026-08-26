@@ -10,7 +10,7 @@ import {
   GitBranch, Globe, Home, LogOut, PlayCircle, Radar, ScrollText, Settings, Warehouse, X,
 } from 'lucide-react';
 
-import { authApi, opsApi } from '@/lib/api';
+import { authApi, opsApi, pipelineApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { LOCALE_NAMES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -24,11 +24,22 @@ interface NavItem {
   icon: React.ReactNode;
   module?: Module;
   action?: Action;
+  /** Hidden until this workspace has a pipeline. See `NavGroup.advanced`. */
+  advancedItem?: boolean;
 }
 
 interface NavGroup {
   labelKey?: string;
   items: NavItem[];
+  /**
+   * Folded away until the workspace has its first pipeline.
+   *
+   * On a fresh deployment every module is equally prominent, so the two things
+   * a new user actually needs -- build something, then watch it run -- sit
+   * beside the connector catalogue, the Builder, the audit log and alert
+   * rules. None of those mean anything before a pipeline exists.
+   */
+  advanced?: boolean;
 }
 
 // Grouped by user intent, mirroring AppBI's sidebar (section 6.1).
@@ -46,12 +57,15 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: 'sidebar.group.operate',
     items: [
       { labelKey: 'sidebar.runs', href: '/runs', icon: <PlayCircle className="h-4 w-4" />, module: 'monitoring' },
-      { labelKey: 'sidebar.monitoring', href: '/monitoring', icon: <Radar className="h-4 w-4" />, module: 'monitoring' },
-      { labelKey: 'sidebar.alerts', href: '/alerts', icon: <Bell className="h-4 w-4" />, module: 'alerts' },
+      // Monitoring dashboards and alert rules are for a system that is already
+      // running; before the first pipeline they are empty screens.
+      { labelKey: 'sidebar.monitoring', href: '/monitoring', icon: <Radar className="h-4 w-4" />, module: 'monitoring', advancedItem: true },
+      { labelKey: 'sidebar.alerts', href: '/alerts', icon: <Bell className="h-4 w-4" />, module: 'alerts', advancedItem: true },
     ],
   },
   {
     labelKey: 'sidebar.group.manage',
+    advanced: true,
     items: [
       { labelKey: 'sidebar.connectors', href: '/connectors', icon: <Boxes className="h-4 w-4" />, module: 'connectors' },
       { labelKey: 'sidebar.builder', href: '/builder', icon: <Hammer className="h-4 w-4" />, module: 'connectors' },
@@ -109,11 +123,27 @@ export function Sidebar({
   }, [menuOpen]);
 
   const permissions = user?.permissions;
+  // First run: no pipeline has ever been created here. Until one has, the
+  // sidebar shows the path through the product rather than every module at
+  // once. `showAdvanced` is a deliberate escape hatch, not a hidden feature --
+  // and once a pipeline exists the whole navigation returns permanently.
+  const pipelineCount = useQuery({
+    queryKey: qk.pipelines(workspaceId, { probe: 'first-run' }),
+    queryFn: () => pipelineApi.list({ limit: 1 }),
+    staleTime: 60_000,
+  });
+  const firstRun = pipelineCount.data?.items?.length === 0;
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const folded = firstRun && !showAdvanced;
+
   const visibleGroups = NAV_GROUPS
+    .filter((group) => !(folded && group.advanced))
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => !item.module || hasPermission(permissions, item.module, item.action ?? 'view'),
+        (item) =>
+          (!item.module || hasPermission(permissions, item.module, item.action ?? 'view'))
+          && !(folded && item.advancedItem),
       ),
     }))
     .filter((group) => group.items.length > 0);
@@ -285,6 +315,19 @@ export function Sidebar({
               </ul>
             </div>
           ))}
+
+          {/* Folded, not removed. The rest of the product is one click away and
+              says so, which is the difference between a simplified first run
+              and a feature somebody has to go looking for. */}
+          {folded && !collapsed && (
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(true)}
+              className="mt-1 w-full rounded-md px-3 py-1.5 text-left text-tiny text-text-quaternary hover:bg-surface-2 hover:text-text-secondary"
+            >
+              {t('sidebar.showAdvanced')}
+            </button>
+          )}
         </nav>
 
         {/* User + collapse */}

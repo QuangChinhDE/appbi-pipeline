@@ -127,6 +127,12 @@ export function StreamSelector({
                   const needsCursor = isIncremental && !stream.source_defined_cursor;
                   const needsPk = selection.destination_sync_mode === 'append_dedup';
                   const open = expanded === key;
+                  const requiredFields = new Set([
+                    ...selection.cursor_fields,
+                    ...selection.primary_key_fields.flat(),
+                  ]);
+                  const allFieldNames = stream.fields.map((field) => field.name);
+                  const selectedFields = selection.selected_fields ?? allFieldNames;
 
                   return (
                     <React.Fragment key={key}>
@@ -277,15 +283,46 @@ export function StreamSelector({
                         <tr className="bg-surface-2/40">
                           <td />
                           <td colSpan={6} className="px-2 pb-3">
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <span className="text-tiny font-emphasis text-text-secondary">
+                                {t('stream.fieldSelection', {
+                                  n: selectedFields.length, total: stream.fields.length,
+                                })}
+                              </span>
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                disabled={selection.selected_fields === null}
+                                onClick={() => setStream(key, { selected_fields: null })}
+                              >
+                                {t('stream.selectAllFields')}
+                              </Button>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                               {stream.fields.map((field) => (
-                                <span
+                                <div
                                   key={field.name}
-                                  className="rounded-sm border border-[rgb(var(--border-line))] bg-surface-1 px-1.5 py-0.5 text-tiny"
+                                  className="flex min-w-0 items-center justify-between gap-2"
                                 >
-                                  <span className="text-text-secondary">{field.name}</span>
-                                  <span className="ml-1 text-text-quaternary">{field.type}</span>
-                                </span>
+                                  <Checkbox
+                                    checked={selectedFields.includes(field.name)}
+                                    disabled={!selection.selected || requiredFields.has(field.name)}
+                                    label={field.name}
+                                    onChange={(checked) => {
+                                      const next = checked
+                                        ? [...selectedFields, field.name]
+                                        : selectedFields.filter((name) => name !== field.name);
+                                      setStream(key, {
+                                        selected_fields: next.length === allFieldNames.length
+                                          ? null : next,
+                                      });
+                                    }}
+                                  />
+                                  <span className="flex-shrink-0 text-tiny text-text-quaternary">
+                                    {requiredFields.has(field.name)
+                                      ? t('stream.requiredField') : field.type}
+                                  </span>
+                                </div>
                               ))}
                             </div>
                           </td>
@@ -314,17 +351,31 @@ export function StreamSelector({
 export function buildInitialSelections(
   streams: StreamCapability[], destinationModes: string[],
 ): Record<string, StreamSelection> {
-  const preferOverwrite = destinationModes.includes('overwrite');
   const out: Record<string, StreamSelection> = {};
   for (const stream of streams) {
+    const hasCursor = stream.source_defined_cursor || stream.default_cursor_field.length > 0;
+    const incremental = stream.supported_sync_modes.includes('incremental') && hasCursor;
+    const canDeduplicate = incremental
+      && destinationModes.includes('append_dedup')
+      && stream.source_defined_primary_key.length > 0;
+    const destinationMode: StreamSelection['destination_sync_mode'] = canDeduplicate
+      ? 'append_dedup'
+      : incremental && destinationModes.includes('append')
+        ? 'append'
+        : destinationModes.includes('overwrite')
+          ? 'overwrite'
+          : destinationModes[0] as StreamSelection['destination_sync_mode'];
+
     out[streamKey(stream.namespace, stream.name)] = {
       name: stream.name,
       namespace: stream.namespace,
-      selected: false,
-      sync_mode: 'full_refresh',
-      destination_sync_mode: preferOverwrite ? 'overwrite' : (destinationModes[0] as never),
-      cursor_fields: [],
-      primary_key_fields: [],
+      selected: true,
+      sync_mode: incremental ? 'incremental' : 'full_refresh',
+      destination_sync_mode: destinationMode,
+      cursor_fields: incremental && !stream.source_defined_cursor
+        ? stream.default_cursor_field : [],
+      primary_key_fields: canDeduplicate ? stream.source_defined_primary_key : [],
+      selected_fields: null,
     };
   }
   return out;
@@ -353,6 +404,18 @@ export function validateSelections(
     if (selection.destination_sync_mode === 'append_dedup'
         && selection.primary_key_fields.length === 0) {
       problems.push(t('stream.needPk', { name: stream.name }));
+    }
+    if (selection.selected_fields?.length === 0) {
+      problems.push(t('stream.needField', { name: stream.name }));
+    }
+    if (selection.selected_fields !== null && selection.selected_fields !== undefined) {
+      const required = [
+        ...selection.cursor_fields,
+        ...selection.primary_key_fields.flat(),
+      ];
+      if (required.some((field) => !selection.selected_fields?.includes(field))) {
+        problems.push(t('stream.needRequiredFields', { name: stream.name }));
+      }
     }
   }
   return problems;

@@ -155,6 +155,24 @@ class EmbeddedAirbyteAdapter:
 
         return RUNNER_REPOSITORY, RUNNER_VERSION
 
+    async def find_by_product_id(self, resource_type: str,
+                                 product_resource_id: str) -> str | None:
+        """Derivable here, and genuinely so.
+
+        This adapter has no server-side registry: a "resource" is just a
+        configuration the product holds, and the ref is a deterministic string
+        built from the product id. So the crash window the Airbyte adapter has
+        to recover from by listing does not exist here -- there is nothing on
+        a remote system to lose track of.
+
+        Worth stating explicitly, because a test double that behaved this way
+        is what made the Airbyte bug invisible. It is true for this adapter and
+        false for that one.
+        """
+        prefix = {"SOURCE": "source", "DESTINATION": "destination",
+                  "PIPELINE": "connection"}.get(resource_type)
+        return f"embedded://{prefix}/{product_resource_id}" if prefix else None
+
     async def create_source(self, request: EngineActorRequest) -> EngineResourceRef:
         return EngineResourceRef(
             ref=f"embedded://source/{request.product_resource_id}",
@@ -509,6 +527,20 @@ class EmbeddedAirbyteAdapter:
             has_more=next_cursor < len(all_lines),
             total_lines=len(all_lines),
         )
+
+    async def connection_state(self, ref: str) -> list[dict] | None:
+        """None: this engine keeps no connection-scoped cursor.
+
+        Explicit rather than inherited from the protocol default, because
+        `IntegrationEngineAdapter` is `runtime_checkable` and `isinstance`
+        looks for the attribute on the *instance* -- a default on the protocol
+        does not satisfy it, and the adapter silently stops being an adapter.
+        """
+        return None
+
+    async def set_connection_state(self, ref: str, state: list[dict]) -> bool:
+        """False: nothing here to write a cursor into. See `connection_state`."""
+        return False
 
     async def close(self) -> None:
         for job in list(self._jobs.values()):

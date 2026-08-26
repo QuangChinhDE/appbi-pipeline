@@ -33,15 +33,16 @@ WORKDIR /srv
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-COPY pytest.ini ./
+# The test suite is deliberately not in the runtime image. It used to be, and
+# an image that carries its own tests ships code nobody reviewed as product
+# code, on a machine that runs customer data. The contract suite needs a live
+# engine, so CI mounts `qa/backend` into the container for that one run
+# instead.
 COPY app ./app
 # Schema migrations ship with the code that expects them, so an image can never
 # be deployed against a database it does not know how to bring up to date.
 COPY alembic.ini ./
 COPY migrations ./migrations
-# Tests ship with the image so the adapter contract suite can gate an upgrade
-# from inside the same runtime the platform uses (section 29.3).
-COPY tests ./tests
 
 RUN mkdir -p /engine/workspace /engine/logs
 

@@ -10,6 +10,7 @@ import { qk } from '@/lib/queryKeys';
 import { formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useUrlTab } from '@/hooks/use-url-tab';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -17,11 +18,12 @@ import { Button } from '@/components/ui/Button';
 import { Toggle } from '@/components/ui/Input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { Tabs } from '@/components/ui/Tabs';
-import { Card, PageListLayout } from '@/components/layout/PageLayout';
+import { Card, ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
 
 const SEVERITY_VARIANT: Record<string, 'info' | 'warning' | 'danger'> = {
   INFO: 'info', WARNING: 'warning', ERROR: 'danger', CRITICAL: 'danger',
 };
+const ALERT_TABS = ['notifications', 'rules'] as const;
 
 export default function AlertsPage() {
   const { t, tf, locale } = useI18n();
@@ -29,7 +31,7 @@ export default function AlertsPage() {
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
   const { can } = usePermissions();
-  const [tab, setTab] = React.useState('notifications');
+  const { tab, hrefForTab } = useUrlTab(ALERT_TABS, 'notifications');
 
   const notifications = useQuery({
     queryKey: qk.notifications(workspaceId, {}),
@@ -65,7 +67,7 @@ export default function AlertsPage() {
       description={t('alerts.subtitle')}
       searchable={false}
       action={
-        unread.length > 0 && can('alerts', 'operate') ? (
+        tab === 'notifications' && unread.length > 0 && can('alerts', 'operate') ? (
           <Button
             variant="secondary"
             loading={acknowledge.isPending}
@@ -76,14 +78,29 @@ export default function AlertsPage() {
           </Button>
         ) : null
       }
+      overview={
+        <ModuleOverview stats={[
+          { label: t('alerts.summary.unread'), value: unread.length, tone: unread.length ? 'warning' : 'default' },
+          { label: t('alerts.summary.total'), value: notifications.data?.length ?? 0 },
+          {
+            label: t('alerts.summary.enabledRules'),
+            value: (rules.data ?? []).filter((rule) => rule.enabled).length,
+          },
+        ]} />
+      }
     >
       <Tabs
         className="mb-4"
         value={tab}
-        onChange={setTab}
         items={[
-          { id: 'notifications', label: t('alerts.notifications'), count: unread.length },
-          { id: 'rules', label: t('alerts.rules'), count: rules.data?.length },
+          {
+            id: 'notifications', label: t('alerts.notifications'), count: unread.length,
+            href: hrefForTab('notifications'),
+          },
+          {
+            id: 'rules', label: t('alerts.rules'), count: rules.data?.length,
+            href: hrefForTab('rules'),
+          },
         ]}
       />
 
@@ -141,19 +158,19 @@ export default function AlertsPage() {
                         {formatRelative(notification.created_at, locale)}
                       </span>
                       {notification.run_id && (
-                        <Link href={`/runs/${notification.run_id}`}
+                        <Link href={`/runs/${notification.run_id}?tab=summary`}
                               className="text-tiny text-brand hover:underline">
                           {t('alerts.viewRun')}
                         </Link>
                       )}
                       {notification.resource_type === 'PIPELINE' && notification.resource_id && (
-                        <Link href={`/pipelines/${notification.resource_id}`}
+                        <Link href={`/pipelines/${notification.resource_id}?tab=status`}
                               className="text-tiny text-brand hover:underline">
                           {t('alerts.openPipeline')}
                         </Link>
                       )}
                       {notification.resource_type === 'SOURCE' && notification.resource_id && (
-                        <Link href={`/sources/${notification.resource_id}`}
+                        <Link href={`/sources/${notification.resource_id}?tab=overview`}
                               className="text-tiny text-brand hover:underline">
                           {t('alerts.openSource')}
                         </Link>
@@ -184,7 +201,17 @@ export default function AlertsPage() {
           <TableSkeleton rows={4} columns={4} />
         ) : (
           <Card padded={false}>
-            <ul className="divide-y divide-[rgb(var(--border-line))]">
+            {(rules.data ?? []).length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  icon={BellOff}
+                  title={t('alerts.noRules')}
+                  description={t('alerts.noRulesBody')}
+                  compact
+                />
+              </div>
+            ) : (
+              <ul className="divide-y divide-[rgb(var(--border-line))]">
               {(rules.data ?? []).map((rule) => (
                 <li key={rule.id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
@@ -206,7 +233,8 @@ export default function AlertsPage() {
                   />
                 </li>
               ))}
-            </ul>
+              </ul>
+            )}
           </Card>
         )
       )}

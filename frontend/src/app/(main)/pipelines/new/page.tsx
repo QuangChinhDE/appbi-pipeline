@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowLeft, ArrowRight, Database, Lock, Warehouse } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Database, Lock } from 'lucide-react';
 
 import { destinationApi, pipelineApi, sourceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
@@ -42,13 +42,24 @@ export default function NewPipelinePage() {
   const [step, setStep] = React.useState(0);
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
-  const [sourceId, setSourceId] = React.useState('');
-  const [destinationId, setDestinationId] = React.useState('');
+  // Prefilled from the journey that got here. Arriving from
+  // `/destinations/new?source=<id>` the user has just created both halves;
+  // asking them to pick the two things they made thirty seconds ago from two
+  // dropdowns is the seam that made the flow feel like three separate tools.
+  const searchParams = useSearchParams();
+  const [sourceId, setSourceId] = React.useState(searchParams.get('source') ?? '');
+  const [destinationId, setDestinationId] =
+    React.useState(searchParams.get('destination') ?? '');
   const [selections, setSelections] = React.useState<Record<string, StreamSelection>>({});
   const [schedule, setSchedule] = React.useState<ScheduleConfig>({
     type: 'DAILY', time_of_day: '02:00', timezone: 'Asia/Bangkok',
   });
   const [runFirst, setRunFirst] = React.useState(true);
+  const [streamPrefix, setStreamPrefix] = React.useState('');
+  const [namespaceFormat, setNamespaceFormat] = React.useState('');
+  const [overlapPolicy, setOverlapPolicy] = React.useState<'SKIP_IF_RUNNING' | 'QUEUE'>(
+    'SKIP_IF_RUNNING',
+  );
   const [failure, setFailure] = React.useState<RemediationInput | null>(null);
   const [problems, setProblems] = React.useState<string[]>([]);
 
@@ -99,7 +110,9 @@ export default function NewPipelinePage() {
         schema_snapshot_id: discover.data?.id,
         streams: chosen,
         schedule,
-        overlap_policy: 'SKIP_IF_RUNNING',
+        overlap_policy: overlapPolicy,
+        namespace_format: namespaceFormat.trim() || null,
+        stream_prefix: streamPrefix.trim() || null,
         run_first_sync: runFirst,
       });
     },
@@ -313,9 +326,50 @@ export default function NewPipelinePage() {
           )}
 
           {step === 2 && (
-            <Card title={t('pipelines.schedule')}>
-              <ScheduleEditor value={schedule} onChange={setSchedule} />
-            </Card>
+            <div className="space-y-4">
+              <Card title={t('pipelines.schedule')}>
+                <ScheduleEditor value={schedule} onChange={setSchedule} />
+              </Card>
+              <Card title={t('pipelines.destinationOptions')}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="pl-prefix" hint={t('common.optional')}>
+                      {t('pipelines.prefix')}
+                    </Label>
+                    <Input
+                      id="pl-prefix"
+                      value={streamPrefix}
+                      placeholder="base_"
+                      onChange={(event) => setStreamPrefix(event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pl-namespace" hint={t('common.optional')}>
+                      {t('pipelines.namespaceFormat')}
+                    </Label>
+                    <Input
+                      id="pl-namespace"
+                      value={namespaceFormat}
+                      placeholder="${SOURCE_NAMESPACE}"
+                      onChange={(event) => setNamespaceFormat(event.target.value)}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="pl-overlap">{t('pipelines.overlapLabel')}</Label>
+                    <Select
+                      id="pl-overlap"
+                      value={overlapPolicy}
+                      onChange={(event) => setOverlapPolicy(
+                        event.target.value as 'SKIP_IF_RUNNING' | 'QUEUE',
+                      )}
+                    >
+                      <option value="SKIP_IF_RUNNING">{t('pipelines.overlapSkip')}</option>
+                      <option value="QUEUE">{t('pipelines.overlapQueue')}</option>
+                    </Select>
+                  </div>
+                </div>
+              </Card>
+            </div>
           )}
 
           {step === 3 && (
@@ -363,6 +417,12 @@ export default function NewPipelinePage() {
                         {t('pipelines.reviewTimezone')}
                       </dt>
                       <dd className="text-caption text-text-primary">{schedule.timezone}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-caption text-text-tertiary">
+                        {t('pipelines.prefix')}
+                      </dt>
+                      <dd className="text-caption text-text-primary">{streamPrefix || '—'}</dd>
                     </div>
                   </dl>
                 </div>

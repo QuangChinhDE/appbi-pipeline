@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-drawn to match the n8n Base icon set: 64x64, single flat fill.
+     The Base Account n8n repository is empty and base.vn serves a login page
+     rather than a logo, so this is an original glyph in the same language. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<path fill="#4B6FD6" d="M8 12h48a4 4 0 0 1 4 4v32a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4zm0 5a1 1 0 0 0-1 1v28a1 1 0 0 0 1 1h48a1 1 0 0 0 1-1V18a1 1 0 0 0-1-1H8z"/>
+<path fill="#4B6FD6" d="M22 23a6 6 0 1 1 0 12 6 6 0 0 1 0-12zm0 14c5.5 0 10 2.9 10 6.5V45H12v-1.5C12 39.9 16.5 37 22 37z"/>
+<path fill="#4B6FD6" d="M38 25h14v3.5H38zm0 8h14v3.5H38zm0 8h9v3.5h-9z"/>
+</svg>

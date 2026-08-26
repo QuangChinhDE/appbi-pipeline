@@ -18,7 +18,7 @@ This runbook is how to find out cheaply and then prove it.
 ## Step 1 — does the API surface still exist? (minutes)
 
 ```bash
-python scripts/verify-engine-api.py --url https://airbyte.internal.example
+python qa/probes/verify-engine-api.py --url https://airbyte.internal.example
 ```
 
 It reads the 24 endpoints out of
@@ -50,9 +50,9 @@ distinction PM flagged and the reason this step is separate.
 ## Step 3 — end to end, and record it (an hour)
 
 ```bash
-python scripts/e2e.py --source postgres --engine airbyte-api \
+python qa/e2e/e2e.py --source postgres --engine airbyte-api \
   --evidence evidence-e2e.json
-python scripts/verify-egress.py
+python qa/probes/verify-egress.py
 python scripts/release-gate.py record --evidence evidence-e2e.json \
   --out certification.json
 python scripts/release-gate.py check certification.json
@@ -85,45 +85,30 @@ one that admits a gap, because nobody re-checks a `true`.
 
 ---
 
-## Airbyte with auth enabled: the one manual step
+## Airbyte with auth enabled: Community API credentials
 
-Chart V2 2.0.17 (Airbyte app 1.8.5) with `auth.enabled: true` was stood up and
-is the target topology — see `deploy/kubernetes/airbyte/values-certification-v2.yaml`,
-which carries six traps that are not in the chart's documented values.
+Chart V2 2.0.17 (Airbyte app 1.8.5) with `auth.enabled: true` is the target
+topology. In Community SIMPLE auth, Airbyte exposes exactly one Application.
+Its implementation backs that Application with `instance-admin-client-id` and
+`instance-admin-client-secret`; creating or deleting another Application is
+explicitly unsupported. No browser action is required.
 
-**One step cannot be automated from the deployment side**, and pretending
-otherwise is how a pilot stalls on its first morning.
+Chart 2.0.17 generates both keys in `airbyte-auth-secrets`, but its server
+template injects only the admin password. Without the post-install patch the
+API lists a synthetic Application with empty credentials and every token
+exchange fails.
 
-AppBI authenticates to the Config API with an Airbyte **Application**'s client
-credentials. Applications are created by a signed-in operator; nothing in the
-chart, the Helm values, or the Kubernetes secrets creates one:
+> **The tooling for this was deleted.** `scripts/patch-airbyte-community-auth.py`
+> and `scripts/airbyte-application.py` went with the Kubernetes deployment path
+> — see [engine.md](engine.md). The finding is kept because it is a property of
+> chart 2.0.17, not of this repo, and anyone pointing the product at a
+> Community Airbyte will meet it again: wire `AB_INSTANCE_ADMIN_CLIENT_ID` and
+> `AB_INSTANCE_ADMIN_CLIENT_SECRET` into the server from `airbyte-auth-secrets`
+> yourself, then copy them into AppBI's `AIRBYTE_CLIENT_ID` /
+> `AIRBYTE_CLIENT_SECRET` through the production secret manager.
 
-- `/api/v1/applications/token` rejects the instance admin's email and password
-- it also rejects the `instance-admin-client-id` / `-client-secret` the server
-  writes into `airbyte-auth-secrets` — those are for internal service-to-service
-  use, not for this endpoint
-- the `application` table stays empty until somebody creates one
-
-So the sequence for a new Airbyte deployment is:
-
-```bash
-# 1. Complete first-time setup (once, unauthenticated while incomplete).
-kubectl -n airbyte exec deploy/airbyte-server --   curl -fsS -X POST http://localhost:8001/api/v1/instance_configuration/setup   -H 'Content-Type: application/json'   -d '{"email":"<ops>","anonymousDataCollection":false,"initialSetupComplete":true,"organizationName":"<org>"}'
-
-# 2. Sign in to the Airbyte UI as the instance admin and create an Application.
-#    The server serves the UI itself from 1.8 onward -- there is no separate
-#    webapp image, and `airbyte/webapp:1.8.5` does not exist on Docker Hub.
-#    Reach it over a port-forward; do NOT expose it publicly.
-kubectl -n airbyte port-forward deploy/airbyte-server 8001:8001
-
-# 3. Put the Application's credentials where AppBI reads them.
-kubectl -n appbi create secret generic appbi-secrets   --from-literal=AIRBYTE_CLIENT_ID='<application client id>'   --from-literal=AIRBYTE_CLIENT_SECRET='<application client secret>'   ...
-```
-
-This is the same shape as issuing an API key in any managed service: a one-time
-human action, recorded here so it is a scheduled step rather than a surprise.
-`production.py doctor` fails the deployment if the credentials are absent or if
-the engine reports `auth: none`, so a deployment cannot quietly skip it.
+The engine this product ships runs in Compose with no auth layer of its own and
+is not published to the host, so none of this applies to the default topology.
 
 ## Kubernetes — exercised, and what it cost
 
@@ -139,7 +124,7 @@ Replaced by `/api/v1/workspaces/list_by_organization_id` (needs an
 `/api/v1/workspaces/list_paginated` (needs an explicit `pagination` block —
 omitting it is a 500, not a default). The adapter now tries all three in order
 and declares them as `ALTERNATIVE_ROUTE_GROUPS`, which
-`scripts/verify-engine-api.py` reads so a 404 on one member is not reported as
+`qa/probes/verify-engine-api.py` reads so a 404 on one member is not reported as
 a broken adapter.
 
 This is the entire argument for endpoint probing. It cost minutes to find and
@@ -157,8 +142,13 @@ engine was healthy; the connector *pod* was still pulling a 500MB image.
 Pre-pull before certifying:
 
 ```bash
-python scripts/pull-engine-images.py --into-kind <node-container>     sources.json destinations.json
+python scripts/pull-engine-images.py sources.json destinations.json
 ```
+
+(The `--into-kind` variant that pushed images onto a kind node was removed with
+the Kubernetes path. On a cluster, pre-pull onto the nodes by whatever means
+that cluster provides — the point is that it happens before certifying, not
+which command does it.)
 
 **A port-forward is not a network.** Probing through
 `kubectl port-forward` reported half the endpoints as taking >15s. The same
@@ -168,36 +158,13 @@ measuring the tunnel. Attach the node to the network the product is on instead.
 
 ### Reproducing it
 
-```bash
-kind create cluster --name appbi-cert
-helm repo add airbyte https://airbytehq.github.io/helm-charts
-helm install airbyte airbyte/airbyte --version 1.8.5 -n airbyte \
-  --create-namespace --timeout 30m --wait=false \
-  --values deploy/kubernetes/airbyte/values-certification.yaml
-kubectl -n airbyte wait --for=condition=ready pod -l airbyte=server --timeout=30m
-
-# A real path between the product and the engine, in BOTH directions: the
-# product calls the Config API, and connector pods call the demo database.
-kubectl -n airbyte patch svc airbyte-airbyte-server-svc -p \
-  '{"spec":{"type":"NodePort","ports":[{"port":8001,"nodePort":30801}]}}'
-docker network connect appbi-pipeline_appbi appbi-cert-control-plane
-
-# Ask the deployment which connector tags it pins, then put them on the node.
-python scripts/pull-engine-images.py --into-kind appbi-cert-control-plane \
-  sources-k8s.json destinations-k8s.json
-
-docker compose -f docker-compose.yml -f docker-compose.k8s-cert.yml \
-  up -d --build api worker
-python scripts/verify-engine-api.py --in-network appbi-pipeline_appbi \
-  --url http://appbi-cert-control-plane:30801
-python scripts/e2e.py --source postgres --engine airbyte-api \
-  --demo-host <compose-postgres-ip> --evidence evidence-e2e-k8s.json
-```
-
-`--demo-host` is not optional here. Connectors run as pods in the cluster,
-where the Compose service name `postgres` does not resolve; the default is
-right for Compose and wrong for Kubernetes, which is why it is a flag rather
-than a constant.
+Not reproducible from this repository any more. The harness it needed — the
+kind cluster `appbi-base-cert`, `deploy/kubernetes/airbyte/values-certification*.yaml`,
+`docker-compose.k8s-cert.yml` and the scripts above — was removed when the
+engine moved into Compose ([engine.md](engine.md)). The findings above are kept
+because they are the reason the adapter probes alternative routes at all; the
+commands that produced them are not, because commands that cannot run are worse
+than no commands.
 
 ## Kubernetes deployment notes
 

@@ -1,7 +1,7 @@
 # AppBI Data Integration Platform — single Docker project.
 #
 # Everything the product needs runs here: Postgres (product DB + the demo
-# source/warehouse databases), Redis, the Product API, the background Worker
+# source/warehouse databases), the Product API, the background Worker
 # that actually executes syncs, the Next.js frontend and an nginx edge.
 #
 # Connector execution is delegated to an IntegrationEngineAdapter, chosen by
@@ -42,6 +42,31 @@ x-backend-env: &backend-env
   AIRBYTE_API_USERNAME: ${AIRBYTE_API_USERNAME:-}
   AIRBYTE_API_PASSWORD: ${AIRBYTE_API_PASSWORD:-}
   AIRBYTE_WORKSPACE_ID: ${AIRBYTE_WORKSPACE_ID:-}
+  # Airbyte 1.x rejects Basic on the Config API, including the instance
+  # admin's own password. These are an Application's client credentials, and
+  # without them AIRBYTE_API mode cannot authenticate at all.
+  AIRBYTE_CLIENT_ID: ${AIRBYTE_CLIENT_ID:-}
+  AIRBYTE_CLIENT_SECRET: ${AIRBYTE_CLIENT_SECRET:-}
+  # --- connector OAuth ---
+  # This deployment's registered application with each provider. Empty means
+  # the provider is not offered and the wizard shows the service-account path
+  # alone -- which is correct behaviour for a deployment that has not
+  # registered one, not a degraded one.
+  GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+  GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+  MICROSOFT_OAUTH_CLIENT_ID: ${MICROSOFT_OAUTH_CLIENT_ID:-}
+  MICROSOFT_OAUTH_CLIENT_SECRET: ${MICROSOFT_OAUTH_CLIENT_SECRET:-}
+  MICROSOFT_OAUTH_TENANT_ID: ${MICROSOFT_OAUTH_TENANT_ID:-}
+  # Must match the redirect registered with the provider character for
+  # character, or consent fails with redirect_uri_mismatch.
+  OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-http://localhost:8080/api/v1/oauth/callback}
+  FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
+  # --- launch scope ---
+  # Which of the 654 bundled connectors this deployment offers. Absent from
+  # this list, the settings existed and could not be set: every deployment got
+  # the default no matter what .env said.
+  CONNECTOR_LAUNCH_SCOPE: ${CONNECTOR_LAUNCH_SCOPE:-SUPPORTED_ONLY}
+  CONNECTOR_BETA_ALLOWLIST: ${CONNECTOR_BETA_ALLOWLIST:-}
   # --- policy ---
   MAX_CONCURRENT_RUNS_GLOBAL: ${MAX_CONCURRENT_RUNS_GLOBAL:-4}
   MAX_CONCURRENT_RUNS_PER_WORKSPACE: ${MAX_CONCURRENT_RUNS_PER_WORKSPACE:-3}
@@ -65,7 +90,15 @@ services:
       # on a conference network becomes a database server.
       - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U appbi -d appbi_integration"]
+      # `-h 127.0.0.1` is the whole point, not decoration. Without a host,
+      # pg_isready talks over the unix socket -- and while the official image
+      # runs the scripts in /docker-entrypoint-initdb.d it has a temporary
+      # server listening on that socket *only*. So the socket probe reports
+      # healthy in the middle of initialisation, every dependant starts against
+      # a database that answers "the database system is starting up", and the
+      # whole engine falls over. Invisible until the volume is wiped, because
+      # init scripts only run on an empty data directory.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U appbi -d appbi_integration"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -157,6 +190,12 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+        # Prefills the seeded demo account on the sign-in page. Empty by
+        # default, and empty means the credential is not in the built bundle
+        # at all -- a production image must never carry one, least of all for
+        # an account production does not create.
+        NEXT_PUBLIC_DEMO_EMAIL: ${NEXT_PUBLIC_DEMO_EMAIL:-}
+        NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-}
     container_name: appbi-pipeline-frontend
     environment:
       NODE_ENV: production

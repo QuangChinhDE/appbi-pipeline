@@ -10,7 +10,8 @@ import type {
   Actor, ActorDetail, ActorTestResult, AlertRule, AppNotification, AuditEvent,
   BuilderDefinition, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
   ConnectorDetail, CurrentUser, EngineStatus, Member, MonitoringResponse, Overview, Paginated,
-  Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff, SchemaSnapshot,
+  ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
+  SchemaSnapshot,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
 
@@ -123,6 +124,7 @@ const get = <T>(path: string, query?: Query) => request<T>('GET', path, { query 
 const post = <T>(path: string, body?: unknown, extra?: { query?: Query; headers?: Record<string, string> }) =>
   request<T>('POST', path, { body, ...extra });
 const patch = <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body });
+const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, { body });
 const del = <T>(path: string, query?: Query) => request<T>('DELETE', path, { query });
 
 // ── auth ───────────────────────────────────────────────────────────────────
@@ -131,6 +133,13 @@ export const authApi = {
     post<CurrentUser>('/auth/login', { email, password }),
   logout: () => post<{ ok: boolean }>('/auth/logout'),
   me: () => get<CurrentUser>('/auth/me'),
+  // Returns a fresh session: changing the password revokes every token issued
+  // before it, including the caller's own.
+  changePassword: (currentPassword: string, newPassword: string) =>
+    post<CurrentUser>('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
   switchWorkspace: (workspaceId: string) =>
     post<CurrentUser>(`/auth/switch-workspace/${workspaceId}`),
 };
@@ -172,9 +181,33 @@ export const builderApi = {
     post<BuilderProjectDetail>(`/builder/projects/${id}/import`, { manifest }),
 };
 
+// ── connector OAuth ────────────────────────────────────────────────────────
+// The refresh token never comes back here. `start` returns a consent URL, the
+// provider redirects to the API, and the page is handed an opaque grant id
+// which the wizard passes to the save call.
+export const oauthApi = {
+  providers: () =>
+    get<{ connector_key: string; provider: string; label: string; scopes: string[] }[]>(
+      '/oauth/providers'),
+  start: (connectorKey: string) =>
+    post<{ authorize_url: string; state: string }>(`/oauth/${connectorKey}/start`),
+  grant: (grantId: string) =>
+    get<{
+      id: string; connector_key: string; provider: string;
+      account_label: string; consumed: boolean;
+    }>(`/oauth/grant/${grantId}`),
+};
+
 // ── connectors ─────────────────────────────────────────────────────────────
 export const connectorApi = {
-  list: (query?: { type?: string; q?: string; category?: string }) =>
+  list: (query?: {
+    type?: string;
+    q?: string;
+    category?: string;
+    /** Only what this deployment offers. The create wizard sets this; the
+     *  admin catalogue deliberately does not. */
+    selectable?: string;
+  }) =>
     get<Connector[]>('/connectors', query),
   detail: (connectorKey: string) => get<ConnectorDetail>(`/connectors/${connectorKey}`),
   refresh: (connectorKey?: string) =>
@@ -209,6 +242,11 @@ export interface ActorWritePayload {
   credentials: Record<string, unknown>;
   test_before_save: boolean;
   check_token?: string | null;
+  /**
+   * Opaque handle to a completed OAuth consent. The refresh token behind it is
+   * held server-side and never passes through this client.
+   */
+  oauth_grant_id?: string | null;
 }
 
 function actorApi(base: 'sources' | 'destinations') {
@@ -259,6 +297,13 @@ export const pipelineApi = {
   remove: (id: string) => del<void>(`/pipelines/${id}`),
   rediscover: (id: string) => post<SchemaSnapshot>(`/pipelines/${id}/rediscover`),
   schemaDiff: (id: string) => get<SchemaDiff>(`/pipelines/${id}/schema-diff`),
+  // Lazy on purpose: the answer comes from the engine, and the settings page
+  // has to render whether or not the engine is reachable.
+  state: (id: string) => get<ConnectionStateView>(`/pipelines/${id}/state`),
+  // PUT, not PATCH: the body is the whole cursor. Sending a subset would drop
+  // the streams it omits, which reads as "those streams reset" on the next run.
+  setState: (id: string, state: Record<string, unknown>[]) =>
+    put<ConnectionStateView>(`/pipelines/${id}/state`, { state }),
   approveSchema: (id: string, snapshotId: string, dropRemoved = true) =>
     post<PipelineDetail>(`/pipelines/${id}/schema-approve`, {
       snapshot_id: snapshotId,

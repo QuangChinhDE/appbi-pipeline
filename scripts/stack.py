@@ -53,8 +53,8 @@ MODES: dict[str, dict] = {
         # against this API, which reloads in a second instead of rebuilding an
         # image. No engine either — nothing here starts connectors, so `lite`
         # is for API and schema work, not for running a sync.
-        "services": ["postgres", "redis", "api", "worker"],
-        "summary": "product core only (postgres, redis, api, worker)",
+        "services": ["postgres", "api", "worker"],
+        "summary": "product core only (postgres, api, worker)",
         "next": [
             "cd frontend && npm run dev      # UI at http://localhost:3000",
             "API at http://localhost:{api_port}",

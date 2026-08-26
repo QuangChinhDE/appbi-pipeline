@@ -96,6 +96,27 @@ class IntegrationEngineAdapter(Protocol):
     async def update_connection(self, ref: str, request: EngineConnectionRequest) -> EngineResourceRef: ...
     async def delete_connection(self, ref: str) -> None: ...
 
+    # --- crash recovery --------------------------------------------------
+    async def find_by_product_id(
+        self, resource_type: str, product_resource_id: str
+    ) -> str | None:
+        """The engine ref for a resource this product created, or None.
+
+        Needed because a create is two writes to two systems and the engine
+        answers first. If the process dies after the engine's HTTP 200 and
+        before the reference is recorded, the engine holds a resource with
+        customer credentials in it and the product has no id for it.
+
+        The Airbyte Config API has no external-id field, so nothing can be
+        looked up by the product's own id unless the adapter arranges it. Each
+        adapter therefore decides how to make its resources findable again; the
+        one thing it may not do is pretend the product id *is* the engine id.
+
+        Returning None means "no such resource", which is a real answer: the
+        engine call may never have landed.
+        """
+        ...
+
     # --- jobs ------------------------------------------------------------
     async def trigger_sync(self, request: EngineSyncRequest) -> EngineJobRef: ...
     async def get_job(self, ref: str) -> EngineJobStatus: ...
@@ -103,5 +124,27 @@ class IntegrationEngineAdapter(Protocol):
     async def get_job_logs(
         self, ref: str, *, cursor: int = 0, limit: int = 500
     ) -> EngineLogResult: ...
+
+    async def connection_state(self, ref: str) -> list[dict] | None:
+        """The engine's replication cursor for a connection, or None.
+
+        Returning None means "this engine has no such concept", which is a
+        different answer from an empty list ("it has one and it is empty") --
+        the difference decides whether the UI hides the panel or says the
+        pipeline has not checkpointed yet.
+
+        Default implementation so an engine without state does not have to
+        carry a stub; `sql_direct` is exactly that case.
+        """
+        return None
+
+    async def set_connection_state(self, ref: str, state: list[dict]) -> bool:
+        """Replace the replication cursor. `False` if this engine has none.
+
+        Separate from `connection_state` because reading is safe and writing is
+        not: the returned bool lets the caller tell "this engine cannot" from
+        "it worked", without an exception for the ordinary case.
+        """
+        return False
 
     async def close(self) -> None: ...

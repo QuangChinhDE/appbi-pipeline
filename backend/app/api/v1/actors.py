@@ -10,6 +10,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response
+from sqlalchemy import select
 
 from app.api.deps import CtxDep, SessionDep
 from app.api.v1.presenters import actor_detail, actor_view
@@ -17,6 +18,8 @@ from app.core.db import utcnow
 from app.core.errors import ValidationError
 from app.core.permissions import Action
 from app.core.secrets import secret_store
+from app.models.engine import ConnectorDefinition
+from app.models.identity import User
 from app.schemas.common import Paginated, PageInfo
 from app.schemas.domain import (
     ActorCreate, ActorDetail, ActorTestRequest, ActorTestResult, ActorUpdate, ActorView,
@@ -45,12 +48,32 @@ def build_router(kind, *, prefix: str, tag: str) -> APIRouter:
             status=status, usage=usage, limit=limit, offset=offset,
         )
         usage_map = await actor_service.pipeline_usage(session, ctx.workspace_id, kind)
+
+        # Two queries for the page instead of two per row. At the 200-row
+        # ceiling this endpoint allows, the per-row version issued 400 extra
+        # round trips to render one screen -- invisible on a laptop with six
+        # sources and the first thing to break under load.
+        connector_keys = {row.connector_key for row in rows}
+        connectors = {
+            definition.connector_key: definition
+            for definition in (await session.scalars(
+                select(ConnectorDefinition).where(
+                    ConnectorDefinition.connector_key.in_(connector_keys)))).all()
+        } if connector_keys else {}
+        owner_ids = {row.created_by for row in rows if row.created_by}
+        owners = {
+            user.id: user
+            for user in (await session.scalars(
+                select(User).where(User.id.in_(owner_ids)))).all()
+        } if owner_ids else {}
+
         items = []
         for row in rows:
-            connector = await _connector(session, row.connector_key)
-            owner = await actor_service.owner_of(session, row.created_by)
-            items.append(actor_view(ctx, kind, row, connector=connector,
-                                    pipeline_count=usage_map.get(row.id, 0), owner=owner))
+            items.append(actor_view(
+                ctx, kind, row,
+                connector=connectors.get(row.connector_key),
+                pipeline_count=usage_map.get(row.id, 0),
+                owner=owners.get(row.created_by) if row.created_by else None))
         return Paginated[ActorView](
             items=items,
             page=PageInfo(has_more=offset + len(items) < total, total=total,

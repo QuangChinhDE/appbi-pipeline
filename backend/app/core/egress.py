@@ -37,7 +37,7 @@ internet and anything the host itself routes to. That is required: a SaaS
 connector has to call out. Restricting *which* external addresses may be
 reached is a host firewall or forward-proxy decision, not something a Compose
 file can express, and it is listed as an open item in
-PRODUCTION_READINESS_REVIEW.md rather than quietly assumed to be handled here.
+docs/PRODUCTION_READINESS_REVIEW.md rather than quietly assumed to be handled here.
 
 In AIRBYTE_API deployments the same split applies, because Airbyte's worker is
 told to start connector containers on that network (`DOCKER_NETWORK` in

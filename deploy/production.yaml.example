@@ -68,7 +68,7 @@ engine:
 
 datastores:
   # Managed instances, outside the cluster. deploy/kubernetes/ ships no
-  # Postgres and no Redis on purpose.
+  # Postgres on purpose.
   database_url_ref: secret://appbi-secrets/DATABASE_URL
   # The sync driver, used by Alembic and by the init containers that wait for
   # the schema. Same database, different URL scheme; it is a separate key
@@ -122,7 +122,7 @@ mirror:
 
 release:
   # What the release artifact is built from. Produced by:
-  #   python scripts/e2e.py --engine airbyte-api --evidence evidence-e2e.json
+  #   python qa/e2e/e2e.py --engine airbyte-api --evidence evidence-e2e.json
   # An install with no evidence still deploys, and says loudly that it is not a
   # release.
   evidence:

@@ -537,10 +537,13 @@ def main() -> int:
     record.add_argument("--product-url", default="http://localhost:8010")
     record.add_argument("--cookie", default=os.getenv("APPBI_COOKIE"),
                         help="session cookie for the product API (or APPBI_COOKIE)")
-    record.add_argument("--engine-policy-overlay",
-                        default="deploy/kubernetes/airbyte/overlays/production",
-                        help="Kustomize overlay for the policy applied in "
-                             "Airbyte's namespace; pass '' to skip")
+    # Default empty: the engine runs in Compose beside the product now, so
+    # there is no Airbyte namespace to apply a policy into. The flag stays for
+    # a deployment that does run Airbyte on Kubernetes separately.
+    record.add_argument("--engine-policy-overlay", default="",
+                        help="Kustomize overlay for a policy applied in the "
+                             "engine's namespace, if the engine runs on "
+                             "Kubernetes. Empty by default.")
     record.add_argument("--overlay", default="deploy/kubernetes/overlays/production",
                         help="Kustomize overlay whose rendered output must be "
                              "free of repository placeholders; pass '' to skip")

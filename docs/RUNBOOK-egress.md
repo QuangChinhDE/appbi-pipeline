@@ -15,7 +15,7 @@ What actually constrains a connector is the network it runs on.
 ## Measured, not assumed
 
 ```bash
-python scripts/verify-egress.py
+python qa/probes/verify-egress.py
 ```
 
 It opens sockets from a container on `appbi-pipeline_connectors` — the same
@@ -54,7 +54,7 @@ docker compose -f docker-compose.yml \
                -f docker-compose.airbyte.yml \
                -f docker-compose.egress.yml up -d
 
-python scripts/verify-egress.py --expect-internet-blocked
+python qa/probes/verify-egress.py --expect-internet-blocked
 ```
 
 `docker-compose.egress.yml` marks the `connectors` network `internal`, which
@@ -121,7 +121,7 @@ Rules in `DOCKER-USER` are not persistent. Install them with
 `iptables-persistent`, a systemd unit, or the host's configuration management —
 a firewall that disappears on reboot is one people stop believing in.
 
-Re-run `python scripts/verify-egress.py` afterwards. Adding a rule and not
+Re-run `python qa/probes/verify-egress.py` afterwards. Adding a rule and not
 measuring it is how allowlists come to exist only on paper.
 
 ### Kubernetes — the product's own policies, measured
@@ -230,7 +230,7 @@ An egress gateway (Istio, Cilium) is the tool for that.
 Egress rules go stale quietly: a connector is removed and its allowance stays,
 or a vendor changes address and the rule keeps matching nothing.
 
-At each release, run `python scripts/verify-egress.py` and check the allowlist
+At each release, run `python qa/probes/verify-egress.py` and check the allowlist
 against the connectors actually in use:
 
 ```bash

@@ -1,0 +1,3060 @@
+version: 3.9.6
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - inflow
+
+definitions:
+  streams:
+    income:
+      type: DeclarativeStream
+      name: income
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /incomes/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - incomes
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/income'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+    inflow:
+      type: DeclarativeStream
+      name: inflow
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflows/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - inflows
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        lookback_window: P1D
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+    inflow_code:
+      type: DeclarativeStream
+      name: inflow_code
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflowcodes/get
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - inflow_codes
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow_code'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+    revenue_unit:
+      type: DeclarativeStream
+      name: revenue_unit
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /revenueunits/get
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - revenue_units
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/revenue_unit'
+    income_inflow:
+      type: DeclarativeStream
+      name: income_inflow
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /incomes/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - inflows
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/income_inflow'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+    inflow_income:
+      type: DeclarativeStream
+      name: inflow_income
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflows/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - incomes
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow_income'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1D
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT0.000001S
+        cursor_datetime_formats:
+          - '%s'
+    income_payment:
+      type: DeclarativeStream
+      name: income_payment
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /incomes/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            limit: '500'
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - payments
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/income_payment'
+      transformations:
+        - type: AddFields
+          fields:
+            - path:
+                - last_update
+              value: '{{ record[''since''] }}'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1D
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT0.000001S
+        cursor_datetime_formats:
+          - '%s'
+    inflow_payment:
+      type: DeclarativeStream
+      name: inflow_payment
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflows/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - payments
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow_payment'
+      transformations:
+        - type: AddFields
+          fields:
+            - path:
+                - last_update
+              value: '{{ record[''since''] }}'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1D
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT0.000001S
+        cursor_datetime_formats:
+          - '%s'
+    revenue_center:
+      type: DeclarativeStream
+      name: revenue_center
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /revenuecenters/get
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - revenue_centers
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/revenue_center'
+    income_customer:
+      type: DeclarativeStream
+      name: income_customer
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /incomes/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - customers
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/income_customer'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+    income_estimate:
+      type: DeclarativeStream
+      name: income_estimate
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /incomes/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - estimates
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/income_estimate'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1D
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT0.000001S
+        cursor_datetime_formats:
+          - '%s'
+    inflow_customer:
+      type: DeclarativeStream
+      name: inflow_customer
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflows/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - customers
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow_customer'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+    income_item_line:
+      type: DeclarativeStream
+      name: income_item_line
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /incomes/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - income_item_lines
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/income_item_line'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1D
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT0.000001S
+        cursor_datetime_formats:
+          - '%s'
+    inflow_item_line:
+      type: DeclarativeStream
+      name: inflow_item_line
+      retriever:
+        type: SimpleRetriever
+        paginator:
+          type: DefaultPaginator
+          page_size_option:
+            type: RequestOption
+            field_name: limit
+            inject_into: body_data
+          page_token_option:
+            type: RequestOption
+            field_name: page
+            inject_into: body_data
+          pagination_strategy:
+            type: PageIncrement
+            page_size: 500
+            start_from_page: 1
+            inject_on_first_request: true
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflows/last.update
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - inflow_item_lines
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow_item_line'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        step: P1D
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_granularity: PT0.000001S
+        cursor_datetime_formats:
+          - '%s'
+    inflow_code_group:
+      type: DeclarativeStream
+      name: inflow_code_group
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: /inflowcodegroups/get
+          http_method: POST
+          request_headers:
+            User-Agent: >-
+              Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like
+              Gecko) Chrome/77.0.3865.90 Safari/537.36
+            Content-Type: application/x-www-form-urlencoded
+          request_body_data:
+            access_token: '{{ config[''access_token''] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - data
+              - inflow_code_groups
+      primary_key:
+        - id
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/inflow_code_group'
+      incremental_sync:
+        type: DatetimeBasedCursor
+        cursor_field: last_update
+        end_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ now_utc().strftime(''%Y-%m-%dT%H:%M:%SZ'') }}'
+          datetime_format: '%Y-%m-%dT%H:%M:%SZ'
+        start_datetime:
+          type: MinMaxDatetime
+          datetime: '{{ config["updated_from"] }}'
+          datetime_format: '%s'
+        datetime_format: '%s'
+        end_time_option:
+          type: RequestOption
+          field_name: updated_to
+          inject_into: body_data
+        start_time_option:
+          type: RequestOption
+          field_name: updated_from
+          inject_into: body_data
+        cursor_datetime_formats:
+          - '%s'
+  base_requester:
+    type: HttpRequester
+    url_base: https://income.base.vn/extapi/v1/
+
+streams:
+  - $ref: '#/definitions/streams/inflow'
+  - $ref: '#/definitions/streams/income'
+  - $ref: '#/definitions/streams/inflow_code'
+  - $ref: '#/definitions/streams/inflow_code_group'
+  - $ref: '#/definitions/streams/revenue_unit'
+  - $ref: '#/definitions/streams/revenue_center'
+  - $ref: '#/definitions/streams/inflow_payment'
+  - $ref: '#/definitions/streams/income_estimate'
+  - $ref: '#/definitions/streams/income_payment'
+  - $ref: '#/definitions/streams/inflow_customer'
+  - $ref: '#/definitions/streams/inflow_item_line'
+  - $ref: '#/definitions/streams/inflow_income'
+  - $ref: '#/definitions/streams/income_item_line'
+  - $ref: '#/definitions/streams/income_inflow'
+  - $ref: '#/definitions/streams/income_customer'
+
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required:
+      - access_token
+      - updated_from
+    properties:
+      access_token:
+        type: string
+        order: 0
+        title: access_token
+        airbyte_secret: true
+      updated_from:
+        type: string
+        order: 1
+        title: updated_from
+    additionalProperties: true
+
+metadata:
+  testedStreams: {}
+  autoImportSchema:
+    income: true
+    inflow: true
+    inflow_code: true
+    revenue_unit: true
+    income_inflow: true
+    inflow_income: true
+    income_payment: true
+    inflow_payment: true
+    revenue_center: true
+    income_customer: true
+    income_estimate: true
+    inflow_customer: true
+    income_item_line: true
+    inflow_item_line: true
+    inflow_code_group: true
+
+schemas:
+  income:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      acl:
+        type:
+          - object
+          - 'null'
+        properties:
+          edit:
+            type:
+              - number
+              - 'null'
+          view:
+            type:
+              - number
+              - 'null'
+          follow:
+            type:
+              - number
+              - 'null'
+          manage:
+            type:
+              - number
+              - 'null'
+      hid:
+        type:
+          - string
+          - 'null'
+      tax:
+        type:
+          - object
+          - 'null'
+      form:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            value:
+              type:
+                - array
+                - number
+                - string
+                - 'null'
+            display:
+              type:
+                - string
+                - 'null'
+            enabled:
+              type:
+                - number
+                - 'null'
+            options:
+              type:
+                - array
+                - 'null'
+            required:
+              type:
+                - number
+                - 'null'
+            placeholder:
+              type:
+                - string
+                - 'null'
+      link:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      uuid:
+        type:
+          - string
+          - 'null'
+      files:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            fid:
+              type:
+                - string
+                - 'null'
+            src:
+              type:
+                - string
+                - 'null'
+            url:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            size:
+              type:
+                - string
+                - 'null'
+            image:
+              type:
+                - string
+                - 'null'
+            since:
+              type:
+                - number
+                - 'null'
+            download:
+              type:
+                - string
+                - 'null'
+            username:
+              type:
+                - string
+                - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      stats:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          views:
+            type:
+              - number
+              - 'null'
+          comments:
+            type:
+              - number
+              - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      status:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      due_date:
+        type:
+          - string
+          - 'null'
+      keywords:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      edit_time:
+        type:
+          - string
+          - 'null'
+      editor_id:
+        type:
+          - string
+          - 'null'
+      followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      is_edited:
+        type:
+          - string
+          - 'null'
+      reference:
+        type:
+          - string
+          - 'null'
+      sale_type:
+        type:
+          - string
+          - 'null'
+      amount_tax:
+        type:
+          - string
+          - 'null'
+      categories:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            loaihopdong:
+              type:
+                - string
+                - 'null'
+      embed_link:
+        type:
+          - string
+          - 'null'
+      amount_excl:
+        type:
+          - string
+          - 'null'
+      amount_incl:
+        type:
+          - string
+          - 'null'
+      customer_id:
+        type:
+          - string
+          - 'null'
+      is_invoiced:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      record_date:
+        type:
+          - string
+          - 'null'
+      salesperson:
+        type:
+          - string
+          - 'null'
+      income_value:
+        type:
+          - string
+          - 'null'
+      invoice_files:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            fid:
+              type:
+                - string
+                - 'null'
+            src:
+              type:
+                - string
+                - 'null'
+            url:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            size:
+              type:
+                - number
+                - 'null'
+            image:
+              type:
+                - number
+                - 'null'
+            since:
+              type:
+                - number
+                - 'null'
+            origin:
+              type:
+                - number
+                - 'null'
+            download:
+              type:
+                - string
+                - 'null'
+            username:
+              type:
+                - string
+                - 'null'
+            dimension:
+              type:
+                - array
+                - 'null'
+            invoice_id:
+              type:
+                - string
+                - 'null'
+            is_templated:
+              type:
+                - number
+                - 'null'
+      is_itemizable:
+        type:
+          - string
+          - 'null'
+      income_type_id:
+        type:
+          - string
+          - 'null'
+      inflow_code_id:
+        type:
+          - number
+          - 'null'
+      to_be_received:
+        type:
+          - string
+          - 'null'
+      amount_received:
+        type:
+          - string
+          - 'null'
+      cash_account_id:
+        type:
+          - string
+          - 'null'
+      revenue_unit_id:
+        type:
+          - string
+          - 'null'
+      origin_income_id:
+        type:
+          - string
+          - 'null'
+      previous_income_id:
+        type:
+          - string
+          - 'null'
+      created_from_source:
+        type:
+          - string
+          - 'null'
+      is_multiple_due_date:
+        type:
+          - number
+          - 'null'
+      code_sysfix_c_transaction:
+        type:
+          - number
+          - 'null'
+      dedution_is_all_income_tax:
+        type:
+          - number
+          - 'null'
+      linked_estimate_inflow_ids:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      item_line_is_all_income_tax:
+        type:
+          - number
+          - 'null'
+      receivable_deduction_amount:
+        type:
+          - string
+          - 'null'
+    additionalProperties: true
+  inflow:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      acl:
+        type:
+          - object
+          - 'null'
+        properties:
+          edit:
+            type:
+              - number
+              - 'null'
+          view:
+            type:
+              - number
+              - 'null'
+          follow:
+            type:
+              - number
+              - 'null'
+          manage:
+            type:
+              - number
+              - 'null'
+      hid:
+        type:
+          - string
+          - 'null'
+      tax:
+        type:
+          - object
+          - 'null'
+      data:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          revenue_amount:
+            type:
+              - number
+              - string
+              - 'null'
+          created_from_app:
+            type:
+              - string
+              - 'null'
+      form:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            value:
+              type:
+                - string
+                - 'null'
+            display:
+              type:
+                - string
+                - 'null'
+            enabled:
+              type:
+                - number
+                - 'null'
+            options:
+              type:
+                - array
+                - 'null'
+            required:
+              type:
+                - number
+                - 'null'
+            placeholder:
+              type:
+                - string
+                - 'null'
+      link:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      uuid:
+        type:
+          - string
+          - 'null'
+      files:
+        type:
+          - array
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      stats:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          views:
+            type:
+              - number
+              - 'null'
+          comments:
+            type:
+              - number
+              - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      reference:
+        type:
+          - string
+          - 'null'
+      amount_tax:
+        type:
+          - string
+          - 'null'
+      categories:
+        type:
+          - object
+          - 'null'
+      embed_link:
+        type:
+          - string
+          - 'null'
+      amount_excl:
+        type:
+          - string
+          - 'null'
+      amount_incl:
+        type:
+          - string
+          - 'null'
+      customer_id:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      receive_date:
+        type:
+          - string
+          - 'null'
+      amount_unused:
+        type:
+          - string
+          - 'null'
+      is_itemizable:
+        type:
+          - string
+          - 'null'
+      inflow_code_id:
+        type:
+          - string
+          - 'null'
+      inflow_type_id:
+        type:
+          - string
+          - 'null'
+      revenue_amount:
+        type:
+          - number
+          - string
+          - 'null'
+      amount_received:
+        type:
+          - string
+          - 'null'
+      cash_account_id:
+        type:
+          - string
+          - 'null'
+      created_from_app:
+        type:
+          - string
+          - 'null'
+      cash_transaction_id:
+        type:
+          - string
+          - 'null'
+      created_from_source:
+        type:
+          - string
+          - 'null'
+      customer_prepayment_id:
+        type:
+          - number
+          - 'null'
+      code_sysfix_c_transaction:
+        type:
+          - number
+          - 'null'
+    additionalProperties: true
+  inflow_code:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      hid:
+        type: string
+      code:
+        type: string
+      link:
+        type: string
+      name:
+        type: string
+      since:
+        type: string
+      token:
+        type: string
+      owners:
+        type: array
+      source:
+        type: string
+      status:
+        type: string
+      content:
+        type: string
+      deleted:
+        type: string
+      user_id:
+        type: string
+      group_id:
+        type: string
+      metatype:
+        type: string
+      username:
+        type: string
+      watchers:
+        type: array
+      followers:
+        type: array
+      parent_id:
+        type: string
+      to_account:
+        type: string
+      last_update:
+        type: string
+      from_account:
+        type: string
+      cashflow_type:
+        type: string
+      accounting_account_code:
+        type: string
+    additionalProperties: true
+  revenue_unit:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      acl:
+        type: object
+        properties:
+          view:
+            type: number
+          manage:
+            type: number
+      hid:
+        type: string
+      link:
+        type: string
+      name:
+        type: string
+      since:
+        type: string
+      token:
+        type: string
+      owners:
+        type: array
+        items:
+          type: string
+      source:
+        type: string
+      status:
+        type: string
+      content:
+        type: string
+      periods:
+        type: array
+        items:
+          type: string
+      user_id:
+        type: string
+      metatype:
+        type: string
+      username:
+        type: string
+      followers:
+        type: array
+        items:
+          type: string
+      parent_id:
+        type: string
+      revenue_center_id:
+        type: string
+    additionalProperties: true
+  income_inflow:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      acl:
+        type:
+          - object
+          - 'null'
+        properties:
+          edit:
+            type:
+              - number
+              - 'null'
+          view:
+            type:
+              - number
+              - 'null'
+          follow:
+            type:
+              - number
+              - 'null'
+          manage:
+            type:
+              - number
+              - 'null'
+      hid:
+        type:
+          - string
+          - 'null'
+      tax:
+        type:
+          - object
+          - 'null'
+      data:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          revenue_amount:
+            type:
+              - number
+              - 'null'
+          created_from_app:
+            type:
+              - string
+              - 'null'
+          code_sysfix_c_transaction:
+            type:
+              - number
+              - 'null'
+      form:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            type:
+              type:
+                - string
+                - 'null'
+            id:
+              type:
+                - string
+                - 'null'
+            name:
+              type:
+                - string
+                - 'null'
+            value:
+              type:
+                - number
+                - string
+                - 'null'
+            display:
+              type:
+                - string
+                - 'null'
+            enabled:
+              type:
+                - number
+                - 'null'
+            options:
+              type:
+                - array
+                - 'null'
+            required:
+              type:
+                - number
+                - 'null'
+            placeholder:
+              type:
+                - string
+                - 'null'
+      link:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      uuid:
+        type:
+          - string
+          - 'null'
+      files:
+        type:
+          - array
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      stats:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          views:
+            type:
+              - number
+              - 'null'
+          comments:
+            type:
+              - number
+              - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      followers:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      reference:
+        type:
+          - string
+          - 'null'
+      amount_tax:
+        type:
+          - string
+          - 'null'
+      categories:
+        type:
+          - object
+          - 'null'
+      embed_link:
+        type:
+          - string
+          - 'null'
+      amount_excl:
+        type:
+          - string
+          - 'null'
+      amount_incl:
+        type:
+          - string
+          - 'null'
+      customer_id:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      receive_date:
+        type:
+          - string
+          - 'null'
+      amount_unused:
+        type:
+          - string
+          - 'null'
+      is_itemizable:
+        type:
+          - string
+          - 'null'
+      inflow_code_id:
+        type:
+          - string
+          - 'null'
+      inflow_type_id:
+        type:
+          - string
+          - 'null'
+      revenue_amount:
+        type:
+          - number
+          - 'null'
+      amount_received:
+        type:
+          - string
+          - 'null'
+      cash_account_id:
+        type:
+          - string
+          - 'null'
+      created_from_app:
+        type:
+          - string
+          - 'null'
+      cash_transaction_id:
+        type:
+          - string
+          - 'null'
+      created_from_source:
+        type:
+          - string
+          - 'null'
+      customer_prepayment_id:
+        type:
+          - number
+          - 'null'
+      code_sysfix_c_transaction:
+        type:
+          - number
+          - 'null'
+    additionalProperties: true
+  inflow_income:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      acl:
+        type: object
+        properties:
+          edit:
+            type: number
+          view:
+            type: number
+          follow:
+            type: number
+          manage:
+            type: number
+      hid:
+        type: string
+      tax:
+        type: object
+      form:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            name:
+              type: string
+            value:
+              type:
+                - number
+                - string
+            display:
+              type: string
+            enabled:
+              type: number
+            options:
+              type: array
+            required:
+              type: number
+            placeholder:
+              type: string
+      link:
+        type: string
+      name:
+        type: string
+      uuid:
+        type: string
+      files:
+        type: array
+      since:
+        type: string
+      stats:
+        type: object
+        properties:
+          posts:
+            type: number
+          views:
+            type: number
+          comments:
+            type: number
+      token:
+        type: string
+      status:
+        type: string
+      content:
+        type: string
+      user_id:
+        type: string
+      due_date:
+        type: string
+      keywords:
+        type: string
+      username:
+        type: string
+      followers:
+        type: array
+        items:
+          type: string
+      reference:
+        type: string
+      sale_type:
+        type: string
+      amount_tax:
+        type: string
+      categories:
+        type: object
+      amount_excl:
+        type: string
+      amount_incl:
+        type: string
+      customer_id:
+        type: string
+      is_invoiced:
+        type: string
+      last_update:
+        type: string
+      record_date:
+        type: string
+      salesperson:
+        type: string
+      invoice_files:
+        type: array
+        items:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: string
+            fid:
+              type: string
+            src:
+              type: string
+            url:
+              type: string
+            name:
+              type: string
+            size:
+              type: number
+            image:
+              type: number
+            since:
+              type: number
+            origin:
+              type: number
+            download:
+              type: string
+            username:
+              type: string
+            dimension:
+              type: array
+            invoice_id:
+              type: string
+            is_templated:
+              type: number
+      is_itemizable:
+        type: string
+      income_type_id:
+        type: string
+      inflow_code_id:
+        type: number
+      to_be_received:
+        type: string
+      amount_received:
+        type: string
+      cash_account_id:
+        type: string
+      fee_record_date:
+        type: number
+      revenue_unit_id:
+        type: string
+      created_from_source:
+        type: string
+      is_multiple_due_date:
+        type: number
+      code_sysfix_c_transaction:
+        type: number
+      linked_estimate_inflow_ids:
+        type: array
+        items:
+          type: string
+      receivable_deduction_amount:
+        type: string
+    additionalProperties: true
+  income_payment:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      hid:
+        type:
+          - string
+          - 'null'
+      link:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      code_id:
+        type:
+          - number
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      income_id:
+        type:
+          - string
+          - 'null'
+      inflow_id:
+        type:
+          - string
+          - 'null'
+      customer_id:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: number
+      salesperson:
+        type:
+          - string
+          - 'null'
+      amount_revenue:
+        type:
+          - string
+          - 'null'
+      amount_received:
+        type:
+          - string
+          - 'null'
+      cash_account_id:
+        type:
+          - number
+          - 'null'
+      revenue_unit_id:
+        type:
+          - string
+          - 'null'
+      inflow_itemlines:
+        type:
+          - object
+          - 'null'
+        properties:
+          ids:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - string
+                - 'null'
+          itemlines:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - object
+                - 'null'
+              properties:
+                type:
+                  type:
+                    - string
+                    - 'null'
+                id:
+                  type:
+                    - string
+                    - 'null'
+                hid:
+                  type:
+                    - string
+                    - 'null'
+                name:
+                  type:
+                    - string
+                    - 'null'
+                unit:
+                  type:
+                    - string
+                    - 'null'
+                since:
+                  type:
+                    - number
+                    - 'null'
+                token:
+                  type:
+                    - string
+                    - 'null'
+                tax_id:
+                  type:
+                    - number
+                    - string
+                    - 'null'
+                content:
+                  type:
+                    - string
+                    - 'null'
+                user_id:
+                  type:
+                    - string
+                    - 'null'
+                quantity:
+                  type:
+                    - number
+                    - 'null'
+                username:
+                  type:
+                    - string
+                    - 'null'
+                object_id:
+                  type:
+                    - string
+                    - 'null'
+                amount_tax:
+                  type:
+                    - number
+                    - 'null'
+                categories:
+                  type:
+                    - array
+                    - 'null'
+                  items:
+                    type:
+                      - object
+                      - 'null'
+                    properties:
+                      loaihopdong:
+                        type:
+                          - string
+                          - 'null'
+                is_invalid:
+                  type:
+                    - string
+                    - 'null'
+                product_id:
+                  type:
+                    - number
+                    - 'null'
+                amount_excl:
+                  type:
+                    - number
+                    - 'null'
+                amount_incl:
+                  type:
+                    - number
+                    - 'null'
+                discount_id:
+                  type:
+                    - string
+                    - 'null'
+                last_update:
+                  type:
+                    - number
+                    - 'null'
+                object_type:
+                  type:
+                    - string
+                    - 'null'
+                inflow_code_id:
+                  type:
+                    - string
+                    - 'null'
+                origin_line_id:
+                  type:
+                    - number
+                    - 'null'
+                root_object_id:
+                  type:
+                    - number
+                    - 'null'
+                previous_line_id:
+                  type:
+                    - number
+                    - 'null'
+      code_sysfix_c_transaction:
+        type:
+          - number
+          - 'null'
+      is_created_transaction_manually:
+        type:
+          - number
+          - 'null'
+    additionalProperties: true
+  inflow_payment:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      hid:
+        type: string
+      link:
+        type: string
+      since:
+        type: string
+      token:
+        type: string
+      code_id:
+        type: number
+      user_id:
+        type: string
+      metatype:
+        type: string
+      username:
+        type: string
+      income_id:
+        type: string
+      inflow_id:
+        type: string
+      customer_id:
+        type: string
+      last_update:
+        type: number
+      salesperson:
+        type: string
+      amount_revenue:
+        type: string
+      amount_received:
+        type: string
+      cash_account_id:
+        type: number
+      revenue_unit_id:
+        type: string
+      inflow_itemlines:
+        type: object
+        properties:
+          ids:
+            type: array
+            items:
+              type: string
+          itemlines:
+            type: array
+            items:
+              type: object
+              properties:
+                type:
+                  type: string
+                id:
+                  type: string
+                hid:
+                  type: string
+                name:
+                  type: string
+                since:
+                  type: number
+                token:
+                  type: string
+                tax_id:
+                  type: number
+                content:
+                  type: string
+                user_id:
+                  type: string
+                username:
+                  type: string
+                object_id:
+                  type: string
+                amount_tax:
+                  type: number
+                amount_excl:
+                  type: number
+                amount_incl:
+                  type: number
+                last_update:
+                  type: number
+                object_type:
+                  type: string
+                inflow_code_id:
+                  type: string
+      code_sysfix_c_transaction:
+        type: number
+      is_created_transaction_manually:
+        type: number
+    additionalProperties: true
+  revenue_center:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      hid:
+        type: string
+      link:
+        type: string
+      name:
+        type: string
+      since:
+        type: string
+      token:
+        type: string
+      source:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+      parent_id:
+        type: string
+    additionalProperties: true
+  income_customer:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      hid:
+        type:
+          - string
+          - 'null'
+      uid:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      buyer:
+        type:
+          - object
+          - 'null'
+        properties:
+          buyer_email:
+            type:
+              - string
+              - 'null'
+          buyer_full_name:
+            type:
+              - string
+              - 'null'
+          buyer_phone_number:
+            type:
+              - string
+              - 'null'
+      email:
+        type:
+          - string
+          - 'null'
+      phone:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      stats:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          views:
+            type:
+              - number
+              - 'null'
+          comments:
+            type:
+              - number
+              - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      source:
+        type:
+          - string
+          - 'null'
+      address:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      deleted:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      tax_code:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      invoice_receive:
+        type:
+          - object
+          - 'null'
+        properties:
+          ir_email:
+            type:
+              - string
+              - 'null'
+          ir_full_name:
+            type:
+              - string
+              - 'null'
+          ir_phone_number:
+            type:
+              - string
+              - 'null'
+    additionalProperties: true
+  income_estimate:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      hid:
+        type: string
+      since:
+        type: string
+      token:
+        type: string
+      portion:
+        type: string
+      user_id:
+        type: string
+      due_date:
+        type: string
+      received:
+        type: string
+      username:
+        type: string
+      object_id:
+        type: string
+      inflow_ids:
+        type: array
+        items:
+          type: string
+      last_update:
+        type: string
+      object_type:
+        type: string
+      to_be_received:
+        type: string
+    additionalProperties: true
+  inflow_customer:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      hid:
+        type:
+          - string
+          - 'null'
+      uid:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      buyer:
+        type:
+          - object
+          - 'null'
+        properties:
+          buyer_email:
+            type:
+              - string
+              - 'null'
+          buyer_full_name:
+            type:
+              - string
+              - 'null'
+          buyer_phone_number:
+            type:
+              - string
+              - 'null'
+      email:
+        type:
+          - string
+          - 'null'
+      phone:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      stats:
+        type:
+          - object
+          - 'null'
+        properties:
+          posts:
+            type:
+              - number
+              - 'null'
+          views:
+            type:
+              - number
+              - 'null'
+          comments:
+            type:
+              - number
+              - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      source:
+        type:
+          - string
+          - 'null'
+      address:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      deleted:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      tax_code:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      invoice_receive:
+        type:
+          - object
+          - 'null'
+        properties:
+          ir_email:
+            type:
+              - string
+              - 'null'
+          ir_full_name:
+            type:
+              - string
+              - 'null'
+          ir_phone_number:
+            type:
+              - string
+              - 'null'
+    additionalProperties: true
+  income_item_line:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      hid:
+        type:
+          - string
+          - 'null'
+      data:
+        type:
+          - object
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      unit:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      tax_id:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      quantity:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      object_id:
+        type:
+          - string
+          - 'null'
+      amount_tax:
+        type:
+          - string
+          - 'null'
+      categories:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            loaihopdong:
+              type:
+                - string
+                - 'null'
+      is_invalid:
+        type:
+          - string
+          - 'null'
+      product_id:
+        type:
+          - string
+          - 'null'
+      amount_excl:
+        type:
+          - string
+          - 'null'
+      amount_incl:
+        type:
+          - string
+          - 'null'
+      discount_id:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      object_type:
+        type:
+          - string
+          - 'null'
+      inflow_code_id:
+        type:
+          - string
+          - 'null'
+      origin_line_id:
+        type:
+          - string
+          - 'null'
+      root_object_id:
+        type:
+          - string
+          - 'null'
+      previous_line_id:
+        type:
+          - string
+          - 'null'
+    additionalProperties: true
+  inflow_item_line:
+    type: object
+    $schema: http://json-schema.org/schema#
+    required:
+      - id
+      - last_update
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type: string
+      hid:
+        type:
+          - string
+          - 'null'
+      data:
+        type:
+          - object
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      unit:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      tax_id:
+        type:
+          - string
+          - 'null'
+      content:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      quantity:
+        type:
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      object_id:
+        type:
+          - string
+          - 'null'
+      amount_tax:
+        type:
+          - string
+          - 'null'
+      categories:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - object
+            - 'null'
+          properties:
+            loaihopdong:
+              type:
+                - string
+                - 'null'
+      is_invalid:
+        type:
+          - string
+          - 'null'
+      product_id:
+        type:
+          - string
+          - 'null'
+      amount_excl:
+        type:
+          - string
+          - 'null'
+      amount_incl:
+        type:
+          - string
+          - 'null'
+      discount_id:
+        type:
+          - string
+          - 'null'
+      last_update:
+        type: string
+      object_type:
+        type:
+          - string
+          - 'null'
+      inflow_code_id:
+        type:
+          - string
+          - 'null'
+      origin_line_id:
+        type:
+          - string
+          - 'null'
+      root_object_id:
+        type:
+          - string
+          - 'null'
+      previous_line_id:
+        type:
+          - string
+          - 'null'
+    additionalProperties: true
+  inflow_code_group:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type: string
+      id:
+        type: string
+      hid:
+        type: string
+      link:
+        type: string
+      name:
+        type: string
+      since:
+        type: string
+      token:
+        type: string
+      source:
+        type: string
+      content:
+        type: string
+      user_id:
+        type: string
+      metatype:
+        type: string
+      parent_id:
+        type: string
+      system_id:
+        type: string
+      last_update:
+        type: string
+    additionalProperties: true

@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
+from app.core.security import MIN_PASSWORD_LENGTH
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import (
@@ -86,7 +87,11 @@ class MemberInvite(_EmailMixin, BaseModel):
     email: str = Field(max_length=255)
     full_name: str = Field(min_length=1, max_length=255)
     role: str
-    password: str = Field(min_length=8, max_length=200)
+    # The route runs `password_problems()`, which is the real policy. This
+    # bound only stops an obviously-too-short value early; it said 8 while the
+    # policy said 12, so an invite could set a password the owner of that
+    # account would never be allowed to choose for themselves.
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=200)
 
 
 class MemberRoleUpdate(BaseModel):
@@ -127,6 +132,15 @@ class ConnectorView(ORMModel):
 class ConnectorDetail(ConnectorView):
     spec_schema: dict[str, Any] = Field(default_factory=dict)
     spec_source: str = "BUNDLED"
+    # How many tables this connector can read, when that is knowable before a
+    # discover. It is for connectors this product defines, because the manifest
+    # lists them; for an Airbyte image nobody knows until the connector is run
+    # against real credentials, and guessing would be worse than saying nothing.
+    stream_count: int | None = None
+    #: The tables this connector reads, when they are known without running a
+    #: discover. "What will I actually get?" is the question the setup form
+    #: cannot answer, and the one people ask before spending a sync finding out.
+    stream_names: list[str] = Field(default_factory=list)
 
 
 # ── sources / destinations ─────────────────────────────────────────────────
@@ -142,6 +156,10 @@ class ActorCreate(BaseModel):
     # Signed proof that this exact configuration already passed a check in the
     # wizard, so saving does not repeat a slow connector run.
     check_token: str | None = None
+    # An opaque handle to a completed OAuth consent. The refresh token itself
+    # never reaches the browser, so the form sends this instead and the server
+    # resolves it into the connector's credentials at save time.
+    oauth_grant_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -293,8 +311,8 @@ class PipelineCreate(BaseModel):
     streams: list[StreamSelection] = Field(default_factory=list)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     overlap_policy: Literal["SKIP_IF_RUNNING", "QUEUE"] = "SKIP_IF_RUNNING"
-    namespace_format: str | None = None
-    stream_prefix: str | None = None
+    namespace_format: str | None = Field(default=None, max_length=120)
+    stream_prefix: str | None = Field(default=None, max_length=64)
     run_first_sync: bool = True
 
 
@@ -304,8 +322,8 @@ class PipelineUpdate(BaseModel):
     streams: list[StreamSelection] | None = None
     schedule: ScheduleConfig | None = None
     overlap_policy: Literal["SKIP_IF_RUNNING", "QUEUE"] | None = None
-    namespace_format: str | None = None
-    stream_prefix: str | None = None
+    namespace_format: str | None = Field(default=None, max_length=120)
+    stream_prefix: str | None = Field(default=None, max_length=64)
     version: int | None = None
 
 
@@ -339,6 +357,26 @@ class PipelineView(BaseModel):
     available_actions: list[str] = Field(default_factory=list)
 
 
+class StreamSyncState(BaseModel):
+    """What the last sync did to one stream.
+
+    The Status view answers "is this stream healthy, how much landed, and how
+    stale is it" per stream, not per pipeline -- a pipeline that reports
+    SUCCEEDED can still have one stream that read nothing, and a pipeline-level
+    record count hides exactly that.
+
+    Every field is already recorded in `pipeline_stream_stats`; until now it
+    was written on every run and read by nothing.
+    """
+
+    status: str
+    records_loaded: int = 0
+    bytes_loaded: int = 0
+    #: When the stream last landed data. Named for the question it answers on
+    #: screen -- "data fresh as of" -- rather than for the run that produced it.
+    synced_at: datetime | None = None
+
+
 class PipelineStreamView(BaseModel):
     id: uuid.UUID
     name: str
@@ -348,8 +386,58 @@ class PipelineStreamView(BaseModel):
     destination_sync_mode: str
     cursor_fields: list[str] = Field(default_factory=list)
     primary_key_fields: list[list[str]] = Field(default_factory=list)
+    selected_fields: list[str] | None = None
     field_count: int = 0
     fields: list[dict[str, Any]] = Field(default_factory=list)
+    #: None when the stream has never been part of a completed run.
+    last_sync: StreamSyncState | None = None
+
+
+class ConnectionStateView(BaseModel):
+    """The engine's replication cursor for one pipeline.
+
+    Answers the question a stalled incremental sync always raises: what
+    high-water mark will the next run resume from. Fetched from the engine on
+    request rather than stored, because the engine owns it -- the `sync_state`
+    column exists and has never been written, so serving it would have shown an
+    empty panel for every pipeline forever.
+
+    Lazy on purpose. It hangs off its own endpoint so a slow or unreachable
+    engine degrades one collapsed panel instead of the whole settings page.
+    """
+
+    supported: bool = True
+    state: list[dict[str, Any]] = Field(default_factory=list)
+    fetched_at: datetime | None = None
+    #: Set when the engine could not answer; the panel says so rather than
+    #: rendering an empty state that reads as "no cursor yet".
+    unavailable_reason: str | None = None
+
+
+class ConnectionStateUpdate(BaseModel):
+    """A replacement cursor, as the panel hands it back.
+
+    `state` is the whole list, not a patch: the panel edits the document the
+    read returned, so a partial update would silently drop the streams the
+    editor did not mention -- which reads as "those streams reset" the next
+    time a sync runs.
+    """
+
+    state: list[dict[str, Any]] = Field(
+        description="Empty list means forget the cursor and read from the start.")
+
+    @field_validator("state")
+    @classmethod
+    def _entries_are_objects(cls, value: list[Any]) -> list[Any]:
+        # The panel is a free-text editor over JSON. A list of strings parses
+        # fine and is meaningless to every engine, so it is refused here rather
+        # than at replication time, hours later, inside a job log.
+        for index, entry in enumerate(value):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"phần tử {index} phải là một object, nhận được "
+                    f"{type(entry).__name__}")
+        return value
 
 
 class PipelineMetrics(BaseModel):

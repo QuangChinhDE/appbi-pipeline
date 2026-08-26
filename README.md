@@ -1,12 +1,12 @@
 # AppBI Data Integration Platform
 
-A working implementation of `BA_AppBI_Data_Integration_Airbyte.md`: an AppBI-styled
+A working implementation of `docs/spec/BA_AppBI_Data_Integration_Airbyte.md`: an AppBI-styled
 Integration Hub where users connect **Sources**, **Destinations** and **Pipelines**, and
 **real Airbyte connectors move real data** behind a product-owned control plane.
 
 Everything runs in **one Docker Compose project**, Postgres included.
 
-**Where this is:** [CURRENT_STATUS.md](CURRENT_STATUS.md) — one page: what has
+**Where this is:** [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) — one page: what has
 been proven against a real Airbyte, and the one thing still blocking production.
 
 ```
@@ -88,12 +88,16 @@ A production environment simply does not set `COMPOSE_FILE`.
 | `operator@appbi.local` | Operator | `Admin@12345` |
 | `analyst@appbi.local` | Analyst (read-only) | `Admin@12345` |
 
-Optional but recommended — pre-pull the connector images so the first
-*Test connection* is fast instead of downloading ~1 GB inline:
+Recommended on a new machine — pre-pull the eight connector images the product
+can run, so the first sync is fast instead of downloading ~1 GB inside the job
+(where the wait surfaces as a timeout and reads like a broken engine):
 
 ```bash
-bash scripts/pull-connectors.sh
+python scripts/pull-engine-images.py
 ```
+
+This pulls the product's catalogue only. The engine's own catalogue is six
+hundred-odd connectors and none of the rest are ever pulled.
 
 ### Ports
 
@@ -284,7 +288,7 @@ appbi-pipeline/
 | 4 | No plaintext credentials outside the secret store | Envelope encryption; masked in responses, redacted in logs and audit |
 | 5 | Adapter is the only engine-aware code | `grep -r airbyte backend/app --include=*.py -l` → only `adapters/` |
 | 6 | Versions pinned | `app/resources/connector_registry.json`, surfaced in Settings → Engine |
-| 7 | Upgrades gated by contract tests | `backend/tests/test_adapter_contract.py` |
+| 7 | Upgrades gated by contract tests | `qa/backend/test_adapter_contract.py` |
 | 8 | Everything workspace-scoped | `workspace_id` comes from the session, never the request body |
 | 9 | Mutations audited | `services/audit.py`, visible at `/audit` |
 | 10 | Capability-driven UI | Sync modes, cursors and PKs come from the discovered catalog |
@@ -389,14 +393,14 @@ Three suites drive the running system:
 
 ```bash
 # journey A over HTTP: source -> test -> destination -> discover -> pipeline -> sync
-python scripts/e2e.py --source postgres     # or --source faker (no credentials needed)
+python qa/e2e/e2e.py --source postgres     # or --source faker (no credentials needed)
 
 # live UAT cases: incremental resume, cancel idempotency, retry lineage,
 # dependency-blocked delete, tenant isolation, RBAC, secret leakage
-python scripts/verify.py
+python qa/e2e/verify.py
 
 # the same journey through a real browser, with screenshots
-cd frontend && npm i --no-save playwright &&   SHOT_DIR=../e2e-shots node ../scripts/ui-journey.mjs
+cd frontend && npm i --no-save playwright &&   SHOT_DIR=../e2e-shots node ../qa/audit/ui-journey.mjs
 ```
 
 Two adversarial audits run against the same instance. They do not test the happy
@@ -405,13 +409,13 @@ path — they try to break it:
 ```bash
 # API: bad enums, unknown timezones, duplicate names, cross-tenant ids,
 # RBAC escalation, secret leakage, pagination edges, error-envelope shape
-python scripts/audit-api.py
+python qa/audit/audit-api.py
 
 # UI: every screen in four states (populated tenant, empty tenant, read-only
 # role, error paths) across three viewports; reports layout overflow,
 # unlabelled controls, sub-20px targets, colour-only status, dead ends,
 # console noise and slow calls
-cd frontend && SHOT_DIR=../audit-shots node ../scripts/audit-ui.mjs
+cd frontend && SHOT_DIR=../audit-shots node ../qa/audit/audit-ui.mjs
 
 # i18n gate: vi/en key parity and no hardcoded Vietnamese outside the catalog
 npm run check:i18n
@@ -423,12 +427,12 @@ Last verified on a clean `docker compose up -d --build`:
 |---|---|
 | Backend unit + structural contract | 130 passed, 26 skipped (live-only) |
 | Adapter contract vs. live engine | 16 passed |
-| `scripts/e2e.py --source postgres` | 2 500 rows synced |
-| `scripts/verify.py` | 28/28 checks |
-| `scripts/ui-journey.mjs` | pipeline HEALTHY, no page or 5xx errors |
-| `scripts/audit-api.py` | 0 findings |
-| `scripts/audit-ui.mjs` | 0 findings |
-| `scripts/audit-behaviour.mjs` | 22 checks, 0 findings |
+| `qa/e2e/e2e.py --source postgres` | 2 500 rows synced |
+| `qa/e2e/verify.py` | 28/28 checks |
+| `qa/audit/ui-journey.mjs` | pipeline HEALTHY, no page or 5xx errors |
+| `qa/audit/audit-api.py` | 0 findings |
+| `qa/audit/audit-ui.mjs` | 0 findings |
+| `qa/audit/audit-behaviour.mjs` | 22 checks, 0 findings |
 | `npm run check:i18n` | 792 vi / 792 en keys, coverage OK |
 
 ---

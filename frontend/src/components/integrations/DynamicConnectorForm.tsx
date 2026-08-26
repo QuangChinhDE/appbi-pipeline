@@ -344,7 +344,18 @@ export function SchemaField(props: FieldProps & { secretsConfigured?: Record<str
     );
   }
 
-  const multiline = (schema.description ?? '').length > 140 || schema.format === 'textarea';
+  // What kind of box this is depends on the field, not on how much prose
+  // happens to describe it.
+  //
+  // This used to be `description.length > 140`, so writing a careful
+  // explanation of a field silently turned it into a four-line textarea. The
+  // Base `domain` field — one short hostname — rendered as a paragraph box
+  // because its help text explained why the wrong choice looks like an expired
+  // token. The better the documentation, the worse the form got.
+  const multiline = schema.format === 'textarea'
+    || schema.multiline === true
+    // A genuinely long value: a private key, a JSON service account, a query.
+    || (typeof value === 'string' && value.length > 120);
   return (
     <div>
       <Label htmlFor={id} required={required}>{schema.title ?? name}</Label>

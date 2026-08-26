@@ -1,0 +1,437 @@
+version: 3.9.6
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - user
+
+definitions:
+  streams:
+    user:
+      type: DeclarativeStream
+      name: user
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: users
+          http_method: POST
+          request_body_data:
+            access_token: '{{ config["access_token"] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - users
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/user'
+    group:
+      type: DeclarativeStream
+      name: group
+      retriever:
+        type: SimpleRetriever
+        requester:
+          $ref: '#/definitions/base_requester'
+          path: units
+          http_method: POST
+          request_body_data:
+            access_token: '{{ config["access_token"] }}'
+        record_selector:
+          type: RecordSelector
+          extractor:
+            type: DpathExtractor
+            field_path:
+              - units
+      schema_loader:
+        type: InlineSchemaLoader
+        schema:
+          $ref: '#/schemas/group'
+  base_requester:
+    type: HttpRequester
+    url_base: https://account.base.vn/extapi/v1/
+
+streams:
+  - $ref: '#/definitions/streams/user'
+  - $ref: '#/definitions/streams/group'
+
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required:
+      - access_token
+    properties:
+      access_token:
+        type: string
+        order: 0
+        title: access_token
+        airbyte_secret: true
+    additionalProperties: true
+
+metadata:
+  testedStreams: {}
+  autoImportSchema:
+    user: true
+    group: true
+
+schemas:
+  user:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      bg:
+        type:
+          - object
+          - 'null'
+        properties:
+          type:
+            type:
+              - string
+              - 'null'
+          value:
+            type:
+              - string
+              - 'null'
+      id:
+        type:
+          - string
+          - 'null'
+      dob:
+        type:
+          - object
+          - 'null'
+        properties:
+          day:
+            type:
+              - number
+              - string
+              - 'null'
+          year:
+            type:
+              - number
+              - string
+              - 'null'
+          month:
+            type:
+              - number
+              - string
+              - 'null'
+      sas:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      tfa:
+        type:
+          - object
+          - 'null'
+        properties:
+          token:
+            type:
+              - string
+              - 'null'
+          status:
+            type:
+              - number
+              - 'null'
+      lang:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      role:
+        type:
+          - string
+          - 'null'
+      color:
+        type:
+          - string
+          - 'null'
+      email:
+        type:
+          - string
+          - 'null'
+      image:
+        type:
+          - string
+          - 'null'
+      phone:
+        type:
+          - string
+          - 'null'
+      reqip:
+        type:
+          - number
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      title:
+        type:
+          - string
+          - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      social:
+        type:
+          - object
+          - 'null'
+        properties: {}
+      status:
+        type:
+          - string
+          - 'null'
+      stoken:
+        type:
+          - string
+          - 'null'
+      address:
+        type:
+          - string
+          - 'null'
+      devices:
+        type:
+          - array
+          - 'null'
+      gavatar:
+        type:
+          - string
+          - 'null'
+      manager:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      accesses:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      delegate:
+        type:
+          - object
+          - 'null'
+        properties:
+          edate:
+            type:
+              - number
+              - 'null'
+          sdate:
+            type:
+              - number
+              - 'null'
+          enabled:
+            type:
+              - number
+              - 'null'
+          username:
+            type:
+              - string
+              - 'null'
+      networks:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      timezone:
+        type:
+          - number
+          - string
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      has_image:
+        type:
+          - string
+          - 'null'
+      last_name:
+        type:
+          - string
+          - 'null'
+      system_id:
+        type:
+          - string
+          - 'null'
+      timesheet:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - array
+            - 'null'
+          items:
+            type:
+              - array
+              - 'null'
+            items:
+              type:
+                - number
+                - 'null'
+      first_name:
+        type:
+          - string
+          - 'null'
+      taken_tour:
+        type:
+          - number
+          - 'null'
+      last_update:
+        type:
+          - string
+          - 'null'
+      voip_devices:
+        type:
+          - array
+          - 'null'
+      direct_reports:
+        type:
+          - array
+          - 'null'
+        items:
+          type:
+            - string
+            - 'null'
+      disabled_message:
+        type:
+          - number
+          - 'null'
+      last_time_password_changed:
+        type:
+          - number
+          - string
+          - 'null'
+    additionalProperties: true
+  group:
+    type: object
+    $schema: http://json-schema.org/schema#
+    properties:
+      type:
+        type:
+          - string
+          - 'null'
+      id:
+        type:
+          - string
+          - 'null'
+      hid:
+        type:
+          - string
+          - 'null'
+      name:
+        type:
+          - string
+          - 'null'
+      path:
+        type:
+          - string
+          - 'null'
+      role:
+        type:
+          - number
+          - string
+          - 'null'
+      about:
+        type:
+          - string
+          - 'null'
+      color:
+        type:
+          - string
+          - 'null'
+      since:
+        type:
+          - string
+          - 'null'
+      token:
+        type:
+          - string
+          - 'null'
+      leader:
+        type:
+          - object
+          - 'null'
+        properties:
+          id:
+            type:
+              - string
+              - 'null'
+          image:
+            type:
+              - string
+              - 'null'
+          username:
+            type:
+              - string
+              - 'null'
+      status:
+        type:
+          - string
+          - 'null'
+      user_id:
+        type:
+          - string
+          - 'null'
+      metatype:
+        type:
+          - string
+          - 'null'
+      official:
+        type:
+          - number
+          - 'null'
+      username:
+        type:
+          - string
+          - 'null'
+      has_image:
+        type:
+          - string
+          - 'null'
+      parent_id:
+        type:
+          - string
+          - 'null'
+      system_id:
+        type:
+          - string
+          - 'null'
+      timesheet:
+        type:
+          - array
+          - 'null'
+      num_people:
+        type:
+          - string
+          - 'null'
+      disabled_message:
+        type:
+          - number
+          - 'null'
+    additionalProperties: true

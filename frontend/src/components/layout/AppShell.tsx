@@ -53,8 +53,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
-    if (error instanceof ApiError && error.status === 401) router.replace('/login');
+    if (!(error instanceof ApiError)) return;
+    if (error.status === 401) {
+      router.replace('/login');
+      return;
+    }
+    // The account authenticated but may not use the product yet. Without this
+    // the shell fell through to `if (!user) return null` and painted nothing:
+    // a signed-in user staring at a white page, which is what a fresh
+    // production deployment did to its own bootstrap admin.
+    if (error.status === 403 && error.code === 'PASSWORD_CHANGE_REQUIRED') {
+      router.replace('/change-password');
+    }
   }, [error, router]);
+
+  // Belt and braces: the session can also be read successfully and simply say
+  // the password must change -- on a reload, `/auth/me` answers rather than
+  // failing, so there is no error to react to.
+  React.useEffect(() => {
+    if (user?.password_change_required) router.replace('/change-password');
+  }, [user, router]);
 
   const toggle = () => {
     setCollapsed((previous) => {

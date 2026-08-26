@@ -40,7 +40,15 @@ both.
 |---|---|---|
 | Config database | Airbyte's Postgres (`airbyte` DB) | sources, destinations, connections, and the ids the product stores |
 | Job history and state | same database | incremental cursors: losing these re-reads everything |
-| Job logs | MinIO / S3 (`airbyte-storage`) | forensics only; a run's logs, not its correctness |
+| Job logs | the `airbyte_workspace` Docker volume (`STORAGE_TYPE: LOCAL`) | forensics only; a run's logs, not its correctness |
+
+Logs used to live in MinIO. They do not any more: server and worker share the
+`airbyte_workspace` volume, so `STORAGE_TYPE` is `LOCAL` and MinIO was removed
+from the stack ([engine.md](engine.md)). A backup script still reaching for an
+`airbyte-storage` bucket is backing up nothing and reporting success. Nothing
+in `scripts/backup.py` does — logs are deliberately out of scope, per the table
+above — but a deployment that points `STORAGE_TYPE` at real S3 puts them back
+in scope, and that is the case to remember.
 
 For Compose staging the config database is inside `appbi-pipeline-postgres`:
 

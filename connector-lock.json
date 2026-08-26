@@ -1,12 +1,26 @@
 {
   "product_version": "1.0.0",
-  "generated_at": "2026-08-23T05:02:47Z",
+  "generated_at": "2026-08-26T01:53:14Z",
   "connectors": [
     {
+      "connector_key": "destination-bigquery",
+      "image": "airbyte/destination-bigquery:2.4.19",
+      "digest": "sha256:1d533858a4ead3db0b5e98b117132a56b96bbd8e85f5db929dc0d156f4ed9f02",
+      "spec_hash": "d695d5bcbc05bc6f7815255161d3ac93",
+      "certification": "SUPPORTED"
+    },
+    {
       "connector_key": "destination-postgres",
-      "image": "airbyte/destination-postgres:3.0.17",
-      "digest": "sha256:2e9e80a0648603ceaa07327deae99fdcc2bc3077f9bc7d143ea64f1ae130479b",
+      "image": "airbyte/destination-postgres:2.0.10",
+      "digest": "sha256:340eb57efcf8b2e1eaef6de03de6098a953bc645a2d19963b188edf3b20c913b",
       "spec_hash": "5917976e1f8afe00ae8aa847d2aa272c",
+      "certification": "SUPPORTED"
+    },
+    {
+      "connector_key": "source-bigquery",
+      "image": "airbyte/source-bigquery:0.4.5",
+      "digest": "sha256:00bfb583125cd61caf54baedc807222e952d8389167c9ac169060f0fbc0b3f45",
+      "spec_hash": "2ff0b33c531cd45757258359bffd0098",
       "certification": "SUPPORTED"
     },
     {
@@ -14,6 +28,13 @@
       "image": "airbyte/source-faker:7.2.1",
       "digest": "sha256:358625056eac2fa89f0ae92272e153e598b67c5515536b535f244df20b2ff8eb",
       "spec_hash": "1fcd4d723f7789d728471157d78a6bea",
+      "certification": "SUPPORTED"
+    },
+    {
+      "connector_key": "source-google-sheets",
+      "image": "airbyte/source-google-sheets:0.12.35",
+      "digest": "sha256:9469df5d9e24e966dbc34b25bf484414f6846483d2732df278c06efbcb195568",
+      "spec_hash": "6ebd0c6a278f8157cb5fdf24c5eac045",
       "certification": "SUPPORTED"
     },
     {

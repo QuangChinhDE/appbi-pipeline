@@ -14,7 +14,7 @@
 #
 # The layer that does hold is the network. Marking `connectors` internal removes
 # the route off the bridge entirely, so a connector can open a socket to what is
-# attached to that network and to nothing else: not the product API, not Redis,
+# attached to that network and to nothing else: not the product API,
 # not the Docker host, not the cloud metadata endpoint, not the internet.
 #
 # What it costs: SaaS connectors stop working. This profile suits a deployment
@@ -27,7 +27,7 @@
 # docs/RUNBOOK-egress.md has the firewall rules for that case.
 #
 # Verify rather than assume:
-#   python scripts/verify-egress.py --expect-internet-blocked
+#   python qa/probes/verify-egress.py --expect-internet-blocked
 
 networks:
   connectors:

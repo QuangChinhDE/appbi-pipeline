@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
-"""Pull the connector images a self-managed Airbyte says it will run.
+"""Pull the connector images this deployment can actually run — and only those.
 
-In AIRBYTE_API mode the engine owns the connector version, not the product: our
-`connector-lock.json` records what the embedded executor pins, and Airbyte pins
-its own. Pulling from the lock file would download the right connectors at the
-wrong tags, and the first sync would then stall on an image pull inside a job.
+Airbyte 0.59.1's bootloader seeds its catalogue from Airbyte's *current*
+registry, so the engine comes up offering six hundred-odd connectors. The
+product offers seven, plus one runner image that executes every connector built
+inside the product. Pulling the engine's whole catalogue would be tens of
+gigabytes of images for connectors nobody can select.
 
-So this asks the deployment. Input is whatever
-`/api/v1/{source,destination}_definitions/list` returned.
+So the set is taken from the product's own catalogue, never from the engine's:
+
+    python scripts/pull-engine-images.py
+
+That works with the stack down, which is the case that matters — a new machine
+pre-pulls before the first sync rather than discovering the wait inside a job,
+where the timeout surfaces as ENGINE_UNAVAILABLE and reads like a broken engine.
+
+Given the engine's definition lists, it pulls the tags the engine will *really*
+start, still filtered to the product's repositories:
 
     python scripts/pull-engine-images.py sources.json destinations.json
 
-A Kubernetes Airbyte runs connectors as pods, so the images have to be on the
-*cluster's* nodes, not the laptop's Docker daemon. `--into-kind` pulls them
-there instead:
+That is the stricter check. `connector-lock.json` says what should run and the
+definitions list says what will; a disagreement means a pin did not apply, and
+this reports it rather than pulling over it.
 
-    python scripts/pull-engine-images.py --into-kind appbi-cert-control-plane         sources.json destinations.json
-
-Skipping this on a cold cluster does not fail cleanly: the first `check` starts
-a pod, the pod spends minutes pulling, and the product times out with
-ENGINE_UNAVAILABLE -- which reads like the engine is broken when it is only
-cold. That is exactly how the first Kubernetes certification run failed.
+There is deliberately no fourth list of connector names here. `WANTED` used to
+be hardcoded and had drifted to four images while the product shipped eight, so
+`source-bigquery`, `destination-bigquery`, `source-google-sheets` and
+`destination-google-sheets` were silently never pre-pulled.
 """
 
 from __future__ import annotations
@@ -30,72 +37,86 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Only what the contract suite and the e2e script actually exercise. Pulling all
-# 600-odd definitions would take longer than the tests and prove nothing.
-WANTED = {
-    "airbyte/source-postgres",
-    "airbyte/source-faker",
-    "airbyte/destination-postgres",
-    "airbyte/source-declarative-manifest",
-}
+ROOT = Path(__file__).resolve().parent.parent
+REGISTRY = ROOT / "backend" / "app" / "resources" / "connector_registry.json"
+LOCK = ROOT / "connector-lock.json"
 
 FIELDS = ("sourceDefinitions", "destinationDefinitions")
 
 
-def images(paths: list[str]) -> list[str]:
+def bundled() -> dict[str, str]:
+    """Every connector image the product can run, repository -> pinned tag.
+
+    The registry is the catalogue a user picks from, at every certification
+    level: a BETA connector is still selectable, so a machine that has not
+    pre-pulled it still stalls on the first sync. `destination-google-sheets`
+    is exactly that case, and is why this reads the registry rather than the
+    lock, which by design covers only SUPPORTED connectors.
+    """
+    wanted: dict[str, str] = {}
+    registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    for entry in registry["connectors"]:
+        repository = entry.get("docker_repository") or ""
+        if repository.startswith("airbyte/") and entry.get("version"):
+            wanted[repository] = entry["version"]
+
+    # The runner that executes every connector built in the product. It is not
+    # in the registry -- no user selects it -- but without it every Base.vn
+    # connector fails on its first job.
+    for entry in json.loads(LOCK.read_text(encoding="utf-8"))["connectors"]:
+        repository, _, tag = entry["image"].rpartition(":")
+        if repository not in wanted:
+            wanted[repository] = tag
+    return wanted
+
+
+def from_definitions(paths: list[str], wanted: dict[str, str]) -> list[str]:
+    """The tags the engine will really start, limited to our repositories."""
     found: list[str] = []
     for path in paths:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         for field in FIELDS:
             for entry in data.get(field) or []:
                 repository = entry.get("dockerRepository")
-                if repository in WANTED:
-                    found.append(f"{repository}:{entry['dockerImageTag']}")
+                if repository not in wanted:
+                    continue
+                tag = entry["dockerImageTag"]
+                if tag != wanted[repository]:
+                    # Not fatal here -- this script pulls, it does not pin --
+                    # but silence would let a failed pin look like a clean run.
+                    print(f"  ! {repository} is {tag} on the engine, "
+                          f"{wanted[repository]} in the product catalogue; "
+                          f"pulling {tag}", file=sys.stderr)
+                found.append(f"{repository}:{tag}")
     return sorted(set(found))
 
 
 def main() -> int:
-    arguments = sys.argv[1:]
-    node = ""
-    if "--into-kind" in arguments:
-        index = arguments.index("--into-kind")
-        try:
-            node = arguments[index + 1]
-        except IndexError:
-            print("--into-kind needs the node container name, e.g. "
-                  "appbi-cert-control-plane", file=sys.stderr)
-            return 2
-        del arguments[index:index + 2]
-
-    paths = arguments
-    if not paths:
-        print(__doc__)
-        return 2
-
-    wanted = images(paths)
+    wanted = bundled()
     if not wanted:
-        # Silence here would look like success and fail later, inside a job.
-        print("no matching connector definitions found — is this the right "
-              "Airbyte, and did the definitions list load?", file=sys.stderr)
+        print("the product catalogue names no connector images", file=sys.stderr)
         return 1
 
-    for image in wanted:
-        if node:
-            # crictl on the node, rather than `docker pull` + `kind load`: the
-            # load path round-trips the whole image through a tarball on disk,
-            # and these are hundreds of megabytes each.
-            print(f"pulling {image} onto {node}", flush=True)
-            subprocess.run(["docker", "exec", node, "crictl", "pull", image],
-                           check=True)
-        else:
-            print(f"pulling {image}", flush=True)
-            subprocess.run(["docker", "pull", image], check=True)
+    paths = sys.argv[1:]
+    if paths:
+        images = from_definitions(paths, wanted)
+        if not images:
+            # Silence here would look like success and fail later, inside a job.
+            print("none of the product's connectors are in these definition "
+                  "lists — is this the right Airbyte, and did the lists load?",
+                  file=sys.stderr)
+            return 1
+        missing = set(wanted) - {i.rsplit(":", 1)[0] for i in images}
+        if missing:
+            print(f"not offered by this deployment: {', '.join(sorted(missing))}")
+    else:
+        images = sorted(f"{r}:{t}" for r, t in wanted.items())
+        print(f"pulling {len(images)} image(s) from the product catalogue "
+              f"(engine not consulted)")
 
-    missing = WANTED - {image.split(":")[0] for image in wanted}
-    if missing:
-        # Not fatal: a deployment may legitimately not carry the declarative
-        # runner until a connector is built. Say so rather than hiding it.
-        print(f"not offered by this deployment: {', '.join(sorted(missing))}")
+    for image in images:
+        print(f"pulling {image}", flush=True)
+        subprocess.run(["docker", "pull", image], check=True)
     return 0
 
 

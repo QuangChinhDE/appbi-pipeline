@@ -55,6 +55,11 @@ class ConnectorMetadata:
     supports_cdc: bool = False
     supports_namespaces: bool = True
     supported_destination_sync_modes: list[str] = field(default_factory=list)
+    # Set for a connector this product defines rather than pulls: the behaviour
+    # travels with the definition, because the image is a generic runner. The
+    # Base.vn connectors are the shipped example; Connector Builder projects
+    # are the user-made one.
+    declarative_manifest: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -154,6 +159,10 @@ class ConfiguredStream:
     namespace: str | None = None
     cursor_field: list[str] = field(default_factory=list)
     primary_key: list[list[str]] = field(default_factory=list)
+    # None means every top-level field. A list enables Airbyte field selection.
+    # Airbyte currently supports top-level paths only, which matches the
+    # product API's list[str] contract.
+    selected_fields: list[str] | None = None
 
 
 @dataclass(slots=True)

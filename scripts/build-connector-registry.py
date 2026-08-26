@@ -64,26 +64,71 @@ def product_version() -> str:
 # wrote. This says nothing about certification — that is read from
 # compatibility.yaml, which is where the evidence lives.
 CURATED: dict[str, dict] = {
+    # The launch scope, and the whole catalogue this product ships.
+    #
+    # Three systems, both directions where the connector exists: PostgreSQL,
+    # BigQuery and Google Sheets. Plus the sample source, which is how the demo
+    # and the end-to-end suite run a sync without needing anybody's data.
+    #
+    # Anything not listed here is not shipped. That is deliberate: 654
+    # connectors in the resource file meant 649 locked cards a user had to read
+    # past, and a claim of support this product cannot make.
     "source-postgres": {
         "version": "3.8.5",
         "description": "Đọc bảng từ PostgreSQL; hỗ trợ full refresh và incremental theo cursor.",
         "icon": "postgres",
+    },
+    # ── destination pins and the platform ────────────────────────────────
+    # These are held BELOW the current upstream versions on purpose.
+    #
+    # Airbyte's refresh protocol adds `generationId`/`minimumGenerationId`/
+    # `syncId` to the configured catalog, and any destination that declares
+    # `supportsRefreshes: true` requires them. Platform 0.59.1 predates the
+    # protocol and never sends them, so a modern destination dies on the first
+    # record with:
+    #
+    #     BeanInstantiationException: PostgresWriter
+    #     Caused by: NullPointerException: getGenerationId(...) must not be null
+    #
+    # 0.59.1 is the last platform that runs a sync under Docker Compose, so the
+    # destinations move to match it rather than the other way round. Sources are
+    # unaffected: refreshes are a destination concern.
+    #
+    # Raising these means raising the platform, which means Kubernetes.
+    "destination-postgres": {
+        "version": "2.0.10",
+        "description": "Ghi dữ liệu vào PostgreSQL; bảng đích do connector tự tạo và quản lý.",
+        "icon": "postgres",
+    },
+    "source-bigquery": {
+        "version": "0.4.5",
+        "description": "Đọc bảng từ Google BigQuery bằng service account; "
+                       "hỗ trợ full refresh và incremental theo cursor.",
+        "icon": "bigquery",
+    },
+    "destination-bigquery": {
+        "version": "2.4.19",
+        "description": "Ghi dữ liệu vào Google BigQuery; dataset phải cùng "
+                       "location khai trong cấu hình.",
+        "icon": "bigquery",
+    },
+    "source-google-sheets": {
+        "version": "0.12.35",
+        "description": "Đọc từng sheet trong Google Sheets thành một bảng; "
+                       "dùng service account hoặc đăng nhập Google (OAuth).",
+        "icon": "google-sheets",
+    },
+    "destination-google-sheets": {
+        "version": "0.3.5",
+        "description": "Ghi dữ liệu ra Google Sheets; phù hợp báo cáo nhỏ, "
+                       "không phải kho dữ liệu.",
+        "icon": "google-sheets",
     },
     "source-faker": {
         "version": "7.2.1",
         "description": "Nguồn dữ liệu mẫu sinh bởi connector, dùng để kiểm thử pipeline "
                        "mà không cần hệ thống ngoài.",
         "icon": "faker",
-    },
-    "source-file": {
-        "version": "0.6.0",
-        "description": "Nạp một file từ URL công khai thành một bảng.",
-        "icon": "file",
-    },
-    "destination-postgres": {
-        "version": "3.0.17",
-        "description": "Ghi dữ liệu vào PostgreSQL; bảng đích do connector tự tạo và quản lý.",
-        "icon": "postgres",
     },
 }
 
@@ -263,6 +308,9 @@ def main() -> None:
     parser.add_argument("--offline", action="store_true")
     parser.add_argument("--icons", action="store_true",
                         help="also vendor connector logos into resources/connector_icons")
+    parser.add_argument("--full-catalog", action="store_true",
+                        help="emit all 650+ upstream connectors instead of the "
+                             "launch scope. Not the default: see below.")
     args = parser.parse_args()
 
     registry = fetch(args.offline)
@@ -274,6 +322,20 @@ def main() -> None:
             built = entry(raw, kind, certified)
             if built:
                 connectors.append(built)
+
+    # The launch scope, not the upstream catalogue.
+    #
+    # Shipping all 654 meant a 2.1 MB resource file, 654 rows seeded into every
+    # deployment's database, and a create wizard that downloaded half a
+    # megabyte to offer five choices. Every one of those connectors that is not
+    # in `CURATED` renders as a locked card saying it is not certified -- which
+    # is honest, and is also 649 things a user has to read past.
+    #
+    # `--full-catalog` still emits everything, for a deployment that has
+    # decided to stand behind more. It is not the default because the default
+    # should be what this product can actually support.
+    if not args.full_catalog:
+        connectors = [c for c in connectors if c["connector_key"] in CURATED]
 
     # Curated first, then alphabetical, so the connectors we stand behind lead
     # the catalogue without hiding the rest.

@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     engine_workspace_dir: str = "/engine/workspace"
     engine_log_dir: str = "/engine/logs"
     # Connector containers run here, and this network deliberately does not
-    # reach the API or Redis: a connector is user-controlled code pointed at a
+    # reach the product API: a connector is user-controlled code pointed at a
     # user-controlled URL.
     engine_docker_network: str = "appbi-pipeline_connectors"
 
@@ -128,6 +128,29 @@ class Settings(BaseSettings):
         if self.connector_launch_scope.upper() == "FULL_CATALOG":
             return True
         return certification == "SUPPORTED" or connector_key in self.beta_allowlist
+
+    # --- connector OAuth ---------------------------------------------------
+    # The deployment's own registered application with each provider. These
+    # identify *this installation* on the consent screen, so there is no
+    # sensible default: a provider without them is simply not offered, and the
+    # wizard shows the service-account path alone rather than a button that
+    # cannot work.
+    #
+    # Service accounts remain the right credential for a warehouse -- they
+    # belong to the organisation and survive people leaving. OAuth is for
+    # somebody's own files, where a service account would need every user to
+    # share each document with a robot address.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    microsoft_oauth_client_id: str = ""
+    microsoft_oauth_client_secret: str = ""
+    #: `common` accepts work and personal accounts; a single-tenant deployment
+    #: pins its own directory id here.
+    microsoft_oauth_tenant_id: str = ""
+    #: Must match the redirect registered with the provider, exactly.
+    oauth_redirect_uri: str = ""
+    #: Where to send the browser after the provider redirects back.
+    frontend_base_url: str = "http://localhost:8080"
 
     # --- policy / quota ---
     max_concurrent_runs_global: int = 4

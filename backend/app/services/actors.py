@@ -39,7 +39,7 @@ from app.models.enums import (
 )
 from app.models.identity import User
 from app.models.integration import Destination, Pipeline, SchemaSnapshot, Source
-from app.services import audit, catalog
+from app.services import audit, catalog, oauth, outbox
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +316,15 @@ async def create(
 
     config, spec_secrets = catalog.split_configuration(connector.spec_schema, payload.configuration)
     secrets = {**spec_secrets, **(payload.credentials or {})}
+    # A completed OAuth consent, resolved here rather than in the browser. The
+    # grant is single-use and scoped to this workspace and this connector, so a
+    # handle leaked from one form cannot attach somebody else's account to a
+    # different resource.
+    grant_id = getattr(payload, "oauth_grant_id", None)
+    if grant_id is not None:
+        secrets = {**secrets, **await oauth.consume_grant(
+            session, grant_id, workspace_id=ctx.workspace_id,
+            connector_key=connector.connector_key)}
     merged = catalog.apply_spec_defaults(
         connector.spec_schema, catalog.merge_configuration(config, secrets)
     )
@@ -348,14 +357,38 @@ async def create(
         workspace_id=ctx.workspace_id, product_resource_id=actor_id, name=payload.name,
         connector=catalog.descriptor(connector), configuration=merged,
     )
+    # Durable intent, committed on its own connection *before* the engine is
+    # touched. Everything below this line can die -- the process, the
+    # transaction, the database connection -- and the ledger still knows an
+    # engine resource may exist holding this customer's credentials. Without it
+    # a rollback after a successful engine call left that resource invisible:
+    # in no list, deletable by nobody, known to nothing.
+    operation_id, is_retry = await outbox.begin(
+        ctx.workspace_id, kind.side, "CREATE", actor_id,
+        {"connector_key": connector.connector_key, "name": payload.name})
     try:
-        ref = (await adapter.create_source(request) if kind.side == "SOURCE"
-               else await adapter.create_destination(request))
-    except AppError:
-        # Compensation: the secret is the only thing written so far.
+        # On a retry, the previous attempt may already have created the engine
+        # resource before dying. The engine has no idempotency key -- calling
+        # create again would simply make a second one, and the first would be
+        # the orphan this whole mechanism exists to prevent.
+        ref = None
+        if is_retry:
+            finder = getattr(adapter, "find_by_product_id", None)
+            if finder is not None:
+                existing_ref = await finder(kind.side, str(actor_id))
+                if existing_ref:
+                    ref = existing_ref
+        if ref is None:
+            ref = (await adapter.create_source(request) if kind.side == "SOURCE"
+                   else await adapter.create_destination(request))
+    except AppError as exc:
+        # The engine call itself failed, so there is nothing on the engine to
+        # compensate. The secret is the only thing written so far.
+        await outbox.failed(operation_id, str(exc))
         if secret_ref:
             await secret_store.delete(session, secret_ref)
         raise
+    await outbox.engine_created(operation_id, ref)
 
     actor = kind.model(
         id=actor_id,
@@ -385,6 +418,9 @@ async def create(
     )
     log_event(logger, logging.INFO, "actor.created", side=kind.side,
               resource_id=str(actor.id), connector=connector.connector_key)
+    # Closed only once the route's transaction lands. If it never does, the row
+    # stays ENGINE_CREATED and the sweeper removes the engine resource.
+    outbox.close_on_commit(session, operation_id)
     return actor
 
 

@@ -12,6 +12,7 @@ import { ApiError, destinationApi, sourceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { formatDateTime, formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
+import { useUrlTab } from '@/hooks/use-url-tab';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
@@ -20,7 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 import { Tabs } from '@/components/ui/Tabs';
-import { Card, DetailBody, DetailHeader } from '@/components/layout/PageLayout';
+import { Card, DetailBody, DetailHeader, ModuleOverview } from '@/components/layout/PageLayout';
 import { HealthBadge } from './Badges';
 import { ConnectorIcon } from './ConnectorIcon';
 import { ErrorRemediationCard, fromApiError, type RemediationInput } from './ErrorRemediationCard';
@@ -29,6 +30,7 @@ import {
 } from './DynamicConnectorForm';
 
 type Kind = 'source' | 'destination';
+const ACTOR_TABS = ['overview', 'configuration', 'pipelines'] as const;
 
 export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string }) {
   const { t, locale } = useI18n();
@@ -41,7 +43,7 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
   const basePath = isSource ? '/sources' : '/destinations';
   const detailKey = isSource ? qk.source(workspaceId, actorId) : qk.destination(workspaceId, actorId);
 
-  const [tab, setTab] = React.useState('overview');
+  const { tab, setTab, hrefForTab } = useUrlTab(ACTOR_TABS, 'overview');
   const [failure, setFailure] = React.useState<RemediationInput | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [dependencies, setDependencies] = React.useState<{ id: string; name: string }[] | null>(null);
@@ -123,6 +125,11 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
   if (!actor) return null;
 
   const actions = actor.available_actions;
+  const linkedPipelines = pipelines.data ?? [];
+  const nextRun = linkedPipelines
+    .filter((pipeline) => pipeline.next_run_at)
+    .sort((left, right) => String(left.next_run_at).localeCompare(String(right.next_run_at)))[0]
+    ?.next_run_at;
 
   return (
     <div>
@@ -147,6 +154,23 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
         }
         actions={
           <>
+            {/* The way onward. A healthy source with nothing pointing at it
+                moves no data, and this page previously offered only test,
+                discover, enable and delete -- so the journey ended here and
+                the user had to work out for themselves that a destination and
+                a pipeline were still needed. */}
+            {actor.health.level === 'HEALTHY' && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => router.push(
+                  isSource
+                    ? `/destinations/new?source=${actor.id}`
+                    : `/pipelines/new?destination=${actor.id}`)}
+              >
+                {t(isSource ? 'actor.continueToDestination' : 'actor.continueToPipeline')}
+              </Button>
+            )}
             {actions.includes('TEST') && (
               <Button
                 variant="secondary"
@@ -203,11 +227,19 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
         <Tabs
           className="mb-4"
           value={tab}
-          onChange={setTab}
           items={[
-            { id: 'overview', label: t('pipelines.tab.overview') },
-            { id: 'configuration', label: t('actor.tabConfig') },
-            { id: 'pipelines', label: t('actor.tabPipelines'), count: actor.pipeline_count },
+            {
+              id: 'overview', label: t('pipelines.tab.overview'),
+              href: hrefForTab('overview'),
+            },
+            {
+              id: 'configuration', label: t('actor.tabConfig'),
+              href: hrefForTab('configuration'),
+            },
+            {
+              id: 'pipelines', label: t('actor.tabPipelines'), count: actor.pipeline_count,
+              href: hrefForTab('pipelines'),
+            },
           ]}
         />
 
@@ -270,19 +302,52 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
         {tab === 'configuration' && <ConfigurationTab kind={kind} actor={actor} />}
 
         {tab === 'pipelines' && (
-          <Card padded={false}>
-            {(pipelines.data ?? []).length === 0 ? (
-              <EmptyState
-                icon={GitBranch}
-                title={t('actor.noPipelines')}
-                compact
-              />
-            ) : (
-              <ul className="divide-y divide-[rgb(var(--border-line))]">
-                {(pipelines.data ?? []).map((pipeline) => (
+          <div className="space-y-3">
+            <ModuleOverview stats={[
+              { label: t('actor.pipelineSummary.total'), value: linkedPipelines.length },
+              {
+                label: t('actor.pipelineSummary.active'),
+                value: linkedPipelines.filter((pipeline) => pipeline.status === 'ACTIVE').length,
+                tone: 'success',
+              },
+              {
+                label: t('actor.pipelineSummary.paused'),
+                value: linkedPipelines.filter((pipeline) => pipeline.status === 'PAUSED').length,
+              },
+              {
+                label: t('actor.pipelineSummary.next'),
+                value: nextRun ? formatRelative(nextRun, locale) : t('common.none'),
+              },
+            ]} />
+            <Card title={t('actor.tabPipelines')} padded={false}>
+              {pipelines.isLoading ? (
+                <Spinner label={t('common.loading')} />
+              ) : linkedPipelines.length === 0 ? (
+                <div className="p-4">
+                  <EmptyState
+                    icon={GitBranch}
+                    title={t('actor.noPipelines')}
+                    action={
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => router.push(
+                          isSource
+                            ? `/destinations/new?source=${actor.id}`
+                            : `/pipelines/new?destination=${actor.id}`)}
+                      >
+                        {t(isSource ? 'actor.continueToDestination' : 'actor.continueToPipeline')}
+                      </Button>
+                    }
+                    compact
+                  />
+                </div>
+              ) : (
+                <ul className="divide-y divide-[rgb(var(--border-line))]">
+                  {linkedPipelines.map((pipeline) => (
                   <li key={pipeline.id}>
                     <Link
-                      href={`/pipelines/${pipeline.id}`}
+                      href={`/pipelines/${pipeline.id}?tab=status`}
                       className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-2"
                     >
                       <span className="text-caption font-emphasis text-text-primary">
@@ -298,10 +363,11 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
                       </span>
                     </Link>
                   </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
         )}
       </DetailBody>
 
@@ -363,7 +429,7 @@ export function DependencyModal({
           <li key={item.id} className="flex items-center justify-between gap-3 py-2">
             <span className="text-caption text-text-primary">{item.name}</span>
             <Link
-              href={`/pipelines/${item.id}`}
+              href={`/pipelines/${item.id}?tab=status`}
               className="text-caption text-brand hover:underline"
               onClick={onClose}
             >
