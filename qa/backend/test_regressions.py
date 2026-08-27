@@ -6,13 +6,16 @@ reintroduces it fails here rather than in production.
 
 from __future__ import annotations
 
+import json
 import pathlib
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 
 import pytest
 
 from app.core.errors import ValidationError
+from app.models.engine import ConnectorDefinition
 from app.core.params import as_enum
 from app.models.enums import RunStatus, ScheduleType, TriggerType
 from app.services import scheduling
@@ -303,6 +306,7 @@ def test_the_catalogue_is_exactly_the_launch_scope() -> None:
         "source-postgres", "destination-postgres",
         "source-bigquery", "destination-bigquery",
         "source-google-sheets", "destination-google-sheets",
+        "source-mssql", "destination-mssql",
         "source-faker",
         # Base.vn, written here. Not pulled from anywhere: these are Python in
         # `app/connectors/base_vn`, compiled to a declarative manifest at
@@ -310,7 +314,7 @@ def test_the_catalogue_is_exactly_the_launch_scope() -> None:
         "source-base-account", "source-base-hrm", "source-base-hiring",
         "source-base-workflow", "source-base-request", "source-base-service",
         "source-base-wework", "source-base-timeoff", "source-base-payroll",
-        "source-base-income",
+        "source-base-income", "source-base-crm", "source-base-crm-leads",
     }, sorted(c.connector_key for c in connectors)
 
     # Every offered connector must be renderable, or the wizard dead-ends.
@@ -339,24 +343,38 @@ def test_only_verified_connectors_claim_certification() -> None:
     #   source-bigquery        check, discover 164 streams, read 50 records
     #   destination-bigquery   check, 50 records written and read back
     #   source-google-sheets   check, discover, read 30 records
+    #   source-mssql           check, discover, read 3 records from SQL Server 2022
     #
     # source-file and source-microsoft-onedrive are deliberately absent.
     # source-file has no e2e driver; OneDrive has only ever run `spec`, because
     # no Microsoft tenant was available to check against.
+    #
+    # `destination-mssql` is absent from this set on purpose. Its sync
+    # completes and the rows arrive, but only as JSON in
+    # `airbyte_internal.<schema>_raw__stream_<name>` -- no typed table, on any
+    # of 1.0.0 / 2.0.0 / 2.2.20. Calling it SUPPORTED would promise a SQL
+    # Server table nobody gets.
+    #
     # The Base.vn connectors are SUPPORTED on different evidence from the
     # Airbyte ones, and it is worth being precise about which. Nobody upstream
     # tests them, so "supported" here means: this product wrote them, 160
-    # structural tests cover them, and `qa/e2e/base-connectors.py` exercises
-    # spec, check, the bad-token negative control and discovery against the
-    # live Base API. `check` against a real account is still owed — the ten
-    # tokens supplied are all rejected by Base with `access_token_v2_invalid_3`.
+    # structural tests cover them, and all ten now run end to end into BigQuery
+    # -- 9,049 records across 69 tables, `qa/e2e/base-to-bigquery.py`.
+    #
+    #   source-base-crm-leads  built from the published request contract, then
+    #     corrected against a live token by `qa/probe/base_crm_leads.py` (the
+    #     collection is `services`, not `lead_services`, which the convention
+    #     would have got wrong), and synced twice into BigQuery: 1,833 records
+    #     over 3 streams and a two-level parent chain, then 707 on the second
+    #     run as the cursors reduced. It shipped BETA until those runs existed.
     assert supported == {
         "source-postgres", "source-faker", "destination-postgres",
         "source-bigquery", "destination-bigquery", "source-google-sheets",
+        "source-mssql",
         "source-base-account", "source-base-hrm", "source-base-hiring",
         "source-base-workflow", "source-base-request", "source-base-service",
         "source-base-wework", "source-base-timeoff", "source-base-payroll",
-        "source-base-income",
+        "source-base-income", "source-base-crm", "source-base-crm-leads",
     }, f"certification must mean this product tested it, got {sorted(supported)}"
 
 
@@ -613,3 +631,166 @@ def test_a_cursor_of_the_wrong_shape_is_refused_by_the_schema() -> None:
         ConnectionStateUpdate(state=["not-an-object"])
     with _pytest.raises(Exception):
         ConnectionStateUpdate(state=[["nested-list"]])
+
+
+# A declarative connector carries its logic inside each source's configuration,
+# injected once when that source is created; the engine keeps its own copy from
+# then on. `seed_catalog` overwrites the catalogue row on every deploy and the
+# module docstring promises that this is how "fix the Base API logic once and
+# every workspace has it" works -- but nothing carried the new manifest to a
+# source that already existed. `deal_activity` was fixed, re-seeded, redeployed
+# and re-synced three times, still emitting the same unfiltered 3,970 rows,
+# because the pipeline pointed at a source built an hour earlier. Editing the
+# source by hand was the only thing that moved it.
+
+@pytest.mark.asyncio
+async def test_a_rebuilt_manifest_reaches_the_sources_already_built_on_it() -> None:
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from app.models.engine import EngineMapping
+    from app.models.enums import EngineResourceType, ProductResourceType
+    from app.models.integration import Source
+    from app.models.identity import Workspace
+    from app.services import actors as actor_service
+    from app.services.catalog import seed_catalog
+
+    KEY = "source-base-crm"
+    pushed: list[dict] = []
+
+    class _Ref:
+        engine_type = "AIRBYTE_EMBEDDED"
+        ref = "engine-source-1"
+
+    class _Adapter:
+        async def update_source(self, ref, request):
+            # The manifest is injected by the adapter itself, from the
+            # descriptor -- `_config_for` is what turns it into
+            # `__injected_declarative_manifest` on the wire.
+            pushed.append({"ref": ref,
+                           "manifest": request.connector.declarative_manifest})
+            return _Ref()
+
+        async def update_destination(self, ref, request):  # pragma: no cover
+            raise AssertionError("no destination in this fixture")
+
+    maker, release = await _seed_into("catalog_manifest_propagation")
+    try:
+        async with maker() as session:
+            await seed_catalog(session)
+            workspace_id = _uuid.uuid4()
+            session.add(Workspace(id=workspace_id, name="QA", slug="qa",
+                                  timezone="Asia/Ho_Chi_Minh"))
+            await session.flush()
+            source = Source(
+                id=_uuid.uuid4(), workspace_id=workspace_id, name="CRM",
+                connector_key=KEY, configuration_json={"domain": "basecrm.vn"},
+            )
+            session.add(source)
+            await session.flush()
+            session.add(EngineMapping(
+                workspace_id=workspace_id,
+                product_resource_type=ProductResourceType.SOURCE,
+                product_resource_id=source.id,
+                engine_type="AIRBYTE_EMBEDDED",
+                engine_resource_type=EngineResourceType.SOURCE,
+                engine_resource_ref="engine-source-1",
+            ))
+            await session.commit()
+            source_id = source.id
+
+        # A deploy that changes nothing must not disturb a running resource.
+        async with maker() as session:
+            outcome = await seed_catalog(session)
+            await session.commit()
+        assert KEY not in outcome.manifests_changed
+        assert not pushed, "an unchanged manifest was pushed to the engine anyway"
+
+        # Now the manifest really changes, as a connector fix does.
+        async with maker() as session:
+            row = await session.scalar(
+                select(ConnectorDefinition).where(
+                    ConnectorDefinition.connector_key == KEY))
+            stale = json.loads(json.dumps(row.declarative_manifest))
+            stale["definitions"]["streams"]["deal_activity"]["incremental_sync"].pop(
+                "is_client_side_incremental", None)
+            row.declarative_manifest = stale
+            await session.commit()
+
+        async with maker() as session:
+            outcome = await seed_catalog(session)
+            assert KEY in outcome.manifests_changed, (
+                "seeding overwrote the manifest without noticing it had changed")
+            with mock.patch("app.services.actors.get_adapter", return_value=_Adapter()):
+                count = await actor_service.republish_manifests(
+                    session, outcome.manifests_changed)
+            await session.commit()
+
+        assert count == 1 and len(pushed) == 1, (
+            "the fixed connector never reached the source already built on it")
+        manifest = pushed[0]["manifest"]
+        cursor = manifest["definitions"]["streams"]["deal_activity"]["incremental_sync"]
+        assert cursor.get("is_client_side_incremental") is True
+        assert pushed[0]["ref"] == "engine-source-1", "pushed to the wrong resource"
+
+        async with maker() as session:
+            mapping = await session.scalar(
+                select(EngineMapping).where(
+                    EngineMapping.product_resource_id == source_id))
+        assert mapping.engine_resource_ref == "engine-source-1"
+    finally:
+        await release()
+
+
+# `alembic.ini` describes logging for the standalone CLI -- root at WARNING with
+# a plain stderr handler -- and `migrations/env.py` applied it unconditionally.
+# Inside `python -m app.bootstrap` that runs *between* migrating and seeding, so
+# the deploy container migrated, seeded the catalogue, republished manifests and
+# exited 0 having printed nothing after its Alembic lines. Root had been reset
+# and the JSON handler dropped. A bootstrap that works silently cannot be told
+# apart from one that skipped, and any warning raised in that window is lost --
+# including `catalog.manifest_republish_failed`, which is precisely the warning
+# an operator needs to see.
+
+def test_running_migrations_does_not_silence_the_application_log() -> None:
+    import io
+    import logging as _logging
+    from logging.config import fileConfig
+
+    from app.core.logging import JsonFormatter, log_event
+
+    ini = str(ROOT / "backend" / "alembic.ini")
+    env = (ROOT / "backend" / "migrations" / "env.py").read_text(encoding="utf-8")
+
+    def _emits_after(name, apply_ini) -> str:
+        """Install the app's handler, let `apply_ini` run, then log at INFO."""
+        stream = io.StringIO()
+        handler = _logging.StreamHandler(stream)
+        handler.setFormatter(JsonFormatter())
+        root = _logging.getLogger()
+        saved = (root.handlers, root.level, root.manager.disable)
+        root.handlers, root.level = [handler], _logging.INFO
+        try:
+            apply_ini()
+            log_event(_logging.getLogger(name), _logging.INFO, "seed.done")
+            for installed in _logging.getLogger().handlers:
+                installed.flush()
+            return stream.getvalue()
+        finally:
+            root.handlers, root.level, root.manager.disable = saved
+            _logging.getLogger(name).disabled = False
+
+    # The hazard is real: applying the ini the way env.py used to swallows the
+    # line the deploy container exists to print.
+    assert "seed.done" not in _emits_after("qa.unguarded", lambda: fileConfig(ini)), (
+        "alembic.ini no longer replaces the host logging, so this guard is "
+        "protecting nothing -- check what changed before deleting it")
+
+    # env.py must therefore not apply it when a host already configured logging.
+    assert "not logging.getLogger().handlers" in env, (
+        "migrations/env.py applies alembic.ini's logging unconditionally, which "
+        "replaces the host process's handlers")
+    guarded = lambda: (fileConfig(ini)                      # noqa: E731
+                       if not _logging.getLogger().handlers else None)
+    assert "seed.done" in _emits_after("qa.guarded", guarded)

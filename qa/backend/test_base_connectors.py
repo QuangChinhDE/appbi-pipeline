@@ -35,34 +35,91 @@ IDS = [f"{c.app}.{s.name}" for c, s in ALL_STREAMS]
 # ── the promises ─────────────────────────────────────────────────────────────
 
 def test_every_required_connector_ships() -> None:
-    """The ten applications asked for, by key."""
+    """The applications asked for, by key. Widening this is a deliberate edit."""
     assert set(BY_KEY) == {
+        # The ten originally asked for.
         "source-base-account", "source-base-hrm", "source-base-hiring",
         "source-base-workflow", "source-base-request", "source-base-service",
         "source-base-wework", "source-base-timeoff", "source-base-payroll",
         "source-base-income",
+        # Added later, and on a different API generation -- see `crm.py`.
+        "source-base-crm",
+        # The other half of Base CRM, and a separate application: its own
+        # token, its own password, its own path root -- see `crm_leads.py`.
+        "source-base-crm-leads",
     }, sorted(BY_KEY)
 
 
-def test_the_credential_is_always_access_token_v2() -> None:
-    """One spelling, everywhere.
+#: Applications that do not use `access_token_v2`, and the field they use.
+#:
+#: An allowlist rather than a free-for-all. The reason the spelling matters is
+#: that Base distinguishes the two names in its own error taxonomy --
+#: `access_token_invalid_2` for the old field, `access_token_v2_invalid_*` for
+#: the current one -- and the very first Base manifests all sent
+#: `access_token`, so none of them could authenticate. A connector that picks
+#: the wrong name fails the same way, so a new entry here has to be a measured
+#: fact about that API, not a guess.
+TOKEN_FIELD_EXCEPTIONS = {
+    # Measured: `apis.base.vn/sales/v1` refuses `access_token_v2` and accepts
+    # `access_token`. It is a different API generation from the rest.
+    "crm": "access_token",
+    # Same generation, same spelling. Measured separately because it is a
+    # separate application: `apis.basecrm.vn/leads/` refuses the Sales token
+    # outright with `INVALID TOKEN APPKEY`, and answers `access_token_v2` with
+    # `access_token_invalid_1` -- two different refusals, so it reads both
+    # fields and accepts neither from the wrong app.
+    "crm-leads": "access_token",
+}
 
-    Base distinguishes the two names in its own error taxonomy:
-    `access_token_invalid_2` for the old field, `access_token_v2_invalid_*`
-    for this one. The previous manifests all sent `access_token`, so none of
-    them could authenticate with a current token.
+
+def test_each_connector_sends_the_credential_its_api_actually_reads() -> None:
+    """One spelling per application, and the same one in the spec and the body.
+
+    The failure this prevents is subtle: a spec that asks for one field name
+    and a request that sends another authenticates against nothing, and Base
+    answers with a refusal that reads like an expired token.
+    """
+    for connector in CONNECTORS:
+        expected = TOKEN_FIELD_EXCEPTIONS.get(connector.app, TOKEN_FIELD)
+        assert connector.token_field == expected, (
+            f"{connector.app} sends {connector.token_field!r}; if that is "
+            f"deliberate, record it in TOKEN_FIELD_EXCEPTIONS with what was "
+            f"measured")
+
+        manifest = compile_manifest(connector)
+        spec = manifest["spec"]["connection_specification"]
+        assert expected in spec["required"], connector.app
+        assert spec["properties"][expected]["airbyte_secret"] is True
+
+        for stream in manifest["definitions"]["streams"].values():
+            body = stream["retriever"]["requester"]["request_body_data"]
+            assert body[expected] == "{{ config['" + expected + "'] }}", (
+                f"{connector.app}.{stream['name']} sends a different field "
+                f"from the one its spec asks for")
+
+
+def test_a_second_credential_is_declared_secret_and_actually_sent() -> None:
+    """Base CRM needs a password on every call as well as a token.
+
+    Two ways to get this wrong, both silent. Collect it and never send it, and
+    every request is refused while the form looks complete. Send it without
+    `airbyte_secret`, and an account password is stored and logged in clear.
     """
     for connector in CONNECTORS:
         manifest = compile_manifest(connector)
         spec = manifest["spec"]["connection_specification"]
-        assert TOKEN_FIELD in spec["required"], connector.app
-        assert spec["properties"][TOKEN_FIELD]["airbyte_secret"] is True
-
-        blob = json.dumps(manifest)
-        assert "config['access_token']" not in blob, connector.app
-        for stream in manifest["definitions"]["streams"].values():
-            body = stream["retriever"]["requester"]["request_body_data"]
-            assert body[TOKEN_FIELD] == "{{ config['" + TOKEN_FIELD + "'] }}"
+        for extra in connector.config:
+            if not extra.send_in_body:
+                continue
+            assert extra.secret, (
+                f"{connector.app}.{extra.name} rides on every request but is "
+                "not marked secret")
+            assert spec["properties"][extra.name]["airbyte_secret"] is True
+            for stream in manifest["definitions"]["streams"].values():
+                body = stream["retriever"]["requester"]["request_body_data"]
+                assert body.get(extra.name) == "{{ config['" + extra.name + "'] }}", (
+                    f"{connector.app}.{stream['name']} does not send "
+                    f"{extra.name}, so the request is unauthenticated")
 
 
 def test_no_token_is_baked_into_a_connector() -> None:
@@ -232,6 +289,10 @@ def test_each_app_uses_its_real_page_parameter() -> None:
                 continue
             expected = "page_id" if connector.app == "workflow" else "page"
             assert stream.page_field == expected, f"{connector.app}.{stream.name}"
+            # Where page numbering starts is part of the same contract, and
+            # getting it wrong reads page one twice rather than erroring.
+            first = 1 if connector.app.startswith("crm") else 0
+            assert stream.first_page == first, f"{connector.app}.{stream.name}"
 
 
 def test_each_stream_uses_the_documented_page_size_parameter() -> None:
@@ -268,14 +329,46 @@ def test_stream_wiring_reaches_the_manifest(connector, stream) -> None:
         paginator = retriever["paginator"]
         assert paginator["type"] == "DefaultPaginator"
         assert paginator["page_token_option"]["field_name"] == stream.page_field
-        assert paginator["page_size_option"]["inject_into"] == "body_data"
+        if stream.page_size_field:
+            assert paginator["page_size_option"]["inject_into"] == "body_data"
+            assert paginator["pagination_strategy"]["page_size"] == stream.page_size
+        else:
+            # An endpoint that pages but takes no size. Two things must follow,
+            # and the second is the one that bites: no invented `limit` on the
+            # request, and no declared `page_size` either -- that number is what
+            # the CDK compares a short page against to decide it has finished,
+            # so asserting a size the server never agreed to either stops on the
+            # server's first default page or pages past the end forever.
+            assert "page_size_option" not in paginator, stream.name
+            assert "page_size" not in paginator["pagination_strategy"], stream.name
     else:
         assert retriever["paginator"]["type"] == "NoPagination"
 
     if stream.incremental:
         cursor = compiled["incremental_sync"]
         assert cursor["cursor_field"] == stream.incremental.field
-        assert cursor["start_time_option"]["field_name"] == stream.incremental.param
+        if stream.incremental.send_request_options:
+            assert cursor["start_time_option"]["field_name"] == stream.incremental.param
+        else:
+            # A cursor that filters on the way out and sends nothing. Correct
+            # only where the endpoint documents no time filter at all --
+            # `deal/get.activities` takes an id and a viewer, full stop. The
+            # assertion is that we send *neither* bound, because sending an
+            # invented parameter name is what this shape exists to avoid.
+            assert "start_time_option" not in cursor, stream.name
+            assert "end_time_option" not in cursor, stream.name
+            # ...and then it has to actually filter. Declaring a cursor is not
+            # enough: the CDK only compares records against the high-water mark
+            # when `is_client_side_incremental` is set, so without it the stream
+            # advertises `incremental` in the UI, saves state every sync, and
+            # re-emits every record forever. `deal_activity` did exactly that --
+            # 5,583 partitions of state and the identical 3,970 rows twice.
+            assert cursor.get("is_client_side_incremental"), (
+                f"{stream.name}: cursor sends nothing and filters nothing")
+        if stream.incremental.client_side:
+            assert not stream.incremental.send_request_options, (
+                f"{stream.name}: the server already filters; a second, "
+                f"client-side pass can only disagree with it and drop rows")
         # One slice: Base takes a "changed since" value, not a range, so
         # stepping the window would re-read everything once per step.
         assert cursor["step"] == "P1000Y"
@@ -360,12 +453,20 @@ def test_the_domain_is_a_workspace_setting() -> None:
     config, and letting a workspace change `extapi/v1` only lets them point at
     an API these streams are not written against.
     """
+    # Per connector, because they are not all on the same pair of hosts. The
+    # invariant is that the choice is offered, is a closed set, and defaults to
+    # the first member -- not that every application lives at `base.com.vn`.
+    expected = {
+        "crm": ["basecrm.vn", "base.vn"],        # apis.basecrm.vn / apis.base.vn
+        "crm-leads": ["basecrm.vn", "base.vn"],  # same two hosts, other root
+    }
     for connector in CONNECTORS:
         spec = compile_manifest(connector)["spec"]["connection_specification"]
         assert "domain" in spec["properties"], connector.app
-        assert spec["properties"]["domain"]["default"] == "base.com.vn"
-        # An enum, so the form renders a dropdown: two installations, no typos.
-        assert spec["properties"]["domain"]["enum"] == ["base.com.vn", "base.vn"]
+        hosts = expected.get(connector.app, ["base.com.vn", "base.vn"])
+        # An enum, so the form renders a dropdown: a fixed list, no typos.
+        assert spec["properties"]["domain"]["enum"] == hosts, connector.app
+        assert spec["properties"]["domain"]["default"] == hosts[0], connector.app
         assert "version" not in spec["properties"], connector.app
 
         # And it actually reaches the request.
@@ -619,8 +720,12 @@ def test_income_sends_a_closed_range_in_the_body_not_the_query() -> None:
     assert end["field_name"] == "updated_to"
     assert end["inject_into"] == "body_data", end
 
+    # Applications whose cursor rides in the request body rather than the query
+    # string, each verified against the live API. Everything else must stay on
+    # the query string -- see the assertion below for what breaks otherwise.
+    body_cursor = {"income", "crm", "crm-leads"}
     for connector in CONNECTORS:
-        if connector.app == "income":
+        if connector.app in body_cursor:
             continue
         start, end = options(connector)
         if start is None:
@@ -632,3 +737,204 @@ def test_income_sends_a_closed_range_in_the_body_not_the_query() -> None:
             f"{connector.app} now sends a closing bound. publicapi/v2 treats "
             f"the filter as open-ended, so this silently truncates every sync "
             f"at the moment it started: {end}")
+
+
+def test_every_substream_names_a_parent_that_exists() -> None:
+    """A substream is only as complete as the partitions it is handed.
+
+    This replaced a test that asserted a partition parent must be full refresh.
+    That was a theory -- an incremental parent emits only changed rows, so the
+    children would surely lose partitions -- and it is wrong.
+    `SubstreamPartitionRouter` reads the parent independently of the parent's
+    cursor. Measured on the live API: `workflow.workflow` is incremental and
+    emits one record per sync, while `workflow.stage` still receives all twenty
+    partitions and reads all 103 stages, every run.
+
+    What is worth asserting is the thing that would actually silently drop
+    records: a parent named in a partition router that is not a stream this
+    connector ships. `_shared` already refuses that at import; this pins it so
+    the check cannot be quietly relaxed.
+    """
+    from app.connectors.base_vn import CONNECTORS
+
+    for connector in CONNECTORS:
+        names = {stream.name for stream in connector.streams}
+        for stream in connector.streams:
+            if not stream.parent:
+                continue
+            assert stream.parent.stream in names, (
+                f"{connector.app}.{stream.name} is partitioned by "
+                f"{stream.parent.stream!r}, which this connector does not ship")
+            assert stream.parent.inject, (
+                f"{connector.app}.{stream.name} has a parent but no request "
+                "field to inject the parent id into, so every partition would "
+                "issue the same unfiltered request")
+
+
+def test_no_substream_asks_the_router_to_follow_the_parent_cursor() -> None:
+    """`incremental_dependency` is off, and that is a decision with evidence.
+
+    The complaint it answers is real and was reproduced: a parent filtered by
+    `last_update` yields far fewer records than it holds, yet the child still
+    issues one request per parent id. On Base CRM, run two emitted 263 deals
+    instead of 5,582 and still made all 270 child requests.
+
+    The CDK flag that changes this is `incremental_dependency` on
+    `ParentStreamConfig`. It stays off for two measured reasons:
+
+    * Enabling it on CRM changed nothing -- identical 263 records and 270
+      requests -- because `pipeline/all` ignores the time filter, so the parent
+      read is the full list either way.
+    * Where it *would* bite, it loses data. It is only correct when a parent's
+      `last_update` moves whenever a child changes. Base does not do that: 234
+      of 234 CRM pipelines have a deal newer than the pipeline, and 41 of 42
+      WeWork projects have a task newer than the project. Those parents would
+      leave the partition list after the first sync and their children would
+      stop arriving, with every run still green.
+
+    So this asserts the flag is absent everywhere. Turning it on for a stream
+    is allowed -- but only by editing this test with the cascade measurement
+    for that specific parent, which is the check that was missing.
+    """
+    from app.connectors.base_vn import CONNECTORS
+    from app.connectors.base_vn._shared import compile_manifest
+
+    for connector in CONNECTORS:
+        manifest = compile_manifest(connector)
+        for name, stream in manifest["definitions"]["streams"].items():
+            router = stream["retriever"].get("partition_router")
+            if not router:
+                continue
+            for parent in router.get("parent_stream_configs", []):
+                assert "incremental_dependency" not in parent, (
+                    f"{connector.app}.{name} follows its parent's cursor. That "
+                    f"only holds if {parent.get('partition_field')}'s parent is "
+                    f"touched whenever a child changes -- measure it before "
+                    f"enabling, and record the numbers here.")
+
+
+def test_crm_does_not_ship_endpoints_whose_data_is_already_embedded() -> None:
+    """Three documented CRM endpoints are left out on purpose.
+
+    `pipeline/get.stages` returns exactly what `pipeline.cached_stages`
+    already carries -- compared field by field across twenty pipelines, the
+    only difference is `token`, a per-response value. `pipeline/get.segments`
+    is the same against `cached_segments`, identical on all fifteen checked.
+    Shipping either means 270 extra requests a sync for rows the reader
+    already has, and two tables that must be joined to say the same thing.
+
+    `account/get.activities` and `contact/get.activities` answer with the
+    plain string `Function 1 is deprecated` -- not JSON, not an error code.
+
+    This is a list of paths rather than stream names because the tempting
+    mistake is to add the endpoint back under a new name.
+    """
+    from app.connectors.base_vn import BY_KEY
+
+    crm = BY_KEY["source-base-crm"]
+    shipped = {stream.path for stream in crm.streams}
+    for path, why in (
+        ("pipeline/get.stages", "duplicated by pipeline.cached_stages"),
+        ("pipeline/get.segments", "duplicated by pipeline.cached_segments"),
+        ("account/get.activities", "returns 'Function 1 is deprecated'"),
+        ("contact/get.activities", "returns 'Function 1 is deprecated'"),
+    ):
+        assert path not in shipped, f"{path} is back: {why}"
+
+
+def test_crm_reaches_accounts_and_contacts_without_a_hardcoded_service() -> None:
+    """The ported YAML baked in one tenant's service ids; they fail elsewhere.
+
+    `service_id: '248'` for contacts and `['680', '211']` for accounts are
+    rejected for this token with `INVALID_CONTACT_SERVICE` /
+    `INVALID_ACCOUNT_SERVICE`. `account/service/all` and `contact/service/all`
+    list them from the token alone, so the services are streams and the rest
+    hang off them.
+
+    What this pins is that no CRM stream carries a literal id in its request
+    body -- the shape the YAML had, and the one that ships somebody else's
+    tenant to every workspace.
+    """
+    from app.connectors.base_vn import BY_KEY
+
+    crm = BY_KEY["source-base-crm"]
+    by_name = {s.name: s for s in crm.streams}
+
+    for child, parent in (("account", "account_service"),
+                          ("contact", "contact_service"),
+                          ("account_segment", "account_service"),
+                          ("contact_segment", "contact_service")):
+        stream = by_name[child]
+        assert stream.parent is not None, f"{child} has no parent service stream"
+        assert stream.parent.stream == parent, (child, stream.parent.stream)
+        assert stream.parent.inject == "service_id", stream.parent.inject
+
+    for stream in crm.streams:
+        for field, value in stream.body.items():
+            assert not str(value).isdigit(), (
+                f"crm.{stream.name} sends a literal {field}={value!r}; that is "
+                "one tenant's id and fails for every other workspace")
+
+
+def test_a_quota_refusal_is_a_wait_not_a_failure() -> None:
+    """Base says "too fast" in the body, with HTTP 400 and no Retry-After.
+
+    Measured: `lead/feed/list` answers
+    `{"code": 0, "message": "Quota exceeded: 100 req/min"}` once a token has
+    spent its minute. Read by the catch-all FAIL rule that turns `code: 0` into
+    an error, that killed the stream 37 seconds into a sync -- and Airbyte then
+    turned one failed stream into three unreadable retries, because
+    `StreamStatusException.getMessage()` in 0.59.1 calls itself and the
+    resulting StackOverflow stacktrace pushed the job result past Temporal's
+    2 MB limit ("Complete result exceeds size limit").
+
+    So the ordering matters as much as the rule: RATE_LIMITED has to be matched
+    before FAIL.
+    """
+    from jinja2 import Template
+
+    from app.connectors.base_vn._shared import _error_handler
+
+    filters = _error_handler()["response_filters"]
+    actions = [f["action"] for f in filters]
+    assert actions.index("RATE_LIMITED") < actions.index("FAIL"), (
+        "FAIL is evaluated first, so a quota refusal kills the sync")
+
+    throttle = next(f for f in filters
+                    if f["action"] == "RATE_LIMITED" and "predicate" in f)
+
+    def decides(body: dict) -> bool:
+        return Template(throttle["predicate"]).render(response=body).strip() == "True"
+
+    assert decides({"code": 0, "message": "Quota exceeded: 100 req/min"})
+    assert decides({"code": 0, "message": "TOO MANY REQUESTS"})
+    # A token failure is not throttling and must still reach FAIL.
+    assert not decides({"code": 0, "message": "access_token_v2_invalid_3"})
+    assert not decides({"code": 0, "message": "This opening is private."})
+    assert not decides({"code": 1, "data": []})
+
+
+def test_only_the_application_with_a_measured_cap_declares_one() -> None:
+    """A budget slows every request, so it is not a precaution to sprinkle.
+
+    Base CRM Leads refused at 100/minute. The Sales API sustained 5,582 requests
+    in one sync at roughly 220/minute without a refusal, so the two do not share
+    a limit and inventing one for the other ten would make every sync slower to
+    guard against a cap nobody has seen.
+    """
+    declared = {c.app: c.rate_limit for c in CONNECTORS if c.rate_limit}
+    assert declared == {"crm-leads": (100, "PT1M")}, declared
+
+    manifest = compile_manifest(BY_KEY["source-base-crm-leads"])
+    budget = manifest["api_budget"]
+    assert budget["type"] == "HTTPAPIBudget"
+    policy = budget["policies"][0]
+    assert policy["type"] == "MovingWindowCallRatePolicy"
+    assert policy["rates"] == [{"type": "Rate", "limit": 100, "interval": "PT1M"}]
+    # No matchers: the quota is per token, not per endpoint, so it has to cover
+    # every request the connector makes rather than one path.
+    assert policy["matchers"] == []
+
+    # And nothing is emitted where no cap was measured.
+    assert "api_budget" not in compile_manifest(BY_KEY["source-base-crm"])
+

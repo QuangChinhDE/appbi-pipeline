@@ -973,6 +973,16 @@ def test_the_catalogue_offers_only_what_the_release_stands_behind() -> None:
     assert curated.connector_is_offered("source-postgres", "SUPPORTED")
     assert not curated.connector_is_offered("source-hubspot", "BETA")
     assert not curated.connector_is_offered("source-anything", "BLOCKED")
+    # A connector the workspace built is exempt: the launch scope exists to stop
+    # the product offering untested *upstream* connectors, and a Builder project
+    # is neither upstream nor visible outside its own workspace. Without this,
+    # Publish succeeded and the create wizard refused the result with "contact
+    # your administrator" -- the Builder shipped something nobody could use.
+    assert curated.connector_is_offered("custom-orders-1", "BETA", "BUILDER")
+    # BLOCKED still wins, so an administrator can retire one.
+    assert not curated.connector_is_offered("custom-orders-1", "BLOCKED", "BUILDER")
+    # And the exemption is for BUILDER alone, not for anything non-bundled.
+    assert not curated.connector_is_offered("source-hubspot", "BETA", "ENGINE")
 
     everything = Settings(connector_launch_scope="FULL_CATALOG")
     assert everything.connector_is_offered("source-hubspot", "BETA")
@@ -1071,3 +1081,33 @@ def test_the_engine_waits_for_temporal_rather_than_for_luck() -> None:
         assert depends["airbyte-temporal"]["condition"] == "service_healthy", (
             f"{name} waits for Temporal to start, not to be ready: "
             f"{depends['airbyte-temporal']}")
+
+
+@repo_only
+def test_the_replication_activity_is_given_longer_than_two_minutes() -> None:
+    """Airbyte's 120-second default kills wide substream syncs on attempt one.
+
+    Reproduced, not inferred. Base CRM's `deal` stream walks 270 sales
+    pipelines, one request each. Its first full sync failed with
+    `activity Heartbeat timeout` after about two minutes -- having already
+    written 5,319 rows -- and only succeeded on the automatic retry, which by
+    then had a cursor and read 263 records. The run looked green and had
+    quietly cost a full read plus a reconciliation.
+
+    With `ACTIVITY_MAX_TIMEOUT_SECOND` raised, the same full read (5,852
+    records) completes in a single attempt.
+
+    The trade is real and deliberate: a genuinely wedged sync now takes this
+    long to be noticed. That is better than every wide substream failing its
+    first attempt, which reads as flakiness and hides the cause.
+    """
+    import yaml
+
+    compose = yaml.safe_load(
+        (ROOT / "docker-compose.airbyte.yml").read_text(encoding="utf-8"))
+    env = compose["services"]["airbyte-worker"]["environment"]
+    value = env.get("ACTIVITY_MAX_TIMEOUT_SECOND")
+    assert value is not None, (
+        "the worker is back on Airbyte's 120-second default, which fails the "
+        "first attempt of any sync with hundreds of partitions")
+    assert int(value) >= 600, f"{value}s is not enough for a 270-partition read"

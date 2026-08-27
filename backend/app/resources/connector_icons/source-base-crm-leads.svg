@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The Base shield, as the other eleven use, with a funnel in place of the
+     Sales connector's currency mark: the same family, a different half. -->
+<svg width="64" height="64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill="#0F558F" d="M15 4v9c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V4l7-4z"/><path fill="#FFFFFF" d="M4.6 5h6.8L8.8 8.1v3.3l-1.6.9V8.1z"/></svg>

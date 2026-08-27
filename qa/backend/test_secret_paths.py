@@ -105,6 +105,7 @@ def test_the_launch_scope_is_what_we_think_it_is() -> None:
     assert keys == {
         "source-postgres", "destination-postgres", "source-faker",
         "source-bigquery", "destination-bigquery", "source-google-sheets",
+        "source-mssql",
     }, sorted(keys)
     assert all(spec for _, spec in SUPPORTED), "a connector shipped with no spec"
 

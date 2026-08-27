@@ -76,6 +76,36 @@ class Parent:
     `inject` says how the parent id reaches the request. Base is not consistent
     about the field name — `id` for workflow stages, `cycle_id` for payroll
     records — so it is named per stream rather than assumed.
+    Why a substream reads every parent id, every sync
+    -------------------------------------------------
+
+    An incremental parent narrows what it *emits*, not what the partition
+    router *iterates*: the child still issues one request per parent record.
+    Measured on Base CRM, whose 270 sales pipelines make the gap obvious:
+
+        run 1, no state    5,582 deals emitted, 270 child requests
+        run 2, with state    263 deals emitted, 270 child requests
+
+    The CDK does offer `incremental_dependency` on `ParentStreamConfig` for
+    exactly this, and it is deliberately not set. Two reasons, both measured
+    rather than argued:
+
+    * **It does not help on these APIs.** Turning it on for CRM changed
+      nothing -- 263 records and 270 child requests either way -- because
+      `pipeline/all` ignores `last_update_stime` and returns all 270 records
+      regardless, so there is nothing narrower for the router to iterate.
+    * **It would lose data where it did work.** It is only safe when a parent
+      is touched whenever one of its children changes, and Base does not do
+      that. Of 234 CRM pipelines holding deals, 234 have a deal newer than the
+      pipeline itself, some by over a year; WeWork is the same, 41 of 42
+      projects. With the flag on, those parents would drop out of the
+      partition list after the first sync and their children would silently
+      stop arriving, while every run still reported success.
+
+    `workflow.workflow -> workflow.stage` is the one pair whose parent is
+    incremental, and it is safe for the opposite reason: 20 of 20 workflows
+    are at least as new as their newest stage. It still reads all 20
+    partitions each sync, and that is the behaviour to keep.
     """
 
     stream: str
@@ -108,6 +138,32 @@ class Incremental:
     #: is accepted. The parameter was being sent all along -- to a place that
     #: application does not read.
     inject_into: str = "request_parameter"
+    #: Whether to put the bounds on the request at all.
+    #:
+    #: Off means "track a cursor, filter on the way out, send nothing". That is
+    #: the honest shape for an endpoint whose documented parameters do not
+    #: include a time filter -- `deal/get.activities` takes an id and nothing
+    #: else. Inventing `last_update_stime` there is noise today and a hazard
+    #: later: if Base ever implements that name with different semantics, the
+    #: connector changes behaviour without anybody editing it.
+    #:
+    #: Distinct from an endpoint that documents the filter and applies it --
+    #: `pipeline/deals`, `account/list` and `contact/list` all do, provided they
+    #: are sent the *closed pair*. A lone `last_update_stime` is ignored there,
+    #: which is what made them look like they filtered nothing.
+    send_request_options: bool = True
+    #: Also drop records older than the cursor before emitting them.
+    #:
+    #: For an endpoint that returns everything no matter what it is sent, the
+    #: cursor can still earn its keep: the CDK compares each record against the
+    #: high-water mark and only the changed ones reach the destination. It saves
+    #: warehouse writes, never API calls -- every record is still fetched.
+    #:
+    #: Leave it off where the server filters. Declaring it there would re-check
+    #: on the client what the server already applied, and any disagreement
+    #: between the two -- a clock skew, an inclusive versus exclusive bound --
+    #: would silently drop rows the server was willing to give us.
+    client_side: bool = False
 
 
 @dataclass(frozen=True)
@@ -132,7 +188,20 @@ class Stream:
     #: Hiring calls it `num_per_page`; WeWork uses three different names.
     #: Sending the generic `limit` can be ignored silently, which makes the
     #: paginator stop after the server's first short default page.
-    page_size_field: str = "limit"
+    #:
+    #: `None` means the endpoint pages but takes no size at all -- Base CRM
+    #: Leads documents `page` and nothing else. Sending an invented `limit`
+    #: there is the same hazard as inventing a time filter: noise today, and a
+    #: silent change of behaviour the day Base implements that name.
+    page_size_field: str | None = "limit"
+    #: Where page numbering starts. Base's older APIs count from 0; the CRM
+    #: (`apis.base.vn/sales`) counts from 1, and starting at 0 there returns
+    #: the first page twice before the paginator believes it is done.
+    first_page: int = 0
+    #: Whether the page number rides on the first request too. Off by default,
+    #: because most Base endpoints treat an explicit page on the first call as
+    #: a filter rather than an offset.
+    page_on_first_request: bool = False
     #: Extra body fields this endpoint requires.
     body: dict[str, str] = field(default_factory=dict)
     #: A one-line note on why this stream exists, shown in the catalogue and in
@@ -163,6 +232,13 @@ class ConfigField:
     kind: Literal["string", "integer"] = "string"
     secret: bool = False
     default: Any = None
+    #: Send this field in the body of every request, not merely collect it.
+    #:
+    #: Most Base applications authenticate with a token alone. Base CRM wants a
+    #: token *and* an account password on each call, and a credential that is
+    #: asked for but never sent is the worst of both: the form demands it and
+    #: every request is still refused.
+    send_in_body: bool = False
 
 
 #: Where Base is hosted. Not a cosmetic setting: `base.vn` and `base.com.vn`
@@ -192,6 +268,43 @@ class BaseConnector:
     summary: str = ""
     docs_url: str = ""
     config: tuple[ConfigField, ...] = ()
+    #: The request field the token travels in. Every application on
+    #: `publicapi/v2` and `extapi/v1` reads `access_token_v2`; Base CRM reads
+    #: plain `access_token` and refuses the other name.
+    token_field: str = TOKEN_FIELD
+    #: Hosts this application is reachable on. The CRM lives on
+    #: `apis.base.vn` / `apis.basecrm.vn`, which are the same backend under two
+    #: names, and not on the per-app subdomains the others use.
+    domains: tuple[str, ...] = KNOWN_DOMAINS
+    #: Requests per interval this application allows, as (limit, ISO-8601).
+    #:
+    #: Declared so the CDK paces itself with a moving window, instead of running
+    #: flat out and learning the cap from a refusal. `lead_feed` issues one
+    #: request per lead -- 546 of them here -- and without this it exceeded Base
+    #: CRM Leads' 100/minute after about a hundred, failed the stream, and then
+    #: took the whole job down through an Airbyte bug (see the module docstring
+    #: in `crm_leads.py`).
+    #:
+    #: Left unset elsewhere on purpose: the Sales API sustained 5,582 requests
+    #: in one sync at roughly 220/minute with no refusal, so the two
+    #: applications do not share a limit and guessing one for the others would
+    #: slow every sync to protect against a cap nobody has observed.
+    rate_limit: tuple[int, str] | None = None
+    #: What the catalogue claims about this connector.
+    #:
+    #: `SUPPORTED` means "this product wrote it, tested it against the live API
+    #: and stands behind it". A connector built from documentation but not yet
+    #: run against a real tenant is `BETA` -- it is honest to ship the shape and
+    #: dishonest to call it certified. Promote it when the measurements exist,
+    #: not when the code is finished.
+    certification: str = "SUPPORTED"
+    #: Key to look this application's field contracts up under in
+    #: `schemas.json`. Defaults to `app`; set it where the reviewed YAML is
+    #: filed under a different name -- `base_crm_sale.yaml` yields `crm_sale`
+    #: while the connector ships as `crm`. Renaming either to match the other
+    #: would mean either an awkward `source-base-crm_sale` in the catalogue or
+    #: a source document that no longer matches what Base calls it.
+    schema_app: str | None = None
 
     @property
     def connector_key(self) -> str:
@@ -243,6 +356,39 @@ PARTITION_REFUSALS = (
     "is private",
 )
 
+#: Refusals that mean "too fast", said in the body rather than the status line.
+#:
+#: Base CRM Leads caps at 100 requests a minute and says so with HTTP 400 and
+#: `{"code": 0, "message": "Quota exceeded: 100 req/min"}` -- no 429, no
+#: `Retry-After`. Read by the catch-all FAIL rule below, that is a dead sync:
+#: `lead_feed` makes one request per lead, hit the cap after about a hundred, and
+#: the stream failed 37 seconds in. Matched before FAIL so it becomes a wait.
+#:
+#: The client-side budget (`BaseConnector.rate_limit`) is the real control; this
+#: is the safety net for when something else is spending the same quota.
+RATE_LIMIT_REFUSALS = (
+    "quota exceeded",
+    "too many request",
+)
+
+
+def _api_budget(connector: BaseConnector) -> dict[str, Any]:
+    """A moving-window rate limit over every request this connector makes.
+
+    One policy with no matchers, so it covers the whole connector: the quota
+    Base enforces is per token, not per endpoint, and a substream firing one
+    request per parent is exactly the stream that would exhaust it.
+    """
+    limit, interval = connector.rate_limit  # type: ignore[misc]
+    return {
+        "type": "HTTPAPIBudget",
+        "policies": [{
+            "type": "MovingWindowCallRatePolicy",
+            "rates": [{"type": "Rate", "limit": limit, "interval": interval}],
+            "matchers": [],
+        }],
+    }
+
 
 def _error_handler() -> dict[str, Any]:
     """Turn Base's 200-with-`code:0` into a failure, except where it is not one.
@@ -259,9 +405,25 @@ def _error_handler() -> dict[str, Any]:
     """
     private = " or ".join(
         f"{phrase!r} in message" for phrase in PARTITION_REFUSALS)
+    throttled = " or ".join(
+        f"{phrase!r} in message" for phrase in RATE_LIMIT_REFUSALS)
     return {
         "type": "DefaultErrorHandler",
         "response_filters": [
+            # Before FAIL: a quota refusal is a wait, not a broken request.
+            {
+                "type": "HttpResponseFilter",
+                "action": "RATE_LIMITED",
+                "predicate": (
+                    "{% set message = (response.get('message') or '')|lower %}"
+                    "{{ " + throttled + " }}"
+                ),
+                "error_message": (
+                    "Base is rate limiting this connector "
+                    "({{ response.get('message', 'unknown') }}); waiting and "
+                    "retrying."
+                ),
+            },
             {
                 "type": "HttpResponseFilter",
                 "action": "IGNORE",
@@ -305,11 +467,11 @@ def _paginator(stream: Stream) -> dict[str, Any]:
         return {"type": "NoPagination"}
     return {
         "type": "DefaultPaginator",
-        "page_size_option": {
+        **({"page_size_option": {
             "type": "RequestOption",
             "field_name": stream.page_size_field,
             "inject_into": "body_data",
-        },
+        }} if stream.page_size_field else {}),
         "page_token_option": {
             "type": "RequestOption",
             "field_name": stream.page_field,
@@ -317,8 +479,15 @@ def _paginator(stream: Stream) -> dict[str, Any]:
         },
         "pagination_strategy": {
             "type": "PageIncrement",
-            "page_size": stream.page_size,
-            "start_from_page": 0,
+            # Declared only when we control it. `page_size` is what the CDK
+            # compares a short page against to decide it has reached the end, so
+            # asserting a size the server was never told about means guessing:
+            # too high and it stops on the server's first default-sized page,
+            # too low and it pages past the end forever. With no size declared
+            # it stops on an empty page, which is true whatever the server does.
+            **({"page_size": stream.page_size} if stream.page_size_field else {}),
+            "start_from_page": stream.first_page,
+            "inject_on_first_request": stream.page_on_first_request,
         },
     }
 
@@ -348,18 +517,21 @@ def _incremental(inc: Incremental) -> dict[str, Any]:
             "datetime": "{{ now_utc().strftime('%s') }}",
             "datetime_format": "%s",
         },
-        "start_time_option": {
-            "type": "RequestOption",
-            "field_name": inc.param,
-            "inject_into": inc.inject_into,
-        },
+        **({
+            "start_time_option": {
+                "type": "RequestOption",
+                "field_name": inc.param,
+                "inject_into": inc.inject_into,
+            },
+        } if inc.send_request_options else {}),
         **({
             "end_time_option": {
                 "type": "RequestOption",
                 "field_name": inc.end_param,
                 "inject_into": inc.inject_into,
             },
-        } if inc.end_param else {}),
+        } if inc.end_param and inc.send_request_options else {}),
+        **({"is_client_side_incremental": True} if inc.client_side else {}),
     }
 
 
@@ -372,7 +544,8 @@ def _schema(connector: BaseConnector, stream: Stream) -> JsonSchema:
     losing a column.
     """
     schema = copy.deepcopy(
-        _SCHEMA_REGISTRY.get(connector.app, {}).get(stream.name, {})
+        _SCHEMA_REGISTRY.get(connector.schema_app or connector.app, {})
+        .get(stream.name, {})
     )
     schema["$schema"] = "http://json-schema.org/draft-07/schema#"
     schema["type"] = "object"
@@ -391,7 +564,12 @@ def _schema(connector: BaseConnector, stream: Stream) -> JsonSchema:
 
 
 def _stream_manifest(connector: BaseConnector, stream: Stream) -> dict[str, Any]:
-    body: dict[str, str] = {TOKEN_FIELD: "{{ config['" + TOKEN_FIELD + "'] }}"}
+    token = connector.token_field
+    body: dict[str, str] = {token: "{{ config['" + token + "'] }}"}
+    # Credentials that have to accompany every call, not just be collected.
+    for extra in connector.config:
+        if extra.send_in_body:
+            body[extra.name] = "{{ config['" + extra.name + "'] }}"
     body.update(stream.body)
 
     retriever: dict[str, Any] = {
@@ -399,7 +577,8 @@ def _stream_manifest(connector: BaseConnector, stream: Stream) -> dict[str, Any]
         "requester": {
             "type": "HttpRequester",
             "url_base": connector.url_base.replace(
-                "{domain}", "{{ config['domain'] or '" + DEFAULT_DOMAIN + "' }}"),
+                "{domain}",
+                "{{ config['domain'] or '" + connector.domains[0] + "' }}"),
             "path": stream.path,
             "http_method": "POST",
             "request_headers": {
@@ -461,7 +640,7 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
     # type. No backticks either: the form renders help as plain text, so
     # markdown arrives on screen as punctuation.
     properties: dict[str, Any] = {
-        TOKEN_FIELD: {
+        connector.token_field: {
             "type": "string",
             "title": "Access token",
             "description": (
@@ -473,7 +652,7 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
             "order": 0,
         },
     }
-    required = [TOKEN_FIELD]
+    required = [connector.token_field]
 
     properties["domain"] = {
         "type": "string",
@@ -484,8 +663,8 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
         # exactly like an expired token -- which cost most of a debugging
         # session to work out. Two choices instead of a text field removes the
         # typo and names the alternative.
-        "enum": list(KNOWN_DOMAINS),
-        "default": DEFAULT_DOMAIN,
+        "enum": list(connector.domains),
+        "default": connector.domains[0],
         "description": (
             "Tài khoản này nằm trên bản Base nào. base.vn là bản chính; "
             "base.com.vn là một bản cài riêng, tài khoản tách biệt. Token của "
@@ -556,6 +735,8 @@ def compile_manifest(connector: BaseConnector) -> dict[str, Any]:
         "check": {"type": "CheckStream", "stream_names": [checkable]},
         "definitions": {"streams": streams},
         "streams": [{"$ref": f"#/definitions/streams/{name}"} for name in streams],
+        # Only where a cap has actually been observed; see `rate_limit`.
+        **({"api_budget": _api_budget(connector)} if connector.rate_limit else {}),
         "spec": {
             "type": "Spec",
             "connection_specification": connection_specification(connector),

@@ -44,7 +44,8 @@ def connector_view(connector: ConnectorDefinition) -> ConnectorView:
     # of. `require_usable` applies the identical rule on the create path -- a
     # greyed-out card with a working endpoint behind it is decoration.
     offered = settings.connector_is_offered(
-        connector.connector_key, connector.certification.value)
+        connector.connector_key, connector.certification.value,
+        connector.spec_source)
     selectable = connector.status is ConnectorStatus.ACTIVE and offered
 
     reason = connector.disabled_reason

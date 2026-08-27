@@ -10,6 +10,7 @@ and a migration is a one-shot operation with no concurrency to gain from.
 
 from __future__ import annotations
 
+import logging
 from logging.config import fileConfig
 
 from alembic import context
@@ -23,7 +24,21 @@ from app.core.db import Base
 import app.models  # noqa: F401
 
 config = context.config
-if config.config_file_name is not None:
+# Only take over logging when nobody else has set it up.
+#
+# `alembic.ini` describes logging for the standalone CLI: root at WARNING with a
+# plain stderr handler. Applying that inside a host process replaces whatever
+# the host installed. `python -m app.bootstrap` migrates and *then* seeds, so
+# the deploy container printed its migration lines, seeded the catalogue,
+# republished manifests and exited 0 having said nothing about any of it --
+# root had been reset to WARNING and the JSON handler dropped. A bootstrap that
+# works silently is indistinguishable from one that skipped, and a warning
+# raised in that window is simply lost.
+#
+# `disable_existing_loggers=False` is not enough on its own: the damage is the
+# root logger's level and handlers being replaced, not existing loggers being
+# switched off.
+if config.config_file_name is not None and not logging.getLogger().handlers:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata

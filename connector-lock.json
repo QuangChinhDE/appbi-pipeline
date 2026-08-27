@@ -1,6 +1,6 @@
 {
   "product_version": "1.0.0",
-  "generated_at": "2026-08-26T01:53:14Z",
+  "generated_at": "2026-08-26T17:59:18Z",
   "connectors": [
     {
       "connector_key": "destination-bigquery",
@@ -35,6 +35,13 @@
       "image": "airbyte/source-google-sheets:0.12.35",
       "digest": "sha256:9469df5d9e24e966dbc34b25bf484414f6846483d2732df278c06efbcb195568",
       "spec_hash": "6ebd0c6a278f8157cb5fdf24c5eac045",
+      "certification": "SUPPORTED"
+    },
+    {
+      "connector_key": "source-mssql",
+      "image": "airbyte/source-mssql:5.0.0",
+      "digest": "sha256:5bdfad43e456facff0b3f9f3706594180e6fa2e6cef15991d88bd82305a9848b",
+      "spec_hash": "0d07cabd3b23318a81e9ad7c6cbb99ce",
       "certification": "SUPPORTED"
     },
     {

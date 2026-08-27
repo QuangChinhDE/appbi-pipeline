@@ -100,6 +100,31 @@ CURATED: dict[str, dict] = {
         "description": "Ghi dữ liệu vào PostgreSQL; bảng đích do connector tự tạo và quản lý.",
         "icon": "postgres",
     },
+    "source-mssql": {
+        "version": "5.0.0",
+        "description": "Đọc bảng từ Microsoft SQL Server; hỗ trợ full refresh và "
+                       "incremental theo cursor.",
+        "icon": "mssql",
+    },
+    "destination-mssql": {
+        # Deliberately NOT held back, unlike the destinations above.
+        #
+        # `destination-mssql` declares `supportsRefreshes: true`, so the rule
+        # for this platform says pin below it. Measured instead of assumed:
+        # 1.0.0, 2.0.0 and 2.2.20 were each run against a real SQL Server on
+        # 0.59.1 and all three completed. The refresh protocol is declared but
+        # not required at runtime by this connector, so the reason to hold it
+        # back does not apply -- and pinning below upstream costs something
+        # real, because the bundled spec comes from the registry and describes
+        # the *current* version. Pinning 1.0.0 shipped a form asking for
+        # `user` and `load_type` against a connector that wants `username` and
+        # has no `load_type`.
+        "version": "2.2.20",
+        "description": "Ghi dữ liệu vào Microsoft SQL Server. Hiện chỉ ghi bảng "
+                       "raw dạng JSON trong schema `airbyte_internal`; connector "
+                       "chưa dựng bảng đã định kiểu trên nền tảng này.",
+        "icon": "mssql",
+    },
     "source-bigquery": {
         "version": "0.4.5",
         "description": "Đọc bảng từ Google BigQuery bằng service account; "

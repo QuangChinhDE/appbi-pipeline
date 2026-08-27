@@ -240,6 +240,38 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                              "allowed": sorted(known - {name})},
                 )
 
+            # A parent that is never used is always a mistake.
+            #
+            # `SubstreamPartitionRouter` repeats the stream once per parent
+            # record; it does not change the request. So a child that neither
+            # names a parameter nor interpolates the partition anywhere reads the
+            # same collection N times and reports success -- N identical copies
+            # of one page, which looks like the connector works until somebody
+            # counts rows. Either is fine; neither is not.
+            field_name = partition.get("partition_field") or "parent_id"
+            reference = "stream_partition"
+            used_somewhere = any(
+                reference in str(value)
+                for value in [
+                    stream.get("path") or "",
+                    *[entry.get("value", "") for entry in (stream.get("query_params") or [])],
+                    *[entry.get("value", "") for entry in (stream.get("headers") or [])],
+                    *[entry.get("value", "") for entry
+                      in ((stream.get("request_body") or {}).get("entries") or [])],
+                ]
+            )
+            if not (partition.get("param") or "").strip() and not used_somewhere:
+                raise ValidationError(
+                    f"Stream '{name}' chọn stream cha '{parent}' nhưng không dùng id "
+                    f"của bản ghi cha ở đâu cả, nên mỗi phân mảnh sẽ gọi đúng một "
+                    f"request giống nhau. Hoặc điền tên tham số nhận id cha, hoặc "
+                    f"chèn {{{{ stream_partition.{field_name} }}}} vào URL path, "
+                    f"query, header hay body.",
+                    code="BUILDER_PARENT_KEY_UNUSED",
+                    details={"field": f"streams[{index}].partition.param",
+                             "partition_field": field_name},
+                )
+
     return definition
 
 
@@ -359,8 +391,22 @@ def _paginator(pagination: dict[str, Any]) -> dict[str, Any]:
     carry parameters the API never asked for.
     """
     mode = (pagination.get("mode") or "none").lower()
-    page_size = int(pagination.get("page_size") or 50)
+    # Blank means "this API pages but takes no size". Two things follow, and the
+    # second is the one that silently loses data: no invented size parameter on
+    # the request, and no `page_size` in the strategy either -- that number is
+    # what the CDK compares a short page against to decide it has finished, so
+    # asserting a size the server never agreed to either stops on the server's
+    # own first default-sized page or pages past the end forever. Measured on
+    # Base CRM Leads, whose `lead/list` ignores `limit` entirely and always
+    # returns 100.
+    raw_size = pagination.get("page_size")
+    page_size = int(raw_size) if str(raw_size or "").strip() else None
     inject = pagination.get("inject_into") or "request_parameter"
+
+    def with_size(strategy: dict[str, Any]) -> dict[str, Any]:
+        if page_size is not None:
+            strategy["page_size"] = page_size
+        return strategy
 
     if mode == "none":
         return {"type": "NoPagination"}
@@ -371,22 +417,21 @@ def _paginator(pagination: dict[str, Any]) -> dict[str, Any]:
         cursor_path = pagination.get("cursor_path") or "next"
         compiled: dict[str, Any] = {
             "type": "DefaultPaginator",
-            "pagination_strategy": {
+            "pagination_strategy": with_size({
                 "type": "CursorPagination",
-                "page_size": page_size,
                 "cursor_value": "{{ response." + cursor_path + " }}",
                 "stop_condition": pagination.get("stop_condition")
                 or ("{{ not response." + cursor_path + " }}"),
-            },
+            }),
             "page_token_option": {
                 "type": "RequestOption",
                 "inject_into": inject,
                 "field_name": pagination.get("page_param") or "cursor",
             },
         }
-        if pagination.get("size_param"):
+        if pagination.get("size_param") and page_size is not None:
             compiled["page_size_option"] = {
-                "type": "RequestOption", "inject_into": "request_parameter",
+                "type": "RequestOption", "inject_into": inject,
                 "field_name": pagination["size_param"],
             }
         return compiled
@@ -396,19 +441,19 @@ def _paginator(pagination: dict[str, Any]) -> dict[str, Any]:
         # whole URL and replaces the path rather than being a parameter.
         return {
             "type": "DefaultPaginator",
-            "pagination_strategy": {
+            "pagination_strategy": with_size({
                 "type": "CursorPagination",
-                "page_size": page_size,
                 "cursor_value": "{{ headers.link.next.url }}",
                 "stop_condition": "{{ 'next' not in headers.link }}",
-            },
+            }),
             "page_token_option": {"type": "RequestPath"},
         }
 
-    strategy = ({"type": "PageIncrement", "page_size": page_size,
-                 "start_from_page": int(pagination.get("start_from") or 1)}
-                if mode == "page"
-                else {"type": "OffsetIncrement", "page_size": page_size})
+    strategy = with_size(
+        {"type": "PageIncrement",
+         "start_from_page": int(pagination.get("start_from") or 1),
+         "inject_on_first_request": bool(pagination.get("inject_on_first_request"))}
+        if mode == "page" else {"type": "OffsetIncrement"})
 
     compiled = {
         "type": "DefaultPaginator",
@@ -419,11 +464,16 @@ def _paginator(pagination: dict[str, Any]) -> dict[str, Any]:
             or ("page" if mode == "page" else "offset"),
         },
     }
-    size_param = pagination.get("size_param") or ("per_page" if mode == "page" else "limit")
-    compiled["page_size_option"] = {
-        "type": "RequestOption", "inject_into": "request_parameter",
-        "field_name": size_param,
-    }
+    # Only when there is a size to send, and into the same place as the page
+    # token. Defaulting the name to `per_page`/`limit` and the location to the
+    # query string is how a POST-body API ends up ignoring the size while the
+    # manifest claims to set it.
+    if page_size is not None:
+        compiled["page_size_option"] = {
+            "type": "RequestOption", "inject_into": inject,
+            "field_name": pagination.get("size_param")
+            or ("per_page" if mode == "page" else "limit"),
+        }
     return compiled
 
 
@@ -538,21 +588,61 @@ def _partition_router(partition: dict[str, Any]) -> dict[str, Any] | None:
         parent = partition.get("parent_stream")
         if not parent:
             return None
-        return {
-            "type": "SubstreamPartitionRouter",
-            "parent_stream_configs": [{
-                "type": "ParentStreamConfig",
-                "stream": "#/definitions/streams/" + parent,
-                "parent_key": partition.get("parent_key") or "id",
-                "partition_field": partition.get("partition_field") or "parent_id",
-            }],
+        config: dict[str, Any] = {
+            "type": "ParentStreamConfig",
+            "stream": "#/definitions/streams/" + parent,
+            "parent_key": partition.get("parent_key") or "id",
+            "partition_field": partition.get("partition_field") or "parent_id",
         }
+        # Send the parent's id, rather than leaving the user to discover
+        # `{{ stream_partition.<field> }}` and hand-write a body field.
+        #
+        # Choosing a parent used to change nothing about the child's request: it
+        # produced partitions and the child had to interpolate the value itself,
+        # which the hint only ever described for the URL path. Every Base API
+        # takes the parent id in the form body instead, so "connect a parent"
+        # looked done and read the same unfiltered collection once per parent.
+        if partition.get("param"):
+            config["request_option"] = {
+                "type": "RequestOption",
+                "inject_into": partition.get("inject_into") or "request_parameter",
+                "field_name": partition["param"],
+            }
+        # Off unless asked for, and worth being blunt about in the UI: it is only
+        # safe where a parent is touched whenever one of its children changes.
+        # Measured on Base, which does not do that -- 234 of 234 CRM pipelines
+        # hold a deal newer than the pipeline itself. With it on, those parents
+        # drop out of the partition list after the first sync and their children
+        # silently stop arriving while every run still reports success.
+        if partition.get("incremental_parent"):
+            config["incremental_dependency"] = True
+        return {"type": "SubstreamPartitionRouter", "parent_stream_configs": [config]}
 
     return None
 
 
 def _incremental(stream: dict[str, Any]) -> dict[str, Any]:
+    """A cursor, and an honest answer about who applies it.
+
+    `filter_mode` is the choice Airbyte's builder calls "API Time Filtering
+    Capabilities", and it exists because declaring a cursor is not the same as
+    filtering with one. The CDK only compares records against the high-water
+    mark when `is_client_side_incremental` is set; without it, an endpoint that
+    ignores the parameter leaves a stream that advertises `incremental`, saves
+    state every sync, and re-emits every record forever. Base CRM's
+    `deal_activity` did exactly that -- 5,583 partitions of state and the
+    identical 3,970 rows twice -- and a connector built here could reproduce it
+    with no way to say what was wrong.
+
+    Two modes, not Airbyte's three. `is_data_feed` is left out because it is a
+    different promise -- the API returns newest-first and pagination stops at the
+    cursor -- and the CDK refuses to combine it with client-side filtering. An
+    option that cannot be explained in the form is worse than one that is absent.
+    """
     cursor = stream["cursor_field"].strip()
+    # "server" (default): the API takes the bounds. "client": it does not, so
+    # nothing is sent and records are dropped on the way out.
+    client_side = (stream.get("cursor_filter_mode") or "server").lower() == "client"
     compiled: dict[str, Any] = {
         "type": "DatetimeBasedCursor",
         "cursor_field": cursor,
@@ -562,13 +652,21 @@ def _incremental(stream: dict[str, Any]) -> dict[str, Any]:
             "datetime": "{{ config['start_date'] }}",
             "datetime_format": "%Y-%m-%dT%H:%M:%SZ",
         },
-        "start_time_option": {
-            "type": "RequestOption",
-            "inject_into": "request_parameter",
-            "field_name": stream.get("cursor_param") or cursor,
-        },
     }
-    if stream.get("cursor_end_param"):
+    if client_side:
+        compiled["is_client_side_incremental"] = True
+        compiled["end_datetime"] = {
+            "type": "MinMaxDatetime",
+            "datetime": "{{ now_utc().strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+            "datetime_format": "%Y-%m-%dT%H:%M:%SZ",
+        }
+    else:
+        compiled["start_time_option"] = {
+            "type": "RequestOption",
+            "inject_into": stream.get("cursor_inject_into") or "request_parameter",
+            "field_name": stream.get("cursor_param") or cursor,
+        }
+    if not client_side and stream.get("cursor_end_param"):
         compiled["end_datetime"] = {
             "type": "MinMaxDatetime",
             "datetime": "{{ now_utc().strftime('%Y-%m-%dT%H:%M:%SZ') }}",
@@ -576,7 +674,7 @@ def _incremental(stream: dict[str, Any]) -> dict[str, Any]:
         }
         compiled["end_time_option"] = {
             "type": "RequestOption",
-            "inject_into": "request_parameter",
+            "inject_into": stream.get("cursor_inject_into") or "request_parameter",
             "field_name": stream["cursor_end_param"],
         }
     if stream.get("step"):
@@ -1018,6 +1116,42 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
             primary_key = ", ".join(str(p) for p in primary_key)
 
         cursor = raw.get("incremental_sync") or {}
+
+        # The partition router used to be dropped here and replaced with
+        # `{"mode": "none"}`. Importing a manifest with a parent/child link and
+        # saving it deleted the link -- exactly the "destroy work the user could
+        # see in the YAML" this function's docstring promises not to do.
+        router = retriever.get("partition_router") or {}
+        if isinstance(router, list):
+            router = router[0] if router else {}
+        partition: dict[str, Any] = {"mode": "none"}
+        if router.get("type") == "ListPartitionRouter":
+            option = router.get("request_option") or {}
+            partition = {
+                "mode": "list",
+                "values": ", ".join(str(v) for v in (router.get("values") or [])),
+                "cursor_field": router.get("cursor_field") or "partition",
+                "param": option.get("field_name") or "",
+                "inject_into": option.get("inject_into") or "request_parameter",
+            }
+        elif router.get("type") == "SubstreamPartitionRouter":
+            parent_config = (router.get("parent_stream_configs") or [{}])[0]
+            option = parent_config.get("request_option") or {}
+            partition = {
+                "mode": "parent",
+                # `#/definitions/streams/<name>` or an inlined stream.
+                "parent_stream": str(parent_config.get("stream") or "").rsplit("/", 1)[-1]
+                if isinstance(parent_config.get("stream"), str)
+                else (parent_config.get("stream") or {}).get("name") or "",
+                "parent_key": parent_config.get("parent_key") or "id",
+                "partition_field": parent_config.get("partition_field") or "parent_id",
+                "param": option.get("field_name") or "",
+                "inject_into": option.get("inject_into") or "request_parameter",
+                "incremental_parent": bool(parent_config.get("incremental_dependency")),
+            }
+
+        size_option = paginator.get("page_size_option") or {}
+        token_option = paginator.get("page_token_option") or {}
         imported.append({
             "name": raw.get("name") or "stream",
             "path": requester.get("path") or "/",
@@ -1028,20 +1162,33 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
             "primary_key": primary_key or "",
             "pagination": {
                 "mode": pagination_mode,
-                "page_size": strategy.get("page_size") or 50,
-                "page_param": (paginator.get("page_token_option") or {}).get("field_name"),
-                "size_param": (paginator.get("page_size_option") or {}).get("field_name"),
+                # Kept blank when the manifest declares none, rather than
+                # inventing 50: re-saving would then assert a page length the
+                # API was never told about.
+                "page_size": strategy.get("page_size"),
+                "page_param": token_option.get("field_name"),
+                "size_param": size_option.get("field_name"),
+                "inject_into": token_option.get("inject_into") or "request_parameter",
+                "start_from": strategy.get("start_from_page"),
+                "inject_on_first_request": bool(strategy.get("inject_on_first_request")),
             },
             "incremental": bool(cursor),
             "cursor_field": cursor.get("cursor_field") or "",
             "cursor_format": cursor.get("datetime_format") or "",
             "cursor_param": (cursor.get("start_time_option") or {}).get("field_name") or "",
+            "cursor_end_param": (cursor.get("end_time_option") or {}).get("field_name") or "",
+            "cursor_inject_into": ((cursor.get("start_time_option") or {})
+                                   .get("inject_into") or "request_parameter"),
+            "cursor_filter_mode": ("client" if cursor.get("is_client_side_incremental")
+                                   else "server"),
+            "step": cursor.get("step") or "",
+            "lookback": cursor.get("lookback_window") or "",
             "query_params": [{"key": k, "value": str(v)}
                              for k, v in (requester.get("request_parameters") or {}).items()],
             "headers": [{"key": k, "value": str(v)}
                         for k, v in (requester.get("request_headers") or {}).items()],
             "schema": (raw.get("schema_loader") or {}).get("schema") or {},
-            "partition": {"mode": "none"},
+            "partition": partition,
             "transformations": [],
             "error_handler": {},
         })

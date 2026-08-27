@@ -515,6 +515,83 @@ async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
     return actor
 
 
+async def republish_manifests(
+    session: AsyncSession, connector_keys: frozenset[str] | set[str]
+) -> int:
+    """Carry a rebuilt connector manifest to the resources already built on it.
+
+    A declarative connector does not live in the engine as a definition with
+    logic in it; the logic travels inside each source's configuration, injected
+    once when that source is created. Airbyte then keeps its own copy forever.
+    So re-seeding `connector_definitions` on deploy updates the catalogue, the
+    Builder preview, and every source created *from now on* -- and changes
+    nothing about the sources that already exist.
+
+    That is not a corner case. `deal_activity` was fixed in code, re-seeded,
+    redeployed and re-synced, and emitted the same unfiltered 3,970 rows three
+    runs in a row, because the pipeline pointed at a source built an hour
+    earlier. The only thing that moved it was editing the source by hand, which
+    is not a thing a workspace should have to know to do.
+
+    Failures here are logged and skipped, never raised. This runs at boot: an
+    engine that is briefly unreachable must not stop the product from starting,
+    and the next deploy will try again because the catalogue comparison is
+    against stored state, not against a "done" flag.
+    """
+    if not connector_keys:
+        return 0
+
+    republished = 0
+    for kind in (SOURCE, DESTINATION):
+        actors = (await session.scalars(
+            select(kind.model).where(
+                kind.model.connector_key.in_(connector_keys),
+                kind.model.deleted_at.is_(None),
+            )
+        )).all()
+        for actor in actors:
+            ref = await engine_ref(session, kind, actor.id)
+            if ref is None:
+                continue          # never reached the engine; nothing to update
+            try:
+                connector = await catalog.get_connector(session, actor.connector_key)
+                configuration = catalog.apply_spec_defaults(
+                    connector.spec_schema, await resolve_configuration(session, actor)
+                )
+                request = EngineActorRequest(
+                    workspace_id=actor.workspace_id, product_resource_id=actor.id,
+                    name=actor.name, connector=catalog.descriptor(connector),
+                    configuration=configuration,
+                )
+                adapter = get_adapter()
+                updated = (await adapter.update_source(ref, request)
+                           if kind.side == "SOURCE"
+                           else await adapter.update_destination(ref, request))
+            except Exception as exc:                     # noqa: BLE001 -- see docstring
+                log_event(logger, logging.WARNING, "catalog.manifest_republish_failed",
+                          side=kind.side, resource_id=str(actor.id),
+                          connector_key=actor.connector_key, error=str(exc))
+                continue
+
+            mapping = await session.scalar(
+                select(EngineMapping).where(
+                    EngineMapping.product_resource_type == kind.product_resource,
+                    EngineMapping.product_resource_id == actor.id,
+                    EngineMapping.engine_resource_type == kind.engine_resource,
+                )
+            )
+            if mapping is not None:
+                mapping.engine_resource_ref = updated.ref
+                mapping.engine_version = connector.version
+            republished += 1
+            log_event(logger, logging.INFO, "catalog.manifest_republished",
+                      side=kind.side, resource_id=str(actor.id),
+                      connector_key=actor.connector_key)
+
+    await session.flush()
+    return republished
+
+
 async def test_existing(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
                         actor_id: uuid.UUID) -> tuple[Any, ConnectionCheckResult]:
     ctx.require(kind.module, Action.OPERATE)

@@ -28,6 +28,7 @@ from app.models import (  # noqa: F401 - import registers every table
     SchemaSnapshot, SecretRecord, Source, User, Workspace,
 )
 from app.models.enums import EngineStatus, EngineType
+from app.services import actors as actor_service
 from app.services import alerts, catalog
 
 logger = logging.getLogger(__name__)
@@ -267,8 +268,19 @@ async def seed() -> None:
             await session.flush()
 
         # The connector catalogue carries no credentials, so both modes get it.
-        created = await catalog.seed_catalog(session)
-        log_event(logger, logging.INFO, "bootstrap.catalog_seeded", created=created)
+        outcome = await catalog.seed_catalog(session)
+        log_event(logger, logging.INFO, "bootstrap.catalog_seeded",
+                  created=outcome.created,
+                  manifests_changed=sorted(outcome.manifests_changed))
+        # A declarative connector's logic lives inside each source's config in
+        # the engine, not in a shared definition, so re-seeding the catalogue
+        # does not reach a source that already exists. Push it.
+        republished = await actor_service.republish_manifests(
+            session, outcome.manifests_changed
+        )
+        if republished:
+            log_event(logger, logging.INFO, "bootstrap.manifests_republished",
+                      resources=republished)
 
         if settings.seed_demo_data:
             if settings.is_production:

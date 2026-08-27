@@ -232,6 +232,19 @@ services:
       AIRBYTE_ROLE: worker
       SYNC_JOB_MAX_ATTEMPTS: "3"
       SYNC_JOB_MAX_TIMEOUT_DAYS: "3"
+      # How long Temporal waits for the replication activity to report in
+      # before it kills the attempt. Airbyte ships 120 seconds, which is fine
+      # for a stream that is one request and wrong for a substream that is
+      # hundreds: Base CRM's `deal` walks 270 pipelines, and the first attempt
+      # of its first sync died with `activity Heartbeat timeout` after about
+      # two minutes -- having already written 5,319 rows, which the retry then
+      # had to reconcile.
+      #
+      # 15 minutes. The cost is that a genuinely wedged sync takes that long to
+      # be noticed; the alternative is that every wide substream fails its
+      # first attempt and succeeds on the second, which looks like flakiness
+      # and wastes a full read each time.
+      ACTIVITY_MAX_TIMEOUT_SECOND: "900"
     # Runs as root so it can open the Docker socket. On Docker Desktop the
     # socket is root-owned and the image's own user is not in that group, so
     # the worker starts, accepts a job, and then reports "Could not find image"

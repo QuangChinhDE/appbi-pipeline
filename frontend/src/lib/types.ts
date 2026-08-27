@@ -514,13 +514,19 @@ export interface BuilderKeyValue {
   value: string;
 }
 
+/** Where a value is placed on the outgoing request. */
+export type BuilderInjectInto =
+  | 'request_parameter' | 'header' | 'body_data' | 'body_json';
+
 export interface BuilderPagination {
   mode: 'none' | 'page' | 'offset' | 'cursor' | 'link_header';
-  page_size?: number;
+  /** Blank means the API pages but takes no size. Never defaulted. */
+  page_size?: number | null;
   page_param?: string;
   size_param?: string;
   start_from?: number;
-  inject_into?: 'request_parameter' | 'header' | 'body_json';
+  inject_on_first_request?: boolean;
+  inject_into?: BuilderInjectInto;
   cursor_path?: string;
   stop_condition?: string;
 }
@@ -528,11 +534,15 @@ export interface BuilderPagination {
 export interface BuilderPartition {
   mode: 'none' | 'list' | 'parent';
   values?: string;
+  /** Request field carrying the partition value, so choosing a parent sends it. */
   param?: string;
+  inject_into?: BuilderInjectInto;
   cursor_field?: string;
   parent_stream?: string;
   parent_key?: string;
   partition_field?: string;
+  /** `incremental_dependency`. Off by default; see the warning in the form. */
+  incremental_parent?: boolean;
 }
 
 export interface BuilderTransformation {
@@ -567,6 +577,9 @@ export interface BuilderStream {
   cursor_param?: string;
   cursor_end_param?: string;
   cursor_format?: string;
+  cursor_inject_into?: BuilderInjectInto;
+  /** 'server': the API takes the bounds. 'client': it does not, so we filter. */
+  cursor_filter_mode?: 'server' | 'client';
   step?: string;
   lookback?: string;
   query_params: BuilderKeyValue[];

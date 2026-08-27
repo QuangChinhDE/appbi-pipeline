@@ -116,15 +116,28 @@ class Settings(BaseSettings):
         return frozenset(
             key.strip() for key in self.connector_beta_allowlist.split(",") if key.strip())
 
-    def connector_is_offered(self, connector_key: str, certification: str) -> bool:
+    def connector_is_offered(self, connector_key: str, certification: str,
+                             spec_source: str | None = None) -> bool:
         """Is this connector one this deployment is prepared to stand behind?
 
         Read by both the presenter and the create path. One function, because a
         catalogue that greys a connector out while the API still accepts it is
         not a launch scope -- it is a suggestion.
+
+        `spec_source == "BUILDER"` is exempt, and the distinction is the point of
+        the setting. The launch scope exists so the product does not *offer*
+        hundreds of upstream connectors it has never tested; a connector the
+        workspace built in the Connector Builder is not upstream, is scoped to
+        that workspace, and was published by a deliberate act. Applying the
+        certification rule to it made Publish succeed and the create wizard then
+        refuse the result with "contact your administrator" -- the Builder shipped
+        something nobody could use. BLOCKED and HIDDEN still win, so an
+        administrator can retire one.
         """
         if certification in ("BLOCKED", "HIDDEN"):
             return False
+        if (spec_source or "").upper() == "BUILDER":
+            return True
         if self.connector_launch_scope.upper() == "FULL_CATALOG":
             return True
         return certification == "SUPPORTED" or connector_key in self.beta_allowlist

@@ -3,7 +3,647 @@
 One page. `PRODUCTION_READINESS_REVIEW.md` is the full review log and reads
 chronologically; this is where it has got to.
 
-**Updated:** 2026-08-26 (thu gọn stack + dọn cây thư mục)
+**Updated:** 2026-08-27 (cursor `deal_activity` lọc thật)
+
+---
+
+## Bootstrap khi deploy chạy câm (2026-08-27)
+
+Tìm ra khi đi kiểm chứng bản vá ở trên: container `migrate` thoát 0 mà không in
+một dòng nào sau phần Alembic — không `bootstrap.schema_ready`, không
+`bootstrap.catalog_seeded`, không `bootstrap.seed_complete`.
+
+Nó không hề bỏ qua bước nào. `migrations/env.py` gọi
+`fileConfig(alembic.ini)` vô điều kiện, mà file đó mô tả logging cho CLI đứng
+một mình: root ở mức WARNING với một handler stderr thường. Áp cấu hình đó bên
+trong một tiến trình chủ sẽ thay luôn handler mà tiến trình đã cài.
+`python -m app.bootstrap` migrate **rồi mới** seed, nên toàn bộ phần sau đi vào
+im lặng. `disable_existing_loggers=False` không đủ: hỏng là ở mức và handler của
+root bị thay, không phải ở việc logger cũ bị tắt.
+
+Đây không chỉ là chuyện đẹp mắt. Bước đẩy manifest mới thêm ở trên ghi
+`catalog.manifest_republish_failed` khi engine không tới được — đúng cảnh báo mà
+người vận hành cần thấy, và nó rơi vào đúng khoảng câm này. Một bootstrap chạy
+đúng mà không nói gì thì không phân biệt được với một bootstrap đã bỏ qua.
+
+Sửa: chỉ áp `alembic.ini` khi chưa ai cấu hình logging. Khoá bằng
+`test_running_migrations_does_not_silence_the_application_log`, và test đó tự
+chứng minh mối nguy còn thật trước khi kiểm tra guard — nếu ngày nào
+`alembic.ini` thôi thay logging của chủ, test sẽ nói ra thay vì lặng lẽ bảo vệ
+một thứ không còn tồn tại.
+
+---
+
+## Sửa connector không tới được source đã tạo (2026-08-27)
+
+Tìm ra khi truy vấn `deal_activity`, và nặng hơn chính lỗi ban đầu.
+
+`app/connectors/base_vn/__init__.py` viết rằng "sửa một lần, mọi workspace nhận
+được ở lần deploy sau, vì `seed_catalog()` ghi đè manifest đã lưu". Nửa đầu
+đúng, nửa sau không. Một connector khai báo **không** tồn tại trong engine dưới
+dạng một definition có logic; logic nằm trong `__injected_declarative_manifest`
+của *từng source*, được nhét vào đúng lúc tạo source, và Airbyte giữ bản sao đó
+mãi. Deploy lại chỉ cập nhật hàng trong `connector_definitions`, bản xem trước
+của Builder, và những source tạo *từ giờ trở đi*.
+
+Triệu chứng: sau khi vá `deal_activity`, chạy lại ba lần vẫn ra đúng 3.970 bản
+ghi không lọc. Manifest trong catalogue đã có `is_client_side_incremental: true`
+lúc 10:13:25; source trong engine thì vẫn là bản dựng lúc 09:14. Chỉ đến khi
+`PATCH /api/v1/sources/{id}` — thao tác tay — engine mới nhận bản mới. Đó không
+phải việc một workspace phải biết mà làm.
+
+Sửa: `seed_catalog` trả về `SeedOutcome(created, manifests_changed)` — so
+manifest cũ với mới ngay chỗ ghi đè — và bootstrap gọi
+`actors.republish_manifests()` đẩy bản mới tới mọi source/destination dựng trên
+những connector đó. Manifest không đổi thì không đụng gì tới tài nguyên đang
+chạy. Engine tạm không tới được thì ghi log rồi bỏ qua, không chặn khởi động;
+lần deploy sau thử lại, vì mốc so sánh là trạng thái đã lưu chứ không phải một
+cờ "đã xong".
+
+Khoá bằng `test_a_rebuilt_manifest_reaches_the_sources_already_built_on_it`: một
+deploy không đổi gì thì không được đẩy gì, một deploy đổi manifest thì phải đẩy
+đúng resource đang có. Tắt bước đẩy đi thì test đỏ — đã thử ngược.
+
+---
+
+## Hạn mức 100 req/phút, và một lỗi Airbyte biến nó thành bí ẩn (2026-08-27)
+
+Lần chạy Leads đầu tiên thất bại ba attempt liền, và thông báo duy nhất là:
+
+    io.temporal.failure.ServerFailure: Complete result exceeds size limit.
+
+Không nói gì về stream nào, cũng không phải lỗi thật. Truy theo bốn lớp:
+
+1. **Gốc, và là phần của mình:** `lead/feed/list` gọi một lượt cho mỗi lead —
+   546 lượt — và Base CRM Leads chặn ở **100 request/phút**. Nó từ chối bằng
+   HTTP **400** với `{"code": 0, "message": "Quota exceeded: 100 req/min"}`:
+   không 429, không `Retry-After`. Luật catch-all FAIL của mình (đúng đắn cho
+   `code: 0`) đọc đó là lỗi chí tử và giết stream sau 37 giây.
+2. `lead_feed` chuyển sang INCOMPLETE lúc 14:16:59, rồi nhận INCOMPLETE **lần
+   hai** lúc 14:17:02 khi job dọn dẹp.
+3. `StreamStatusTracker` ném `StreamStatusException` cho lần chuyển trùng đó — và
+   trong Airbyte 0.59.1 `StreamStatusException.getMessage()` **gọi chính nó**.
+   Đọc bytecode cho thấy lệnh đầu tiên của phương thức là `invokevirtual
+   getMessage` trên `this`. Log nó là StackOverflowError.
+4. Stacktrace hàng nghìn khung đó đi vào `StandardSyncOutput.failures`, đẩy kết
+   quả activity vượt giới hạn blob 2 MB của Temporal. Temporal từ chối, Airbyte
+   retry, ba lần đều thế.
+
+State chỉ 70 KB và catalog 1 KB — đã đo, để loại trừ hai nghi phạm dễ đoán.
+
+Sửa hai lớp mình sở hữu:
+
+* **`BaseConnector.rate_limit`** phát `api_budget` với
+  `MovingWindowCallRatePolicy` 100/PT1M. CDK tự điều tiết thay vì chạy hết tốc
+  rồi học giới hạn từ một lời từ chối. Không có matcher, vì hạn mức tính theo
+  token chứ không theo endpoint.
+* **`RATE_LIMIT_REFUSALS`** khớp `quota exceeded` / `too many request` với action
+  `RATE_LIMITED`, **đặt trước** FAIL. Đây là lưới an toàn cho trường hợp có thứ
+  khác đang tiêu cùng hạn mức đó.
+
+Chỉ khai cho Leads. API Sales chịu 5.582 request trong một lần sync ở khoảng
+220/phút mà không bị từ chối, nên hai ứng dụng không dùng chung giới hạn; đặt
+bừa một con số cho mười connector còn lại sẽ làm mọi lần sync chậm đi để phòng
+một cái trần chưa ai thấy. Khoá bằng
+`test_only_the_application_with_a_measured_cap_declares_one`.
+
+Ba lớp 2–4 là của Airbyte, không sửa được từ đây. Điều đáng ghi lại: ở phiên bản
+này, **một stream lỗi có thể biến thành một job không đọc được thông báo**. Khi
+gặp `Complete result exceeds size limit`, chỗ cần tìm là stream nào đổi trạng
+thái hai lần, rồi tìm lỗi thật ngay trước đó.
+
+---
+
+## Builder: chọn stream cha xong phải chạy được (2026-08-27)
+
+Đối chiếu với ảnh Connector Builder của Airbyte anh gửi. Bố cục của mình đã có
+đủ các nhóm tương ứng — Request, Pagination, Incremental, Partition,
+Transformations, Error handler — và gom thành khối gập được thay vì cuộn phẳng,
+nên phần bố cục không cần đổi. Thiếu là ở **ba ô điều khiển**, và cả ba đều là
+bài học rút ra trong ngày.
+
+### 1. Chọn stream cha nhưng không gửi id cha
+
+Đây chính là chỗ anh nói "connect stream cha sang stream con đang gặp lỗi".
+
+`SubstreamPartitionRouter` chỉ **lặp** stream một lần cho mỗi bản ghi cha; nó
+không sửa request. Builder trước đây chọn cha xong là hết — request con không
+đổi, nên nó đọc đúng một trang giống nhau N lần rồi báo thành công. Đường thoát
+duy nhất là biết tới `{{ stream_partition.<field> }}`, mà gợi ý trên form chỉ nói
+tới **URL path**, trong khi mọi API của Base nhận id cha trong **form body**.
+
+Sửa ba lớp:
+
+* CDK cho phép `request_option` trên `ParentStreamConfig`. Điền tên tham số là
+  id cha được gửi tự động, kèm ô chọn nơi gửi (query / body form / body JSON /
+  header).
+* Chọn cha mà **không** điền tên tham số và cũng **không** tham chiếu phân mảnh ở
+  path, query, header hay body thì `validate()` từ chối, với thông báo nêu cả hai
+  cách sửa. N request giống nhau báo thành công tệ hơn một lỗi.
+* Thêm ô `incremental_dependency` ("Incremental Parent" trong ảnh), **mặc định
+  tắt**, kèm cảnh báo ghi rõ số đo: 234/234 pipeline CRM có deal mới hơn chính
+  pipeline, nên bật lên là những cha đó rơi khỏi danh sách phân mảnh sau lần sync
+  đầu và con của chúng ngừng về trong khi mọi lần chạy vẫn xanh.
+
+### 2. Khai cursor mà không lọc gì
+
+Ảnh của Airbyte có ô "API Time Filtering Capabilities". Builder của mình không
+có, nên gặp endpoint kiểu `deal/get.activities` hay `lead/feed/list` thì người
+dùng chỉ còn hai lựa chọn: bịa một tên tham số, hoặc nhận một cursor không làm
+gì. Đúng lỗi vừa sửa ở `deal_activity`.
+
+Thêm ô "Ai lọc theo thời gian" với hai lựa chọn: API lọc (gửi tham số) hoặc API
+không lọc (phát `is_client_side_incremental`, không gửi gì). **Hai chứ không phải
+ba như Airbyte** — `is_data_feed` là một lời hứa khác (API trả mới nhất trước,
+phân trang dừng ở cursor) và CDK từ chối kết hợp nó với lọc phía client; một ô
+không giải thích được trên form thì tệ hơn là không có.
+
+Cũng thêm ô chọn nơi gửi mốc thời gian, vì trước đây luôn ép vào query string.
+
+### 3. Cỡ trang mặc định 50
+
+Builder luôn phát `page_size` và luôn bịa tên tham số (`per_page`/`limit`) đặt
+vào query string — cả ba đều sai với API POST-form. Nay để trống được, và khi
+trống thì không phát `page_size_option` lẫn `page_size` trong strategy. Lý do đã
+đo trên `lead/list`: nó phân trang, cỡ 100 cố định, và bỏ qua `limit` ở cả 5,
+500, 1000.
+
+`page_size` là con số CDK đem so với một trang ngắn để biết đã hết. Khai một cỡ
+server chưa từng đồng ý thì hoặc dừng ngay ở trang mặc định đầu tiên, hoặc lật
+trang qua khỏi cuối mãi mãi.
+
+### Và một lỗi mất dữ liệu trong lúc rà
+
+`definition_from_manifest` thay **mọi** partition router bằng `{"mode": "none"}`.
+Nhập một manifest có liên kết cha–con rồi lưu là mất liên kết — đúng điều
+docstring của chính nó hứa không xảy ra ("anything unrecognised makes the import
+fail loudly instead"). Cũng mất luôn `cursor_end_param`, `step`, `lookback`, và
+đặt `page_size` về 50 khi manifest không khai. Nay round-trip giữ hết, và có test
+đi hai chiều: định nghĩa → YAML → định nghĩa → biên dịch lại phải ra đúng router
+cũ.
+
+### Bằng chứng
+
+`test_the_builder_can_express_base_crm_leads` dựng lại Base CRM - Leads bằng
+đúng những gì điền được trên form, rồi so từng thành phần với connector đã ship:
+cùng record selector, cùng loại paginator, cùng chuỗi cha hai tầng có
+`request_option` vào body, cùng cursor server-side ở `lead` và client-side ở
+`lead_feed`. Connector viết tay ship kèm sản phẩm; một workspace gặp cùng API mà
+không đi tới được cùng manifest thì Builder chỉ là bản demo.
+
+Lưu ý về nút Test: ở chế độ `AIRBYTE_API`, Test trong Builder chạy `check` +
+`discover` và **không** trả về bản ghi mẫu — Config API của Airbyte không có
+endpoint đọc giới hạn, và tự gọi HTTP trong sản phẩm sẽ cho một bản xem trước
+chạy bằng network, Python và CDK của sản phẩm chứ không phải của connector đã
+phát hành. Adapter báo thẳng qua `record_preview_supported`. Muốn thấy bản ghi
+thì publish rồi chạy trong một connection — đúng như cảnh báo trong ảnh Airbyte
+anh gửi.
+
+---
+
+## Base CRM tách đôi: Deals và Leads (2026-08-27)
+
+Ba endpoint Lead trong tài liệu (`lead/services`, `lead/list`,
+`lead/feed/list`) không nằm cùng ứng dụng với phần đang có:
+
+| | Base CRM - Deals | Base CRM - Leads |
+|---|---|---|
+| Gốc đường dẫn | `apis.basecrm.vn/sales/v1/` | `apis.basecrm.vn/leads/` |
+| Token | riêng | **riêng, khác hẳn** |
+| Thực thể chung | — | không có |
+
+Đo được: token Sales bị `/leads/` từ chối với `INVALID TOKEN APPKEY` trên cả hai
+host, có và không có mật khẩu, trong khi chính token đó vẫn trả về 271 pipeline
+ở `sales/v1/pipeline/all`. Gửi bằng `access_token_v2` thì lỗi khác
+(`access_token_invalid_1`) — nó đọc cả hai tên và không nhận cái nào từ nhầm
+app. Tài liệu gọi cặp này là `leads_access_token` / `leads_password` cũng vì thế.
+
+Nên tách thành `source-base-crm-leads`, và connector cũ đổi tên hiển thị thành
+**Base CRM - Deals** (khoá vẫn là `source-base-crm` — đổi khoá sẽ làm mồ côi mọi
+source đã dựng). Gộp chung sẽ bắt workspace chỉ bán hàng phải giữ credential
+Leads, hoặc để cặp đó tùy chọn và sinh ra ba stream hiện trong Schema rồi hỏng
+lúc sync — đúng kiểu lỗi câm vừa dọn hôm nay.
+
+Ba stream: `lead_service → lead → lead_feed`. `lead/services` liệt kê dịch vụ từ
+token nên không cần `service_id` điền sẵn, giống cách phần Deals đã bỏ được
+`service_id: '248'` hardcode.
+
+**`time_filter_key` là điểm đáng chú ý.** `lead/list` không có một trường "đổi
+từ lúc nào" duy nhất: nó nhận khoảng `start_time`/`end_time` **cộng với**
+`time_filter_key` chỉ ra khoảng đó áp lên cột nào — `since`, `last_update`,
+`last_update_stage` hay `last_update_status`. Mặc định là `since`, tức thời điểm
+tạo; incremental theo đó sẽ gom được lead mới và **không bao giờ thấy** một lead
+cũ bị sửa hay chuyển giai đoạn. Connector ghim `last_update`. Hai key còn lại
+mỗi cái chỉ nhúc nhích theo một loại thay đổi nên không dùng làm cursor.
+
+Hai khả năng mới trong `_shared.py`, cả hai đều xuất phát từ `lead/list`:
+
+* `page_size_field=None` — endpoint có `page` nhưng **không có** tham số cỡ
+  trang. Gửi thêm `limit` là bịa tham số; và nguy hơn, `page_size` khai trong
+  `PageIncrement` chính là con số CDK đem so với một trang ngắn để biết đã hết.
+  Khai một cỡ mà server chưa từng đồng ý thì hoặc dừng ngay ở trang mặc định đầu
+  tiên, hoặc lật trang qua khỏi cuối mãi mãi. Không khai thì nó dừng khi gặp
+  trang rỗng — điều luôn đúng.
+* `BaseConnector.certification` — một connector dựng từ tài liệu nhưng chưa chạy
+  thật thì nói `BETA`, không nhận `SUPPORTED`.
+
+### Đã đo với token thật, và một chỗ tôi đoán sai
+
+`qa/probe/base_crm_leads.py`. Những gì nó sửa:
+
+* **`lead/services` trả về khoá `services`, không phải `lead_services`.** Quy ước
+  của mười một connector Base còn lại — collection đặt tên theo thực thể — không
+  đúng ở đây. Dựng theo phỏng đoán thì đọc được **0 bản ghi và vẫn báo thành
+  công**. Đây chính là lý do connector này ship `BETA` cho tới khi có số đo.
+* **`service_id` là bắt buộc** — thiếu nó `lead/list` trả `Invalid service`.
+* **Trang cỡ 100 cố định, `limit` bị bỏ qua hoàn toàn** (5 / 500 / 1000 đều trả
+  100). Lật trang trên dịch vụ 205 lead ra 100 / 100 / 5 / 0, không trùng lặp,
+  và `page=0` lặp lại trang 1.
+* **`lead/feed/list` không phân trang và không lọc thời gian** — `page=2` trả
+  đúng 15 bản ghi như trang 1, và cả sáu phép thử tham số thời gian đều trả đủ
+  15. Mọi feed có `last_update`, nên nó nhận cursor lọc phía client.
+* Bản ghi lead **không có** `service_id` lẫn `stage_id`; giai đoạn là `stage`,
+  trạng thái là `status`. Kiểu trường khai theo bản ghi, không theo tham số.
+
+### Chạy thật lên BigQuery
+
+| Stream | Lần 1 | Lần 2 |
+|---|---:|---:|
+| lead_service | 19 | 19 |
+| lead | 24 | 24 |
+| **lead_feed** | 1.790 | **707** |
+
+1.833 bản ghi, 8 phút, 1 attempt. `lead` giữ 24 vì đó là các bản ghi nằm đúng
+mốc biên (một cho mỗi dịch vụ có lead) — cùng trạng thái dừng như `deal` ở phần
+Deals. `lead_feed` giảm 1.790 → 707 nhờ cursor phía client. Đã nâng lên
+`SUPPORTED` với bằng chứng ghi trong
+`test_only_verified_connectors_claim_certification`.
+
+---
+
+## Cursor khai báo mà không lọc gì — `deal_activity` (2026-08-27)
+
+Câu hỏi của anh về `deal_activity` đúng ở cả hai vế, và vế thứ hai là một lỗi
+thật.
+
+**Vế 1 — nó chạy theo toàn bộ deal id, không phải deal mới nhất.** Đây là hành
+vi cố ý. `SubstreamPartitionRouter` đọc stream cha độc lập với cursor của cha,
+nên 5.582 deal đều được duyệt mỗi lần sync. Bật `incremental_dependency` sẽ cắt
+xuống hai chục lần nhưng **không an toàn ở đây**: trong 121 deal có feed, 46
+deal có feed mới hơn chính deal đó (chênh tới hai ngày). Những deal ấy sẽ rơi
+khỏi danh sách phân mảnh và hoạt động mới nhất của chúng ngừng về, trong khi mọi
+lần chạy vẫn báo thành công.
+
+**Vế 2 — Sync mode `incremental` là nhãn suông.** Stream khai báo cursor, lưu
+state đủ 5.583 phân mảnh, cursor có tiến — và vẫn phát lại đúng 3.970 bản ghi ở
+lần chạy sau. CDK chỉ so bản ghi với mốc nước khi manifest bật
+`is_client_side_incremental`; connector không phát cờ đó ở bất kỳ đâu.
+
+Trong lúc truy vấn, một kết luận cũ của tôi hoá ra sai và đã sửa: tôi từng ghi
+`pipeline/deals`, `account/list`, `contact/list` "khai báo bộ lọc thời gian rồi
+lờ đi". Không phải. Chúng lọc thật, **nhưng chỉ khi nhận đủ cặp**:
+
+| Gửi tới `pipeline/deals` (65 deal) | Trả về |
+|---|---:|
+| không tham số | 65 |
+| chỉ `last_update_stime` = 2030 | 65 |
+| `last_update_stime` + `last_update_etime` = 2030 | 0 |
+
+Phép thử cũ chỉ gửi một vế nên đọc ra "không lọc". Bằng chứng ngược đã nằm sẵn
+trong số liệu: các stream này giảm 5.583→263, 957→36, 1.317→27 ở lần sync thứ
+hai *trong khi connector chưa hề có lọc phía client* — chỉ server mới làm được
+điều đó. `deal/get.activities` thì đúng là không lọc: sáu phép thử
+(`last_update_stime`, `stime`, `since_stime`, mỗi tên thử đơn lẻ và theo cặp)
+đều trả về đủ 16 bản ghi.
+
+Sửa: thêm `Incremental.client_side`, phát `is_client_side_incremental: true`, và
+chỉ bật cho `_INC_FEED`. Không bật ở nơi server đã lọc — một lượt lọc thứ hai
+chỉ có thể bất đồng với server và làm rơi dòng.
+
+Khoá bằng `test_stream_wiring_reaches_the_manifest`: cursor nào không gửi tham
+số thì **bắt buộc** phải bật lọc phía client, và ngược lại. Bỏ cờ ra thì test đỏ
+đúng ở `crm.deal_activity` — đã thử ngược.
+
+Kết quả đo sau khi sửa, cùng một pipeline:
+
+| Stream | Đầy đủ | Trước sửa | Sau sửa |
+|---|---:|---:|---:|
+| deal | 5.583 | 263 | 263 |
+| **deal_activity** | 3.970 | **3.970** | **1.707** |
+| pipeline_log | 1.389 | 0 | 0 |
+| contact | 1.317 | 27 | 27 |
+| account | 957 | 36 | 36 |
+
+1.707 chứ không phải 0, và đó là đúng. State có 5.583 phân mảnh, trong đó 3.884
+deal không có feed nào (cursor 0) và **1.699 deal có feed**. Cursor của Airbyte
+lấy biên dưới theo kiểu bao gồm ở mức giây, nên mỗi phân mảnh phát lại đúng bản
+ghi nằm trên mốc: 1.699 + 8 bản ghi mới thật = 1.707. `deal` cũng vậy — 263 ≈
+một deal mới nhất cho mỗi pipeline có deal. Đây là trạng thái dừng bình thường
+của Airbyte, và `append_dedup` ở đích khử trùng chúng.
+
+Cái không sửa được bằng cursor: `deal_activity` vẫn gọi API đủ 5.582 lần mỗi lần
+sync, vì router phân mảnh đọc stream cha độc lập. Lọc phía client tiết kiệm lượt
+ghi vào kho, không tiết kiệm lượt gọi. Lý do không bật `incremental_dependency`
+đã ghi ở mục dưới.
+
+---
+
+## Base CRM dựng lại theo tài liệu API thật (2026-08-27)
+
+Bản đầu tôi dựng từ YAML và chỉ ship 2 stream. Ảnh tài liệu anh gửi cho thấy
+**hai endpoint tôi tìm mãi không ra**: `account/service/all` và
+`contact/service/all` — chỉ cần token + password, trả về danh mục service.
+Vậy `service_id` **khám phá được**, không phải hardcode, và toàn bộ nhánh
+account/contact mở ra. Connector giờ **10 stream**, không còn giá trị nào của
+tenant khác.
+
+### Cây stream
+
+```
+pipeline (270)                 account_service (29)      contact_service (22)
+├─ deal (5.582)                ├─ account (957)          ├─ contact (1.317)
+│  └─ deal_activity            └─ account_segment (16)   └─ contact_segment (5)
+└─ pipeline_log (1.389)
+```
+
+`deal_activity` là **cháu** của pipeline (pipeline → deal → activity), và đó
+chính là thứ trước đây phải bắn ra webhook n8n. Đã chạy được trong hệ thống:
+`deal/get.activities` nhận deal id, trả `feeds`, và `user_id` hoá ra **tuỳ
+chọn** — cùng 6 bản ghi dù có hay không, nên không bắt workspace phải nhập.
+
+### Ba endpoint cố ý không ship, đã đo
+
+| Endpoint | Lý do |
+|---|---|
+| `pipeline/get.stages` | Trùng khít `pipeline.cached_stages`. So từng trường trên 20 pipeline: khác **duy nhất** `token` — giá trị phù du mỗi response. Ship riêng = 270 lượt gọi/lần sync cho dữ liệu đã có. |
+| `pipeline/get.segments` | Tương tự với `cached_segments`, giống hệt trên cả 15 pipeline đã kiểm. |
+| `account/get.activities`, `contact/get.activities` | Trả về chuỗi thuần **`Function 1 is deprecated`** — không phải JSON, không phải mã lỗi. Đã bỏ. |
+
+Khoá bằng `test_crm_does_not_ship_endpoints_whose_data_is_already_embedded`,
+liệt kê theo **đường dẫn** chứ không theo tên stream — vì sai lầm dễ mắc là
+thêm lại endpoint đó dưới một cái tên khác.
+
+### Không endpoint nào lọc theo thời gian
+
+`last_update_stime`/`etime` có trong tài liệu của `pipeline/deals`,
+`account/list`, `contact/list`. Không cái nào áp dụng: gửi mốc năm 2030 vẫn
+trả về đúng 41 / 260 / 333 bản ghi như không gửi. Cursor vẫn khai, để CDK lọc
+phía client — đích chỉ nhận bản ghi đổi và `append_dedup` có cái để khử trùng.
+**Tiết kiệm lượt ghi kho, không tiết kiệm lượt gọi API.**
+
+Tài liệu cũng ghi `service_id` là optional cho `account/list`. Thực tế **bắt
+buộc**: thiếu là `INVALID_ACCOUNT_SERVICE`.
+
+### `deal_activity` đắt, và vì sao không tối ưu được
+
+Một lượt gọi cho mỗi deal, đo được 0,35s → **~30 phút mỗi lần sync** ở quy mô
+5.582 deal. `incremental_dependency` sẽ cắt được 20 lần, và **không an toàn**:
+trong 121 deal có feed, **46 deal có feed mới hơn chính deal**, lệch tới 2
+ngày. Bật lên thì những deal đó rời danh sách phân mảnh và hoạt động mới nhất
+của chúng ngừng về.
+
+Đáng ghi lại: mẫu đầu tiên tôi lấy 9 deal cho kết quả 9/9 cascade đúng, suýt
+kết luận là an toàn. Mở rộng lên 300 deal thì hỏng 46/121. Mẫu nhỏ ở đây
+không nói lên gì cả.
+
+Stream này để người dùng tự chọn bật/tắt theo nhu cầu.
+
+### Chạy thật qua sản phẩm
+
+Cả 10 stream vào BigQuery, một lần chạy, **không retry** — heartbeat fix ở mục
+trước giữ được. Số emit khớp tuyệt đối với số dòng đếm trong BigQuery:
+
+| Stream | Bản ghi | | Stream | Bản ghi |
+|---|---:|---|---|---:|
+| deal | 5.583 | | pipeline | 271 |
+| deal_activity | 3.970 | | account_service | 29 |
+| pipeline_log | 1.389 | | contact_service | 22 |
+| contact | 1.317 | | account_segment | 16 |
+| account | 957 | | contact_segment | 5 |
+| | | | **Tổng** | **13.559** |
+
+```
+21 phút, 1 attempt, SUCCEEDED
+suite   510 passed, 37 skipped
+```
+
+---
+
+## Base CRM, và câu trả lời cho vấn đề parent_id (2026-08-27)
+
+### Vấn đề anh nêu: đúng, và đây là con số
+
+Stream cha lọc theo `last_update` ra ít id, nhưng stream con vẫn nhận **đủ**
+parent id. Tái hiện trên Base CRM (270 pipeline):
+
+| | Lần 1 (không state) | Lần 2 (có state) |
+|---|---:|---:|
+| deal emit | 5.582 | **263** |
+| gọi `pipeline/all` (cha) | 1 | 1 |
+| gọi `pipeline/deals` (con) | 270 | **270** |
+
+Emit giảm 95%, **số lần gọi API không giảm**. Nguyên nhân: cursor của cha thu
+hẹp thứ nó *emit*, không thu hẹp thứ partition router *duyệt*.
+
+CDK **có** cờ `incremental_dependency` trên `ParentStreamConfig` đúng cho việc
+này. Đã thử bật:
+
+* **Không giúp gì trên API này.** Bật lên: vẫn 263 record, vẫn 270 lần gọi —
+  vì `pipeline/all` bỏ qua `last_update_stime`, trả đủ 270 bản ghi dù có lọc
+  hay không, nên router chẳng có gì hẹp hơn để duyệt.
+* **Bật lên ở chỗ nó có tác dụng thì mất dữ liệu.** Nó chỉ đúng khi cha được
+  chạm mỗi lần con đổi. Base không làm vậy: **234/234** pipeline CRM có deal
+  mới hơn chính pipeline, có cái lệch hơn một năm; WeWork tương tự, 41/42
+  project. Bật cờ này thì các cha đó rời khỏi danh sách phân mảnh sau lần sync
+  đầu, con ngừng về — mà mọi lần chạy vẫn báo xanh.
+
+Cặp `workflow.workflow → workflow.stage` là chỗ duy nhất cha đang incremental,
+và an toàn vì lý do ngược lại: 20/20 workflow đều mới ít nhất bằng stage mới
+nhất của nó. Đã ghi vào docstring `Parent` và khoá bằng
+`test_no_substream_asks_the_router_to_follow_the_parent_cursor`.
+
+### Một bug nền tảng thật, tìm ra nhờ connector này
+
+Lần sync đầy đủ đầu tiên của CRM **thất bại ở attempt 1** với
+`activity Heartbeat timeout`, sau khi đã ghi 5.319 dòng; retry mới xong. Nguyên
+nhân: `ACTIVITY_MAX_TIMEOUT_SECOND` của Airbyte mặc định **120 giây**, không đủ
+cho stream con duyệt 270 phân mảnh.
+
+Đã nâng lên 900s. Kiểm chứng: pipeline mới, state trắng, đọc đủ **5.852
+record trong 1 attempt**, không retry. Khoá bằng
+`test_the_replication_activity_is_given_longer_than_two_minutes`.
+
+Đây là thứ sẽ đánh vào **mọi** substream lớn, không riêng CRM.
+
+### Connector Base CRM
+
+Dialect khác hẳn 10 app trước, mỗi điểm đều đo trên API thật:
+
+| | Các app khác | Base CRM |
+|---|---|---|
+| Token | `access_token_v2` | `access_token` |
+| Bí mật | chỉ token | token **+ password**, gửi mỗi request |
+| Host | `<app>.base.com.vn` | `apis.base.vn` / `apis.basecrm.vn` |
+| Cursor | `updated_from` trên query | `last_update_stime`/`etime` trong body |
+| Phân trang | page bắt đầu 0 | bắt đầu **1**, gửi ngay request đầu |
+
+`_shared.py` nhận thêm 5 nút xoay cho các khác biệt này
+(`token_field`, `domains`, `schema_app`, `ConfigField.send_in_body`,
+`Stream.first_page`/`page_on_first_request`) thay vì rẽ nhánh theo tên app.
+
+Qua sản phẩm: check khoẻ, discover 2 stream, sync **5.852 record vào BigQuery**
+(5.582 deal + 270 pipeline), đã đối chiếu bằng truy vấn.
+
+### Bốn stream trong YAML **không** ship, và vì sao
+
+* `contact`, `account`, `account_segment`, `contact_segment` cần `service_id`;
+  YAML hardcode giá trị của **một tenant** (`248`, `['680','211']`). Thử với
+  token này: `INVALID_CONTACT_SERVICE`. Không có endpoint nào liệt kê service
+  của một token, nên không có gì để khám phá. Ship id của người khác nghĩa là
+  mọi workspace có một stream chết ngay lần sync đầu.
+* `deal_feed` trỏ tới `https://n8n.base-datateam.com/webhook/get-deal-feed`
+  kèm `user_id` hardcode — máy chủ tự động hoá riêng, không phải API Base.
+* `deal_activity` gọi `deal/get.activities` mà **không có** partition router,
+  tức gọi endpoint cần deal id nhưng không truyền — trả về lỗi `998`.
+
+### Một hạn chế của tính năng sửa Connection state (vòng trước)
+
+Gửi `state: []` để **xoá** cursor không có tác dụng: Airbyte bỏ qua
+`streamState` rỗng và giữ nguyên state cũ. Panel có so sánh gửi-vs-giữ nên
+người dùng thấy cảnh báo "engine đã chuẩn hoá lại", nhưng thao tác "quên
+cursor" cần dùng `connections/reset` của Airbyte chứ không phải ghi state
+rỗng. Chưa nối vào sản phẩm.
+
+```
+suite   492 passed, 37 skipped
+```
+
+---
+
+## Kiểm tra lịch chạy và incremental trên Base.vn (2026-08-27)
+
+Đặt lịch `INTERVAL 300s` cho ba pipeline **workflow · wework · request**, để
+chạy 4–5 vòng, rồi so từng stream. Kết luận: **không hề full refresh** — lịch
+bắn đúng và incremental có hiệu lực.
+
+### Lịch
+
+Bắn đúng giờ (đặt 03:40:59, chạy 03:41:05), tự đặt lại `next_run_at`, không bỏ
+vòng nào. Chu kỳ tính **từ lúc chạy xong** chứ không từ lúc bắt đầu, nên ba
+pipeline lệch nhau dần — mỗi lần sync mất 4–10 phút.
+
+### Incremental
+
+| | Lần đầu (thủ công) | 4–5 lần theo lịch |
+|---|---:|---:|
+| workflow | 2.793 | 105 · 105 · 105 · 105 |
+| wework | 4.368 | 401 · 401 · 401 |
+| request | 286 | 21 · 21 · 21 · 21 |
+
+Con số ổn định tuyệt đối vì Base không có dữ liệu mới trong lúc đo. Phần dư
+giải thích được hết, không có chỗ nào là "đọc lại toàn bộ":
+
+* **Stream INCREMENTAL thường** đọc đúng **1** bản ghi mỗi lần
+  (`request.request`, `workflow.job`, `workflow.workflow`) — đó là bản ghi biên,
+  vì `updated_from` của Base là **bao gồm cả mốc** (`>=`), không có cách diễn
+  đạt "lớn hơn hẳn".
+* **`wework.task` đọc 226/546.** Nó là substream trên 55 phân mảnh. Đo trực
+  tiếp: gọi API với `updated_from = cursor` từng phân mảnh trả về **173** bản
+  ghi, trong đó **0** thực sự mới; phần còn lại là `lookback_window` do CDK tự
+  tính. Đích dùng APPEND_DEDUP nên không sinh bản trùng — tốn lượt gọi API,
+  không sai dữ liệu.
+* **Stream FULL_REFRESH đọc lại nguyên vẹn**, và đó là đúng: đã dò từng
+  endpoint, `request.group`, `wework.dept`, `workflow.stage`, `wework.topic`
+  đều **không có `last_update`** trên bản ghi hoặc endpoint bỏ qua
+  `updated_from`.
+
+### Một giả thuyết của tôi sai, và số đo bác bỏ
+
+Thấy `wework.project` **có** `last_update` và endpoint **có** lọc, tôi kết luận
+đây là cơ hội bị bỏ lỡ — rồi lại kết luận ngược: không được làm, vì `project`
+là partition parent, incremental parent sẽ chỉ sinh phân mảnh cho project có
+thay đổi và task của project không đổi sẽ ngừng được đồng bộ. Tôi viết cả một
+test để chặn.
+
+Test đó lập tức đỏ ở `workflow.workflow` — vốn **đang** vừa incremental vừa là
+parent của `workflow.stage`. Đo thật: 20 workflow, tổng 103 stage, và connector
+đọc đủ **103 mỗi lần chạy** trong khi parent chỉ emit 1. Vậy
+`SubstreamPartitionRouter` đọc parent **độc lập** với cursor của parent — giả
+thuyết sai, và test tôi vừa viết sẽ cấm một mẫu đang chạy đúng.
+
+Đã bỏ test đó, thay bằng `test_every_substream_names_a_parent_that_exists` —
+kiểm thứ thật sự làm mất dữ liệu: parent không tồn tại, hoặc không có trường để
+bơm id vào. Comment trong `work.py` cũng sửa theo số đo: để `project` full
+refresh **không phải để tránh hỏng**, mà vì lượt gọi API lấy danh sách project
+vẫn xảy ra cho việc phân mảnh — chuyển sang incremental chỉ bớt 55 dòng emit,
+không bớt một lượt gọi nào.
+
+### Sau khi đo xong
+
+Ba pipeline chuyển về `DAILY 08:00 Asia/Ho_Chi_Minh` — không để 5 phút/lần đập
+vào tài khoản Base thật.
+
+```
+suite   484 passed, 37 skipped
+```
+
+---
+
+## Thêm SQL Server làm connector mặc định (2026-08-27)
+
+Catalogue: 7 → 9 connector Airbyte (tổng 19 mục chọn được cùng 10 connector
+Base.vn). SQL Server có cả hai chiều, như BigQuery.
+
+| | Pin | Mức | Đã chạy thật |
+|---|---|---|---|
+| `source-mssql` | 5.0.0 | **SUPPORTED** | check · discover (bảng + khoá chính) · full refresh 3 bản ghi |
+| `destination-mssql` | 2.2.20 | **BETA** | check · ghi 3 dòng, đã query để xác nhận |
+
+Kiểm chứng bằng SQL Server 2022 thật dựng trên mạng connector, đi qua **API sản
+phẩm** chứ không gọi thẳng connector. Container thử nghiệm đã xoá sau khi xong.
+
+### Vì sao destination để BETA
+
+Sync **thành công** và dữ liệu **có tới nơi** — nhưng chỉ ở dạng JSON trong
+`airbyte_internal.<schema>_raw__stream_<name>`. Không có bảng đã định kiểu.
+Thử cả `1.0.0`, `2.0.0`, `2.2.20`: cả ba hành xử giống nhau, trong khi
+`destination-postgres:2.0.10` trên **cùng nền tảng** vẫn dựng bảng typed
+(`synced_29095.customers`). Vậy đây là hạn chế của connector, không phải của
+nền tảng. Gọi nó SUPPORTED là hứa một bảng SQL Server mà người dùng không nhận
+được.
+
+### Hai giả định của tôi hoá ra sai, và sửa được nhờ đo
+
+1. **"Destination phải cũ hơn refresh protocol."** Đúng với postgres/bigquery,
+   **sai với mssql**: `2.2.20` khai `supportsRefreshes: true` nhưng chạy trơn
+   trên 0.59.1 — nó khai mà không đòi ở runtime. Tôi đã pin 1.0.0 theo suy luận
+   trước khi đo.
+2. **Pin thấp hơn upstream có giá của nó.** Spec đóng gói lấy từ registry, mô tả
+   bản **hiện tại**. Pin 1.0.0 nghĩa là form hỏi `user` và `load_type` trong khi
+   connector muốn `username` và không có `load_type` — người dùng điền xong thì
+   connector từ chối. Pin theo upstream làm spec khớp bản chạy, nên máy mới
+   dùng được ngay mà không cần refresh spec.
+
+Một lỗi của connector 1.0.0 gặp trên đường: thiếu `tunnel_method` thì nó báo
+"Could not connect with provided SSH configuration" — nói về SSH trong khi
+không ai yêu cầu tunnel.
+
+### Kèm theo
+
+`connector-lock.json` 8 mục (thêm `source-mssql` vì đã SUPPORTED) ·
+icon `source-mssql.svg` / `destination-mssql.svg` đã vendor ·
+`CONNECTOR_BETA_ALLOWLIST` trong `.env.example` thêm `destination-mssql` để máy
+mới chọn được · `scripts/pull-engine-images.py` **tự nhận**, giờ pre-pull 10
+image (suy ra từ catalogue, không có danh sách thứ hai).
+
+Ba test khoá phạm vi catalogue đã cập nhật có chủ ý — đó chính là việc của
+chúng. Nhân tiện sửa một comment đã lỗi thời trong `test_regressions.py` còn
+ghi token Base bị `access_token_v2_invalid_3`, trong khi cả 10 app đã chạy được
+9.049 bản ghi vào BigQuery.
+
+```
+suite    483 passed, 37 skipped
+```
 
 ---
 

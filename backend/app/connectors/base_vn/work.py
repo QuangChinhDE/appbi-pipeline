@@ -34,6 +34,19 @@ WEWORK = BaseConnector(
     docs_url="https://documenter.getpostman.com/view/1345096/SztA68Az",
     streams=(
         Stream(
+            # Full refresh, and the reason is that incremental would buy
+            # nothing here rather than that it would break something.
+            #
+            # `project/list` does honour `updated_from` and every project
+            # carries `last_update`, so this could filter server-side. But
+            # `project` is also the partition parent of `task`, `topic`,
+            # `tasklist` and `milestone`, and `SubstreamPartitionRouter` reads
+            # the parent independently of the parent's own cursor -- measured
+            # on `workflow`, where the parent stream is incremental and emits
+            # one record per sync while the child still receives all twenty
+            # partitions and reads all 103 stages. So the full list is fetched
+            # for partitioning either way; making this stream incremental would
+            # save 55 emitted rows and not one API call.
             name="project", path="project/list", collection=("projects",),
             page_size_field="items_per_page",
             fields={"name": "string"},

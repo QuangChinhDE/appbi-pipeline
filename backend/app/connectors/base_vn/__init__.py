@@ -19,7 +19,12 @@ The shape that makes multi-workspace work:
 So fixing a Base API change means editing this package once. Every workspace
 using that connector picks it up on the next deploy, because `seed_catalog()`
 overwrites the stored manifest from here rather than treating it as
-user-owned data.
+user-owned data -- and then `actors.republish_manifests()` pushes it to the
+sources that already exist. Both halves are needed: the manifest travels inside
+each source's configuration in the engine, injected when that source is
+created, so overwriting the catalogue row alone updates nothing that is
+running. That was true for a while, and a fixed connector kept syncing the
+broken way three runs in a row.
 
 Why not keep the YAML
 ---------------------
@@ -44,6 +49,8 @@ from ._shared import (
     connection_specification,
 )
 from .core import ACCOUNT, REQUEST, TIMEOFF, WORKFLOW
+from .crm import CRM
+from .crm_leads import CRM_LEADS
 from .finance import INCOME
 from .hr import HIRING, HRM
 from .work import PAYROLL, SERVICE, WEWORK
@@ -60,6 +67,8 @@ CONNECTORS: tuple[BaseConnector, ...] = (
     TIMEOFF,
     PAYROLL,
     INCOME,
+    CRM,
+    CRM_LEADS,
 )
 
 # Checked at import, so a broken definition fails the process rather than
@@ -106,8 +115,10 @@ def catalogue_entries() -> list[dict[str, Any]]:
             "supported_destination_sync_modes": [],
             "spec_schema": connection_specification(connector),
             "declarative_manifest": compile_manifest(connector),
-            # Shipped and supported: this product wrote them and tests them.
-            "certification": "SUPPORTED",
+            # Usually SUPPORTED: this product wrote them and tests them against
+            # the live API. A connector whose response side has not been
+            # measured yet says BETA instead of claiming otherwise.
+            "certification": connector.certification,
             "stream_count": len(streams),
         })
     return entries
@@ -140,7 +151,8 @@ def stream_inventory() -> list[dict[str, Any]]:
 
 
 __all__ = [
-    "ACCOUNT", "BY_KEY", "CONNECTORS", "HIRING", "HRM", "INCOME", "PAYROLL",
+    "ACCOUNT", "BY_KEY", "CONNECTORS", "CRM", "CRM_LEADS", "HIRING", "HRM",
+    "INCOME", "PAYROLL",
     "REQUEST", "SERVICE", "TIMEOFF", "WEWORK", "WORKFLOW",
     "BaseConnector", "ConfigField", "Incremental", "Parent", "Stream",
     "RUNNER_REPOSITORY", "RUNNER_VERSION", "TOKEN_FIELD",

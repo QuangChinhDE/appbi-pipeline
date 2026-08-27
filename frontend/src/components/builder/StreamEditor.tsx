@@ -127,15 +127,38 @@ export function StreamEditor({
           </Field>
 
           {stream.pagination?.mode !== 'none' && (
-            <Field label={t('builder.pageSize')} htmlFor="page-size">
+            <Field label={t('builder.pageSize')} htmlFor="page-size"
+                   hint={t('builder.pageSizeHint')}>
               <Input id="page-size" size="sm" type="number" min={1} disabled={disabled}
-                     value={String(stream.pagination?.page_size ?? 50)}
+                     value={stream.pagination?.page_size == null
+                       ? '' : String(stream.pagination.page_size)}
+                     placeholder={t('builder.pageSizeNone')}
                      onChange={(e) => onChange({
                        pagination: {
                          ...stream.pagination,
-                         page_size: Number(e.target.value) || 50,
+                         page_size: e.target.value.trim()
+                           ? Number(e.target.value) : null,
                        },
                      })} />
+            </Field>
+          )}
+
+          {['page', 'offset', 'cursor'].includes(stream.pagination?.mode ?? '') && (
+            <Field label={t('builder.pageInject')} htmlFor="page-inject"
+                   hint={t('builder.injectHint')}>
+              <Select id="page-inject" size="sm" disabled={disabled}
+                      value={stream.pagination?.inject_into ?? 'request_parameter'}
+                      onChange={(e) => onChange({
+                        pagination: {
+                          ...stream.pagination,
+                          inject_into: e.target.value as never,
+                        },
+                      })}>
+                <option value="request_parameter">{t('builder.injectQuery')}</option>
+                <option value="body_data">{t('builder.injectBodyForm')}</option>
+                <option value="body_json">{t('builder.injectBodyJson')}</option>
+                <option value="header">{t('builder.injectHeader')}</option>
+              </Select>
             </Field>
           )}
 
@@ -197,21 +220,55 @@ export function StreamEditor({
                        onChange={(e) => onChange({ cursor_format: e.target.value })}
                        placeholder="%Y-%m-%dT%H:%M:%SZ" />
               </Field>
-              <Field label={t('builder.cursorParam')} htmlFor="cursor-param"
-                     hint={t('builder.cursorParamHint')}>
-                <Input id="cursor-param" size="sm" disabled={disabled}
-                       value={stream.cursor_param ?? ''}
-                       onChange={(e) => onChange({ cursor_param: e.target.value })}
-                       placeholder="updated_since" />
+              <Field label={t('builder.cursorFilterMode')} htmlFor="cursor-filter-mode"
+                     hint={t('builder.cursorFilterModeHint')}>
+                <Select id="cursor-filter-mode" size="sm" disabled={disabled}
+                        value={stream.cursor_filter_mode ?? 'server'}
+                        onChange={(e) => onChange({
+                          cursor_filter_mode: e.target.value as never,
+                        })}>
+                  <option value="server">{t('builder.cursorFilterServer')}</option>
+                  <option value="client">{t('builder.cursorFilterClient')}</option>
+                </Select>
               </Field>
             </div>
+
+            {(stream.cursor_filter_mode ?? 'server') === 'client' ? (
+              <p className="text-caption text-text-tertiary">
+                {t('builder.cursorFilterClientNote')}
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label={t('builder.cursorParam')} htmlFor="cursor-param"
+                       hint={t('builder.cursorParamHint')}>
+                  <Input id="cursor-param" size="sm" disabled={disabled}
+                         value={stream.cursor_param ?? ''}
+                         onChange={(e) => onChange({ cursor_param: e.target.value })}
+                         placeholder="updated_since" />
+                </Field>
+                <Field label={t('builder.cursorEndParam')} htmlFor="cursor-end">
+                  <Input id="cursor-end" size="sm" disabled={disabled}
+                         value={stream.cursor_end_param ?? ''}
+                         onChange={(e) => onChange({ cursor_end_param: e.target.value })}
+                         placeholder="updated_before" />
+                </Field>
+                <Field label={t('builder.cursorInject')} htmlFor="cursor-inject"
+                       hint={t('builder.injectHint')}>
+                  <Select id="cursor-inject" size="sm" disabled={disabled}
+                          value={stream.cursor_inject_into ?? 'request_parameter'}
+                          onChange={(e) => onChange({
+                            cursor_inject_into: e.target.value as never,
+                          })}>
+                    <option value="request_parameter">{t('builder.injectQuery')}</option>
+                    <option value="body_data">{t('builder.injectBodyForm')}</option>
+                    <option value="body_json">{t('builder.injectBodyJson')}</option>
+                    <option value="header">{t('builder.injectHeader')}</option>
+                  </Select>
+                </Field>
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label={t('builder.cursorEndParam')} htmlFor="cursor-end">
-                <Input id="cursor-end" size="sm" disabled={disabled}
-                       value={stream.cursor_end_param ?? ''}
-                       onChange={(e) => onChange({ cursor_end_param: e.target.value })}
-                       placeholder="updated_before" />
-              </Field>
               <Field label={t('builder.step')} htmlFor="cursor-step"
                      hint={t('builder.stepHint')}>
                 <Input id="cursor-step" size="sm" disabled={disabled}
@@ -302,6 +359,63 @@ export function StreamEditor({
                      placeholder="parent_id" />
             </Field>
           </div>
+        )}
+
+        {stream.partition?.mode === 'parent' && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('builder.parentParam')} htmlFor="parent-param"
+                     hint={t('builder.parentParamHint')}>
+                <Input id="parent-param" size="sm" disabled={disabled}
+                       value={stream.partition?.param ?? ''}
+                       onChange={(e) => onChange({
+                         partition: { ...stream.partition!, param: e.target.value },
+                       })}
+                       placeholder="service_id" />
+              </Field>
+              <Field label={t('builder.parentInject')} htmlFor="parent-inject"
+                     hint={t('builder.injectHint')}>
+                <Select id="parent-inject" size="sm" disabled={disabled}
+                        value={stream.partition?.inject_into ?? 'request_parameter'}
+                        onChange={(e) => onChange({
+                          partition: {
+                            ...stream.partition!,
+                            inject_into: e.target.value as never,
+                          },
+                        })}>
+                  <option value="request_parameter">{t('builder.injectQuery')}</option>
+                  <option value="body_data">{t('builder.injectBodyForm')}</option>
+                  <option value="body_json">{t('builder.injectBodyJson')}</option>
+                  <option value="header">{t('builder.injectHeader')}</option>
+                </Select>
+              </Field>
+            </div>
+
+            {!stream.partition?.param && (
+              <p className="text-caption text-text-tertiary">
+                {t('builder.parentParamMissing')}
+              </p>
+            )}
+
+            <label className="flex items-start gap-2 text-caption text-text-secondary">
+              <input type="checkbox" className="mt-0.5 h-3.5 w-3.5 rounded
+                                                border-[rgb(var(--border-strong))]"
+                     checked={Boolean(stream.partition?.incremental_parent)}
+                     disabled={disabled}
+                     onChange={(e) => onChange({
+                       partition: {
+                         ...stream.partition!,
+                         incremental_parent: e.target.checked,
+                       },
+                     })} />
+              <span>
+                {t('builder.incrementalParent')}
+                <span className="block text-text-tertiary">
+                  {t('builder.incrementalParentWarning')}
+                </span>
+              </span>
+            </label>
+          </>
         )}
       </Group>
 

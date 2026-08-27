@@ -8,6 +8,7 @@ broken page.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from sqlalchemy import func, or_, select
@@ -29,7 +30,25 @@ from app.models.enums import Certification, ConnectorStatus, ConnectorType
 logger = logging.getLogger(__name__)
 
 
-async def seed_catalog(session: AsyncSession) -> int:
+@dataclass(frozen=True)
+class SeedOutcome:
+    """What re-seeding actually changed, so the caller can finish the job.
+
+    `manifests_changed` exists because overwriting the catalogue row is only
+    half of "fix the Base API logic once and every workspace has it". A
+    declarative connector's behaviour is injected into each source at the time
+    that source is created, and the engine keeps its own copy from then on. A
+    deploy that edits the manifest therefore reaches the catalogue and no
+    running resource: `deal_activity` was fixed, re-seeded, and re-synced three
+    times still emitting the unfiltered 3,970 rows, because the source in the
+    engine was the one built the hour before.
+    """
+
+    created: int
+    manifests_changed: frozenset[str] = frozenset()
+
+
+async def seed_catalog(session: AsyncSession) -> SeedOutcome:
     """Idempotent: insert bundled connectors, refresh pin/version metadata.
 
     The catalogue is the full upstream registry (650+ connectors), so existing
@@ -39,6 +58,7 @@ async def seed_catalog(session: AsyncSession) -> int:
     existing_rows = (await session.scalars(select(ConnectorDefinition))).all()
     by_key = {row.connector_key: row for row in existing_rows}
     created = 0
+    manifests_changed: set[str] = set()
 
     for metadata in bundled_connectors():
         existing = by_key.get(metadata.connector_key)
@@ -111,6 +131,8 @@ async def seed_catalog(session: AsyncSession) -> int:
                 # code in `app/connectors` is the source of truth and a deploy
                 # re-seeds it. A Connector Builder project has
                 # `spec_source != BUNDLED` and is never touched.
+                if existing.declarative_manifest != metadata.declarative_manifest:
+                    manifests_changed.add(metadata.connector_key)
                 existing.declarative_manifest = metadata.declarative_manifest
                 existing.spec_source = "BUNDLED"
 
@@ -144,7 +166,8 @@ async def seed_catalog(session: AsyncSession) -> int:
         await session.delete(row)
 
     await session.flush()
-    return created
+    return SeedOutcome(created=created,
+                       manifests_changed=frozenset(manifests_changed))
 
 
 async def list_connectors(
@@ -189,7 +212,8 @@ async def list_connectors(
         # through the same function the create path enforces.
         rows = [row for row in rows
                 if settings.connector_is_offered(row.connector_key,
-                                                 row.certification.value)]
+                                                 row.certification.value,
+                                                 row.spec_source)]
     order = {Certification.SUPPORTED: 0, Certification.BETA: 1,
              Certification.BLOCKED: 2, Certification.HIDDEN: 3}
     rows.sort(key=lambda r: (order.get(r.certification, 9), r.display_name.lower()))
@@ -222,7 +246,8 @@ async def require_usable(session: AsyncSession, connector_key: str, expected_typ
     # rendering decision and this is the one that holds against a direct API
     # call.
     if not settings.connector_is_offered(connector.connector_key,
-                                         connector.certification.value):
+                                         connector.certification.value,
+                                         connector.spec_source):
         raise ValidationError(
             "Connector này chưa nằm trong phạm vi hỗ trợ của bản phát hành "
             "hiện tại. Liên hệ quản trị viên nếu bạn cần bật nó.",

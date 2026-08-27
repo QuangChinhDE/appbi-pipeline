@@ -195,6 +195,30 @@ connectors:
       # refresh_generations is deliberately absent: 2.0.10 predates the refresh
       # protocol. Claiming it here would claim the very behaviour this pin
       # exists to avoid.
+  source-mssql:
+    image: airbyte/source-mssql
+    pinned_version: "5.0.0"
+    certification: SUPPORTED
+    verified:
+      check: true          # SQL Server 2022, sa auth, unencrypted
+      discover: true       # dbo schema, table + primary key detected
+      full_refresh: true   # 3 records read and delivered
+  destination-mssql:
+    image: airbyte/destination-mssql
+    pinned_version: "2.2.20"
+    # BETA, and the reason is specific rather than "not tried yet": the sync
+    # completes and the rows land, but only as JSON in
+    # `airbyte_internal.<schema>_raw__stream_<name>`. No typed table is
+    # produced. Checked against 1.0.0, 2.0.0 and 2.2.20 -- all three behave the
+    # same way on platform 0.59.1, while `destination-postgres:2.0.10` on the
+    # same platform does build its typed tables. So this is the connector, not
+    # the platform, and calling it SUPPORTED would promise a SQL Server table
+    # that nobody gets.
+    certification: BETA
+    verified:
+      check: true
+      append: true         # 3 rows in the raw table, verified by query
+      typed_tables: false
   source-bigquery:
     image: airbyte/source-bigquery
     pinned_version: "0.4.5"
