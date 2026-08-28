@@ -4,8 +4,8 @@ import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, Code2, CornerDownRight, ListTree, Play, Plus,
-  Rocket, Save, Settings2, Trash2, Variable,
+  AlertTriangle, CheckCircle2, Code2, CornerDownRight, Eye, EyeOff, ListTree,
+  Play, Plus, Rocket, Save, Settings2, Trash2, Variable, X,
 } from 'lucide-react';
 
 import { ApiError, builderApi } from '@/lib/api';
@@ -15,12 +15,12 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Button, IconButton } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { ErrorState, Skeleton } from '@/components/ui/Feedback';
 import { DetailHeader } from '@/components/layout/PageLayout';
 import type {
-  BuilderDefinition, BuilderKeyValue, BuilderStream, BuilderTestResult,
+  BuilderDefinition, BuilderStream, BuilderTestResult,
 } from '@/lib/types';
 import { Field, JinjaInput } from '@/components/builder/BuilderField';
 import {
@@ -116,10 +116,10 @@ function RailItem({
       onClick={onSelect}
       style={{ paddingInlineStart: `${8 + depth * 10}px` }}
       className={cn(
-        'flex min-h-8 w-full items-center gap-1.5 rounded-md py-1.5 pe-2 text-left',
+        'relative flex min-h-8 w-full items-center gap-1.5 rounded-md py-1.5 pe-2 text-left',
         'text-caption transition-colors',
         active
-          ? 'bg-brand/10 text-brand font-emphasis'
+          ? 'bg-brand/10 font-emphasis text-brand before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand'
           : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
       )}
     >
@@ -365,6 +365,7 @@ export default function BuilderEditorPage() {
         backLabel={t('builder.title')}
         title={data.name}
         subtitle={<span className="font-mono text-tiny">{data.connector_key}</span>}
+        badgesInline
         badges={
           <>
             {data.status === 'PUBLISHED' ? (
@@ -407,19 +408,24 @@ export default function BuilderEditorPage() {
                       onClick={() => publish.mutate()}>
                 {t('builder.publish')}
               </Button>
-              <Button size="sm" variant="ghost"
-                      aria-label={t('common.delete')} title={t('common.delete')}
-                      loading={remove.isPending}
-                      leadingIcon={<Trash2 className="h-3.5 w-3.5" />}
-                      onClick={() => {
+              <IconButton size="sm" variant="ghost"
+                          aria-label={t('common.delete')} title={t('common.delete')}
+                          disabled={remove.isPending}
+                          onClick={() => {
                         if (window.confirm(t('builder.confirmDelete'))) remove.mutate();
-                      }} />
+                          }}>
+                {remove.isPending ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+              </IconButton>
             </div>
           ) : null
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6 xl:px-8">
+      <div className="builder-workspace min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-5 xl:px-6">
         {showManifest && (
           <section className="mb-4 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--border-line))] px-4 py-2.5">
@@ -453,11 +459,12 @@ export default function BuilderEditorPage() {
           </section>
         )}
 
-        <div className="grid items-start gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]
-                        xl:grid-cols-[12rem_minmax(22rem,1fr)_minmax(18rem,22rem)]">
+        <div className="builder-workspace-grid">
           {/* ── rail ─────────────────────────────────────────── */}
-          <nav aria-label={t('builder.sectionsNav')}
-               className="space-y-3 self-start lg:sticky lg:top-0">
+          <nav
+            aria-label={t('builder.sectionsNav')}
+            className="builder-rail max-h-[calc(100vh-9rem)] space-y-3 self-start overflow-y-auto rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-2 shadow-linear-sm"
+          >
             <div className="space-y-0.5">
               <RailItem
                 active={view === 'api'}
@@ -480,19 +487,19 @@ export default function BuilderEditorPage() {
                   {t('builder.sectionStreams')} ({draft.streams.length})
                 </span>
                 {canEdit && (
-                  <button
-                    type="button"
+                  <IconButton
+                    size="xs"
+                    variant="ghost"
                     aria-label={t('builder.addStream')}
                     title={t('builder.addStream')}
                     onClick={() => {
                       setQuery({ tab: 'stream', stream: String(activeStream), section: 'request' });
                       setAdding(true);
                     }}
-                    className="rounded p-0.5 text-text-tertiary hover:bg-surface-2
-                               hover:text-text-primary"
+                    className="text-text-tertiary"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                  </button>
+                  </IconButton>
                 )}
               </div>
               {streamOutline(draft.streams).map(({ index, depth }) => (
@@ -517,7 +524,7 @@ export default function BuilderEditorPage() {
           </nav>
 
           {/* ── panel ───────────────────────────────────────── */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {view === 'api' && (
             <Section title={t('builder.sectionApi')}>
               <Field label={t('builder.baseUrl')} htmlFor="base-url" required>
@@ -646,7 +653,7 @@ export default function BuilderEditorPage() {
                 <div className="divide-y divide-[rgb(var(--border-line))]">
                   {(draft.user_inputs ?? []).map((field, index) => (
                     <div key={index} className="space-y-3 py-3 first:pt-0 last:pb-0">
-                      <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_7rem_auto]">
+                      <div className="grid items-end gap-3 sm:grid-cols-2">
                         <Field label={t('builder.inputKey')}
                                htmlFor={`builder-input-${index}-key`} required>
                           <Input id={`builder-input-${index}-key`} size="sm"
@@ -680,14 +687,16 @@ export default function BuilderEditorPage() {
                             <option value="boolean">boolean</option>
                           </Select>
                         </Field>
-                        <Button size="xs" variant="ghost" disabled={!canEdit}
-                                aria-label={t('builder.removeInput')}
-                                title={t('builder.removeInput')}
-                                leadingIcon={<Trash2 className="h-3 w-3" />}
-                                onClick={() => patch({
+                        <IconButton size="xs" variant="ghost" disabled={!canEdit}
+                                    className="justify-self-end"
+                                    aria-label={t('builder.removeInput')}
+                                    title={t('builder.removeInput')}
+                                    onClick={() => patch({
                                   user_inputs: (draft.user_inputs ?? [])
                                     .filter((_, i) => i !== index),
-                                })} />
+                                    })}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </IconButton>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Field label={t('builder.inputDescription')}
@@ -863,7 +872,7 @@ export default function BuilderEditorPage() {
           </div>
 
           {/* ── test panel ─────────────────────────────────────────── */}
-          <aside className="space-y-3 lg:col-start-2 xl:sticky xl:top-0 xl:col-start-auto xl:self-start">
+          <aside className="builder-test-panel space-y-3 self-start">
             <Section
               title={t('builder.sectionTest')}
               action={stream ? (
@@ -905,12 +914,23 @@ export default function BuilderEditorPage() {
                           <option value="true">true</option>
                           <option value="false">false</option>
                         </Select>
+                      ) : field.secret ? (
+                        <SecretInput
+                          id={`test-config-${index}`}
+                          size="sm"
+                          revealLabel={field.title || field.key}
+                          value={secrets[field.key] ?? ''}
+                          placeholder={field.default ?? ''}
+                          autoComplete="off"
+                          onChange={(event) => setSecrets({
+                            ...secrets, [field.key]: event.target.value,
+                          })}
+                        />
                       ) : (
                         <Input
                           id={`test-config-${index}`}
                           size="sm"
-                          type={field.secret ? 'password'
-                            : ['integer', 'number'].includes(field.type ?? '') ? 'number' : 'text'}
+                          type={['integer', 'number'].includes(field.type ?? '') ? 'number' : 'text'}
                           value={secrets[field.key] ?? ''}
                           placeholder={field.default ?? ''}
                           autoComplete="off"
@@ -923,13 +943,14 @@ export default function BuilderEditorPage() {
                   ))}
                   {needsApiKey && !configuredTestInputs.some((field) => field.key === 'api_key') && (
                     <Field label={t('builder.apiKey')} htmlFor="test-api-key">
-                      <Input id="test-api-key" size="sm" type="password" autoComplete="off"
-                             value={secrets.api_key ?? ''}
-                             onChange={(e) => setSecrets({ ...secrets, api_key: e.target.value })} />
+                      <SecretInput id="test-api-key" size="sm" autoComplete="off"
+                                   revealLabel={t('builder.apiKey')}
+                                   value={secrets.api_key ?? ''}
+                                   onChange={(e) => setSecrets({ ...secrets, api_key: e.target.value })} />
                     </Field>
                   )}
                   {needsBasic && (
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
                       {!configuredTestInputs.some((field) => field.key === 'username') && (
                         <Field label={t('builder.username')} htmlFor="test-username">
                           <Input id="test-username" size="sm" autoComplete="off"
@@ -939,9 +960,10 @@ export default function BuilderEditorPage() {
                       )}
                       {!configuredTestInputs.some((field) => field.key === 'password') && (
                         <Field label={t('builder.password')} htmlFor="test-password">
-                          <Input id="test-password" size="sm" type="password" autoComplete="off"
-                                 value={secrets.password ?? ''}
-                                 onChange={(e) => setSecrets({ ...secrets, password: e.target.value })} />
+                          <SecretInput id="test-password" size="sm" autoComplete="off"
+                                       revealLabel={t('builder.password')}
+                                       value={secrets.password ?? ''}
+                                       onChange={(e) => setSecrets({ ...secrets, password: e.target.value })} />
                         </Field>
                       )}
                     </div>
@@ -972,6 +994,7 @@ export default function BuilderEditorPage() {
                   result={testResult}
                   view={testView}
                   onViewChange={(next) => setQuery({ result: next }, { replace: true })}
+                  onDismiss={() => setTestResult(null)}
                   t={t}
                   onApplySchema={canEdit && testResult.inferred_schema
                     ? () => {
@@ -1021,90 +1044,25 @@ function Section({
   );
 }
 
-
-/**
- * A free-text field that becomes a picker once a test read has shown which
- * fields the API actually returns — typing a column name from memory is where
- * most builder mistakes come from.
- */
-function FieldPicker({
-  id, value, options, disabled, onChange,
-}: {
-  id: string;
-  value: string;
-  options: string[];
-  disabled?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <>
-      <Input
-        id={id}
-        size="sm"
-        value={value}
-        disabled={disabled}
-        list={options.length ? `${id}-options` : undefined}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      {options.length > 0 && (
-        <datalist id={`${id}-options`}>
-          {options.map((option) => <option key={option} value={option} />)}
-        </datalist>
-      )}
-    </>
-  );
-}
-
-function KeyValueEditor({
-  label, rows, disabled, onChange,
-}: {
-  label: string;
-  rows: BuilderKeyValue[];
-  disabled?: boolean;
-  onChange: (rows: BuilderKeyValue[]) => void;
-}) {
+function SecretInput({
+  revealLabel, className, ...props
+}: React.ComponentProps<typeof Input> & { revealLabel: string }) {
   const { t } = useI18n();
+  const [revealed, setRevealed] = React.useState(false);
   return (
-    <div>
-      <p className="mb-1 text-label text-text-secondary">{label}</p>
-      <div className="space-y-1.5">
-        {rows.map((row, index) => (
-          <div key={index} className="flex gap-1.5">
-            <Input
-              size="sm"
-              aria-label={`${label} — key ${index + 1}`}
-              value={row.key}
-              disabled={disabled}
-              placeholder="key"
-              onChange={(event) => onChange(rows.map((r, i) =>
-                i === index ? { ...r, key: event.target.value } : r))}
-            />
-            <Input
-              size="sm"
-              aria-label={`${label} — value ${index + 1}`}
-              value={row.value}
-              disabled={disabled}
-              placeholder="value"
-              onChange={(event) => onChange(rows.map((r, i) =>
-                i === index ? { ...r, value: event.target.value } : r))}
-            />
-            <Button
-              size="xs"
-              variant="ghost"
-              aria-label={t('builder.removeParam')}
-              disabled={disabled}
-              leadingIcon={<Trash2 className="h-3 w-3" />}
-              onClick={() => onChange(rows.filter((_, i) => i !== index))}
-            />
-          </div>
-        ))}
-        {!disabled && (
-          <Button size="xs" variant="ghost" leadingIcon={<Plus className="h-3 w-3" />}
-                  onClick={() => onChange([...rows, { key: '', value: '' }])}>
-            {t('builder.addParam')}
-          </Button>
-        )}
-      </div>
+    <div className="relative">
+      <Input {...props} type={revealed ? 'text' : 'password'} className={cn('pr-9', className)} />
+      <IconButton
+        size="xs"
+        variant="ghost"
+        className="absolute right-0.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+        aria-label={`${revealed ? t('common.hide') : t('common.show')}: ${revealLabel}`}
+        title={revealed ? t('common.hide') : t('common.show')}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setRevealed((current) => !current)}
+      >
+        {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </IconButton>
     </div>
   );
 }
@@ -1117,11 +1075,12 @@ function statusTone(status: number | null): 'success' | 'danger' | 'subtle' {
 }
 
 function TestOutcome({
-  result, view, onViewChange, t, onApplySchema,
+  result, view, onViewChange, onDismiss, t, onApplySchema,
 }: {
   result: BuilderTestResult;
   view: TestView;
   onViewChange: (view: TestView) => void;
+  onDismiss: () => void;
   t: (key: string, vars?: Record<string, string>) => string;
   onApplySchema?: () => void;
 }) {
@@ -1139,25 +1098,37 @@ function TestOutcome({
   return (
     <div className="space-y-3">
       {result.ok ? (
-        <div className="space-y-1">
-          <Badge variant="success" size="sm" pill={false}>
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-            {result.record_preview_supported
-              ? t('builder.testOk', { n: String(result.record_count) })
-              : t('builder.testOkNoPreview')}
-          </Badge>
+        <div className="rounded-md border border-success/30 bg-success/5 p-2.5">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+            <p className="min-w-0 flex-1 text-caption font-emphasis text-success">
+              {result.record_preview_supported
+                ? t('builder.testOk', { n: String(result.record_count) })
+                : t('builder.testOkNoPreview')}
+            </p>
+            <IconButton size="xs" variant="ghost" aria-label={t('common.close')}
+                        title={t('common.close')} onClick={onDismiss}
+                        className="-mr-1 -mt-1 text-text-tertiary">
+              <X className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
           {!result.record_preview_supported && (
-            <p className="text-tiny text-text-tertiary">
+            <p className="mt-1 pl-6 text-tiny text-text-tertiary">
               {t('builder.noPreviewHint')}
             </p>
           )}
         </div>
       ) : (
         <div className="rounded-md border border-danger/30 bg-danger/5 p-2.5">
-          <p className="flex items-start gap-1.5 text-caption text-danger">
+          <div className="flex items-start gap-1.5 text-caption text-danger">
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <span>{result.error?.summary ?? t('builder.testFailed')}</span>
-          </p>
+            <span className="min-w-0 flex-1">{result.error?.summary ?? t('builder.testFailed')}</span>
+            <IconButton size="xs" variant="ghost" aria-label={t('common.close')}
+                        title={t('common.close')} onClick={onDismiss}
+                        className="-mr-1 -mt-1 text-text-tertiary">
+              <X className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
           {result.error?.technical_message && (
             <p className="mt-1.5 break-words font-mono text-tiny text-text-tertiary">
               {result.error.technical_message.slice(0, 400)}
@@ -1258,7 +1229,7 @@ function TestOutcome({
                 })}
               </caption>
               <thead>
-                <tr className="border-b border-[rgb(var(--border-line))] bg-surface-2 text-tiny uppercase tracking-[0.06em] text-text-quaternary">
+                <tr className="border-b border-[rgb(var(--border-line))] bg-surface-2 text-tiny uppercase text-text-quaternary">
                   {columns.map((column) => (
                     <th key={column} scope="col" className="whitespace-nowrap px-2 py-1.5 font-emphasis">
                       {column}

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/Button';
+import { Button, IconButton } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input, Select } from '@/components/ui/Input';
 import { Tabs } from '@/components/ui/Tabs';
@@ -509,9 +509,12 @@ export function StreamEditor({
         <div className="space-y-1.5">
           <p className="text-label text-text-secondary">{t('builder.transformations')}</p>
           {(stream.transformations ?? []).map((item, index) => (
-            <div key={index} className="flex gap-1.5">
+            <div
+              key={index}
+              className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[7rem_minmax(8rem,1fr)_minmax(9rem,1fr)_2rem] sm:border-0 sm:p-0"
+            >
               <Select size="sm" aria-label={t('builder.transformKind')} disabled={disabled}
-                      className="w-28" value={item.type}
+                      value={item.type}
                       onChange={(e) => onChange({
                         transformations: (stream.transformations ?? []).map((row, i) =>
                           i === index ? { ...row, type: e.target.value as 'add' | 'remove' } : row),
@@ -520,6 +523,7 @@ export function StreamEditor({
                 <option value="remove">{t('builder.transformRemove')}</option>
               </Select>
               <Input size="sm" aria-label={t('builder.transformPath')} disabled={disabled}
+                     className="col-span-2 min-w-0 sm:col-span-1"
                      value={item.path} placeholder="field.path"
                      onChange={(e) => onChange({
                        transformations: (stream.transformations ?? []).map((row, i) =>
@@ -527,19 +531,23 @@ export function StreamEditor({
                      })} />
               {item.type === 'add' && (
                 <Input size="sm" aria-label={t('builder.transformValue')} disabled={disabled}
+                       className="col-span-2 min-w-0 sm:col-span-1"
                        value={item.value ?? ''} placeholder="{{ now_utc() }}"
                        onChange={(e) => onChange({
                          transformations: (stream.transformations ?? []).map((row, i) =>
                            i === index ? { ...row, value: e.target.value } : row),
                        })} />
               )}
-              <Button size="xs" variant="ghost" disabled={disabled}
-                      aria-label={t('builder.removeTransform')}
-                      leadingIcon={<Trash2 className="h-3 w-3" />}
-                      onClick={() => onChange({
+              <IconButton size="xs" variant="ghost" disabled={disabled}
+                          className="col-start-2 row-start-1 sm:col-start-4"
+                          aria-label={t('builder.removeTransform')}
+                          title={t('builder.removeTransform')}
+                          onClick={() => onChange({
                         transformations: (stream.transformations ?? [])
                           .filter((_, i) => i !== index),
-                      })} />
+                          })}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </IconButton>
             </div>
           ))}
           {!disabled && (
@@ -698,13 +706,24 @@ function KeyValueRows({
     <div>
       <p className="mb-1 text-label text-text-secondary">{label}</p>
       <div className="space-y-1.5">
+        {rows.length > 0 && (
+          <div className="hidden grid-cols-[minmax(7rem,0.72fr)_minmax(12rem,1.35fr)_2rem] gap-1.5 px-0.5 text-tiny text-text-quaternary sm:grid">
+            <span>{t('builder.inputKey')}</span>
+            <span>{t('builder.transformValue')}</span>
+            <span aria-hidden />
+          </div>
+        )}
         {rows.map((row, index) => (
-          <div key={index} className="flex gap-1.5">
-            <Input size="sm" aria-label={`${label} — key ${index + 1}`} value={row.key}
-                   disabled={disabled} placeholder="key"
+          <div
+            key={index}
+            className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[minmax(7rem,0.72fr)_minmax(12rem,1.35fr)_2rem] sm:border-0 sm:p-0"
+          >
+            <Input size="sm" className="min-w-0"
+                   aria-label={`${label} — ${t('builder.inputKey')} ${index + 1}`}
+                   value={row.key} disabled={disabled} placeholder={t('builder.inputKey')}
                    onChange={(event) => onChange(rows.map((r, i) =>
                      i === index ? { ...r, key: event.target.value } : r))} />
-            <div className="flex-1">
+            <div className="col-span-2 min-w-0 sm:col-span-1">
               {jinja ? (
                 <JinjaInput
                   id={`${label}-value-${index}`}
@@ -712,18 +731,24 @@ function KeyValueRows({
                   {...jinja}
                   onChange={(value) => onChange(rows.map((r, i) =>
                     i === index ? { ...r, value } : r))}
-                  placeholder="value"
+                  placeholder={t('builder.transformValue')}
                 />
               ) : (
-                <Input size="sm" aria-label={`${label} — value ${index + 1}`} value={row.value}
-                       disabled={disabled} placeholder="value"
+                <Input size="sm" className="min-w-0"
+                       aria-label={`${label} — ${t('builder.transformValue')} ${index + 1}`}
+                       value={row.value} disabled={disabled}
+                       placeholder={t('builder.transformValue')}
                        onChange={(event) => onChange(rows.map((r, i) =>
                          i === index ? { ...r, value: event.target.value } : r))} />
               )}
             </div>
-            <Button size="xs" variant="ghost" aria-label={t('builder.removeParam')}
-                    disabled={disabled} leadingIcon={<Trash2 className="h-3 w-3" />}
-                    onClick={() => onChange(rows.filter((_, i) => i !== index))} />
+            <IconButton size="xs" variant="ghost" aria-label={t('builder.removeParam')}
+                        title={t('builder.removeParam')}
+                        className="col-start-2 row-start-1 sm:col-start-3"
+                        disabled={disabled}
+                        onClick={() => onChange(rows.filter((_, i) => i !== index))}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </IconButton>
           </div>
         ))}
         {!disabled && (

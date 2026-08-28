@@ -95,7 +95,7 @@ export function ModuleOverview({
 
 /** Detail page header: back link, title, badges, action group. */
 export function DetailHeader({
-  backHref, backLabel, icon, title, subtitle, badges, actions,
+  backHref, backLabel, icon, title, subtitle, badges, badgesInline = false, actions,
 }: {
   backHref: string;
   backLabel: string;
@@ -103,6 +103,8 @@ export function DetailHeader({
   title: string;
   subtitle?: React.ReactNode;
   badges?: React.ReactNode;
+  /** Keep status beside the title on dense operational screens. */
+  badgesInline?: boolean;
   actions?: React.ReactNode;
 }) {
   return (
@@ -116,14 +118,19 @@ export function DetailHeader({
       </Link>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             {icon}
             <h1 className="truncate text-h3 font-strong text-text-primary">{title}</h1>
+            {badgesInline && badges && (
+              <div className="flex flex-wrap items-center gap-1.5">{badges}</div>
+            )}
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {subtitle}
-            {badges}
-          </div>
+          {(subtitle || (!badgesInline && badges)) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {subtitle}
+              {!badgesInline && badges}
+            </div>
+          )}
         </div>
         {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>

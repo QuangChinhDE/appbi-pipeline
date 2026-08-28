@@ -93,3 +93,9 @@ docs/
 evidence/
 pytest.ini
 .github/
+
+# Documentation stays with the local working copy, including top-level and
+# component-specific readmes that do not live under docs/.
+*.md
+*.mdx
+*.rst

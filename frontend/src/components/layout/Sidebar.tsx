@@ -51,6 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'sidebar.sources', href: '/sources', icon: <Database className="h-4 w-4" />, module: 'sources' },
       { labelKey: 'sidebar.destinations', href: '/destinations', icon: <Warehouse className="h-4 w-4" />, module: 'destinations' },
       { labelKey: 'sidebar.pipelines', href: '/pipelines', icon: <GitBranch className="h-4 w-4" />, module: 'pipelines' },
+      { labelKey: 'sidebar.builder', href: '/builder', icon: <Hammer className="h-4 w-4" />, module: 'connectors' },
     ],
   },
   {
@@ -68,7 +69,6 @@ const NAV_GROUPS: NavGroup[] = [
     advanced: true,
     items: [
       { labelKey: 'sidebar.connectors', href: '/connectors', icon: <Boxes className="h-4 w-4" />, module: 'connectors' },
-      { labelKey: 'sidebar.builder', href: '/builder', icon: <Hammer className="h-4 w-4" />, module: 'connectors' },
       { labelKey: 'sidebar.audit', href: '/audit', icon: <ScrollText className="h-4 w-4" />, module: 'audit' },
     ],
   },
@@ -190,8 +190,8 @@ export function Sidebar({
                 <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-brand text-text-inverse">
                   <Activity className="h-3.5 w-3.5" />
                 </span>
-                <span className="truncate text-small font-strong tracking-[-0.011em] text-text-primary">
-                  AppBI
+                <span className="truncate text-small font-strong text-text-primary">
+                  AppBI Integration
                 </span>
               </Link>
               <button
@@ -207,7 +207,7 @@ export function Sidebar({
             <Link
               href="/overview"
               className="mx-auto flex h-8 w-8 items-center justify-center rounded-md bg-brand text-text-inverse"
-              aria-label="AppBI"
+              aria-label="AppBI Integration"
             >
               <Activity className="h-4 w-4" />
             </Link>

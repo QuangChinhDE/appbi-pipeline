@@ -102,6 +102,57 @@
   .dark .skeleton::after {
     background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
   }
+
+  /* Builder columns respond to the space left after the product sidebar. */
+  .builder-workspace {
+    container-name: builder-workspace;
+    container-type: inline-size;
+  }
+
+  .builder-workspace-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .builder-test-panel {
+    min-width: 0;
+  }
+}
+
+@container builder-workspace (min-width: 760px) {
+  .builder-workspace-grid {
+    grid-template-columns: 220px minmax(480px, 1fr);
+  }
+
+  .builder-test-panel {
+    grid-column: 2;
+  }
+
+  .builder-rail {
+    position: sticky;
+    top: 0;
+  }
+}
+
+@container builder-workspace (min-width: 1060px) {
+  .builder-workspace-grid {
+    grid-template-columns: 220px minmax(480px, 1fr) minmax(340px, 400px);
+  }
+
+  .builder-test-panel {
+    grid-column: auto;
+    position: sticky;
+    top: 0;
+  }
+}
+
+@container builder-workspace (min-width: 1180px) {
+  .builder-workspace-grid {
+    grid-template-columns: 230px minmax(500px, 1fr) minmax(380px, 420px);
+    gap: 16px;
+  }
 }
 
 @keyframes shimmer {
