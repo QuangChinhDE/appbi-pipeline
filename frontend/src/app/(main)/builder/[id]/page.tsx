@@ -19,10 +19,11 @@ import { Button, IconButton } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { ErrorState, Skeleton } from '@/components/ui/Feedback';
 import { DetailHeader } from '@/components/layout/PageLayout';
+import { Modal } from '@/components/ui/Modal';
 import type {
-  BuilderDefinition, BuilderStream, BuilderTestResult,
+  BuilderDefinition, BuilderStream, BuilderTestResult, BuilderUserInput,
 } from '@/lib/types';
-import { Field, JinjaInput } from '@/components/builder/BuilderField';
+import { configReference, Field, JinjaInput } from '@/components/builder/BuilderField';
 import {
   StreamEditor, type BuilderStreamSection,
 } from '@/components/builder/StreamEditor';
@@ -36,6 +37,92 @@ const STREAM_SECTIONS: readonly BuilderStreamSection[] = [
 ];
 const TEST_VIEWS = ['records', 'schema', 'requests', 'logs'] as const;
 type TestView = typeof TEST_VIEWS[number];
+
+const STREAM_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const INPUT_KEY_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+const CONFIG_REFERENCE_PATTERN = /config\[\s*['"]([A-Za-z0-9_]*)['"]\s*\]/g;
+
+/** Apply a change only to values the compiler treats as runtime templates. */
+function mapDefinitionTemplates(
+  definition: BuilderDefinition,
+  transform: (value: string) => string,
+): BuilderDefinition {
+  const mapRows = (rows: { key: string; value: string }[]) => rows.map((row) => ({
+    ...row,
+    value: transform(row.value),
+  }));
+
+  return {
+    ...definition,
+    streams: definition.streams.map((stream) => ({
+      ...stream,
+      path: transform(stream.path),
+      record_filter: stream.record_filter === undefined
+        ? undefined : transform(stream.record_filter),
+      query_params: mapRows(stream.query_params),
+      headers: mapRows(stream.headers),
+      request_body: stream.request_body ? {
+        ...stream.request_body,
+        entries: mapRows(stream.request_body.entries),
+      } : undefined,
+      pagination: stream.pagination.stop_condition === undefined
+        ? stream.pagination
+        : { ...stream.pagination, stop_condition: transform(stream.pagination.stop_condition) },
+      transformations: stream.transformations?.map((item) => ({
+        ...item,
+        value: item.value === undefined ? undefined : transform(item.value),
+      })),
+    })),
+  };
+}
+
+function definitionUsesInput(definition: BuilderDefinition, key: string): boolean {
+  if (!key) return false;
+  let used = false;
+  mapDefinitionTemplates(definition, (value) => {
+    for (const match of value.matchAll(CONFIG_REFERENCE_PATTERN)) {
+      if (match[1] === key) used = true;
+    }
+    return value;
+  });
+  return used;
+}
+
+function inputReferencePattern(key: string): RegExp {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`config\\[\\s*['"]${escaped}['"]\\s*\\]`, 'g');
+}
+
+function validParentNames(streams: BuilderStream[], streamIndex: number): string[] {
+  const currentName = streams[streamIndex]?.name;
+  if (!currentName) return [];
+  const parentByName = new Map(
+    streams.map((item) => [
+      item.name,
+      item.partition?.mode === 'parent' ? item.partition.parent_stream : undefined,
+    ]),
+  );
+  return streams
+    .filter((candidate) => candidate.name !== currentName)
+    .filter((candidate) => {
+      const visited = new Set<string>();
+      let ancestor: string | undefined = candidate.name;
+      while (ancestor && !visited.has(ancestor)) {
+        if (ancestor === currentName) return false;
+        visited.add(ancestor);
+        ancestor = parentByName.get(ancestor);
+      }
+      return true;
+    })
+    .map((candidate) => candidate.name);
+}
+
+function coerceUserInputValue(field: BuilderUserInput, value: string): unknown {
+  if (field.type === 'boolean') return value === 'true';
+  if (field.type === 'integer') return Number.parseInt(value, 10);
+  if (field.type === 'number') return Number(value);
+  return value;
+}
 
 const EMPTY_STREAM = (name: string, path: string): BuilderStream => ({
   name,
@@ -206,41 +293,153 @@ export default function BuilderEditorPage() {
   const [secrets, setSecrets] = React.useState<Record<string, string>>({});
   const [showManifest, setShowManifest] = React.useState(false);
 
+  React.useEffect(() => {
+    if (!dirty) return undefined;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [dirty]);
+
+  const setTestSecret = (key: string, value: string) => {
+    setSecrets((current) => ({ ...current, [key]: value }));
+    setTestResult(null);
+  };
+
   // Load the server copy once; after that the editor owns the state so typing
   // is never interrupted by a refetch.
   React.useEffect(() => {
     if (data && draft === null) setDraft(data.definition);
   }, [data, draft]);
 
-  const patch = (next: Partial<BuilderDefinition>) => {
+  const patch = (
+    next: Partial<BuilderDefinition>,
+    options: { preserveTestResult?: boolean } = {},
+  ) => {
     setDraft((current) => (current ? { ...current, ...next } : current));
     setDirty(true);
+    if (!options.preserveTestResult) setTestResult(null);
   };
 
-  const patchStream = (index: number, next: Partial<BuilderStream>) => {
+  const patchStream = (
+    index: number,
+    next: Partial<BuilderStream>,
+    options: { preserveTestResult?: boolean } = {},
+  ) => {
     setDraft((current) => {
       if (!current) return current;
-      const streams = current.streams.map((stream, i) =>
-        i === index ? { ...stream, ...next } : stream);
+      const previousName = current.streams[index]?.name;
+      const nextName = next.name;
+      const renamed = nextName !== undefined && nextName !== previousName;
+      const streams = current.streams.map((stream, i) => {
+        if (i === index) return { ...stream, ...next };
+        if (renamed && stream.partition?.mode === 'parent'
+            && stream.partition.parent_stream === previousName) {
+          return {
+            ...stream,
+            partition: { ...stream.partition, parent_stream: nextName },
+          };
+        }
+        return stream;
+      });
       return { ...current, streams };
     });
     setDirty(true);
+    if (!options.preserveTestResult) setTestResult(null);
+  };
+
+  const renameUserInput = (index: number, nextKey: string) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const previousKey = current.user_inputs?.[index]?.key ?? '';
+      const renamed = {
+        ...current,
+        user_inputs: (current.user_inputs ?? []).map((row, rowIndex) =>
+          rowIndex === index ? { ...row, key: nextKey } : row),
+      };
+      if (previousKey === nextKey) return renamed;
+      const nextReference = configReference(nextKey);
+      const previousReference = inputReferencePattern(previousKey);
+      return mapDefinitionTemplates(
+        renamed,
+        (value) => value.replace(previousReference, nextReference),
+      );
+    });
+    setDirty(true);
+    setTestResult(null);
+  };
+
+  const openAddStream = () => {
+    setNewStream({ name: '', path: '' });
+    setAdding(true);
+  };
+
+  const closeAddStream = () => {
+    setAdding(false);
+    setNewStream({ name: '', path: '' });
+  };
+
+  const normalizedNewStreamName = newStream.name.trim();
+  const normalizedNewStreamPath = newStream.path.trim();
+  const newStreamNameValid = STREAM_NAME_PATTERN.test(normalizedNewStreamName);
+  const newStreamNameExists = Boolean(draft?.streams.some(
+    (item) => item.name.trim().toLocaleLowerCase() === normalizedNewStreamName.toLocaleLowerCase(),
+  ));
+  const canCreateStream = Boolean(
+    normalizedNewStreamName && newStreamNameValid
+      && normalizedNewStreamPath && !newStreamNameExists,
+  );
+
+  const createStream = (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!draft || !canCreateStream) return;
+    const next = [
+      ...draft.streams,
+      EMPTY_STREAM(normalizedNewStreamName, normalizedNewStreamPath),
+    ];
+    patch({ streams: next });
+    setTestResult(null);
+    closeAddStream();
+    setQuery({
+      tab: 'stream',
+      stream: String(next.length - 1),
+      section: 'request',
+      result: 'records',
+    });
   };
 
   const configuredTestInputs = (draft?.user_inputs ?? [])
     .filter((field) => field.key.trim());
-  const defaultTestConfig = Object.fromEntries(
-    configuredTestInputs
-      .filter((field) => field.default !== undefined && field.default !== '')
-      .map((field) => [field.key, field.default!]),
-  );
+  const testConfig: Record<string, unknown> = { ...secrets };
+  for (const field of configuredTestInputs) {
+    const value = secrets[field.key] ?? field.default;
+    if (value === undefined || value === '') delete testConfig[field.key];
+    else testConfig[field.key] = coerceUserInputValue(field, value);
+  }
   const missingRequiredTestInput = configuredTestInputs.some((field) =>
     field.required && !String(secrets[field.key] ?? field.default ?? '').trim());
+  const needsApiKey = draft?.auth.method === 'api_key' || draft?.auth.method === 'bearer';
+  const needsBasic = draft?.auth.method === 'basic' || draft?.auth.method === 'session_token';
+  const needsOAuth = draft?.auth.method === 'oauth2';
+  const needsJwt = draft?.auth.method === 'jwt';
+  const missingRequiredAuthInput = Boolean(
+    (needsApiKey && !secrets.api_key?.trim())
+    || (needsBasic && (!secrets.username?.trim() || !secrets.password?.trim()))
+    || (needsOAuth && (
+      !secrets.client_id?.trim()
+      || !secrets.client_secret?.trim()
+      || !secrets.refresh_token?.trim()
+    ))
+    || (needsJwt && !secrets.jwt_secret?.trim()),
+  );
 
   const save = useMutation({
     mutationFn: () => builderApi.update(params.id, { definition: draft! }),
-    onSuccess: () => {
+    onSuccess: (project) => {
       setDirty(false);
+      queryClient.setQueryData(qk.builderProject(workspaceId, params.id), project);
       queryClient.invalidateQueries({ queryKey: qk.builderProjects(workspaceId) });
       toastSuccess(t('builder.saved'));
     },
@@ -251,11 +450,14 @@ export default function BuilderEditorPage() {
     mutationFn: async () => {
       // Save first: the server tests what is stored, so an untested edit would
       // silently produce a result for the previous version.
-      if (dirty) await builderApi.update(params.id, { definition: draft! });
-      setDirty(false);
+      if (dirty) {
+        const saved = await builderApi.update(params.id, { definition: draft! });
+        queryClient.setQueryData(qk.builderProject(workspaceId, params.id), saved);
+        setDirty(false);
+      }
       return builderApi.test(params.id, {
         stream_name: draft?.streams[activeStream]?.name,
-        config: { ...defaultTestConfig, ...secrets },
+        config: testConfig,
       });
     },
     onSuccess: (result) => {
@@ -272,7 +474,7 @@ export default function BuilderEditorPage() {
         current?.schema && Object.keys((current.schema as Record<string, unknown>).properties ?? {}).length,
       );
       if (result.ok && result.inferred_schema && !hasSchema) {
-        patchStream(activeStream, { schema: result.inferred_schema });
+        patchStream(activeStream, { schema: result.inferred_schema }, { preserveTestResult: true });
       }
       if (result.ok) {
         toastSuccess(result.record_preview_supported
@@ -284,11 +486,17 @@ export default function BuilderEditorPage() {
       setTestResult(null);
       toastError(caught);
     },
+    onSettled: () => {
+      // Saving invalidates the previous green test even when the new test call
+      // itself fails. Refresh the badge and Publish gate in both outcomes.
+      queryClient.invalidateQueries({ queryKey: qk.builderProject(workspaceId, params.id) });
+    },
   });
 
   const publish = useMutation({
     mutationFn: () => builderApi.publish(params.id),
     onSuccess: (project) => {
+      queryClient.setQueryData(qk.builderProject(workspaceId, params.id), project);
       queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
       toastSuccess(t('builder.published', { v: String(project.published_version) }));
     },
@@ -326,11 +534,26 @@ export default function BuilderEditorPage() {
       setQuery({ tab: 'api', stream: null, section: null, result: null }, { replace: true });
       setDirty(false);
       setTestResult(null);
+      queryClient.setQueryData(qk.builderProject(workspaceId, params.id), project);
       queryClient.invalidateQueries({ queryKey: qk.builderProject(workspaceId, params.id) });
       toastSuccess(t('builder.imported'));
     },
     onError: (caught) => toastError(caught),
   });
+
+  const toggleManifest = async () => {
+    if (showManifest) {
+      setShowManifest(false);
+      return;
+    }
+    try {
+      if (dirty) await save.mutateAsync();
+      await manifestYaml.refetch();
+      setShowManifest(true);
+    } catch {
+      // The save/query mutations already surface the actionable error.
+    }
+  };
 
   if (error) {
     return (
@@ -355,9 +578,22 @@ export default function BuilderEditorPage() {
   }
 
   const stream = draft.streams[activeStream];
-  const needsApiKey = draft.auth.method === 'api_key' || draft.auth.method === 'bearer';
-  const needsBasic = draft.auth.method === 'basic';
-
+  const currentStreamNameCount = stream
+    ? draft.streams.filter((item) => item.name.trim().toLocaleLowerCase()
+      === stream.name.trim().toLocaleLowerCase()).length
+    : 0;
+  const streamNameError = stream && !STREAM_NAME_PATTERN.test(stream.name.trim())
+    ? t('builder.streamNameInvalid')
+    : currentStreamNameCount > 1 ? t('builder.streamNameDuplicate') : undefined;
+  const streamPathError = stream && !stream.path.trim()
+    ? t('builder.streamPathRequired') : undefined;
+  const parentStreamNames = validParentNames(draft.streams, activeStream);
+  const dependentStreamNames = stream
+    ? draft.streams
+      .filter((item) => item.partition?.mode === 'parent'
+        && item.partition.parent_stream === stream.name)
+      .map((item) => item.name)
+    : [];
   return (
     <div className="flex h-full flex-col">
       <DetailHeader
@@ -389,7 +625,8 @@ export default function BuilderEditorPage() {
             <div className="flex flex-wrap items-center gap-1.5">
               <Button size="sm" variant="ghost"
                       leadingIcon={<Code2 className="h-3.5 w-3.5" />}
-                      onClick={() => setShowManifest((v) => !v)}>
+                      loading={!showManifest && (save.isPending || manifestYaml.isFetching)}
+                      onClick={toggleManifest}>
                 {t('builder.viewManifest')}
               </Button>
               <Button size="sm" variant="secondary" disabled={!dirty}
@@ -492,10 +729,7 @@ export default function BuilderEditorPage() {
                     variant="ghost"
                     aria-label={t('builder.addStream')}
                     title={t('builder.addStream')}
-                    onClick={() => {
-                      setQuery({ tab: 'stream', stream: String(activeStream), section: 'request' });
-                      setAdding(true);
-                    }}
+                    onClick={openAddStream}
                     className="text-text-tertiary"
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -528,12 +762,12 @@ export default function BuilderEditorPage() {
             {view === 'api' && (
             <Section title={t('builder.sectionApi')}>
               <Field label={t('builder.baseUrl')} htmlFor="base-url" required>
-                <JinjaInput
+                <Input
                   id="base-url"
+                  size="sm"
                   value={draft.base_url}
                   disabled={!canEdit}
-                  userInputs={draft.user_inputs ?? []}
-                  onChange={(value) => patch({ base_url: value })}
+                  onChange={(event) => patch({ base_url: event.target.value })}
                   placeholder="https://api.example.com"
                 />
               </Field>
@@ -560,18 +794,32 @@ export default function BuilderEditorPage() {
                 </Field>
 
                 {draft.auth.method === 'api_key' && (
-                  <Field label={t('builder.authHeader')} htmlFor="auth-header" required>
-                    <Input
-                      id="auth-header"
-                      size="sm"
-                      value={draft.auth.header ?? ''}
-                      disabled={!canEdit}
-                      onChange={(event) => patch({
-                        auth: { ...draft.auth, header: event.target.value },
-                      })}
-                      placeholder="X-API-Key"
-                    />
-                  </Field>
+                  <>
+                    <Field label={draft.auth.inject_into === 'request_parameter'
+                      ? t('builder.authParameter') : t('builder.authHeader')}
+                           htmlFor="auth-header" required>
+                      <Input
+                        id="auth-header"
+                        size="sm"
+                        value={draft.auth.header ?? ''}
+                        disabled={!canEdit}
+                        onChange={(event) => patch({
+                          auth: { ...draft.auth, header: event.target.value },
+                        })}
+                        placeholder="X-API-Key"
+                      />
+                    </Field>
+                    <Field label={t('builder.authInject')} htmlFor="auth-inject">
+                      <Select id="auth-inject" size="sm" disabled={!canEdit}
+                              value={draft.auth.inject_into ?? 'header'}
+                              onChange={(event) => patch({
+                                auth: { ...draft.auth, inject_into: event.target.value as never },
+                              })}>
+                        <option value="header">{t('builder.injectHeader')}</option>
+                        <option value="request_parameter">{t('builder.injectQuery')}</option>
+                      </Select>
+                    </Field>
+                  </>
                 )}
               </div>
 
@@ -600,8 +848,8 @@ export default function BuilderEditorPage() {
               )}
 
               {draft.auth.method === 'session_token' && (
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Field label={t('builder.sessionLoginPath')} htmlFor="session-path" required>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <Field label={t('builder.sessionLoginPath')} htmlFor="session-path">
                     <Input id="session-path" size="sm" disabled={!canEdit}
                            value={draft.auth.session?.login_path ?? ''}
                            onChange={(e) => patch({
@@ -610,7 +858,7 @@ export default function BuilderEditorPage() {
                            })}
                            placeholder="/auth/login" />
                   </Field>
-                  <Field label={t('builder.sessionTokenPath')} htmlFor="session-token" required>
+                  <Field label={t('builder.sessionTokenPath')} htmlFor="session-token">
                     <Input id="session-token" size="sm" disabled={!canEdit}
                            value={draft.auth.session?.token_path ?? ''}
                            onChange={(e) => patch({
@@ -627,6 +875,46 @@ export default function BuilderEditorPage() {
                                      session: { ...draft.auth.session, header: e.target.value } },
                            })}
                            placeholder="X-Session-Token" />
+                  </Field>
+                  <Field label={t('builder.sessionExpiration')} htmlFor="session-expiration">
+                    <Input id="session-expiration" size="sm" disabled={!canEdit}
+                           value={draft.auth.session?.expiration ?? ''}
+                           onChange={(e) => patch({
+                             auth: { ...draft.auth,
+                                     session: { ...draft.auth.session, expiration: e.target.value } },
+                           })}
+                           placeholder="PT1H" />
+                  </Field>
+                </div>
+              )}
+
+              {draft.auth.method === 'jwt' && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label={t('builder.jwtAlgorithm')} htmlFor="jwt-algorithm">
+                    <Select id="jwt-algorithm" size="sm" disabled={!canEdit}
+                            value={draft.auth.jwt?.algorithm ?? 'HS256'}
+                            onChange={(e) => patch({
+                              auth: { ...draft.auth,
+                                      jwt: { ...draft.auth.jwt, algorithm: e.target.value } },
+                            })}>
+                      <option value="HS256">HS256</option>
+                      <option value="HS384">HS384</option>
+                      <option value="HS512">HS512</option>
+                      <option value="RS256">RS256</option>
+                      <option value="RS384">RS384</option>
+                      <option value="RS512">RS512</option>
+                    </Select>
+                  </Field>
+                  <Field label={t('builder.jwtDuration')} htmlFor="jwt-duration">
+                    <Input id="jwt-duration" size="sm" type="number" min={1}
+                           disabled={!canEdit}
+                           value={String(draft.auth.jwt?.token_duration ?? 1200)}
+                           onChange={(e) => patch({
+                             auth: { ...draft.auth, jwt: {
+                               ...draft.auth.jwt,
+                               token_duration: Number(e.target.value) || 1200,
+                             } },
+                           })} />
                   </Field>
                 </div>
               )}
@@ -655,16 +943,20 @@ export default function BuilderEditorPage() {
                     <div key={index} className="space-y-3 py-3 first:pt-0 last:pb-0">
                       <div className="grid items-end gap-3 sm:grid-cols-2">
                         <Field label={t('builder.inputKey')}
-                               htmlFor={`builder-input-${index}-key`} required>
+                               htmlFor={`builder-input-${index}-key`} required
+                               error={!INPUT_KEY_PATTERN.test(field.key.trim())
+                                 ? t('builder.inputKeyInvalid')
+                                 : (draft.user_inputs ?? []).filter((row) => row.key === field.key).length > 1
+                                   ? t('builder.inputKeyDuplicate') : undefined}>
                           <Input id={`builder-input-${index}-key`} size="sm"
                                  placeholder="access_token" disabled={!canEdit} value={field.key}
-                                 onChange={(e) => patch({
-                                   user_inputs: (draft.user_inputs ?? []).map((row, i) =>
-                                     i === index ? { ...row, key: e.target.value } : row),
-                                 })} />
+                                 aria-invalid={!INPUT_KEY_PATTERN.test(field.key.trim())
+                                   || (draft.user_inputs ?? [])
+                                     .filter((row) => row.key === field.key).length > 1}
+                                 onChange={(e) => renameUserInput(index, e.target.value)} />
                         </Field>
                         <Field label={t('builder.inputTitle')}
-                               htmlFor={`builder-input-${index}-title`} required>
+                               htmlFor={`builder-input-${index}-title`}>
                           <Input id={`builder-input-${index}-title`} size="sm"
                                  placeholder={t('builder.inputTitle')}
                                  disabled={!canEdit} value={field.title ?? ''}
@@ -687,10 +979,12 @@ export default function BuilderEditorPage() {
                             <option value="boolean">boolean</option>
                           </Select>
                         </Field>
-                        <IconButton size="xs" variant="ghost" disabled={!canEdit}
+                        <IconButton size="xs" variant="ghost"
+                                    disabled={!canEdit || definitionUsesInput(draft, field.key)}
                                     className="justify-self-end"
                                     aria-label={t('builder.removeInput')}
-                                    title={t('builder.removeInput')}
+                                    title={definitionUsesInput(draft, field.key)
+                                      ? t('builder.removeInputBlocked') : t('builder.removeInput')}
                                     onClick={() => patch({
                                   user_inputs: (draft.user_inputs ?? [])
                                     .filter((_, i) => i !== index),
@@ -698,6 +992,11 @@ export default function BuilderEditorPage() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </IconButton>
                       </div>
+                      {definitionUsesInput(draft, field.key) && (
+                        <p className="text-tiny text-warning">
+                          {t('builder.removeInputBlocked')}
+                        </p>
+                      )}
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Field label={t('builder.inputDescription')}
                                htmlFor={`builder-input-${index}-description`}>
@@ -711,12 +1010,28 @@ export default function BuilderEditorPage() {
                         {!field.secret && (
                           <Field label={t('builder.inputDefault')}
                                  htmlFor={`builder-input-${index}-default`}>
-                            <Input id={`builder-input-${index}-default`} size="sm"
-                                   disabled={!canEdit} value={field.default ?? ''}
-                                   onChange={(e) => patch({
-                                     user_inputs: (draft.user_inputs ?? []).map((row, i) =>
-                                       i === index ? { ...row, default: e.target.value } : row),
-                                   })} />
+                            {field.type === 'boolean' ? (
+                              <Select id={`builder-input-${index}-default`} size="sm"
+                                      disabled={!canEdit} value={field.default ?? ''}
+                                      onChange={(e) => patch({
+                                        user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                          i === index ? { ...row, default: e.target.value } : row),
+                                      })}>
+                                <option value="">{t('builder.inputNoDefault')}</option>
+                                <option value="true">true</option>
+                                <option value="false">false</option>
+                              </Select>
+                            ) : (
+                              <Input id={`builder-input-${index}-default`} size="sm"
+                                     type={['integer', 'number'].includes(field.type ?? '')
+                                       ? 'number' : 'text'}
+                                     step={field.type === 'number' ? 'any' : undefined}
+                                     disabled={!canEdit} value={field.default ?? ''}
+                                     onChange={(e) => patch({
+                                       user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                         i === index ? { ...row, default: e.target.value } : row),
+                                     })} />
+                            )}
                           </Field>
                         )}
                       </div>
@@ -772,66 +1087,20 @@ export default function BuilderEditorPage() {
                   size="xs"
                   variant="ghost"
                   leadingIcon={<Plus className="h-3 w-3" />}
-                  onClick={() => setAdding((open) => !open)}
+                  onClick={openAddStream}
                 >
                   {t('builder.addStream')}
                 </Button>
               ) : null}
             >
-              {/* Ask for the name and the path up front.
-                *
-                * "Add stream" used to make `stream_3` at path `/` and drop the
-                * person into it -- a stream that cannot work, named after
-                * nothing, which they then have to notice and repair. Both
-                * answers are one line each and the person already knows them. */}
-              {adding && canEdit && (
-                <div className="flex flex-wrap items-end gap-3 rounded-md border
-                                border-[rgb(var(--border-line))] p-3">
-                  <Field label={t('builder.streamName')} htmlFor="new-stream-name" required>
-                    <Input
-                      id="new-stream-name" size="sm" value={newStream.name}
-                      placeholder="lead_service"
-                      onChange={(e) => setNewStream((s) => ({ ...s, name: e.target.value }))}
-                    />
-                  </Field>
-                  <Field label={t('builder.streamPath')} htmlFor="new-stream-path" required
-                         hint={t('builder.streamPathHint')}>
-                    <Input
-                      id="new-stream-path" size="sm" value={newStream.path}
-                      placeholder="/lead/services"
-                      onChange={(e) => setNewStream((s) => ({ ...s, path: e.target.value }))}
-                    />
-                  </Field>
-                  <Button
-                    size="sm"
-                    disabled={!newStream.name.trim() || !newStream.path.trim()
-                      || draft.streams.some((s) => s.name === newStream.name.trim())}
-                    onClick={() => {
-                      const next = [...draft.streams,
-                        EMPTY_STREAM(newStream.name.trim(), newStream.path.trim())];
-                      patch({ streams: next });
-                      setTestResult(null);
-                      setQuery({
-                        tab: 'stream', stream: String(next.length - 1), section: 'request',
-                      });
-                      setNewStream({ name: '', path: '' });
-                      setAdding(false);
-                    }}
-                  >
-                    {t('builder.addStreamConfirm')}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
-                    {t('common.cancel')}
-                  </Button>
-                </div>
-              )}
-
               {stream && (
                 <StreamEditor
                   stream={stream}
-                  streamNames={draft.streams.map((item) => item.name)}
+                  streamNames={parentStreamNames}
                   fields={testResult?.inferred_fields ?? []}
                   userInputs={draft.user_inputs ?? []}
+                  nameError={streamNameError}
+                  pathError={streamPathError}
                   activeSection={streamSection}
                   onSectionChange={(section) => setQuery({ section }, { replace: true })}
                   onCreateInput={canEdit ? () => {
@@ -850,22 +1119,34 @@ export default function BuilderEditorPage() {
               )}
 
               {draft.streams.length > 1 && canEdit && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  leadingIcon={<Trash2 className="h-3 w-3" />}
-                  onClick={() => {
-                    const next = draft.streams.filter((_, i) => i !== activeStream);
-                    patch({ streams: next });
-                    setTestResult(null);
-                    setQuery({
-                      tab: 'stream', stream: String(Math.max(0, activeStream - 1)),
-                      section: 'request',
-                    });
-                  }}
-                >
-                  {t('builder.removeStream')}
-                </Button>
+                <div className="space-y-1.5">
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    disabled={dependentStreamNames.length > 0}
+                    leadingIcon={<Trash2 className="h-3 w-3" />}
+                    onClick={() => {
+                      if (!stream || !window.confirm(t('builder.confirmRemoveStream', {
+                        name: stream.name,
+                      }))) return;
+                      const next = draft.streams.filter((_, i) => i !== activeStream);
+                      patch({ streams: next });
+                      setQuery({
+                        tab: 'stream', stream: String(Math.max(0, activeStream - 1)),
+                        section: 'request', result: 'records',
+                      });
+                    }}
+                  >
+                    {t('builder.removeStream')}
+                  </Button>
+                  {dependentStreamNames.length > 0 && (
+                    <p className="text-tiny text-warning">
+                      {t('builder.removeStreamBlocked', {
+                        names: dependentStreamNames.join(', '),
+                      })}
+                    </p>
+                  )}
+                </div>
               )}
             </Section>
             )}
@@ -891,7 +1172,8 @@ export default function BuilderEditorPage() {
                 </span>
               ) : null}
             >
-              {(configuredTestInputs.length > 0 || needsApiKey || needsBasic) && (
+              {(configuredTestInputs.length > 0 || needsApiKey || needsBasic
+                || needsOAuth || needsJwt) && (
                 <div className="space-y-2.5 border-b border-[rgb(var(--border-line))] pb-3">
                   <p className="text-tiny text-text-quaternary">{t('builder.secretsHint')}</p>
                   {configuredTestInputs.map((field, index) => (
@@ -907,9 +1189,7 @@ export default function BuilderEditorPage() {
                           id={`test-config-${index}`}
                           size="sm"
                           value={secrets[field.key] ?? field.default ?? 'false'}
-                          onChange={(event) => setSecrets({
-                            ...secrets, [field.key]: event.target.value,
-                          })}
+                          onChange={(event) => setTestSecret(field.key, event.target.value)}
                         >
                           <option value="true">true</option>
                           <option value="false">false</option>
@@ -922,9 +1202,7 @@ export default function BuilderEditorPage() {
                           value={secrets[field.key] ?? ''}
                           placeholder={field.default ?? ''}
                           autoComplete="off"
-                          onChange={(event) => setSecrets({
-                            ...secrets, [field.key]: event.target.value,
-                          })}
+                          onChange={(event) => setTestSecret(field.key, event.target.value)}
                         />
                       ) : (
                         <Input
@@ -934,9 +1212,7 @@ export default function BuilderEditorPage() {
                           value={secrets[field.key] ?? ''}
                           placeholder={field.default ?? ''}
                           autoComplete="off"
-                          onChange={(event) => setSecrets({
-                            ...secrets, [field.key]: event.target.value,
-                          })}
+                          onChange={(event) => setTestSecret(field.key, event.target.value)}
                         />
                       )}
                     </Field>
@@ -946,7 +1222,7 @@ export default function BuilderEditorPage() {
                       <SecretInput id="test-api-key" size="sm" autoComplete="off"
                                    revealLabel={t('builder.apiKey')}
                                    value={secrets.api_key ?? ''}
-                                   onChange={(e) => setSecrets({ ...secrets, api_key: e.target.value })} />
+                                   onChange={(e) => setTestSecret('api_key', e.target.value)} />
                     </Field>
                   )}
                   {needsBasic && (
@@ -955,7 +1231,7 @@ export default function BuilderEditorPage() {
                         <Field label={t('builder.username')} htmlFor="test-username">
                           <Input id="test-username" size="sm" autoComplete="off"
                                  value={secrets.username ?? ''}
-                                 onChange={(e) => setSecrets({ ...secrets, username: e.target.value })} />
+                                 onChange={(e) => setTestSecret('username', e.target.value)} />
                         </Field>
                       )}
                       {!configuredTestInputs.some((field) => field.key === 'password') && (
@@ -963,10 +1239,39 @@ export default function BuilderEditorPage() {
                           <SecretInput id="test-password" size="sm" autoComplete="off"
                                        revealLabel={t('builder.password')}
                                        value={secrets.password ?? ''}
-                                       onChange={(e) => setSecrets({ ...secrets, password: e.target.value })} />
+                                       onChange={(e) => setTestSecret('password', e.target.value)} />
                         </Field>
                       )}
                     </div>
+                  )}
+                  {needsOAuth && (
+                    <div className="space-y-2">
+                      <Field label={t('builder.clientId')} htmlFor="test-client-id" required>
+                        <Input id="test-client-id" size="sm" autoComplete="off"
+                               value={secrets.client_id ?? ''}
+                               onChange={(e) => setTestSecret('client_id', e.target.value)} />
+                      </Field>
+                      <Field label={t('builder.clientSecret')} htmlFor="test-client-secret" required>
+                        <SecretInput id="test-client-secret" size="sm" autoComplete="off"
+                                     revealLabel={t('builder.clientSecret')}
+                                     value={secrets.client_secret ?? ''}
+                                     onChange={(e) => setTestSecret('client_secret', e.target.value)} />
+                      </Field>
+                      <Field label={t('builder.refreshToken')} htmlFor="test-refresh-token" required>
+                        <SecretInput id="test-refresh-token" size="sm" autoComplete="off"
+                                     revealLabel={t('builder.refreshToken')}
+                                     value={secrets.refresh_token ?? ''}
+                                     onChange={(e) => setTestSecret('refresh_token', e.target.value)} />
+                      </Field>
+                    </div>
+                  )}
+                  {needsJwt && (
+                    <Field label={t('builder.jwtSecret')} htmlFor="test-jwt-secret" required>
+                      <SecretInput id="test-jwt-secret" size="sm" autoComplete="off"
+                                   revealLabel={t('builder.jwtSecret')}
+                                   value={secrets.jwt_secret ?? ''}
+                                   onChange={(e) => setTestSecret('jwt_secret', e.target.value)} />
+                    </Field>
                   )}
                 </div>
               )}
@@ -975,8 +1280,9 @@ export default function BuilderEditorPage() {
                 className="w-full"
                 variant="primary"
                 loading={runTest.isPending}
-                disabled={!stream || missingRequiredTestInput}
-                title={missingRequiredTestInput ? t('builder.testMissingRequired') : undefined}
+                disabled={!stream || missingRequiredTestInput || missingRequiredAuthInput}
+                title={missingRequiredTestInput || missingRequiredAuthInput
+                  ? t('builder.testMissingRequired') : undefined}
                 leadingIcon={<Play className="h-3.5 w-3.5" />}
                 onClick={() => runTest.mutate()}
               >
@@ -998,7 +1304,11 @@ export default function BuilderEditorPage() {
                   t={t}
                   onApplySchema={canEdit && testResult.inferred_schema
                     ? () => {
-                        patchStream(activeStream, { schema: testResult.inferred_schema! });
+                        patchStream(
+                          activeStream,
+                          { schema: testResult.inferred_schema! },
+                          { preserveTestResult: true },
+                        );
                         toastSuccess(t('builder.schemaApplied'));
                       }
                     : undefined}
@@ -1020,6 +1330,66 @@ export default function BuilderEditorPage() {
           </aside>
         </div>
       </div>
+
+      <Modal
+        open={adding && canEdit}
+        onClose={closeAddStream}
+        title={t('builder.addStream')}
+        size="sm"
+        footer={
+          <>
+            <Button size="sm" variant="ghost" onClick={closeAddStream}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              type="submit"
+              form="builder-add-stream-form"
+              disabled={!canCreateStream}
+            >
+              {t('builder.addStreamConfirm')}
+            </Button>
+          </>
+        }
+      >
+        <form id="builder-add-stream-form" className="space-y-3" onSubmit={createStream}>
+          <Field label={t('builder.streamName')} htmlFor="new-stream-name" required>
+            <Input
+              id="new-stream-name"
+              size="sm"
+              value={newStream.name}
+              placeholder="lead_service"
+              autoFocus
+              onChange={(event) => setNewStream((current) => ({
+                ...current, name: event.target.value,
+              }))}
+            />
+            {normalizedNewStreamName && !newStreamNameValid && (
+              <p className="mt-1 text-tiny text-danger" role="alert">
+                {t('builder.streamNameInvalid')}
+              </p>
+            )}
+            {newStreamNameExists && (
+              <p className="mt-1 text-tiny text-danger" role="alert">
+                {t('builder.streamNameDuplicate')}
+              </p>
+            )}
+          </Field>
+          <Field label={t('builder.streamPath')} htmlFor="new-stream-path" required
+                 hint={t('builder.streamPathHint')}>
+            <Input
+              id="new-stream-path"
+              size="sm"
+              value={newStream.path}
+              placeholder="/lead/services"
+              onChange={(event) => setNewStream((current) => ({
+                ...current, path: event.target.value,
+              }))}
+            />
+          </Field>
+        </form>
+      </Modal>
     </div>
   );
 }

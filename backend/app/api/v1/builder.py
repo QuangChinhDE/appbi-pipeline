@@ -18,6 +18,7 @@ from app.core.errors import ValidationError
 from app.core.permissions import Action, Module
 from app.core.db import utcnow
 from app.models.builder import BuilderProject
+from app.models.enums import BuilderStatus
 from app.schemas.common import ORMModel
 from app.services import audit, builder
 
@@ -161,7 +162,13 @@ async def update_project(
     if payload.definition is not None:
         # Saved as given: a draft the user is still shaping should not be
         # rejected for being incomplete. Validation belongs to test and publish.
+        definition_changed = payload.definition != project.definition
         project.definition = payload.definition
+        if definition_changed:
+            # A successful test certifies one exact draft. Keeping it green
+            # after the definition changes lets an untested edit be published.
+            project.last_test_ok = None
+            project.status = BuilderStatus.DRAFT
     project.updated_by = ctx.user_id
 
     await session.flush()
@@ -274,6 +281,7 @@ async def import_manifest(
     project.updated_by = ctx.user_id
     # The imported connector has not been proven here, whatever it did elsewhere.
     project.last_test_ok = None
+    project.status = BuilderStatus.DRAFT
     await audit.record(session, ctx, action="builder.project.imported",
                        resource_type="builder_project", resource_id=project.id,
                        resource_name=project.name)

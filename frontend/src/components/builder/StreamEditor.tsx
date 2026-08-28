@@ -29,7 +29,7 @@ export type BuilderStreamSection =
  */
 export function StreamEditor({
   stream, streamNames, fields, userInputs, activeSection, onSectionChange,
-  onCreateInput, disabled, onChange,
+  onCreateInput, nameError, pathError, disabled, onChange,
 }: {
   stream: BuilderStream;
   /** Other streams, offered as a parent for substream partitioning. */
@@ -42,6 +42,8 @@ export function StreamEditor({
   activeSection: BuilderStreamSection;
   onSectionChange: (section: BuilderStreamSection) => void;
   onCreateInput?: () => void;
+  nameError?: string;
+  pathError?: string;
   disabled?: boolean;
   onChange: (next: Partial<BuilderStream>) => void;
 }) {
@@ -109,13 +111,16 @@ export function StreamEditor({
 
       <Group title={t('builder.groupRequest')} active={activeSection === 'request'}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t('builder.streamName')} htmlFor="stream-name" required>
+          <Field label={t('builder.streamName')} htmlFor="stream-name" required
+                 error={nameError}>
             <Input id="stream-name" size="sm" value={stream.name} disabled={disabled}
+                   aria-invalid={Boolean(nameError)}
                    onChange={(e) => onChange({ name: e.target.value })} />
           </Field>
           <Field label={t('builder.streamPath')} htmlFor="stream-path" required
-                 hint={t('builder.streamPathHint')}>
+                 hint={t('builder.streamPathHint')} error={pathError}>
             <JinjaInput id="stream-path" value={stream.path} {...jinja}
+                        ariaInvalid={Boolean(pathError)}
                         onChange={(value) => onChange({ path: value })}
                         placeholder="/v1/orders" />
           </Field>
@@ -155,6 +160,7 @@ export function StreamEditor({
           label={t('builder.headers')}
           rows={stream.headers}
           jinja={jinja}
+          caseInsensitiveKeys
           disabled={disabled}
           onChange={(rows) => onChange({ headers: rows })}
         />
@@ -221,6 +227,19 @@ export function StreamEditor({
             </Field>
           )}
 
+          {stream.pagination?.mode !== 'none'
+            && stream.pagination?.mode !== 'link_header'
+            && stream.pagination?.page_size != null && (
+            <Field label={t('builder.pageSizeParam')} htmlFor="page-size-param">
+              <Input id="page-size-param" size="sm" disabled={disabled}
+                     value={stream.pagination?.size_param ?? ''}
+                     onChange={(e) => onChange({
+                       pagination: { ...stream.pagination, size_param: e.target.value },
+                     })}
+                     placeholder={stream.pagination?.mode === 'page' ? 'per_page' : 'limit'} />
+            </Field>
+          )}
+
           {['page', 'offset', 'cursor'].includes(stream.pagination?.mode ?? '') && (
             <Field label={t('builder.pageInject')} htmlFor="page-inject"
                    hint={t('builder.injectHint')}>
@@ -250,7 +269,35 @@ export function StreamEditor({
                      placeholder={stream.pagination?.mode === 'page' ? 'page' : 'offset'} />
             </Field>
           )}
+
+          {stream.pagination?.mode === 'page' && (
+            <Field label={t('builder.pageStart')} htmlFor="page-start">
+              <Input id="page-start" size="sm" type="number" min={0} disabled={disabled}
+                     value={String(stream.pagination?.start_from ?? 1)}
+                     onChange={(e) => onChange({
+                       pagination: {
+                         ...stream.pagination,
+                         start_from: Number(e.target.value),
+                       },
+                     })} />
+            </Field>
+          )}
         </div>
+
+        {stream.pagination?.mode === 'page' && (
+          <label className="flex items-center gap-2 text-caption text-text-secondary">
+            <input type="checkbox" disabled={disabled}
+                   checked={Boolean(stream.pagination?.inject_on_first_request)}
+                   onChange={(e) => onChange({
+                     pagination: {
+                       ...stream.pagination,
+                       inject_on_first_request: e.target.checked,
+                     },
+                   })}
+                   className="h-3.5 w-3.5 rounded border-[rgb(var(--border-strong))]" />
+            {t('builder.pageInjectFirst')}
+          </label>
+        )}
 
         {stream.pagination?.mode === 'cursor' && (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -265,10 +312,10 @@ export function StreamEditor({
             </Field>
             <Field label={t('builder.stopCondition')} htmlFor="stop-condition"
                    hint={t('builder.stopConditionHint')}>
-              <Input id="stop-condition" size="sm" disabled={disabled}
-                     value={stream.pagination?.stop_condition ?? ''}
-                     onChange={(e) => onChange({
-                       pagination: { ...stream.pagination, stop_condition: e.target.value },
+              <JinjaInput id="stop-condition"
+                     value={stream.pagination?.stop_condition ?? ''} {...jinja}
+                     onChange={(value) => onChange({
+                       pagination: { ...stream.pagination, stop_condition: value },
                      })} />
             </Field>
           </div>
@@ -384,7 +431,7 @@ export function StreamEditor({
         </Field>
 
         {stream.partition?.mode === 'list' && (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Field label={t('builder.partitionValues')} htmlFor="partition-values" required
                    hint={t('builder.partitionValuesHint')}>
               <Input id="partition-values" size="sm" disabled={disabled}
@@ -402,7 +449,40 @@ export function StreamEditor({
                      })}
                      placeholder="region" />
             </Field>
+            <Field label={t('builder.partitionField')} htmlFor="partition-list-field"
+                   hint={t('builder.partitionListFieldHint')}>
+              <Input id="partition-list-field" size="sm" disabled={disabled}
+                     value={stream.partition?.cursor_field ?? ''}
+                     onChange={(e) => onChange({
+                       partition: { ...stream.partition!, cursor_field: e.target.value },
+                     })}
+                     placeholder="partition" />
+            </Field>
+            {stream.partition?.param && (
+              <Field label={t('builder.partitionInject')} htmlFor="partition-list-inject"
+                     hint={t('builder.injectHint')}>
+                <Select id="partition-list-inject" size="sm" disabled={disabled}
+                        value={stream.partition?.inject_into ?? 'request_parameter'}
+                        onChange={(e) => onChange({
+                          partition: { ...stream.partition!, inject_into: e.target.value as never },
+                        })}>
+                  <option value="request_parameter">{t('builder.injectQuery')}</option>
+                  <option value="body_data">{t('builder.injectBodyForm')}</option>
+                  <option value="body_json">{t('builder.injectBodyJson')}</option>
+                  <option value="header">{t('builder.injectHeader')}</option>
+                </Select>
+              </Field>
+            )}
           </div>
+        )}
+
+        {stream.partition?.mode === 'list' && !stream.partition?.param
+          && !JSON.stringify(stream).includes('stream_partition') && (
+          <p className="text-caption text-warning">
+            {t('builder.partitionListParamMissing', {
+              field: stream.partition?.cursor_field || 'partition',
+            })}
+          </p>
         )}
 
         {stream.partition?.mode === 'parent' && (
@@ -530,13 +610,19 @@ export function StreamEditor({
                          i === index ? { ...row, path: e.target.value } : row),
                      })} />
               {item.type === 'add' && (
-                <Input size="sm" aria-label={t('builder.transformValue')} disabled={disabled}
-                       className="col-span-2 min-w-0 sm:col-span-1"
-                       value={item.value ?? ''} placeholder="{{ now_utc() }}"
-                       onChange={(e) => onChange({
-                         transformations: (stream.transformations ?? []).map((row, i) =>
-                           i === index ? { ...row, value: e.target.value } : row),
-                       })} />
+                <div className="col-span-2 min-w-0 sm:col-span-1">
+                  <JinjaInput
+                    id={`transform-value-${index}`}
+                    ariaLabel={`${t('builder.transformValue')} ${index + 1}`}
+                    value={item.value ?? ''}
+                    {...jinja}
+                    placeholder="{{ now_utc() }}"
+                    onChange={(value) => onChange({
+                      transformations: (stream.transformations ?? []).map((row, i) =>
+                        i === index ? { ...row, value } : row),
+                    })}
+                  />
+                </div>
               )}
               <IconButton size="xs" variant="ghost" disabled={disabled}
                           className="col-start-2 row-start-1 sm:col-start-4"
@@ -611,6 +697,21 @@ export function StreamEditor({
                      })} />
             </Field>
           )}
+          {stream.error_handler?.backoff?.mode === 'exponential' && (
+            <Field label={t('builder.backoffFactor')} htmlFor="backoff-factor">
+              <Input id="backoff-factor" size="sm" type="number" min={1} disabled={disabled}
+                     value={String(stream.error_handler?.backoff?.factor ?? 5)}
+                     onChange={(e) => onChange({
+                       error_handler: {
+                         ...stream.error_handler,
+                         backoff: {
+                           ...stream.error_handler!.backoff!,
+                           factor: Number(e.target.value) || 5,
+                         },
+                       },
+                     })} />
+            </Field>
+          )}
           {stream.error_handler?.backoff?.mode === 'header' && (
             <Field label={t('builder.backoffHeaderName')} htmlFor="backoff-header">
               <Input id="backoff-header" size="sm" disabled={disabled}
@@ -626,6 +727,98 @@ export function StreamEditor({
                      })}
                      placeholder="Retry-After" />
             </Field>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <p className="text-label text-text-secondary">{t('builder.responseFilters')}</p>
+          {(stream.error_handler?.filters ?? []).map((filter, index) => (
+            <div
+              key={index}
+              className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(9rem,0.8fr)_minmax(10rem,1.4fr)_2rem] sm:border-0 sm:p-0"
+            >
+              <HttpCodesInput
+                codes={filter.http_codes}
+                label={`${t('builder.responseCodes')} ${index + 1}`}
+                disabled={disabled}
+                errorText={t('builder.responseCodesInvalid')}
+                onChange={(httpCodes) => onChange({
+                  error_handler: {
+                    ...stream.error_handler,
+                    filters: (stream.error_handler?.filters ?? []).map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, http_codes: httpCodes } : item),
+                  },
+                })}
+              />
+              <Select
+                size="sm"
+                aria-label={`${t('builder.responseAction')} ${index + 1}`}
+                disabled={disabled}
+                value={filter.action}
+                onChange={(event) => onChange({
+                  error_handler: {
+                    ...stream.error_handler,
+                    filters: (stream.error_handler?.filters ?? []).map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, action: event.target.value } : item),
+                  },
+                })}
+              >
+                <option value="RETRY">{t('builder.responseRetry')}</option>
+                <option value="RATE_LIMITED">{t('builder.responseRateLimited')}</option>
+                <option value="IGNORE">{t('builder.responseIgnore')}</option>
+                <option value="FAIL">{t('builder.responseFail')}</option>
+              </Select>
+              <Input
+                size="sm"
+                className="col-span-2 min-w-0 sm:col-span-1"
+                aria-label={`${t('builder.responseMessage')} ${index + 1}`}
+                disabled={disabled}
+                value={filter.message ?? ''}
+                placeholder={t('builder.responseMessage')}
+                onChange={(event) => onChange({
+                  error_handler: {
+                    ...stream.error_handler,
+                    filters: (stream.error_handler?.filters ?? []).map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, message: event.target.value } : item),
+                  },
+                })}
+              />
+              <IconButton
+                size="xs"
+                variant="ghost"
+                className="col-start-2 row-start-1 sm:col-start-4"
+                aria-label={t('builder.removeResponseFilter')}
+                title={t('builder.removeResponseFilter')}
+                disabled={disabled}
+                onClick={() => onChange({
+                  error_handler: {
+                    ...stream.error_handler,
+                    filters: (stream.error_handler?.filters ?? [])
+                      .filter((_, itemIndex) => itemIndex !== index),
+                  },
+                })}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </IconButton>
+            </div>
+          ))}
+          {!disabled && (
+            <Button
+              size="xs"
+              variant="ghost"
+              leadingIcon={<Plus className="h-3 w-3" />}
+              onClick={() => onChange({
+                error_handler: {
+                  ...stream.error_handler,
+                  filters: [
+                    ...(stream.error_handler?.filters ?? []),
+                    { http_codes: [429], action: 'RATE_LIMITED', message: '' },
+                  ],
+                },
+              })}
+            >
+              {t('builder.addResponseFilter')}
+            </Button>
           )}
         </div>
       </Group>
@@ -687,11 +880,60 @@ function Picker({
   );
 }
 
+function HttpCodesInput({
+  codes, label, errorText, disabled, onChange,
+}: {
+  codes: number[];
+  label: string;
+  errorText: string;
+  disabled?: boolean;
+  onChange: (codes: number[]) => void;
+}) {
+  const serialized = codes.join(', ');
+  const [value, setValue] = React.useState(serialized);
+  const focused = React.useRef(false);
+  React.useEffect(() => {
+    if (!focused.current) setValue(serialized);
+  }, [serialized]);
+
+  const parse = (next: string) => {
+    const tokens = next.split(',').map((item) => item.trim()).filter(Boolean);
+    const parsed = tokens.map((item) => Number(item));
+    const valid = parsed.length > 0
+      && parsed.every((code) => Number.isInteger(code) && code >= 100 && code <= 599);
+    return { parsed, valid };
+  };
+  const invalid = !parse(value).valid;
+
+  return (
+    <div>
+      <Input
+        size="sm"
+        aria-label={label}
+        aria-invalid={invalid}
+        disabled={disabled}
+        value={value}
+        placeholder="429, 500, 503"
+        onFocus={() => { focused.current = true; }}
+        onBlur={() => { focused.current = false; }}
+        onChange={(event) => {
+          const next = event.target.value;
+          setValue(next);
+          const result = parse(next);
+          onChange(result.valid ? result.parsed : []);
+        }}
+      />
+      {invalid && <p className="mt-1 text-tiny text-danger" role="alert">{errorText}</p>}
+    </div>
+  );
+}
+
 function KeyValueRows({
-  label, rows, disabled, onChange, jinja,
+  label, rows, disabled, onChange, jinja, caseInsensitiveKeys = false,
 }: {
   label: string;
   rows: BuilderKeyValue[];
+  caseInsensitiveKeys?: boolean;
   disabled?: boolean;
   onChange: (rows: BuilderKeyValue[]) => void;
   /** Passed to the value column: `{{ config['token'] }}` belongs there. */
@@ -713,44 +955,59 @@ function KeyValueRows({
             <span aria-hidden />
           </div>
         )}
-        {rows.map((row, index) => (
-          <div
-            key={index}
-            className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[minmax(7rem,0.72fr)_minmax(12rem,1.35fr)_2rem] sm:border-0 sm:p-0"
-          >
-            <Input size="sm" className="min-w-0"
-                   aria-label={`${label} — ${t('builder.inputKey')} ${index + 1}`}
-                   value={row.key} disabled={disabled} placeholder={t('builder.inputKey')}
-                   onChange={(event) => onChange(rows.map((r, i) =>
-                     i === index ? { ...r, key: event.target.value } : r))} />
-            <div className="col-span-2 min-w-0 sm:col-span-1">
-              {jinja ? (
-                <JinjaInput
-                  id={`${label}-value-${index}`}
-                  value={row.value}
-                  {...jinja}
-                  onChange={(value) => onChange(rows.map((r, i) =>
-                    i === index ? { ...r, value } : r))}
-                  placeholder={t('builder.transformValue')}
-                />
-              ) : (
-                <Input size="sm" className="min-w-0"
-                       aria-label={`${label} — ${t('builder.transformValue')} ${index + 1}`}
-                       value={row.value} disabled={disabled}
-                       placeholder={t('builder.transformValue')}
-                       onChange={(event) => onChange(rows.map((r, i) =>
-                         i === index ? { ...r, value: event.target.value } : r))} />
+        {rows.map((row, index) => {
+          const normalizedKey = caseInsensitiveKeys ? row.key.trim().toLowerCase() : row.key.trim();
+          const duplicate = Boolean(normalizedKey) && rows.filter((item) => (
+            caseInsensitiveKeys ? item.key.trim().toLowerCase() : item.key.trim()
+          ) === normalizedKey).length > 1;
+          const missingKey = !row.key.trim() && Boolean(row.value);
+          const keyError = duplicate
+            ? t('builder.paramKeyDuplicate')
+            : missingKey ? t('builder.paramKeyRequired') : undefined;
+          return (
+            <div
+              key={index}
+              className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[minmax(7rem,0.72fr)_minmax(12rem,1.35fr)_2rem] sm:border-0 sm:p-0"
+            >
+              <Input size="sm" className="min-w-0"
+                     aria-label={`${label} — ${t('builder.inputKey')} ${index + 1}`}
+                     aria-invalid={Boolean(keyError)}
+                     value={row.key} disabled={disabled} placeholder={t('builder.inputKey')}
+                     onChange={(event) => onChange(rows.map((r, i) =>
+                       i === index ? { ...r, key: event.target.value } : r))} />
+              <div className="col-span-2 min-w-0 sm:col-span-1">
+                {jinja ? (
+                  <JinjaInput
+                    id={`${label}-value-${index}`}
+                    value={row.value}
+                    ariaLabel={`${label} — ${t('builder.transformValue')} ${index + 1}`}
+                    {...jinja}
+                    onChange={(value) => onChange(rows.map((r, i) =>
+                      i === index ? { ...r, value } : r))}
+                    placeholder={t('builder.transformValue')}
+                  />
+                ) : (
+                  <Input size="sm" className="min-w-0"
+                         aria-label={`${label} — ${t('builder.transformValue')} ${index + 1}`}
+                         value={row.value} disabled={disabled}
+                         placeholder={t('builder.transformValue')}
+                         onChange={(event) => onChange(rows.map((r, i) =>
+                           i === index ? { ...r, value: event.target.value } : r))} />
+                )}
+              </div>
+              <IconButton size="xs" variant="ghost" aria-label={t('builder.removeParam')}
+                          title={t('builder.removeParam')}
+                          className="col-start-2 row-start-1 sm:col-start-3"
+                          disabled={disabled}
+                          onClick={() => onChange(rows.filter((_, i) => i !== index))}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </IconButton>
+              {keyError && (
+                <p className="col-span-full text-tiny text-danger" role="alert">{keyError}</p>
               )}
             </div>
-            <IconButton size="xs" variant="ghost" aria-label={t('builder.removeParam')}
-                        title={t('builder.removeParam')}
-                        className="col-start-2 row-start-1 sm:col-start-3"
-                        disabled={disabled}
-                        onClick={() => onChange(rows.filter((_, i) => i !== index))}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </IconButton>
-          </div>
-        ))}
+          );
+        })}
         {!disabled && (
           <Button size="xs" variant="ghost" leadingIcon={<Plus className="h-3 w-3" />}
                   onClick={() => onChange([...rows, { key: '', value: '' }])}>

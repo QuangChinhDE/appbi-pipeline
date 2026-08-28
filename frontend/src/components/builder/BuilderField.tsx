@@ -11,12 +11,13 @@ import { cn } from '@/lib/utils';
 
 /** Label, control, hint. One definition, used by every builder form. */
 export function Field({
-  label, htmlFor, required, hint, children,
+  label, htmlFor, required, hint, error, children,
 }: {
   label: string;
   htmlFor: string;
   required?: boolean;
   hint?: string;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -26,7 +27,11 @@ export function Field({
         {required && <span className="ml-0.5 text-danger">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-tiny text-text-quaternary">{hint}</p>}
+      {error ? (
+        <p className="mt-1 text-tiny text-danger" role="alert">{error}</p>
+      ) : hint ? (
+        <p className="mt-1 text-tiny text-text-quaternary">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -49,7 +54,8 @@ export const configReference = (key: string) => `{{ config['${key}'] }}`;
  * path with an id in the middle.
  */
 export function JinjaInput({
-  id, value, onChange, userInputs, onCreateInput, disabled, placeholder, type,
+  id, value, onChange, userInputs, onCreateInput, disabled, placeholder, type, ariaLabel,
+  ariaInvalid,
 }: {
   id: string;
   value: string;
@@ -60,6 +66,8 @@ export function JinjaInput({
   disabled?: boolean;
   placeholder?: string;
   type?: string;
+  ariaLabel?: string;
+  ariaInvalid?: boolean;
 }) {
   const { t } = useI18n();
   const ref = React.useRef<HTMLInputElement>(null);
@@ -100,6 +108,8 @@ export function JinjaInput({
         id={id}
         size="sm"
         type={type}
+        aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
         value={value}
         disabled={disabled}
         placeholder={placeholder}

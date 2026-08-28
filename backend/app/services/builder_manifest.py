@@ -15,7 +15,7 @@ import ipaddress
 import logging
 import re
 import uuid
-from typing import Any
+from typing import Any, NoReturn
 
 import yaml
 
@@ -55,8 +55,27 @@ _STREAM_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 AUTH_METHODS = {"none", "api_key", "bearer", "basic", "oauth2", "jwt", "session_token"}
 PAGINATION_MODES = {"none", "page", "offset", "cursor", "link_header"}
+INJECT_LOCATIONS = {"request_parameter", "header", "body_data", "body_json"}
 
 _CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_CONFIG_REFERENCE_RE = re.compile(r"config\[\s*['\"]([A-Za-z0-9_]*)['\"]\s*\]")
+
+
+def _runtime_template_values(definition: dict[str, Any]):
+    """Yield only values which the compiler evaluates as Jinja templates."""
+    for stream in definition.get("streams") or []:
+        yield stream.get("path") or ""
+        yield stream.get("record_filter") or ""
+        yield ((stream.get("pagination") or {}).get("stop_condition") or "")
+        for collection in (
+            stream.get("query_params") or [],
+            stream.get("headers") or [],
+            ((stream.get("request_body") or {}).get("entries") or []),
+        ):
+            for item in collection:
+                yield (item or {}).get("value") or ""
+        for item in stream.get("transformations") or []:
+            yield (item or {}).get("value") or ""
 
 
 def slugify(name: str) -> str:
@@ -114,6 +133,14 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             "Cần tên header cho API key.", code="BUILDER_AUTH_HEADER_REQUIRED",
             details={"field": "auth.header"},
         )
+    if method == "api_key" and (auth.get("inject_into") or "header") not in {
+        "header", "request_parameter",
+    }:
+        raise ValidationError(
+            "API key chỉ có thể gửi bằng header hoặc query parameter.",
+            code="BUILDER_AUTH_INJECT_INVALID",
+            details={"field": "auth.inject_into"},
+        )
     if method == "oauth2":
         token_url = ((auth.get("oauth") or {}).get("token_url") or "").strip()
         if not token_url.startswith(("http://", "https://")):
@@ -126,6 +153,26 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
         # the one that carries the client secret. Checking only the scheme let
         # it point anywhere the base URL could not.
         egress.check_url_syntax(token_url, field="auth.oauth.token_url")
+    if method == "jwt":
+        jwt = auth.get("jwt") or {}
+        if (jwt.get("algorithm") or "HS256") not in {
+            "HS256", "HS384", "HS512", "RS256", "RS384", "RS512",
+        }:
+            raise ValidationError(
+                "Thuật toán JWT không được Builder hỗ trợ.",
+                code="BUILDER_JWT_ALGORITHM_UNSUPPORTED",
+                details={"field": "auth.jwt.algorithm"},
+            )
+        try:
+            duration = jwt.get("token_duration")
+            if int(1200 if duration in (None, "") else duration) < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValidationError(
+                "Thời hạn JWT phải là số nguyên dương.",
+                code="BUILDER_JWT_DURATION_INVALID",
+                details={"field": "auth.jwt.token_duration"},
+            ) from None
 
     # A declared input the connector cannot reference is dead weight, and a key
     # that collides with a built-in one silently shadows it.
@@ -152,7 +199,36 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 f"Tham số '{key}' bị trùng.", code="BUILDER_INPUT_DUPLICATE",
                 details={"field": f"user_inputs[{index}].key"},
             )
+        input_type = (field.get("type") or "string").lower()
+        if input_type not in {"string", "integer", "number", "boolean"}:
+            raise ValidationError(
+                f"Kiểu tham số '{input_type}' không được Builder hỗ trợ.",
+                code="BUILDER_INPUT_TYPE_UNSUPPORTED",
+                details={"field": f"user_inputs[{index}].type"},
+            )
         seen_inputs.add(key)
+        default = field.get("default")
+        if field.get("secret") and default not in (None, ""):
+            raise ValidationError(
+                "Tham số bí mật không được có giá trị mặc định trong manifest.",
+                code="BUILDER_SECRET_DEFAULT_FORBIDDEN",
+                details={"field": f"user_inputs[{index}].default"},
+            )
+        if default not in (None, ""):
+            try:
+                if input_type == "integer":
+                    int(str(default))
+                elif input_type == "number":
+                    float(str(default))
+                elif input_type == "boolean" and str(default).lower() not in {"true", "false"}:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"Giá trị mặc định của '{key}' không đúng kiểu {input_type}.",
+                    code="BUILDER_INPUT_DEFAULT_INVALID",
+                    details={"field": f"user_inputs[{index}].default",
+                             "type": input_type},
+                ) from None
 
     streams = definition.get("streams") or []
     if not streams:
@@ -162,6 +238,7 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
         )
 
     seen: set[str] = set()
+    seen_normalized: set[str] = set()
     for index, stream in enumerate(streams):
         name = (stream.get("name") or "").strip()
         if not _STREAM_NAME_RE.match(name):
@@ -170,18 +247,32 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 code="BUILDER_STREAM_NAME_INVALID",
                 details={"field": f"streams[{index}].name", "value": name},
             )
-        if name in seen:
+        if name.casefold() in seen_normalized:
             raise ValidationError(
                 f"Stream '{name}' bị trùng tên.", code="BUILDER_STREAM_DUPLICATE",
                 details={"field": f"streams[{index}].name"},
             )
         seen.add(name)
+        seen_normalized.add(name.casefold())
 
         if not (stream.get("path") or "").strip():
             raise ValidationError(
                 f"Stream '{name}' cần đường dẫn (path).",
                 code="BUILDER_STREAM_PATH_REQUIRED",
                 details={"field": f"streams[{index}].path"},
+            )
+        if (stream.get("http_method") or "GET").upper() not in {"GET", "POST"}:
+            raise ValidationError(
+                f"Stream '{name}' chỉ hỗ trợ GET hoặc POST.",
+                code="BUILDER_HTTP_METHOD_UNSUPPORTED",
+                details={"field": f"streams[{index}].http_method"},
+            )
+        body_mode = ((stream.get("request_body") or {}).get("mode") or "json").lower()
+        if body_mode not in {"json", "form"}:
+            raise ValidationError(
+                f"Stream '{name}' có kiểu request body không được hỗ trợ.",
+                code="BUILDER_BODY_MODE_UNSUPPORTED",
+                details={"field": f"streams[{index}].request_body.mode"},
             )
 
         cursor = (stream.get("cursor_field") or "").strip()
@@ -190,6 +281,21 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 f"Stream '{name}' bật incremental thì phải chọn cursor field.",
                 code="BUILDER_CURSOR_REQUIRED",
                 details={"field": f"streams[{index}].cursor_field"},
+            )
+        cursor_filter_mode = (stream.get("cursor_filter_mode") or "server").lower()
+        if stream.get("incremental") and cursor_filter_mode not in {"server", "client"}:
+            raise ValidationError(
+                f"Stream '{name}' có chế độ lọc cursor không được hỗ trợ.",
+                code="BUILDER_CURSOR_FILTER_MODE_UNSUPPORTED",
+                details={"field": f"streams[{index}].cursor_filter_mode"},
+            )
+        if stream.get("incremental") and cursor_filter_mode == "server" and (
+            stream.get("cursor_inject_into") or "request_parameter"
+        ) not in INJECT_LOCATIONS:
+            raise ValidationError(
+                f"Stream '{name}' có vị trí gửi cursor không hợp lệ.",
+                code="BUILDER_CURSOR_INJECT_INVALID",
+                details={"field": f"streams[{index}].cursor_inject_into"},
             )
 
         pagination = stream.get("pagination") or {}
@@ -208,15 +314,224 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 code="BUILDER_CURSOR_PATH_REQUIRED",
                 details={"field": f"streams[{index}].pagination.cursor_path"},
             )
+        if mode in {"page", "offset", "cursor"} and (
+            pagination.get("inject_into") or "request_parameter"
+        ) not in INJECT_LOCATIONS:
+            raise ValidationError(
+                f"Stream '{name}' có vị trí gửi page token không hợp lệ.",
+                code="BUILDER_PAGINATION_INJECT_INVALID",
+                details={"field": f"streams[{index}].pagination.inject_into"},
+            )
+        if mode == "page" and pagination.get("start_from") not in (None, ""):
+            try:
+                if int(pagination["start_from"]) < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"Stream '{name}' cần trang bắt đầu là số nguyên không âm.",
+                    code="BUILDER_PAGE_START_INVALID",
+                    details={"field": f"streams[{index}].pagination.start_from"},
+                ) from None
+        page_size = pagination.get("page_size")
+        if page_size not in (None, ""):
+            try:
+                if int(page_size) < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"Stream '{name}' cần page size là số nguyên dương.",
+                    code="BUILDER_PAGE_SIZE_INVALID",
+                    details={"field": f"streams[{index}].pagination.page_size"},
+                ) from None
+
+        for collection_name, case_insensitive in (
+            ("query_params", False), ("headers", True),
+        ):
+            row_keys: set[str] = set()
+            for row_index, row in enumerate(stream.get(collection_name) or []):
+                key = ((row or {}).get("key") or "").strip()
+                value = str((row or {}).get("value") or "")
+                if not key and value:
+                    raise ValidationError(
+                        f"Stream '{name}' có giá trị request nhưng thiếu tên tham số.",
+                        code="BUILDER_REQUEST_KEY_REQUIRED",
+                        details={
+                            "field": f"streams[{index}].{collection_name}[{row_index}].key",
+                        },
+                    )
+                normalized_key = key.casefold() if case_insensitive else key
+                if normalized_key and normalized_key in row_keys:
+                    raise ValidationError(
+                        f"Stream '{name}' có tham số request '{key}' bị trùng.",
+                        code="BUILDER_REQUEST_KEY_DUPLICATE",
+                        details={
+                            "field": f"streams[{index}].{collection_name}[{row_index}].key",
+                        },
+                    )
+                if normalized_key:
+                    row_keys.add(normalized_key)
+
+        body_keys: set[str] = set()
+        for row_index, row in enumerate(
+            ((stream.get("request_body") or {}).get("entries") or [])
+        ):
+            key = ((row or {}).get("key") or "").strip()
+            value = str((row or {}).get("value") or "")
+            if not key and value:
+                raise ValidationError(
+                    f"Stream '{name}' có giá trị body nhưng thiếu tên trường.",
+                    code="BUILDER_REQUEST_KEY_REQUIRED",
+                    details={
+                        "field": f"streams[{index}].request_body.entries[{row_index}].key",
+                    },
+                )
+            if key and key in body_keys:
+                raise ValidationError(
+                    f"Stream '{name}' có trường body '{key}' bị trùng.",
+                    code="BUILDER_REQUEST_KEY_DUPLICATE",
+                    details={
+                        "field": f"streams[{index}].request_body.entries[{row_index}].key",
+                    },
+                )
+            if key:
+                body_keys.add(key)
+
+        for transform_index, transformation in enumerate(stream.get("transformations") or []):
+            kind = ((transformation or {}).get("type") or "").lower()
+            path = ((transformation or {}).get("path") or "").strip()
+            if kind not in {"add", "remove"}:
+                raise ValidationError(
+                    f"Stream '{name}' có kiểu transformation không được hỗ trợ.",
+                    code="BUILDER_TRANSFORM_UNSUPPORTED",
+                    details={
+                        "field": f"streams[{index}].transformations[{transform_index}].type",
+                    },
+                )
+            if not path:
+                raise ValidationError(
+                    f"Stream '{name}' có transformation chưa điền field path.",
+                    code="BUILDER_TRANSFORM_PATH_REQUIRED",
+                    details={
+                        "field": f"streams[{index}].transformations[{transform_index}].path",
+                    },
+                )
+            if kind == "add" and (transformation or {}).get("value") is None:
+                raise ValidationError(
+                    f"Stream '{name}' có transformation thêm field nhưng thiếu giá trị.",
+                    code="BUILDER_TRANSFORM_VALUE_REQUIRED",
+                    details={
+                        "field": f"streams[{index}].transformations[{transform_index}].value",
+                    },
+                )
+
+        error_handler = stream.get("error_handler") or {}
+        max_retries = error_handler.get("max_retries")
+        if max_retries not in (None, ""):
+            try:
+                if int(max_retries) < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"Stream '{name}' cần số lần thử lại không âm.",
+                    code="BUILDER_MAX_RETRIES_INVALID",
+                    details={"field": f"streams[{index}].error_handler.max_retries"},
+                ) from None
+
+        backoff = error_handler.get("backoff") or {}
+        backoff_mode = (backoff.get("mode") or "none").lower()
+        if backoff_mode not in {"none", "constant", "exponential", "header"}:
+            raise ValidationError(
+                f"Stream '{name}' có kiểu backoff không được hỗ trợ.",
+                code="BUILDER_BACKOFF_UNSUPPORTED",
+                details={"field": f"streams[{index}].error_handler.backoff.mode"},
+            )
+        numeric_backoff = "seconds" if backoff_mode == "constant" else (
+            "factor" if backoff_mode == "exponential" else None
+        )
+        if numeric_backoff and backoff.get(numeric_backoff) not in (None, ""):
+            try:
+                if int(backoff[numeric_backoff]) < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"Stream '{name}' cần giá trị backoff là số nguyên dương.",
+                    code="BUILDER_BACKOFF_VALUE_INVALID",
+                    details={
+                        "field": f"streams[{index}].error_handler.backoff.{numeric_backoff}",
+                    },
+                ) from None
+
+        allowed_response_actions = {"RETRY", "RATE_LIMITED", "IGNORE", "FAIL"}
+        for filter_index, response_filter in enumerate(error_handler.get("filters") or []):
+            codes = (response_filter or {}).get("http_codes") or []
+            try:
+                normalized_codes = [int(code) for code in codes]
+            except (TypeError, ValueError):
+                normalized_codes = []
+            if not normalized_codes or any(code < 100 or code > 599 for code in normalized_codes):
+                raise ValidationError(
+                    f"Stream '{name}' có quy tắc với mã HTTP không hợp lệ.",
+                    code="BUILDER_RESPONSE_CODES_INVALID",
+                    details={
+                        "field": f"streams[{index}].error_handler.filters[{filter_index}].http_codes",
+                    },
+                )
+            action = ((response_filter or {}).get("action") or "").upper()
+            if action not in allowed_response_actions:
+                raise ValidationError(
+                    f"Stream '{name}' có hành động xử lý response không được hỗ trợ.",
+                    code="BUILDER_RESPONSE_ACTION_UNSUPPORTED",
+                    details={
+                        "field": f"streams[{index}].error_handler.filters[{filter_index}].action",
+                        "allowed": sorted(allowed_response_actions),
+                    },
+                )
 
         partition = stream.get("partition") or {}
         partition_mode = (partition.get("mode") or "none").lower()
-        if partition_mode == "list" and not (partition.get("values") or "").strip():
+        if partition_mode not in {"none", "list", "parent"}:
             raise ValidationError(
-                f"Stream '{name}' phân mảnh theo danh sách thì cần ít nhất một giá trị.",
-                code="BUILDER_PARTITION_VALUES_REQUIRED",
-                details={"field": f"streams[{index}].partition.values"},
+                f"Stream '{name}' có kiểu partition không được hỗ trợ.",
+                code="BUILDER_PARTITION_UNSUPPORTED",
+                details={"field": f"streams[{index}].partition.mode"},
             )
+        if partition_mode in {"list", "parent"} and partition.get("param") and (
+            partition.get("inject_into") or "request_parameter"
+        ) not in INJECT_LOCATIONS:
+            raise ValidationError(
+                f"Stream '{name}' có vị trí gửi partition không hợp lệ.",
+                code="BUILDER_PARTITION_INJECT_INVALID",
+                details={"field": f"streams[{index}].partition.inject_into"},
+            )
+        if partition_mode == "list":
+            if not (partition.get("values") or "").strip():
+                raise ValidationError(
+                    f"Stream '{name}' phân mảnh theo danh sách thì cần ít nhất một giá trị.",
+                    code="BUILDER_PARTITION_VALUES_REQUIRED",
+                    details={"field": f"streams[{index}].partition.values"},
+                )
+            list_field = partition.get("cursor_field") or "partition"
+            list_reference = f"stream_partition.{list_field}"
+            used_somewhere = any(
+                list_reference in str(value)
+                for value in [
+                    stream.get("path") or "",
+                    *[entry.get("value", "") for entry in (stream.get("query_params") or [])],
+                    *[entry.get("value", "") for entry in (stream.get("headers") or [])],
+                    *[entry.get("value", "") for entry
+                      in ((stream.get("request_body") or {}).get("entries") or [])],
+                ]
+            )
+            if not (partition.get("param") or "").strip() and not used_somewhere:
+                raise ValidationError(
+                    f"Stream '{name}' lặp theo danh sách nhưng không dùng giá trị partition "
+                    "trong request.",
+                    code="BUILDER_LIST_PARTITION_UNUSED",
+                    details={
+                        "field": f"streams[{index}].partition.param",
+                        "partition_field": list_field,
+                    },
+                )
         if partition_mode == "parent":
             parent = partition.get("parent_stream")
             if not parent:
@@ -271,6 +586,63 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     details={"field": f"streams[{index}].partition.param",
                              "partition_field": field_name},
                 )
+
+    # Every parent chain must terminate at a root. A cycle can render in the
+    # editor but the CDK cannot resolve it into an execution order.
+    parent_by_name = {
+        (stream.get("name") or "").strip():
+            ((stream.get("partition") or {}).get("parent_stream") or "").strip()
+        for stream in streams
+        if ((stream.get("partition") or {}).get("mode") or "none").lower() == "parent"
+    }
+    for origin in parent_by_name:
+        chain: list[str] = []
+        current = origin
+        while current in parent_by_name:
+            if current in chain:
+                cycle = chain[chain.index(current):] + [current]
+                index = next(
+                    i for i, stream in enumerate(streams)
+                    if (stream.get("name") or "").strip() == origin
+                )
+                raise ValidationError(
+                    f"Các stream tạo thành vòng lặp cha-con: {' -> '.join(cycle)}.",
+                    code="BUILDER_PARENT_STREAM_CYCLE",
+                    details={
+                        "field": f"streams[{index}].partition.parent_stream",
+                        "cycle": cycle,
+                    },
+                )
+            chain.append(current)
+            current = parent_by_name[current]
+
+    # A deleted or renamed input must not leave a template that the generated
+    # source form can no longer supply. Without this, test config can work once
+    # in the editor while every published source is permanently missing a key.
+    referenced = {
+        match.group(1)
+        for value in _runtime_template_values(definition)
+        for match in _CONFIG_REFERENCE_RE.finditer(str(value))
+    }
+    available_system_inputs = {"base_url"}
+    if method in {"api_key", "bearer"}:
+        available_system_inputs.add("api_key")
+    elif method in {"basic", "session_token"}:
+        available_system_inputs.update({"username", "password"})
+    elif method == "oauth2":
+        available_system_inputs.update({"client_id", "client_secret", "refresh_token"})
+    elif method == "jwt":
+        available_system_inputs.add("jwt_secret")
+    if any(stream.get("incremental") for stream in streams):
+        available_system_inputs.add("start_date")
+
+    unknown_references = sorted(referenced - available_system_inputs - seen_inputs)
+    if unknown_references:
+        raise ValidationError(
+            f"Cấu hình đang tham chiếu input không tồn tại: {', '.join(unknown_references)}.",
+            code="BUILDER_INPUT_REFERENCE_UNKNOWN",
+            details={"field": "user_inputs", "keys": unknown_references},
+        )
 
     return definition
 
@@ -579,7 +951,8 @@ def _partition_router(partition: dict[str, Any]) -> dict[str, Any] | None:
         }
         if partition.get("param"):
             router["request_option"] = {
-                "type": "RequestOption", "inject_into": "request_parameter",
+                "type": "RequestOption",
+                "inject_into": partition.get("inject_into") or "request_parameter",
                 "field_name": partition["param"],
             }
         return router
@@ -817,6 +1190,18 @@ _USER_INPUT_TYPES = {"string": "string", "integer": "integer",
                      "number": "number", "boolean": "boolean"}
 
 
+def _typed_input_default(field: dict[str, Any]) -> Any:
+    value = field.get("default")
+    kind = (field.get("type") or "string").lower()
+    if kind == "integer":
+        return int(str(value))
+    if kind == "number":
+        return float(str(value))
+    if kind == "boolean":
+        return str(value).lower() == "true"
+    return value
+
+
 def _connection_spec(definition: dict[str, Any]) -> dict[str, Any]:
     """The config form a user fills in when creating a source from this connector.
 
@@ -887,7 +1272,7 @@ def _connection_spec(definition: dict[str, Any]) -> dict[str, Any]:
         if field.get("description"):
             entry["description"] = field["description"]
         if field.get("default") not in (None, ""):
-            entry["default"] = field["default"]
+            entry["default"] = _typed_input_default(field)
         if field.get("secret"):
             entry["airbyte_secret"] = True
         properties[key] = entry
@@ -1045,6 +1430,209 @@ def manifest_yaml(definition: dict[str, Any]) -> str:
     )
 
 
+def _manifest_import_unsupported(field: str, component: Any) -> NoReturn:
+    kind = component.get("type") if isinstance(component, dict) else type(component).__name__
+    raise ValidationError(
+        f"Builder chưa thể chỉnh sửa thành phần manifest '{kind}' tại {field}.",
+        code="BUILDER_MANIFEST_COMPONENT_UNSUPPORTED",
+        details={"field": field, "type": kind},
+    )
+
+
+def _import_path(value: Any) -> str:
+    if isinstance(value, list):
+        return ".".join(str(part) for part in value)
+    return str(value or "").strip().strip(".")
+
+
+def _import_authenticator(component: Any) -> dict[str, Any]:
+    if not component:
+        return {"method": "none"}
+    if not isinstance(component, dict):
+        _manifest_import_unsupported("authenticator", component)
+
+    kind = component.get("type")
+    if kind == "ApiKeyAuthenticator":
+        option = component.get("inject_into") or {}
+        return {
+            "method": "api_key",
+            "header": option.get("field_name") or "X-API-Key",
+            "inject_into": option.get("inject_into") or "header",
+        }
+    if kind == "BearerAuthenticator":
+        return {"method": "bearer"}
+    if kind == "BasicHttpAuthenticator":
+        return {"method": "basic"}
+    if kind == "OAuthAuthenticator":
+        return {
+            "method": "oauth2",
+            "oauth": {
+                "token_url": component.get("token_refresh_endpoint") or "",
+                "scopes": ", ".join(component.get("scopes") or []),
+                "grant_type": component.get("grant_type") or "refresh_token",
+            },
+        }
+    if kind == "JwtAuthenticator":
+        return {
+            "method": "jwt",
+            "jwt": {
+                "algorithm": component.get("algorithm") or "HS256",
+                "token_duration": component.get("token_duration") or 1200,
+            },
+        }
+    if kind == "SessionTokenAuthenticator":
+        requester = component.get("login_requester") or {}
+        request_auth = component.get("request_authentication") or {}
+        option = request_auth.get("inject_into") or {}
+        if requester.get("http_method", "POST").upper() != "POST":
+            _manifest_import_unsupported("authenticator.login_requester", requester)
+        return {
+            "method": "session_token",
+            "session": {
+                "login_path": requester.get("path") or "/login",
+                "token_path": _import_path(component.get("session_token_path")) or "token",
+                "header": option.get("field_name") or "X-Session-Token",
+                "expiration": component.get("expiration_duration") or "PT1H",
+            },
+        }
+    _manifest_import_unsupported("authenticator", component)
+
+
+def _import_pagination(paginator: Any, stream_index: int) -> dict[str, Any]:
+    if not paginator:
+        return {"mode": "none"}
+    if not isinstance(paginator, dict):
+        _manifest_import_unsupported(f"streams[{stream_index}].retriever.paginator", paginator)
+    if paginator.get("type") == "NoPagination":
+        return {"mode": "none"}
+    if paginator.get("type") != "DefaultPaginator":
+        _manifest_import_unsupported(f"streams[{stream_index}].retriever.paginator", paginator)
+
+    strategy = paginator.get("pagination_strategy") or {}
+    strategy_kind = strategy.get("type")
+    token_option = paginator.get("page_token_option") or {}
+    size_option = paginator.get("page_size_option") or {}
+
+    if strategy_kind == "CursorPagination" and token_option.get("type") == "RequestPath":
+        return {"mode": "link_header", "page_size": strategy.get("page_size")}
+
+    mode = {"PageIncrement": "page", "OffsetIncrement": "offset",
+            "CursorPagination": "cursor"}.get(strategy_kind)
+    if not mode or token_option.get("type") != "RequestOption":
+        _manifest_import_unsupported(
+            f"streams[{stream_index}].retriever.paginator.pagination_strategy", strategy,
+        )
+    inject_into = token_option.get("inject_into") or "request_parameter"
+    if size_option and (size_option.get("inject_into") or "request_parameter") != inject_into:
+        _manifest_import_unsupported(
+            f"streams[{stream_index}].retriever.paginator.page_size_option", size_option,
+        )
+
+    imported: dict[str, Any] = {
+        "mode": mode,
+        "page_size": strategy.get("page_size"),
+        "page_param": token_option.get("field_name"),
+        "size_param": size_option.get("field_name"),
+        "inject_into": inject_into,
+    }
+    if mode == "page":
+        imported.update({
+            "start_from": strategy.get("start_from_page"),
+            "inject_on_first_request": bool(strategy.get("inject_on_first_request")),
+        })
+    if mode == "cursor":
+        value = str(strategy.get("cursor_value") or "")
+        match = re.fullmatch(r"\{\{\s*response\.([^}]+?)\s*\}\}", value)
+        if not match:
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].retriever.paginator.pagination_strategy.cursor_value",
+                strategy,
+            )
+        imported.update({
+            "cursor_path": match.group(1).strip(),
+            "stop_condition": strategy.get("stop_condition") or "",
+        })
+    return imported
+
+
+def _import_transformations(components: Any, stream_index: int) -> list[dict[str, Any]]:
+    imported: list[dict[str, Any]] = []
+    for index, component in enumerate(components or []):
+        if not isinstance(component, dict):
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].transformations[{index}]", component,
+            )
+        kind = component.get("type")
+        if kind == "AddFields":
+            for field in component.get("fields") or []:
+                imported.append({
+                    "type": "add", "path": _import_path(field.get("path")),
+                    "value": str(field.get("value") or ""),
+                })
+        elif kind == "RemoveFields":
+            for path in component.get("field_pointers") or []:
+                imported.append({"type": "remove", "path": _import_path(path)})
+        else:
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].transformations[{index}]", component,
+            )
+    return imported
+
+
+def _import_error_handler(component: Any, stream_index: int) -> dict[str, Any]:
+    if not component:
+        return {}
+    if not isinstance(component, dict) or component.get("type") != "DefaultErrorHandler":
+        _manifest_import_unsupported(
+            f"streams[{stream_index}].retriever.requester.error_handler", component,
+        )
+
+    imported: dict[str, Any] = {}
+    if component.get("max_retries") is not None:
+        imported["max_retries"] = component["max_retries"]
+
+    filters = []
+    for index, response_filter in enumerate(component.get("response_filters") or []):
+        if response_filter.get("type") != "HttpResponseFilter":
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].error_handler.response_filters[{index}]",
+                response_filter,
+            )
+        filters.append({
+            "http_codes": response_filter.get("http_codes") or [],
+            "action": response_filter.get("action") or "RETRY",
+            "message": response_filter.get("error_message") or "",
+        })
+    if filters:
+        imported["filters"] = filters
+
+    strategies = component.get("backoff_strategies") or []
+    if len(strategies) > 1:
+        _manifest_import_unsupported(
+            f"streams[{stream_index}].error_handler.backoff_strategies", strategies,
+        )
+    if strategies:
+        strategy = strategies[0]
+        kind = strategy.get("type")
+        if kind == "ConstantBackoffStrategy":
+            imported["backoff"] = {
+                "mode": "constant", "seconds": strategy.get("backoff_time_in_seconds") or 5,
+            }
+        elif kind == "ExponentialBackoffStrategy":
+            imported["backoff"] = {
+                "mode": "exponential", "factor": strategy.get("factor") or 5,
+            }
+        elif kind == "WaitTimeFromHeader":
+            imported["backoff"] = {
+                "mode": "header", "header": strategy.get("header") or "Retry-After",
+            }
+        else:
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].error_handler.backoff_strategies[0]", strategy,
+            )
+    return imported
+
+
 def definition_from_manifest(document: str) -> dict[str, Any]:
     """Read a declarative manifest back into editor state.
 
@@ -1073,43 +1661,40 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
             "Manifest không có stream nào.", code="BUILDER_MANIFEST_NO_STREAM",
         )
 
-    base_url = ""
-    auth: dict[str, Any] = {"method": "none"}
+    spec = (manifest.get("spec") or {}).get("connection_specification") or {}
+    spec_properties = spec.get("properties") or {}
+    base_url = str((spec_properties.get("base_url") or {}).get("default") or "")
+    auth: dict[str, Any] | None = None
     imported: list[dict[str, Any]] = []
 
-    for raw in streams:
+    for stream_index, raw in enumerate(streams):
         retriever = (raw or {}).get("retriever") or {}
         requester = retriever.get("requester") or {}
-        selector = (retriever.get("record_selector") or {}).get("extractor") or {}
+        record_selector = retriever.get("record_selector") or {}
+        selector = record_selector.get("extractor") or {}
         paginator = retriever.get("paginator") or {}
-        strategy = paginator.get("pagination_strategy") or {}
+
+        if selector and selector.get("type") != "DpathExtractor":
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].retriever.record_selector.extractor", selector,
+            )
+        record_filter = record_selector.get("record_filter") or {}
+        if record_filter and record_filter.get("type") != "RecordFilter":
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].retriever.record_selector.record_filter",
+                record_filter,
+            )
 
         url_base = str(requester.get("url_base") or "")
         if url_base and "config[" not in url_base:
-            base_url = base_url or url_base
+            if base_url and base_url != url_base:
+                _manifest_import_unsupported(f"streams[{stream_index}].url_base", requester)
+            base_url = url_base
 
-        authenticator = requester.get("authenticator") or {}
-        kind = authenticator.get("type")
-        if kind == "ApiKeyAuthenticator":
-            auth = {"method": "api_key",
-                    "header": (authenticator.get("inject_into") or {}).get("field_name")}
-        elif kind == "BearerAuthenticator":
-            auth = {"method": "bearer"}
-        elif kind == "BasicHttpAuthenticator":
-            auth = {"method": "basic"}
-        elif kind == "OAuthAuthenticator":
-            auth = {"method": "oauth2",
-                    "oauth": {"token_url": authenticator.get("token_refresh_endpoint"),
-                              "scopes": ", ".join(authenticator.get("scopes") or [])}}
-        elif kind == "JwtAuthenticator":
-            auth = {"method": "jwt",
-                    "jwt": {"algorithm": authenticator.get("algorithm")}}
-
-        pagination_mode = {
-            "PageIncrement": "page",
-            "OffsetIncrement": "offset",
-            "CursorPagination": "cursor",
-        }.get(strategy.get("type"), "none")
+        stream_auth = _import_authenticator(requester.get("authenticator"))
+        if auth is not None and stream_auth != auth:
+            _manifest_import_unsupported(f"streams[{stream_index}].authenticator", stream_auth)
+        auth = stream_auth
 
         primary_key = raw.get("primary_key")
         if isinstance(primary_key, list):
@@ -1123,6 +1708,10 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
         # see in the YAML" this function's docstring promises not to do.
         router = retriever.get("partition_router") or {}
         if isinstance(router, list):
+            if len(router) > 1:
+                _manifest_import_unsupported(
+                    f"streams[{stream_index}].retriever.partition_router", router,
+                )
             router = router[0] if router else {}
         partition: dict[str, Any] = {"mode": "none"}
         if router.get("type") == "ListPartitionRouter":
@@ -1149,29 +1738,28 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
                 "inject_into": option.get("inject_into") or "request_parameter",
                 "incremental_parent": bool(parent_config.get("incremental_dependency")),
             }
+        elif router:
+            _manifest_import_unsupported(
+                f"streams[{stream_index}].retriever.partition_router", router,
+            )
 
-        size_option = paginator.get("page_size_option") or {}
-        token_option = paginator.get("page_token_option") or {}
+        body_json = requester.get("request_body_json")
+        body_data = requester.get("request_body_data")
+        if body_json is not None and body_data is not None:
+            _manifest_import_unsupported(f"streams[{stream_index}].request_body", requester)
+        body_mode = "form" if body_data is not None else "json"
+        body_entries = body_data if body_data is not None else (body_json or {})
+        if not isinstance(body_entries, dict):
+            _manifest_import_unsupported(f"streams[{stream_index}].request_body", body_entries)
+
         imported.append({
             "name": raw.get("name") or "stream",
             "path": requester.get("path") or "/",
             "http_method": (requester.get("http_method") or "GET").upper(),
-            "record_selector": ".".join(selector.get("field_path") or []),
-            "record_filter": ((retriever.get("record_selector") or {})
-                              .get("record_filter") or {}).get("condition", ""),
+            "record_selector": _import_path(selector.get("field_path")),
+            "record_filter": record_filter.get("condition", ""),
             "primary_key": primary_key or "",
-            "pagination": {
-                "mode": pagination_mode,
-                # Kept blank when the manifest declares none, rather than
-                # inventing 50: re-saving would then assert a page length the
-                # API was never told about.
-                "page_size": strategy.get("page_size"),
-                "page_param": token_option.get("field_name"),
-                "size_param": size_option.get("field_name"),
-                "inject_into": token_option.get("inject_into") or "request_parameter",
-                "start_from": strategy.get("start_from_page"),
-                "inject_on_first_request": bool(strategy.get("inject_on_first_request")),
-            },
+            "pagination": _import_pagination(paginator, stream_index),
             "incremental": bool(cursor),
             "cursor_field": cursor.get("cursor_field") or "",
             "cursor_format": cursor.get("datetime_format") or "",
@@ -1186,19 +1774,53 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
             "query_params": [{"key": k, "value": str(v)}
                              for k, v in (requester.get("request_parameters") or {}).items()],
             "headers": [{"key": k, "value": str(v)}
-                        for k, v in (requester.get("request_headers") or {}).items()],
+                         for k, v in (requester.get("request_headers") or {}).items()],
+            "request_body": {
+                "mode": body_mode,
+                "entries": [{"key": k, "value": str(v)} for k, v in body_entries.items()],
+            },
             "schema": (raw.get("schema_loader") or {}).get("schema") or {},
             "partition": partition,
-            "transformations": [],
-            "error_handler": {},
+            "transformations": _import_transformations(
+                (raw or {}).get("transformations"), stream_index,
+            ),
+            "error_handler": _import_error_handler(
+                requester.get("error_handler"), stream_index,
+            ),
+        })
+
+    reserved_inputs = {
+        "base_url", "api_key", "username", "password", "start_date",
+        "client_id", "client_secret", "refresh_token", "jwt_secret",
+    }
+    required_inputs = set(spec.get("required") or [])
+    user_inputs = []
+    for key, field in spec_properties.items():
+        if key in reserved_inputs:
+            continue
+        input_type = field.get("type") or "string"
+        if input_type not in _USER_INPUT_TYPES:
+            _manifest_import_unsupported(f"spec.properties.{key}", field)
+        default = field.get("default")
+        if isinstance(default, bool):
+            default = "true" if default else "false"
+        elif default is not None:
+            default = str(default)
+        user_inputs.append({
+            "key": key,
+            "title": field.get("title") or key,
+            "type": input_type,
+            "secret": bool(field.get("airbyte_secret")),
+            "required": key in required_inputs,
+            "default": default,
+            "description": field.get("description") or "",
         })
 
     return {
-        "name": ((manifest.get("spec") or {}).get("connection_specification") or {})
-        .get("title", "Imported connector").replace(" Spec", ""),
+        "name": spec.get("title", "Imported connector").replace(" Spec", ""),
         "base_url": base_url or "https://api.example.com",
-        "auth": auth,
-        "user_inputs": [],
+        "auth": auth or {"method": "none"},
+        "user_inputs": user_inputs,
         "streams": imported,
     }
 
