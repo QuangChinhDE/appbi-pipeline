@@ -473,3 +473,20 @@ def test_the_builder_can_express_base_crm_leads() -> None:
     assert built["lead_feed"]["incremental_sync"]["is_client_side_incremental"] is True
     assert "start_time_option" not in built["lead_feed"]["incremental_sync"]
 
+
+def test_a_new_project_does_not_invent_a_page_size() -> None:
+    """The starter seeded 50, and the field's own hint says to leave it blank.
+
+    `page_size` is what the CDK compares a short page against to decide it has
+    finished. A number nobody chose is a claim about an API nobody has called
+    yet: too high and the first sync stops on the server's own default page,
+    too low and it pages past the end. Measured on Base CRM Leads, whose
+    `lead/list` ignores `limit` entirely and always returns 100.
+    """
+    starter = builder.starter_definition("Demo")
+    assert starter["streams"][0]["pagination"] == {"mode": "none"}, (
+        "a fresh project carries a page size the user never typed")
+    # And it still compiles and validates as-is, which is the starter's job.
+    compiled = builder.compile_manifest(builder.validate(starter))
+    assert compiled["streams"][0]["retriever"]["paginator"]["type"] == "NoPagination"
+

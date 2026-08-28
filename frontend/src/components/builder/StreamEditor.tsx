@@ -6,7 +6,8 @@ import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { useI18n } from '@/providers/LanguageProvider';
-import type { BuilderKeyValue, BuilderStream } from '@/lib/types';
+import { Field, JinjaInput } from '@/components/builder/BuilderField';
+import type { BuilderKeyValue, BuilderStream, BuilderUserInput } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 /**
@@ -18,17 +19,24 @@ import { cn } from '@/lib/utils';
  * disclosure: open only what the API you are describing actually needs.
  */
 export function StreamEditor({
-  stream, streamNames, fields, disabled, onChange,
+  stream, streamNames, fields, userInputs, onCreateInput, disabled, onChange,
 }: {
   stream: BuilderStream;
   /** Other streams, offered as a parent for substream partitioning. */
   streamNames: string[];
   /** Fields a test read has seen, so cursors and keys can be picked not typed. */
   fields: string[];
+  /** The connector's own inputs, offered on every field that is a template. */
+  userInputs: BuilderUserInput[];
+  onCreateInput?: () => void;
   disabled?: boolean;
   onChange: (next: Partial<BuilderStream>) => void;
 }) {
   const { t } = useI18n();
+  /* Only the fields that really are Jinja templates in the compiled manifest
+   * get the picker. A parameter *name* is not one, and putting the icon there
+   * would teach the wrong thing about where interpolation works. */
+  const jinja = { userInputs, onCreateInput, disabled };
 
   return (
     <div className="space-y-2">
@@ -40,9 +48,9 @@ export function StreamEditor({
           </Field>
           <Field label={t('builder.streamPath')} htmlFor="stream-path" required
                  hint={t('builder.streamPathHint')}>
-            <Input id="stream-path" size="sm" value={stream.path} disabled={disabled}
-                   onChange={(e) => onChange({ path: e.target.value })}
-                   placeholder="/v1/orders" />
+            <JinjaInput id="stream-path" value={stream.path} {...jinja}
+                        onChange={(value) => onChange({ path: value })}
+                        placeholder="/v1/orders" />
           </Field>
         </div>
 
@@ -72,12 +80,14 @@ export function StreamEditor({
         <KeyValueRows
           label={t('builder.queryParams')}
           rows={stream.query_params}
+          jinja={jinja}
           disabled={disabled}
           onChange={(rows) => onChange({ query_params: rows })}
         />
         <KeyValueRows
           label={t('builder.headers')}
           rows={stream.headers}
+          jinja={jinja}
           disabled={disabled}
           onChange={(rows) => onChange({ headers: rows })}
         />
@@ -100,6 +110,7 @@ export function StreamEditor({
             <KeyValueRows
               label={t('builder.bodyFields')}
               rows={stream.request_body?.entries ?? []}
+              jinja={jinja}
               disabled={disabled}
               onChange={(rows) => onChange({
                 request_body: { mode: stream.request_body?.mode ?? 'json', entries: rows },
@@ -423,9 +434,8 @@ export function StreamEditor({
              summary={String((stream.transformations ?? []).length || t('builder.off'))}>
         <Field label={t('builder.recordFilter')} htmlFor="record-filter"
                hint={t('builder.recordFilterHint')}>
-          <Input id="record-filter" size="sm" disabled={disabled}
-                 value={stream.record_filter ?? ''}
-                 onChange={(e) => onChange({ record_filter: e.target.value })}
+          <JinjaInput id="record-filter" value={stream.record_filter ?? ''} {...jinja}
+                      onChange={(value) => onChange({ record_filter: value })}
                  placeholder="{{ record.status == 'active' }}" />
         </Field>
 
@@ -590,26 +600,6 @@ function Group({
   );
 }
 
-function Field({
-  label, htmlFor, required, hint, children,
-}: {
-  label: string;
-  htmlFor: string;
-  required?: boolean;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label htmlFor={htmlFor} className="mb-1 block text-label text-text-secondary">
-        {label}
-        {required && <span className="ml-0.5 text-danger">*</span>}
-      </label>
-      {children}
-      {hint && <p className="mt-1 text-tiny text-text-quaternary">{hint}</p>}
-    </div>
-  );
-}
 
 /**
  * Free text until a test read has shown which fields exist, then a picker —
@@ -639,12 +629,18 @@ function Picker({
 }
 
 function KeyValueRows({
-  label, rows, disabled, onChange,
+  label, rows, disabled, onChange, jinja,
 }: {
   label: string;
   rows: BuilderKeyValue[];
   disabled?: boolean;
   onChange: (rows: BuilderKeyValue[]) => void;
+  /** Passed to the value column: `{{ config['token'] }}` belongs there. */
+  jinja?: {
+    userInputs: BuilderUserInput[];
+    onCreateInput?: () => void;
+    disabled?: boolean;
+  };
 }) {
   const { t } = useI18n();
   return (
@@ -657,10 +653,23 @@ function KeyValueRows({
                    disabled={disabled} placeholder="key"
                    onChange={(event) => onChange(rows.map((r, i) =>
                      i === index ? { ...r, key: event.target.value } : r))} />
-            <Input size="sm" aria-label={`${label} — value ${index + 1}`} value={row.value}
-                   disabled={disabled} placeholder="value"
-                   onChange={(event) => onChange(rows.map((r, i) =>
-                     i === index ? { ...r, value: event.target.value } : r))} />
+            <div className="flex-1">
+              {jinja ? (
+                <JinjaInput
+                  id={`${label}-value-${index}`}
+                  value={row.value}
+                  {...jinja}
+                  onChange={(value) => onChange(rows.map((r, i) =>
+                    i === index ? { ...r, value } : r))}
+                  placeholder="value"
+                />
+              ) : (
+                <Input size="sm" aria-label={`${label} — value ${index + 1}`} value={row.value}
+                       disabled={disabled} placeholder="value"
+                       onChange={(event) => onChange(rows.map((r, i) =>
+                         i === index ? { ...r, value: event.target.value } : r))} />
+              )}
+            </div>
             <Button size="xs" variant="ghost" aria-label={t('builder.removeParam')}
                     disabled={disabled} leadingIcon={<Trash2 className="h-3 w-3" />}
                     onClick={() => onChange(rows.filter((_, i) => i !== index))} />

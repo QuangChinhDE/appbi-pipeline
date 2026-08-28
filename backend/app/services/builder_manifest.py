@@ -1230,7 +1230,8 @@ def starter_definition(name: str) -> dict[str, Any]:
             "record_selector": "",
             "record_filter": "",
             "primary_key": "id",
-            "pagination": {"mode": "none", "page_size": 50},
+            # No page size until the API is known to take one; see `_paginator`.
+            "pagination": {"mode": "none"},
             "incremental": False,
             "query_params": [],
             "headers": [],

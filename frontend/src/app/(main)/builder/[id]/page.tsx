@@ -21,17 +21,21 @@ import { DetailHeader } from '@/components/layout/PageLayout';
 import type {
   BuilderDefinition, BuilderKeyValue, BuilderStream, BuilderTestResult,
 } from '@/lib/types';
+import { Field, JinjaInput } from '@/components/builder/BuilderField';
 import { StreamEditor } from '@/components/builder/StreamEditor';
 import { cn } from '@/lib/utils';
 
-const EMPTY_STREAM = (index: number): BuilderStream => ({
-  name: `stream_${index}`,
-  path: '/',
+const EMPTY_STREAM = (name: string, path: string): BuilderStream => ({
+  name,
+  path,
   http_method: 'GET',
   record_selector: '',
   record_filter: '',
   primary_key: '',
-  pagination: { mode: 'none', page_size: 50 },
+  // No page size until somebody asks for one. Seeding 50 contradicted the
+  // field's own hint and told the paginator a page length the API never
+  // agreed to, which stops a sync on the server's first default-sized page.
+  pagination: { mode: 'none' },
   incremental: false,
   query_params: [],
   headers: [],
@@ -40,6 +44,98 @@ const EMPTY_STREAM = (index: number): BuilderStream => ({
   transformations: [],
   error_handler: {},
 });
+
+/** Stream indices in reading order, children indented under their parent.
+ *
+ * A flat row of pills hides the one relationship this connector type is about,
+ * and stops being readable somewhere past six streams. Ordering by the parent
+ * link instead makes `lead_service -> lead -> lead_feed` visible at a glance.
+ *
+ * Anything unreachable from a root -- an orphan, or a cycle somebody typed --
+ * is appended at depth zero rather than dropped, because a stream you cannot
+ * select is a stream you cannot fix.
+ */
+function streamOutline(streams: BuilderStream[]): { index: number; depth: number }[] {
+  const byName = new Map(streams.map((s, i) => [s.name, i]));
+  const parentOf = (s: BuilderStream) =>
+    (s.partition?.mode === 'parent' && s.partition.parent_stream
+      && byName.has(s.partition.parent_stream))
+      ? byName.get(s.partition.parent_stream)! : null;
+
+  const children = new Map<number, number[]>();
+  const roots: number[] = [];
+  streams.forEach((s, i) => {
+    const parent = parentOf(s);
+    if (parent === null || parent === i) roots.push(i);
+    else children.set(parent, [...(children.get(parent) ?? []), i]);
+  });
+
+  const out: { index: number; depth: number }[] = [];
+  const seen = new Set<number>();
+  const walk = (index: number, depth: number) => {
+    if (seen.has(index) || depth > 8) return;
+    seen.add(index);
+    out.push({ index, depth });
+    for (const child of children.get(index) ?? []) walk(child, depth + 1);
+  };
+  roots.forEach((index) => walk(index, 0));
+  streams.forEach((_, index) => { if (!seen.has(index)) out.push({ index, depth: 0 }); });
+  return out;
+}
+
+/** One rail entry: a section, or a stream nested under its parent. */
+function RailItem({
+  label, active, onSelect, count, depth = 0, warn = false,
+}: {
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+  count?: number;
+  depth?: number;
+  warn?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-current={active ? 'true' : undefined}
+      onClick={onSelect}
+      style={{ paddingInlineStart: `${8 + depth * 12}px` }}
+      className={cn(
+        'flex w-full items-center gap-1.5 rounded-md py-1.5 pe-2 text-left',
+        'text-caption transition-colors',
+        active
+          ? 'bg-brand/10 text-brand font-emphasis'
+          : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
+      )}
+    >
+      {depth > 0 && <span aria-hidden className="text-text-quaternary">└</span>}
+      <span className="truncate">{label}</span>
+      {typeof count === 'number' && (
+        <span className="ms-auto text-tiny text-text-quaternary">{count}</span>
+      )}
+      {warn && (
+        <AlertTriangle className="ms-auto h-3 w-3 shrink-0 text-warning" aria-hidden />
+      )}
+    </button>
+  );
+}
+
+/** Why this stream would not run, if it would not.
+ *
+ * Shown on the rail rather than at Test time. Both cases are silent failures:
+ * a path of `/` reads the API root, and a parent chosen without sending its id
+ * reads the same first page once per parent and reports success.
+ */
+function streamWarning(stream: BuilderStream): boolean {
+  const path = (stream.path ?? '').replace(/\//g, '').trim();
+  if (!path) return true;
+  if (stream.partition?.mode === 'parent') {
+    const usesPartition = JSON.stringify(stream).includes('stream_partition');
+    if (!stream.partition.param && !usesPartition) return true;
+    if (!stream.partition.parent_stream) return true;
+  }
+  return false;
+}
 
 export default function BuilderEditorPage() {
   const { t } = useI18n();
@@ -57,6 +153,15 @@ export default function BuilderEditorPage() {
 
   const [draft, setDraft] = React.useState<BuilderDefinition | null>(null);
   const [activeStream, setActiveStream] = React.useState(0);
+  // One section on screen at a time, chosen from the rail.
+  //
+  // Everything used to be a single column: global config, user inputs and every
+  // stream stacked into one 2,400px scroll for a connector with *one* stream.
+  // Finding the retry settings meant scrolling past the whole form, and the
+  // stream being edited was wherever the page happened to be scrolled to.
+  const [view, setView] = React.useState<'api' | 'inputs' | 'stream'>('api');
+  const [adding, setAdding] = React.useState(false);
+  const [newStream, setNewStream] = React.useState({ name: '', path: '' });
   const [dirty, setDirty] = React.useState(false);
   const [testResult, setTestResult] = React.useState<BuilderTestResult | null>(null);
   const [secrets, setSecrets] = React.useState<Record<string, string>>({});
@@ -294,17 +399,67 @@ export default function BuilderEditorPage() {
           </section>
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
-          {/* ── editor ─────────────────────────────────────────────── */}
+        <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]
+                        xl:grid-cols-[13rem_minmax(0,1fr)_minmax(0,24rem)]">
+          {/* ── rail ─────────────────────────────────────────── */}
+          <nav aria-label={t('builder.sectionsNav')} className="space-y-3 self-start">
+            <div className="space-y-0.5">
+              <RailItem
+                active={view === 'api'}
+                onSelect={() => setView('api')}
+                label={t('builder.sectionApi')}
+              />
+              <RailItem
+                active={view === 'inputs'}
+                onSelect={() => setView('inputs')}
+                label={t('builder.sectionInputs')}
+                count={(draft.user_inputs ?? []).length}
+              />
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="flex items-center justify-between gap-2 px-2 pt-1">
+                <span className="text-tiny font-emphasis uppercase tracking-wide
+                                 text-text-quaternary">
+                  {t('builder.sectionStreams')} ({draft.streams.length})
+                </span>
+                {canEdit && (
+                  <button
+                    type="button"
+                    aria-label={t('builder.addStream')}
+                    title={t('builder.addStream')}
+                    onClick={() => { setView('stream'); setAdding(true); }}
+                    className="rounded p-0.5 text-text-tertiary hover:bg-surface-2
+                               hover:text-text-primary"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {streamOutline(draft.streams).map(({ index, depth }) => (
+                <RailItem
+                  key={index}
+                  active={view === 'stream' && index === activeStream}
+                  onSelect={() => { setView('stream'); setActiveStream(index); }}
+                  label={draft.streams[index].name || t('builder.unnamedStream')}
+                  depth={depth}
+                  warn={streamWarning(draft.streams[index])}
+                />
+              ))}
+            </div>
+          </nav>
+
+          {/* ── panel ───────────────────────────────────────── */}
           <div className="space-y-4">
+            {view === 'api' && (
             <Section title={t('builder.sectionApi')}>
               <Field label={t('builder.baseUrl')} htmlFor="base-url" required>
-                <Input
+                <JinjaInput
                   id="base-url"
-                  size="sm"
                   value={draft.base_url}
                   disabled={!canEdit}
-                  onChange={(event) => patch({ base_url: event.target.value })}
+                  userInputs={draft.user_inputs ?? []}
+                  onChange={(value) => patch({ base_url: value })}
                   placeholder="https://api.example.com"
                 />
               </Field>
@@ -402,7 +557,9 @@ export default function BuilderEditorPage() {
                 </div>
               )}
             </Section>
+            )}
 
+            {view === 'inputs' && (
             <Section
               title={t('builder.sectionInputs')}
               action={canEdit ? (
@@ -471,7 +628,9 @@ export default function BuilderEditorPage() {
                 </div>
               )}
             </Section>
+            )}
 
+            {view === 'stream' && (
             <Section
               title={t('builder.sectionStreams')}
               action={canEdit ? (
@@ -479,40 +638,73 @@ export default function BuilderEditorPage() {
                   size="xs"
                   variant="ghost"
                   leadingIcon={<Plus className="h-3 w-3" />}
-                  onClick={() => {
-                    const next = [...draft.streams, EMPTY_STREAM(draft.streams.length + 1)];
-                    patch({ streams: next });
-                    setActiveStream(next.length - 1);
-                  }}
+                  onClick={() => setAdding((open) => !open)}
                 >
                   {t('builder.addStream')}
                 </Button>
               ) : null}
             >
-              <div className="flex flex-wrap gap-1.5">
-                {draft.streams.map((item, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    aria-pressed={index === activeStream}
-                    onClick={() => setActiveStream(index)}
-                    className={cn(
-                      'rounded-full border px-2.5 py-1 text-tiny font-emphasis transition-colors',
-                      index === activeStream
-                        ? 'border-brand bg-brand/10 text-brand'
-                        : 'border-[rgb(var(--border-line))] text-text-tertiary hover:text-text-primary',
-                    )}
+              {/* Ask for the name and the path up front.
+                *
+                * "Add stream" used to make `stream_3` at path `/` and drop the
+                * person into it -- a stream that cannot work, named after
+                * nothing, which they then have to notice and repair. Both
+                * answers are one line each and the person already knows them. */}
+              {adding && canEdit && (
+                <div className="flex flex-wrap items-end gap-3 rounded-md border
+                                border-[rgb(var(--border-line))] p-3">
+                  <Field label={t('builder.streamName')} htmlFor="new-stream-name" required>
+                    <Input
+                      id="new-stream-name" size="sm" value={newStream.name}
+                      placeholder="lead_service"
+                      onChange={(e) => setNewStream((s) => ({ ...s, name: e.target.value }))}
+                    />
+                  </Field>
+                  <Field label={t('builder.streamPath')} htmlFor="new-stream-path" required
+                         hint={t('builder.streamPathHint')}>
+                    <Input
+                      id="new-stream-path" size="sm" value={newStream.path}
+                      placeholder="/lead/services"
+                      onChange={(e) => setNewStream((s) => ({ ...s, path: e.target.value }))}
+                    />
+                  </Field>
+                  <Button
+                    size="sm"
+                    disabled={!newStream.name.trim() || !newStream.path.trim()
+                      || draft.streams.some((s) => s.name === newStream.name.trim())}
+                    onClick={() => {
+                      const next = [...draft.streams,
+                        EMPTY_STREAM(newStream.name.trim(), newStream.path.trim())];
+                      patch({ streams: next });
+                      setActiveStream(next.length - 1);
+                      setNewStream({ name: '', path: '' });
+                      setAdding(false);
+                    }}
                   >
-                    {item.name || t('builder.unnamedStream')}
-                  </button>
-                ))}
-              </div>
+                    {t('builder.addStreamConfirm')}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              )}
 
               {stream && (
                 <StreamEditor
                   stream={stream}
                   streamNames={draft.streams.map((item) => item.name)}
                   fields={testResult?.inferred_fields ?? []}
+                  userInputs={draft.user_inputs ?? []}
+                  onCreateInput={canEdit ? () => {
+                    // Jump to the inputs section with a blank row waiting, so
+                    // "the input I want does not exist yet" is one click rather
+                    // than a hunt back up the page.
+                    patch({
+                      user_inputs: [...(draft.user_inputs ?? []),
+                        { key: '', title: '', type: 'string' }],
+                    });
+                    setView('inputs');
+                  } : undefined}
                   disabled={!canEdit}
                   onChange={(next) => patchStream(activeStream, next)}
                 />
@@ -533,6 +725,7 @@ export default function BuilderEditorPage() {
                 </Button>
               )}
             </Section>
+            )}
           </div>
 
           {/* ── test panel ─────────────────────────────────────────── */}
@@ -614,26 +807,6 @@ function Section({
   );
 }
 
-function Field({
-  label, htmlFor, required, hint, children,
-}: {
-  label: string;
-  htmlFor: string;
-  required?: boolean;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label htmlFor={htmlFor} className="mb-1 block text-label text-text-secondary">
-        {label}
-        {required && <span className="ml-0.5 text-danger">*</span>}
-      </label>
-      {children}
-      {hint && <p className="mt-1 text-tiny text-text-quaternary">{hint}</p>}
-    </div>
-  );
-}
 
 /**
  * A free-text field that becomes a picker once a test read has shown which

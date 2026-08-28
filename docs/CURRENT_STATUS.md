@@ -114,6 +114,106 @@ thái hai lần, rồi tìm lỗi thật ngay trước đó.
 
 ---
 
+## Builder dựng lại theo bố cục Airbyte (2026-08-28)
+
+Đối chiếu với mã nguồn Airbyte chứ không chỉ ảnh chụp:
+`airbyte-webapp/src/area/connectorBuilder/components/Builder/` — `BuilderSidebar.tsx`
+cho cấu trúc rail, `JinjaInput.tsx` cho chỗ chèn biến.
+
+### Rail thay cho một cột cuộn dài
+
+Rail của Airbyte: **Global Configuration → User Inputs (N) → STREAMS (N)** kèm
+nút thêm, rồi danh sách stream có chấm cảnh báo. Mình theo đúng thứ tự đó, và
+mỗi lúc chỉ hiện một phần trong panel.
+
+Trước đây tất cả nằm trong một cột: cấu hình chung, tham số, và mọi stream xếp
+chồng thành **2.400px cuộn cho một connector có đúng một stream**. Tìm mục "Lỗi
+& thử lại" là phải cuộn qua cả biểu mẫu, và stream đang sửa nằm ở chỗ trang tình
+cờ được cuộn tới. Giờ cả trang vừa một màn hình.
+
+Một chỗ mình cố ý khác Airbyte: danh sách stream của họ **phẳng**, của mình là
+**cây cha–con**. Với connector của Base thì quan hệ đó chính là phần khó nhất —
+`lead_service → lead → lead_feed` đọc được ngay thay vì phải mở từng stream.
+Kèm chấm cảnh báo cho stream không chạy được: chưa có đường dẫn, hoặc đã chọn
+cha mà id cha không được gửi đi đâu cả. Cả hai đều là kiểu hỏng im lặng — cái
+sau đọc đúng một trang giống nhau một lần cho mỗi bản ghi cha rồi báo thành
+công.
+
+### Chèn biến từ Tham số người dùng
+
+Đây là thứ anh nói còn thiếu. Airbyte để một biểu tượng hình người ở cuối các ô
+là Jinja template; bấm vào chọn một user input, nó chèn `config['key']` **tại vị
+trí con trỏ**, và có sẵn mục "Create New" khi tham số cần chưa tồn tại.
+
+Mình làm đúng vậy, chèn đủ cả dấu ngoặc: `{{ config['access_token'] }}`. Chèn
+tại con trỏ chứ không thay cả ô, vì mấy ô này thường là một phần của chuỗi lớn
+hơn — `Bearer {{ config['token'] }}`, hay một đường dẫn có id ở giữa. Bấm "Tạo
+tham số mới" thì nhảy sang mục Tham số người dùng với một dòng trống chờ sẵn.
+
+Chỉ gắn vào những ô **thật sự** là template khi biên dịch: Base URL, đường dẫn
+stream, giá trị của query param / header / body, và bộ lọc bản ghi. Không gắn
+vào ô *tên tham số* — tên không phải template, để icon ở đó là dạy sai chỗ nào
+nội suy được.
+
+### Đo lại bằng Playwright
+
+`qa/audit/builder-layout.mjs` đi hết rail, rồi lái bộ chọn từ đầu đến cuối: gõ
+`/service/`, tạo tham số `access_token`, quay lại, chọn nó, và **kiểm tra giá
+trị cuối cùng trong ô**:
+
+    duong dan sau khi chen: "/service/{{ config['access_token'] }}"
+
+"Icon có hiện" và "chọn xong chèn đúng template" là hai điều khác nhau, và chỉ
+điều thứ hai mới đáng tin. Một dấu nháy đặt sai là một connector xác thực bằng
+chuỗi chữ, mà Base trả lời bằng lời từ chối trông y hệt token hết hạn.
+
+---
+
+## Nhìn tận mắt Builder bằng Playwright (2026-08-27)
+
+Anh nghi FE và BE lệch nhau. Đúng, và nguyên nhân là lỗi vận hành của tôi:
+**suốt buổi tôi rebuild `api` và `worker` chứ chưa lần nào rebuild `frontend`.**
+Bundle đang chạy không có một ô nào tôi thêm trong ngày. Bằng chứng lấy từ
+payload thật mà form gửi lên, không phải từ đọc code:
+
+    partition: {"mode":"parent","parent_stream":"posts"}   <- khong co param
+    pagination: {"mode":"page","page_size":50,...}         <- van mac dinh 50
+    cursor:    {...}                                       <- khong co filter_mode
+
+Tức là qua giao diện vẫn tái hiện được đúng cái lỗi "chọn cha xong không gửi id
+cha" mà backend đã vá. Sau khi `docker compose build frontend`, payload mang đủ
+`param`, `inject_into`, `cursor_filter_mode`, `cursor_inject_into`.
+
+Bài học đóng gói lại thành công cụ chứ không phải một ghi chú:
+`qa/audit/builder-fidelity.mjs` lái form, **bắt request PATCH ngay trên dây**, và
+in ra ba thứ cạnh nhau — form hiện gì, form gửi gì, backend giữ gì. Một ô form có
+mà payload rụng là UI chết; một trường payload có mà manifest bỏ qua là lời hứa
+engine không bao giờ thấy. Chạy nó là biết ngay bundle có cũ hay không.
+
+### Bốn chỗ sửa sau khi dùng thử như user
+
+* **"Thêm stream" không hỏi gì** — nó tạo thẳng `stream_3` ở đường dẫn `/` rồi
+  thả người dùng vào đó: một stream chắc chắn không chạy, tên vô nghĩa, phải tự
+  nhận ra mà sửa. Nay hỏi tên và đường dẫn trước, như hộp "New stream" trong ảnh
+  Airbyte anh gửi, và chặn trùng tên.
+* **Danh sách stream là dãy pill phẳng** — giấu đúng cái quan hệ mà loại connector
+  này khó nhất, và quá sáu stream là rối. Nay xếp thành cây, con thụt vào dưới
+  cha, đọc một cái là thấy `lead_service → lead → lead_feed`. Stream mồ côi hay
+  vòng lặp vẫn hiện ở mức 0 chứ không biến mất — một stream không chọn được là
+  một stream không sửa được.
+* **Ô "Số bản ghi/trang" mặc định 50** trong khi gợi ý ngay dưới bảo để trống.
+  Bỏ ở cả `EMPTY_STREAM` (FE) lẫn `starter_definition` (BE).
+* **Panel "Chạy thử" hứa thứ nó không đưa được** — ở chế độ `AIRBYTE_API`, Test
+  chỉ chạy `check` + `discover`, không có bản ghi mẫu (Config API không có
+  endpoint đọc giới hạn). Nay nói thẳng nó làm gì và muốn xem dữ liệu thì phát
+  hành rồi chạy trong pipeline.
+
+Một kết luận sai của tôi cũng ghi lại: lần quét đầu tôi báo "editor không có chế
+độ YAML". Có — nút tên là **"Xem manifest"**, mở panel YAML sống kèm **"Nhập từ
+YAML"**. Tôi tìm nút tên "YAML" nên không thấy.
+
+---
+
 ## Builder: chọn stream cha xong phải chạy được (2026-08-27)
 
 Đối chiếu với ảnh Connector Builder của Airbyte anh gửi. Bố cục của mình đã có
