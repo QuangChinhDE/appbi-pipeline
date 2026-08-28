@@ -1,0 +1,278 @@
+{
+ "cycle": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "end_date": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "report_month": {
+    "type": "string"
+   },
+   "report_year": {
+    "type": "string"
+   },
+   "schedule": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "start_date": {
+    "type": "string"
+   },
+   "system_id": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "payroll": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "cycle_export": {
+    "properties": {
+     "end_date": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "path": {
+      "type": "string"
+     },
+     "range": {
+      "type": "string"
+     },
+     "report_month": {
+      "type": "string"
+     },
+     "report_year": {
+      "type": "string"
+     },
+     "schedule": {
+      "type": "string"
+     },
+     "start_date": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "cycle_id": {
+    "type": "string"
+   },
+   "end_date": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "is_main": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "report_year": {
+    "type": "string"
+   },
+   "schedule": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "start_date": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "system_id": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "record": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "adjust": {
+    "type": "string"
+   },
+   "columns": {
+    "type": "object"
+   },
+   "confirm_status": {
+    "type": "string"
+   },
+   "creator_id": {
+    "type": "string"
+   },
+   "creator_username": {
+    "type": "string"
+   },
+   "cycle_export": {
+    "properties": {
+     "end_date": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "path": {
+      "type": "string"
+     },
+     "range": {
+      "type": "string"
+     },
+     "report_month": {
+      "type": "string"
+     },
+     "report_year": {
+      "type": "string"
+     },
+     "schedule": {
+      "type": "string"
+     },
+     "start_date": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "cycle_id": {
+    "type": "string"
+   },
+   "employee_code": {
+    "type": "string"
+   },
+   "employee_id": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "is_main": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "payroll_export": {
+    "properties": {
+     "end_date": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "link": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "start_date": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "payroll_id": {
+    "type": "string"
+   },
+   "publish_payslip": {
+    "type": "string"
+   },
+   "report_month": {
+    "type": "string"
+   },
+   "report_year": {
+    "type": "string"
+   },
+   "resolve_status": {
+    "type": "string"
+   },
+   "schedule": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "system_id": {
+    "type": "string"
+   },
+   "take_home": {
+    "type": "string"
+   },
+   "total_benefits": {
+    "type": "string"
+   },
+   "total_company": {
+    "type": "string"
+   },
+   "total_income": {
+    "type": "string"
+   },
+   "total_insurance": {
+    "type": "string"
+   },
+   "total_other_incomes": {
+    "type": "string"
+   },
+   "total_salaries": {
+    "type": "string"
+   },
+   "total_tax": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "test": {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": true,
+  "properties": {},
+  "type": "object"
+ }
+}

@@ -1,0 +1,3216 @@
+{
+ "job": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "type": "object"
+   },
+   "color": {
+    "type": "string"
+   },
+   "content": {
+    "type": "string"
+   },
+   "content_short": {
+    "type": "string"
+   },
+   "counter_code": {
+    "type": "string"
+   },
+   "counter_keywords": {
+    "type": "string"
+   },
+   "counter_value": {
+    "type": "string"
+   },
+   "cover": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "properties": {
+       "link": {
+        "type": "string"
+       }
+      },
+      "type": "object"
+     }
+    ]
+   },
+   "creator_id": {
+    "type": "string"
+   },
+   "creator_username": {
+    "type": "string"
+   },
+   "data": {
+    "properties": {
+     "attachment": {
+      "properties": {
+       "hid": {
+        "type": "string"
+       },
+       "id": {
+        "type": "string"
+       },
+       "link": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "type": {
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "deadline_assign": {
+      "type": "number"
+     },
+     "deadline_by_timesheet": {
+      "type": "number"
+     },
+     "files": {
+      "type": "number"
+     },
+     "first_assignee": {
+      "type": [
+       "number",
+       "string"
+      ]
+     },
+     "forward_source": {
+      "type": "number"
+     },
+     "gen_list": {
+      "items": {
+       "properties": {
+        "gen": {
+         "type": "number"
+        },
+        "id": {
+         "type": "string"
+        },
+        "link": {
+         "type": "string"
+        },
+        "name": {
+         "type": "string"
+        },
+        "type": {
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "gen_prev": {
+      "properties": {
+       "gen": {
+        "type": "number"
+       },
+       "id": {
+        "type": "string"
+       },
+       "link": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "type": {
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "last_assignee": {
+      "type": "string"
+     },
+     "posts": {
+      "type": "number"
+     },
+     "remind_assign_users": {
+      "type": "array"
+     },
+     "stages_assignee": {
+      "items": {
+       "properties": {
+        "stage_id": {
+         "type": "string"
+        },
+        "user_id": {
+         "type": "string"
+        },
+        "username": {
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "type": "array"
+     }
+    },
+    "type": "object"
+   },
+   "deadline": {
+    "type": "string"
+   },
+   "deadline_assign": {
+    "type": "number"
+   },
+   "deadline_by_timesheet": {
+    "type": "number"
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "items": {
+        "type": "number"
+       },
+       "type": "array"
+      },
+      "download": {
+       "type": "string"
+      },
+      "ext_download": {
+       "type": "string"
+      },
+      "fid": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "image": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "is_templated": {
+       "type": "number"
+      },
+      "name": {
+       "type": "string"
+      },
+      "new_fid": {
+       "type": "string"
+      },
+      "origin": {
+       "type": "number"
+      },
+      "since": {
+       "type": "number"
+      },
+      "size": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "src": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "finish_at": {
+    "type": "string"
+   },
+   "first_assignee": {
+    "type": [
+     "number",
+     "string"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "enabled": {
+       "type": "number"
+      },
+      "file_fid": {
+       "type": "string"
+      },
+      "file_name": {
+       "type": "string"
+      },
+      "file_url": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "index": {
+       "type": "number"
+      },
+      "name": {
+       "type": "string"
+      },
+      "options": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "placeholder": {
+       "type": [
+        "null",
+        "string"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "stage_id": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "stage_index": {
+       "type": "number"
+      },
+      "title": {
+       "type": "number"
+      },
+      "type": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      },
+      "value": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "form_origin": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "enabled": {
+       "type": "number"
+      },
+      "id": {
+       "type": "string"
+      },
+      "index": {
+       "type": "number"
+      },
+      "name": {
+       "type": "string"
+      },
+      "options": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "placeholder": {
+       "type": [
+        "null",
+        "string"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "stage_id": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "stage_index": {
+       "type": "number"
+      },
+      "title": {
+       "type": "number"
+      },
+      "type": {
+       "type": "string"
+      },
+      "value": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "is_archive": {
+    "type": "string"
+   },
+   "keyword": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": "string"
+   },
+   "moves": {
+    "items": {
+     "properties": {
+      "actual_time_by_duration": {
+       "type": "number"
+      },
+      "actual_time_by_timesheet": {
+       "type": "number"
+      },
+      "assignee_timesheet": {
+       "items": {
+        "items": {
+         "items": {
+          "type": "number"
+         },
+         "type": "array"
+        },
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "duration": {
+       "type": "number"
+      },
+      "from_stage_id": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "job_id": {
+       "type": "string"
+      },
+      "mover_id": {
+       "type": "string"
+      },
+      "past": {
+       "type": "number"
+      },
+      "skip_holidays": {
+       "type": "string"
+      },
+      "stage_deadline": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "stage_end": {
+       "type": "number"
+      },
+      "stage_id": {
+       "type": "string"
+      },
+      "stage_start": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "user_id": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "name": {
+    "type": "string"
+   },
+   "on_failed": {
+    "properties": {
+     "failed_name": {
+      "type": "string"
+     },
+     "failed_reason_id": {
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     },
+     "since": {
+      "type": "number"
+     },
+     "stage_id": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "owners": {
+    "type": "array"
+   },
+   "remind_assign_users": {
+    "type": "array"
+   },
+   "results": {
+    "type": "array"
+   },
+   "since": {
+    "type": "string"
+   },
+   "stage_deadline": {
+    "type": "string"
+   },
+   "stage_export": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "metatype": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     },
+     "workflow_id": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "stage_id": {
+    "type": "string"
+   },
+   "stage_start": {
+    "type": "string"
+   },
+   "starred": {
+    "type": "string"
+   },
+   "state": {
+    "type": "string"
+   },
+   "stats": {
+    "properties": {
+     "files": {
+      "type": "number"
+     },
+     "likes": {
+      "type": "number"
+     },
+     "notes": {
+      "type": "number"
+     },
+     "posts": {
+      "type": "number"
+     }
+    },
+    "type": "object"
+   },
+   "status": {
+    "type": "string"
+   },
+   "system_id": {
+    "type": "string"
+   },
+   "tags": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "title": {
+    "type": "string"
+   },
+   "to_sign_token": {
+    "type": "string"
+   },
+   "todos": {
+    "items": {
+     "properties": {
+      "deadline": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "id": {
+       "type": "string"
+      },
+      "link": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "stage_id": {
+       "type": "string"
+      },
+      "status": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   },
+   "workflow_export": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "workflow_id": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "stage": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "followed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "managed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "allow_assignee_job_reassign": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "assignment": {
+    "properties": {
+     "followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "backward": {
+    "properties": {
+     "allow_assignee_previous_stage": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "option": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "stages": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "condition_vars": {
+    "items": {
+     "properties": {
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "key": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "label": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "metatype": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "stage_id": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "conditional_assignee_data": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "conditional_followers_data": {
+    "properties": {
+     "conditions": {
+      "items": {
+       "properties": {
+        "followers": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "rule": {
+         "properties": {
+          "condition": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "id": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "nodes": {
+           "items": {
+            "properties": {
+             "field": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "formula": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "id": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "input_type": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "operator": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "parent_id": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "type": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "value": {
+              "type": [
+               "string",
+               "null"
+              ]
+             }
+            },
+            "type": [
+             "object",
+             "null"
+            ]
+           },
+           "type": [
+            "array",
+            "null"
+           ]
+          }
+         },
+         "type": [
+          "object",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "output_rule": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "conditional_sla_data": {
+    "properties": {
+     "conditions": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "current_deadline_adjustable": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "deadline_adjustable": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "default_followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "duration": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "duration_hours": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "following_teams": {
+    "items": {
+     "properties": {
+      "__cached": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "__deleted": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "about": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "color": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "counter": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "data": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "dbk": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "link": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "metatype": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "num_people": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "parent_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "path": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "status": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "system_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "token": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "user_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "group_followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "more_todos": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "real_order": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reassign_stage": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "remove_deadline_uncompleted_todo": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "remove_last_assignee_following": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "required_todos": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "review": {
+    "properties": {
+     "enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "review_by_job_assignee": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "review_enabled": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "reviewers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "setup_conditional_assignee": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "skip_holidays": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sla_assign": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "todos": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "properties": {
+     "events": {
+      "properties": {
+       "jobBack": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "jobIn": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "jobNext": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "jobReassign": {
+        "type": [
+         "array",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "process_enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "server_token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "transformers": {
+      "items": {
+       "properties": {
+        "key": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "value": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "workflow_export": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "workflow_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "workflow": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "managed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "member": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "staged_followed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "staged_managed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "alias": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "allow_add_confirmer_as_follower": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_auto_add_follower": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "allow_create_tasks_wework": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "allow_print_qrcode_all_status": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_select_qrcode_position_attachment_file": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_select_qrcode_position_custom_field": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_stage_owner_edit_job_deadline": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_stage_owner_edit_todo": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_stage_owner_remove_job": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "allow_todo_add_follower": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "auto_archive": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "auto_archive_conf": {
+    "properties": {
+     "archive_done_jobs": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "archive_failed_jobs": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "default_reason": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "done_after_days": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "failed_after_days": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "block_remove_default_todo": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "block_todo_in_finished_job": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "conditional_stage": {
+    "items": {
+     "properties": {
+      "conditions": {
+       "items": {
+        "properties": {
+         "rule": {
+          "properties": {
+           "condition": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "id": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "nodes": {
+            "items": {
+             "properties": {
+              "field": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "formula": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "id": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "input_type": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "operator": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "parent_id": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "type": {
+               "type": [
+                "string",
+                "null"
+               ]
+              },
+              "value": {
+               "type": [
+                "string",
+                "null"
+               ]
+              }
+             },
+             "type": [
+              "object",
+              "null"
+             ]
+            },
+            "type": [
+             "array",
+             "null"
+            ]
+           }
+          },
+          "type": [
+           "object",
+           "null"
+          ]
+         },
+         "stage": {
+          "type": [
+           "string",
+           "null"
+          ]
+         }
+        },
+        "type": [
+         "object",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "output_rule": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "counter_adjust": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "counter_current": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "counter_enable": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "counter_follow_setup": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "counter_template": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cover_enable": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "creatable_teams": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "custom_field_editable": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "__hf_template": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "__sworkflow": {
+      "properties": {
+       "export_excel": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "export_excel_reviewer": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "remove_workflow": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "active": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "allow_add_confirmer_as_follower": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "allow_auto_add_follower": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "allow_create_tasks_wework": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_print_qrcode_all_status": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_select_qrcode_position_attachment_file": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_select_qrcode_position_custom_field": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_stage_owner_edit_job_deadline": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_stage_owner_edit_todo": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_stage_owner_remove_job": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "allow_todo_add_follower": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "archive_done_jobs": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "auto_archive": {
+      "properties": {
+       "archive_done_jobs": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "archive_failed_jobs": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "default_reason": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "done_after_days": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "failed_after_days": {
+        "type": [
+         "number",
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "block_remove_default_todo": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "block_todo_in_finished_job": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "category": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_current": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "counter_request_enable": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_request_owners": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "cover_enable": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "custom_field_editable": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "deadline_by_timesheet": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "deadline_todo_by_timesheet": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "disable_noti": {
+      "properties": {
+       "create_job": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "done_job": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "failed_job": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "display": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "done": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "donot_allow_edit_from_second_stage": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "failed": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "not_allow_edit_comment_at_last_stage": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "not_show_done": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "print_options": {
+      "properties": {
+       "allow_attach_qrcode": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "allow_custom_qrcode": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "allow_job": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "allow_job_comment": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "allow_pdf_template": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "allow_qrcode_template": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "allow_word_template": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "qrcode_position_of_attachment_file": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "qrcode_position_of_custom_field": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "sign_enable": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "sign_owners": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "sign_stages": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "template_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "templates": {
+      "items": {
+       "properties": {
+        "enabled": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "fid": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "position_qrcode": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "stages": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline_by_timesheet": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "deadline_todo_by_timesheet": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "disable_noti": {
+    "properties": {
+     "create_job": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "done_job": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "failed_job": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "display": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "doc_template": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "doc_templates": {
+    "items": {
+     "properties": {
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "position_qrcode": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "stages": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "donot_allow_edit_from_second_stage": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "duration": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "duration_hours": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "duration_setting": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "email_templates": {
+    "items": {
+     "properties": {
+      "attachments": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "body": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "cc": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "event": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "from": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "stages": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "subject": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "to": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "failed_reasons": {
+    "items": {
+     "properties": {
+      "key": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "columns": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "condition_rule": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "condition_status": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "confidential": {
+       "properties": {
+        "enable": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "view_stages_assignee": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "view_stages_manager": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "view_users": {
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "disable": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "extra": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "properties": {
+          "data_generation": {
+           "type": "string"
+          },
+          "export": {
+           "properties": {
+            "appname": {
+             "type": "string"
+            },
+            "avatar": {
+             "type": "string"
+            },
+            "category": {
+             "type": "string"
+            },
+            "description": {
+             "type": "string"
+            },
+            "followers": {
+             "items": {
+              "type": "string"
+             },
+             "type": "array"
+            },
+            "id": {
+             "type": "string"
+            },
+            "instructions": {
+             "type": "string"
+            },
+            "is_public": {
+             "type": "string"
+            },
+            "is_template": {
+             "type": "string"
+            },
+            "last_update": {
+             "type": "string"
+            },
+            "metatype": {
+             "type": "string"
+            },
+            "name": {
+             "type": "string"
+            },
+            "since": {
+             "type": "string"
+            },
+            "status": {
+             "type": "string"
+            },
+            "system_id": {
+             "type": "string"
+            },
+            "teams": {
+             "type": "array"
+            },
+            "user_id": {
+             "type": "string"
+            },
+            "username": {
+             "type": "string"
+            }
+           },
+           "type": "object"
+          },
+          "id": {
+           "type": "string"
+          },
+          "input_data": {
+           "items": {
+            "type": "string"
+           },
+           "type": "array"
+          },
+          "instruction": {
+           "type": "string"
+          }
+         },
+         "type": "object"
+        }
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "multiple": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        }
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "stage_id": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "stage_io": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "version": {
+       "type": [
+        "number",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "forward_manager": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "forwards": {
+    "items": {
+     "properties": {
+      "assignment_type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "auto": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "follower_type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "stage_id": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "stage_type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_reatable": {
+    "type": [
+     "boolean",
+     "null"
+    ]
+   },
+   "is_viewable": {
+    "type": [
+     "boolean",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "not_allow_edit_comment_at_last_stage": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "not_show_done": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "options": {
+    "properties": {
+     "export_excel": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "export_excel_reviewer": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "remove_workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "path": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "print_options": {
+    "properties": {
+     "allow_attach_qrcode": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "allow_custom_qrcode": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "allow_job": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "allow_job_comment": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "allow_pdf_template": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "allow_qrcode_template": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "allow_word_template": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "privacy": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "qrcode_position_of_attachment_file": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "qrcode_position_of_custom_field": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "refid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "set": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "refid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "sign_enable": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "sign_owners": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "sign_stages": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stages": {
+    "items": {
+     "properties": {
+      "followers": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "metatype": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "owners": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "active": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "done": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "failed": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tags": {
+    "items": {
+     "properties": {
+      "color": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "key": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "viewable_teams": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ }
+}

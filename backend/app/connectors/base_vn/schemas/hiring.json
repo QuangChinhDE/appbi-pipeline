@@ -1,0 +1,1134 @@
+{
+ "candidate": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "address": {
+    "type": "string"
+   },
+   "assign_username": {
+    "type": "string"
+   },
+   "campaign": {
+    "type": "string"
+   },
+   "changelogs": {
+    "items": {
+     "properties": {
+      "action": {
+       "type": "string"
+      },
+      "data": {
+       "properties": {
+        "new_source": {
+         "type": "string"
+        },
+        "old_source": {
+         "type": [
+          "null",
+          "string"
+         ]
+        },
+        "opening_id": {
+         "type": "string"
+        },
+        "reason": {
+         "type": "string"
+        },
+        "stage_in": {
+         "type": "string"
+        },
+        "stage_in_name": {
+         "type": "string"
+        },
+        "stage_in_state": {
+         "type": "string"
+        },
+        "stage_out": {
+         "type": "string"
+        },
+        "stage_out_name": {
+         "type": "string"
+        },
+        "stage_out_state": {
+         "type": "string"
+        },
+        "time": {
+         "type": "number"
+        }
+       },
+       "type": "object"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "note": {
+       "type": "string"
+      },
+      "since": {
+       "type": "number"
+      },
+      "time": {
+       "type": "number"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "cvs": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "disp_name": {
+    "type": "string"
+   },
+   "display_title": {
+    "type": "string"
+   },
+   "dob_day": {
+    "type": "string"
+   },
+   "dob_month": {
+    "type": "string"
+   },
+   "dob_year": {
+    "type": "string"
+   },
+   "email": {
+    "type": "string"
+   },
+   "evaluations": {
+    "items": {
+     "properties": {
+      "competences": {
+       "type": "array"
+      },
+      "content": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "note": {
+       "type": "string"
+      },
+      "opening_export": {
+       "properties": {
+        "abslink": {
+         "type": "string"
+        },
+        "codename": {
+         "type": "string"
+        },
+        "creator": {
+         "type": "string"
+        },
+        "id": {
+         "type": "string"
+        },
+        "name": {
+         "type": "string"
+        },
+        "owners": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "status_display": {
+         "type": "string"
+        },
+        "type": {
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "opening_id": {
+       "type": "string"
+      },
+      "recommend": {
+       "type": "string"
+      },
+      "score": {
+       "type": "number"
+      },
+      "since": {
+       "type": "string"
+      },
+      "user_id": {
+       "type": "string"
+      },
+      "user_name": {
+       "type": "string"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "fields": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "placeholder": {
+       "type": [
+        "null",
+        "string"
+       ]
+      },
+      "type": {
+       "type": "string"
+      },
+      "value": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "first_name": {
+    "type": "string"
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "placeholder": {
+       "type": "string"
+      },
+      "scope": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string"
+      },
+      "value": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "gender": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "interview_count": {
+    "type": "number"
+   },
+   "last_interview": {
+    "type": "number"
+   },
+   "last_name": {
+    "type": "string"
+   },
+   "last_stage_before_failed": {
+    "type": "string"
+   },
+   "last_time_stage": {
+    "type": [
+     "number",
+     "string"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "medium": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "opening_export": {
+    "properties": {
+     "abslink": {
+      "type": "string"
+     },
+     "codename": {
+      "type": "string"
+     },
+     "creator": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "owners": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "status_display": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "opening_id": {
+    "type": "string"
+   },
+   "phone": {
+    "type": "string"
+   },
+   "prefix": {
+    "type": "string"
+   },
+   "reason": {
+    "type": "string"
+   },
+   "reason_id": {
+    "type": "string"
+   },
+   "score": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "source": {
+    "type": "string"
+   },
+   "ssn": {
+    "type": "string"
+   },
+   "stage_id": {
+    "type": "string"
+   },
+   "stage_name": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "tags": {
+    "type": "array"
+   },
+   "time_apply": {
+    "type": "string"
+   },
+   "time_campaign_qualified": {
+    "type": "string"
+   },
+   "time_hired": {
+    "type": "string"
+   },
+   "time_offered": {
+    "type": "string"
+   },
+   "time_rejected": {
+    "type": "string"
+   },
+   "title": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "contact": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "abs_link": {
+    "type": "string"
+   },
+   "address": {
+    "type": "string"
+   },
+   "apply_time": {
+    "type": "string"
+   },
+   "campaigns": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "candidate": {
+    "properties": {
+     "abslink": {
+      "type": "string"
+     },
+     "candidate_id": {
+      "type": "string"
+     },
+     "candidate_link": {
+      "type": "string"
+     },
+     "codename": {
+      "type": "string"
+     },
+     "creator": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "owners": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "scores": {
+      "type": "array"
+     },
+     "since": {
+      "type": [
+       "number",
+       "string"
+      ]
+     },
+     "status_display": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "candidates": {
+    "items": {
+     "properties": {
+      "abslink": {
+       "type": "string"
+      },
+      "candidate_id": {
+       "type": "string"
+      },
+      "candidate_link": {
+       "type": "string"
+      },
+      "codename": {
+       "type": "string"
+      },
+      "creator": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "owners": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "scores": {
+       "type": "array"
+      },
+      "since": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "status_display": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "changelogs": {
+    "items": {
+     "properties": {
+      "action": {
+       "type": "string"
+      },
+      "data": {
+       "properties": {
+        "candidate_id": {
+         "type": "string"
+        },
+        "opening_id": {
+         "type": "string"
+        },
+        "time": {
+         "type": "number"
+        }
+       },
+       "type": "object"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "note": {
+       "type": "string"
+      },
+      "since": {
+       "type": "number"
+      },
+      "time": {
+       "type": "number"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "content": {
+    "type": "string"
+   },
+   "dob": {
+    "type": "string"
+   },
+   "dob_year": {
+    "type": "string"
+   },
+   "email": {
+    "type": "string"
+   },
+   "fields": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "placeholder": {
+       "type": [
+        "null",
+        "string"
+       ]
+      },
+      "type": {
+       "type": "string"
+      },
+      "value": {
+       "type": [
+        "number",
+        "string"
+       ]
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "download_url": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "first_name": {
+    "type": "string"
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "full_url": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "org": {
+       "type": "string"
+      },
+      "placeholder": {
+       "type": "string"
+      },
+      "since": {
+       "type": "number"
+      },
+      "type": {
+       "type": "string"
+      },
+      "value": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "gender": {
+    "type": "string"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "highlight": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "image": {
+    "type": "string"
+   },
+   "last_name": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "ns_id": {
+    "type": "string"
+   },
+   "phone": {
+    "type": "string"
+   },
+   "score": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "source_id": {
+    "type": "string"
+   },
+   "sources": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "stats": {
+    "properties": {
+     "candidates": {
+      "type": "number"
+     },
+     "comments": {
+      "type": "number"
+     },
+     "likes": {
+      "type": "number"
+     }
+    },
+    "type": "object"
+   },
+   "tags": {
+    "type": "array"
+   },
+   "title": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "dept": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "content": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "interview": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "managed": {
+      "type": "number"
+     },
+     "view": {
+      "type": "number"
+     }
+    },
+    "type": "object"
+   },
+   "candidate_email": {
+    "type": "string"
+   },
+   "candidate_export": {
+    "properties": {
+     "email": {
+      "type": "string"
+     },
+     "id": {
+      "type": "string"
+     },
+     "link": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "phone": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "candidate_id": {
+    "type": "string"
+   },
+   "candidate_name": {
+    "type": "string"
+   },
+   "candidate_phone": {
+    "type": "string"
+   },
+   "candidate_title": {
+    "type": "string"
+   },
+   "confirmed": {
+    "type": "string"
+   },
+   "date": {
+    "type": "number"
+   },
+   "est_duration": {
+    "type": [
+     "number",
+     "string"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "hr_set_cf": {
+    "type": "number"
+   },
+   "id": {
+    "type": "string"
+   },
+   "interacted": {
+    "type": "number"
+   },
+   "last_ping": {
+    "type": "number"
+   },
+   "location": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "msgthread_id": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "opening_id": {
+    "type": "string"
+   },
+   "opening_name": {
+    "type": "string"
+   },
+   "questions": {
+    "type": "string"
+   },
+   "sendmail": {
+    "type": [
+     "number",
+     "string"
+    ]
+   },
+   "starred": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "time": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "office": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "address": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "opening": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "codename": {
+    "type": "string"
+   },
+   "company_name": {
+    "type": "string"
+   },
+   "content": {
+    "type": "string"
+   },
+   "deadline": {
+    "type": "string"
+   },
+   "dept_id": {
+    "type": "string"
+   },
+   "etime": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "locations": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "num_positions": {
+    "type": "string"
+   },
+   "office_name": {
+    "type": "string"
+   },
+   "offices": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "period": {
+    "type": "string"
+   },
+   "salary": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "starred": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "stime": {
+    "type": "string"
+   },
+   "talent_pool_id": {
+    "type": [
+     "number",
+     "string"
+    ]
+   }
+  },
+  "type": "object"
+ },
+ "pool": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "content": {
+    "type": "string"
+   },
+   "followers": {
+    "type": "array"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "managed": {
+    "type": "number"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "owners": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": "string"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "path": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "stats": {
+    "properties": {
+     "month": {
+      "type": "number"
+     },
+     "total": {
+      "type": [
+       "number",
+       "string"
+      ]
+     }
+    },
+    "type": "object"
+   },
+   "token": {
+    "type": "string"
+   },
+   "total": {
+    "type": [
+     "null",
+     "string"
+    ]
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   },
+   "visible": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "stage": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "automation": {
+    "properties": {
+     "files": {
+      "items": {
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "name": {
+         "type": "string"
+        },
+        "type": {
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "id": {
+      "type": "string"
+     },
+     "metatype": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "subject": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     },
+     "user_id": {
+      "type": "string"
+     },
+     "username": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "ext_test_ssid": {
+    "type": "number"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "index": {
+    "type": "string"
+   },
+   "multi_tpl": {
+    "type": "number"
+   },
+   "name": {
+    "type": "string"
+   },
+   "order": {
+    "type": "string"
+   },
+   "origin_id": {
+    "type": "string"
+   },
+   "report_key": {
+    "type": "string"
+   },
+   "show_exceeded_warning": {
+    "type": "number"
+   },
+   "state": {
+    "type": "string"
+   },
+   "template": {
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "token": {
+    "type": "string"
+   },
+   "webhooks": {
+    "type": "object"
+   }
+  },
+  "type": "object"
+ }
+}

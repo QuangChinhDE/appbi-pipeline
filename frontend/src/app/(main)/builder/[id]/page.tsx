@@ -4,7 +4,8 @@ import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, Code2, Play, Plus, Rocket, Save, Trash2,
+  AlertTriangle, CheckCircle2, Code2, CornerDownRight, ListTree, Play, Plus,
+  Rocket, Save, Settings2, Trash2, Variable,
 } from 'lucide-react';
 
 import { ApiError, builderApi } from '@/lib/api';
@@ -22,8 +23,19 @@ import type {
   BuilderDefinition, BuilderKeyValue, BuilderStream, BuilderTestResult,
 } from '@/lib/types';
 import { Field, JinjaInput } from '@/components/builder/BuilderField';
-import { StreamEditor } from '@/components/builder/StreamEditor';
+import {
+  StreamEditor, type BuilderStreamSection,
+} from '@/components/builder/StreamEditor';
+import { Tabs } from '@/components/ui/Tabs';
+import { useUrlTab } from '@/hooks/use-url-tab';
 import { cn } from '@/lib/utils';
+
+const BUILDER_VIEWS = ['api', 'inputs', 'stream'] as const;
+const STREAM_SECTIONS: readonly BuilderStreamSection[] = [
+  'request', 'pagination', 'incremental', 'partition', 'transform', 'errors',
+];
+const TEST_VIEWS = ['records', 'schema', 'requests', 'logs'] as const;
+type TestView = typeof TEST_VIEWS[number];
 
 const EMPTY_STREAM = (name: string, path: string): BuilderStream => ({
   name,
@@ -85,7 +97,7 @@ function streamOutline(streams: BuilderStream[]): { index: number; depth: number
 
 /** One rail entry: a section, or a stream nested under its parent. */
 function RailItem({
-  label, active, onSelect, count, depth = 0, warn = false,
+  label, active, onSelect, count, depth = 0, warn = false, icon, method, subtitle,
 }: {
   label: string;
   active: boolean;
@@ -93,25 +105,49 @@ function RailItem({
   count?: number;
   depth?: number;
   warn?: boolean;
+  icon?: React.ReactNode;
+  method?: BuilderStream['http_method'];
+  subtitle?: string;
 }) {
   return (
     <button
       type="button"
       aria-current={active ? 'true' : undefined}
       onClick={onSelect}
-      style={{ paddingInlineStart: `${8 + depth * 12}px` }}
+      style={{ paddingInlineStart: `${8 + depth * 10}px` }}
       className={cn(
-        'flex w-full items-center gap-1.5 rounded-md py-1.5 pe-2 text-left',
+        'flex min-h-8 w-full items-center gap-1.5 rounded-md py-1.5 pe-2 text-left',
         'text-caption transition-colors',
         active
           ? 'bg-brand/10 text-brand font-emphasis'
           : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
       )}
     >
-      {depth > 0 && <span aria-hidden className="text-text-quaternary">└</span>}
-      <span className="truncate">{label}</span>
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-quaternary">
+        {depth > 0 ? <CornerDownRight className="h-3 w-3" aria-hidden /> : icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {method && (
+            <Badge
+              variant={method === 'POST' ? 'info' : 'outline'}
+              size="xs"
+              pill={false}
+              className="shrink-0 font-mono"
+            >
+              {method}
+            </Badge>
+          )}
+        </span>
+        {subtitle && (
+          <span className="mt-0.5 block truncate font-mono text-tiny text-text-quaternary">
+            {subtitle}
+          </span>
+        )}
+      </span>
       {typeof count === 'number' && (
-        <span className="ms-auto text-tiny text-text-quaternary">{count}</span>
+        <Badge variant="subtle" size="xs" className="ms-auto shrink-0">{count}</Badge>
       )}
       {warn && (
         <AlertTriangle className="ms-auto h-3 w-3 shrink-0 text-warning" aria-hidden />
@@ -145,6 +181,7 @@ export default function BuilderEditorPage() {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
   const canEdit = can('connectors', 'edit');
+  const { tab: view, setQuery, queryValue } = useUrlTab(BUILDER_VIEWS, 'api');
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: qk.builderProject(workspaceId, params.id),
@@ -152,14 +189,16 @@ export default function BuilderEditorPage() {
   });
 
   const [draft, setDraft] = React.useState<BuilderDefinition | null>(null);
-  const [activeStream, setActiveStream] = React.useState(0);
-  // One section on screen at a time, chosen from the rail.
-  //
-  // Everything used to be a single column: global config, user inputs and every
-  // stream stacked into one 2,400px scroll for a connector with *one* stream.
-  // Finding the retry settings meant scrolling past the whole form, and the
-  // stream being edited was wherever the page happened to be scrolled to.
-  const [view, setView] = React.useState<'api' | 'inputs' | 'stream'>('api');
+  const requestedStream = Number.parseInt(queryValue('stream') ?? '0', 10);
+  const activeStream = draft && Number.isInteger(requestedStream)
+    ? Math.min(Math.max(requestedStream, 0), Math.max(draft.streams.length - 1, 0))
+    : 0;
+  const requestedSection = queryValue('section') as BuilderStreamSection | null;
+  const streamSection = requestedSection && STREAM_SECTIONS.includes(requestedSection)
+    ? requestedSection : 'request';
+  const requestedTestView = queryValue('result') as TestView | null;
+  const testView = requestedTestView && TEST_VIEWS.includes(requestedTestView)
+    ? requestedTestView : 'records';
   const [adding, setAdding] = React.useState(false);
   const [newStream, setNewStream] = React.useState({ name: '', path: '' });
   const [dirty, setDirty] = React.useState(false);
@@ -188,6 +227,16 @@ export default function BuilderEditorPage() {
     setDirty(true);
   };
 
+  const configuredTestInputs = (draft?.user_inputs ?? [])
+    .filter((field) => field.key.trim());
+  const defaultTestConfig = Object.fromEntries(
+    configuredTestInputs
+      .filter((field) => field.default !== undefined && field.default !== '')
+      .map((field) => [field.key, field.default!]),
+  );
+  const missingRequiredTestInput = configuredTestInputs.some((field) =>
+    field.required && !String(secrets[field.key] ?? field.default ?? '').trim());
+
   const save = useMutation({
     mutationFn: () => builderApi.update(params.id, { definition: draft! }),
     onSuccess: () => {
@@ -206,11 +255,14 @@ export default function BuilderEditorPage() {
       setDirty(false);
       return builderApi.test(params.id, {
         stream_name: draft?.streams[activeStream]?.name,
-        config: secrets,
+        config: { ...defaultTestConfig, ...secrets },
       });
     },
     onSuccess: (result) => {
       setTestResult(result);
+      setQuery({
+        result: result.ok ? 'records' : result.logs.length > 0 ? 'logs' : 'requests',
+      }, { replace: true });
       queryClient.invalidateQueries({ queryKey: qk.builderProject(workspaceId, params.id) });
       // A stream with no declared schema discovers zero columns, so the first
       // successful read fills it in. An existing schema is left alone — the
@@ -271,7 +323,7 @@ export default function BuilderEditorPage() {
       // The editor state is replaced wholesale, so the local draft has to go
       // with it rather than being merged into something that no longer matches.
       setDraft(project.definition);
-      setActiveStream(0);
+      setQuery({ tab: 'api', stream: null, section: null, result: null }, { replace: true });
       setDirty(false);
       setTestResult(null);
       queryClient.invalidateQueries({ queryKey: qk.builderProject(workspaceId, params.id) });
@@ -322,6 +374,12 @@ export default function BuilderEditorPage() {
             ) : (
               <Badge variant="subtle" size="xs">{t('builder.statusDraft')}</Badge>
             )}
+            {!dirty && data.last_test_ok === true && (
+              <Badge variant="success" size="xs" dot>{t('builder.testStatusPassed')}</Badge>
+            )}
+            {!dirty && data.last_test_ok === false && (
+              <Badge variant="danger" size="xs" dot>{t('builder.testStatusFailed')}</Badge>
+            )}
             {dirty && <Badge variant="warning" size="xs">{t('builder.unsaved')}</Badge>}
           </>
         }
@@ -340,15 +398,11 @@ export default function BuilderEditorPage() {
                 {t('common.save')}
               </Button>
               <Button size="sm" variant="primary"
-                      loading={runTest.isPending}
-                      leadingIcon={<Play className="h-3.5 w-3.5" />}
-                      onClick={() => runTest.mutate()}>
-                {t('builder.runTest')}
-              </Button>
-              <Button size="sm" variant="secondary"
                       loading={publish.isPending}
-                      disabled={!data.last_test_ok}
-                      title={!data.last_test_ok ? t('builder.publishNeedsTest') : undefined}
+                      disabled={!data.last_test_ok || dirty}
+                      title={dirty
+                        ? t('builder.publishNeedsCurrentTest')
+                        : !data.last_test_ok ? t('builder.publishNeedsTest') : undefined}
                       leadingIcon={<Rocket className="h-3.5 w-3.5" />}
                       onClick={() => publish.mutate()}>
                 {t('builder.publish')}
@@ -399,28 +453,30 @@ export default function BuilderEditorPage() {
           </section>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]
-                        xl:grid-cols-[13rem_minmax(0,1fr)_minmax(0,24rem)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]
+                        xl:grid-cols-[12rem_minmax(22rem,1fr)_minmax(18rem,22rem)]">
           {/* ── rail ─────────────────────────────────────────── */}
-          <nav aria-label={t('builder.sectionsNav')} className="space-y-3 self-start">
+          <nav aria-label={t('builder.sectionsNav')}
+               className="space-y-3 self-start lg:sticky lg:top-0">
             <div className="space-y-0.5">
               <RailItem
                 active={view === 'api'}
-                onSelect={() => setView('api')}
+                onSelect={() => setQuery({ tab: 'api', stream: null, section: null })}
                 label={t('builder.sectionApi')}
+                icon={<Settings2 className="h-3.5 w-3.5" aria-hidden />}
               />
               <RailItem
                 active={view === 'inputs'}
-                onSelect={() => setView('inputs')}
+                onSelect={() => setQuery({ tab: 'inputs', stream: null, section: null })}
                 label={t('builder.sectionInputs')}
                 count={(draft.user_inputs ?? []).length}
+                icon={<Variable className="h-3.5 w-3.5" aria-hidden />}
               />
             </div>
 
             <div className="space-y-0.5">
               <div className="flex items-center justify-between gap-2 px-2 pt-1">
-                <span className="text-tiny font-emphasis uppercase tracking-wide
-                                 text-text-quaternary">
+                <span className="text-label font-emphasis text-text-quaternary">
                   {t('builder.sectionStreams')} ({draft.streams.length})
                 </span>
                 {canEdit && (
@@ -428,7 +484,10 @@ export default function BuilderEditorPage() {
                     type="button"
                     aria-label={t('builder.addStream')}
                     title={t('builder.addStream')}
-                    onClick={() => { setView('stream'); setAdding(true); }}
+                    onClick={() => {
+                      setQuery({ tab: 'stream', stream: String(activeStream), section: 'request' });
+                      setAdding(true);
+                    }}
                     className="rounded p-0.5 text-text-tertiary hover:bg-surface-2
                                hover:text-text-primary"
                   >
@@ -440,10 +499,18 @@ export default function BuilderEditorPage() {
                 <RailItem
                   key={index}
                   active={view === 'stream' && index === activeStream}
-                  onSelect={() => { setView('stream'); setActiveStream(index); }}
+                  onSelect={() => {
+                    if (index !== activeStream) setTestResult(null);
+                    setQuery({
+                      tab: 'stream', stream: String(index), section: 'request', result: 'records',
+                    });
+                  }}
                   label={draft.streams[index].name || t('builder.unnamedStream')}
                   depth={depth}
                   warn={streamWarning(draft.streams[index])}
+                  method={draft.streams[index].http_method}
+                  subtitle={draft.streams[index].path || '/'}
+                  icon={<ListTree className="h-3.5 w-3.5" aria-hidden />}
                 />
               ))}
             </div>
@@ -576,53 +643,99 @@ export default function BuilderEditorPage() {
               {(draft.user_inputs ?? []).length === 0 ? (
                 <p className="text-caption text-text-quaternary">{t('builder.noInputs')}</p>
               ) : (
-                <div className="space-y-1.5">
+                <div className="divide-y divide-[rgb(var(--border-line))]">
                   {(draft.user_inputs ?? []).map((field, index) => (
-                    <div key={index} className="flex flex-wrap gap-1.5">
-                      <Input size="sm" className="w-40" placeholder="account_id"
-                             aria-label={`${t('builder.inputKey')} ${index + 1}`}
-                             disabled={!canEdit} value={field.key}
-                             onChange={(e) => patch({
-                               user_inputs: (draft.user_inputs ?? []).map((row, i) =>
-                                 i === index ? { ...row, key: e.target.value } : row),
-                             })} />
-                      <Input size="sm" className="min-w-[8rem] flex-1"
-                             placeholder={t('builder.inputTitle')}
-                             aria-label={`${t('builder.inputTitle')} ${index + 1}`}
-                             disabled={!canEdit} value={field.title ?? ''}
-                             onChange={(e) => patch({
-                               user_inputs: (draft.user_inputs ?? []).map((row, i) =>
-                                 i === index ? { ...row, title: e.target.value } : row),
-                             })} />
-                      <Select size="sm" className="w-28" disabled={!canEdit}
-                              aria-label={`${t('builder.inputType')} ${index + 1}`}
-                              value={field.type ?? 'string'}
-                              onChange={(e) => patch({
-                                user_inputs: (draft.user_inputs ?? []).map((row, i) =>
-                                  i === index ? { ...row, type: e.target.value as never } : row),
-                              })}>
-                        <option value="string">string</option>
-                        <option value="integer">integer</option>
-                        <option value="number">number</option>
-                        <option value="boolean">boolean</option>
-                      </Select>
-                      <label className="flex items-center gap-1 text-tiny text-text-tertiary">
-                        <input type="checkbox" disabled={!canEdit}
-                               checked={Boolean(field.secret)}
-                               onChange={(e) => patch({
-                                 user_inputs: (draft.user_inputs ?? []).map((row, i) =>
-                                   i === index ? { ...row, secret: e.target.checked } : row),
-                               })}
-                               className="h-3.5 w-3.5 rounded border-[rgb(var(--border-strong))]" />
-                        {t('builder.inputSecret')}
-                      </label>
-                      <Button size="xs" variant="ghost" disabled={!canEdit}
-                              aria-label={t('builder.removeInput')}
-                              leadingIcon={<Trash2 className="h-3 w-3" />}
-                              onClick={() => patch({
-                                user_inputs: (draft.user_inputs ?? [])
-                                  .filter((_, i) => i !== index),
-                              })} />
+                    <div key={index} className="space-y-3 py-3 first:pt-0 last:pb-0">
+                      <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_7rem_auto]">
+                        <Field label={t('builder.inputKey')}
+                               htmlFor={`builder-input-${index}-key`} required>
+                          <Input id={`builder-input-${index}-key`} size="sm"
+                                 placeholder="access_token" disabled={!canEdit} value={field.key}
+                                 onChange={(e) => patch({
+                                   user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                     i === index ? { ...row, key: e.target.value } : row),
+                                 })} />
+                        </Field>
+                        <Field label={t('builder.inputTitle')}
+                               htmlFor={`builder-input-${index}-title`} required>
+                          <Input id={`builder-input-${index}-title`} size="sm"
+                                 placeholder={t('builder.inputTitle')}
+                                 disabled={!canEdit} value={field.title ?? ''}
+                                 onChange={(e) => patch({
+                                   user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                     i === index ? { ...row, title: e.target.value } : row),
+                                 })} />
+                        </Field>
+                        <Field label={t('builder.inputType')}
+                               htmlFor={`builder-input-${index}-type`}>
+                          <Select id={`builder-input-${index}-type`} size="sm"
+                                  disabled={!canEdit} value={field.type ?? 'string'}
+                                  onChange={(e) => patch({
+                                    user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                      i === index ? { ...row, type: e.target.value as never } : row),
+                                  })}>
+                            <option value="string">string</option>
+                            <option value="integer">integer</option>
+                            <option value="number">number</option>
+                            <option value="boolean">boolean</option>
+                          </Select>
+                        </Field>
+                        <Button size="xs" variant="ghost" disabled={!canEdit}
+                                aria-label={t('builder.removeInput')}
+                                title={t('builder.removeInput')}
+                                leadingIcon={<Trash2 className="h-3 w-3" />}
+                                onClick={() => patch({
+                                  user_inputs: (draft.user_inputs ?? [])
+                                    .filter((_, i) => i !== index),
+                                })} />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label={t('builder.inputDescription')}
+                               htmlFor={`builder-input-${index}-description`}>
+                          <Input id={`builder-input-${index}-description`} size="sm"
+                                 disabled={!canEdit} value={field.description ?? ''}
+                                 onChange={(e) => patch({
+                                   user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                     i === index ? { ...row, description: e.target.value } : row),
+                                 })} />
+                        </Field>
+                        {!field.secret && (
+                          <Field label={t('builder.inputDefault')}
+                                 htmlFor={`builder-input-${index}-default`}>
+                            <Input id={`builder-input-${index}-default`} size="sm"
+                                   disabled={!canEdit} value={field.default ?? ''}
+                                   onChange={(e) => patch({
+                                     user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                       i === index ? { ...row, default: e.target.value } : row),
+                                   })} />
+                          </Field>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <label className="flex items-center gap-1.5 text-caption text-text-secondary">
+                          <input type="checkbox" disabled={!canEdit}
+                                 checked={Boolean(field.required)}
+                                 onChange={(e) => patch({
+                                   user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                     i === index ? { ...row, required: e.target.checked } : row),
+                                 })}
+                                 className="h-3.5 w-3.5 rounded border-[rgb(var(--border-strong))]" />
+                          {t('builder.inputRequired')}
+                        </label>
+                        <label className="flex items-center gap-1.5 text-caption text-text-secondary">
+                          <input type="checkbox" disabled={!canEdit}
+                                 checked={Boolean(field.secret)}
+                                 onChange={(e) => patch({
+                                   user_inputs: (draft.user_inputs ?? []).map((row, i) =>
+                                     i === index ? {
+                                       ...row, secret: e.target.checked,
+                                       default: e.target.checked ? undefined : row.default,
+                                     } : row),
+                                 })}
+                                 className="h-3.5 w-3.5 rounded border-[rgb(var(--border-strong))]" />
+                          {t('builder.inputSecret')}
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -632,7 +745,19 @@ export default function BuilderEditorPage() {
 
             {view === 'stream' && (
             <Section
-              title={t('builder.sectionStreams')}
+              title={stream ? (
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{stream.name || t('builder.unnamedStream')}</span>
+                  <Badge
+                    variant={stream.http_method === 'POST' ? 'info' : 'outline'}
+                    size="xs"
+                    pill={false}
+                    className="font-mono"
+                  >
+                    {stream.http_method}
+                  </Badge>
+                </span>
+              ) : t('builder.sectionStreams')}
               action={canEdit ? (
                 <Button
                   size="xs"
@@ -676,7 +801,10 @@ export default function BuilderEditorPage() {
                       const next = [...draft.streams,
                         EMPTY_STREAM(newStream.name.trim(), newStream.path.trim())];
                       patch({ streams: next });
-                      setActiveStream(next.length - 1);
+                      setTestResult(null);
+                      setQuery({
+                        tab: 'stream', stream: String(next.length - 1), section: 'request',
+                      });
                       setNewStream({ name: '', path: '' });
                       setAdding(false);
                     }}
@@ -695,6 +823,8 @@ export default function BuilderEditorPage() {
                   streamNames={draft.streams.map((item) => item.name)}
                   fields={testResult?.inferred_fields ?? []}
                   userInputs={draft.user_inputs ?? []}
+                  activeSection={streamSection}
+                  onSectionChange={(section) => setQuery({ section }, { replace: true })}
                   onCreateInput={canEdit ? () => {
                     // Jump to the inputs section with a blank row waiting, so
                     // "the input I want does not exist yet" is one click rather
@@ -703,7 +833,7 @@ export default function BuilderEditorPage() {
                       user_inputs: [...(draft.user_inputs ?? []),
                         { key: '', title: '', type: 'string' }],
                     });
-                    setView('inputs');
+                    setQuery({ tab: 'inputs', stream: null, section: null });
                   } : undefined}
                   disabled={!canEdit}
                   onChange={(next) => patchStream(activeStream, next)}
@@ -718,7 +848,11 @@ export default function BuilderEditorPage() {
                   onClick={() => {
                     const next = draft.streams.filter((_, i) => i !== activeStream);
                     patch({ streams: next });
-                    setActiveStream(0);
+                    setTestResult(null);
+                    setQuery({
+                      tab: 'stream', stream: String(Math.max(0, activeStream - 1)),
+                      section: 'request',
+                    });
                   }}
                 >
                   {t('builder.removeStream')}
@@ -729,36 +863,106 @@ export default function BuilderEditorPage() {
           </div>
 
           {/* ── test panel ─────────────────────────────────────────── */}
-          <aside className="space-y-3">
-            <Section title={t('builder.sectionTest')}>
-              {(needsApiKey || needsBasic) && (
-                <div className="space-y-2 rounded-md border border-[rgb(var(--border-line))] bg-surface-0 p-2.5">
+          <aside className="space-y-3 lg:col-start-2 xl:sticky xl:top-0 xl:col-start-auto xl:self-start">
+            <Section
+              title={t('builder.sectionTest')}
+              action={stream ? (
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Badge
+                    variant={stream.http_method === 'POST' ? 'info' : 'outline'}
+                    size="xs"
+                    pill={false}
+                    className="font-mono"
+                  >
+                    {stream.http_method}
+                  </Badge>
+                  <Badge variant="subtle" size="xs" className="max-w-32 truncate">
+                    {stream.name}
+                  </Badge>
+                </span>
+              ) : null}
+            >
+              {(configuredTestInputs.length > 0 || needsApiKey || needsBasic) && (
+                <div className="space-y-2.5 border-b border-[rgb(var(--border-line))] pb-3">
                   <p className="text-tiny text-text-quaternary">{t('builder.secretsHint')}</p>
-                  {needsApiKey && (
+                  {configuredTestInputs.map((field, index) => (
+                    <Field
+                      key={`${field.key}-${index}`}
+                      label={field.title || field.key}
+                      htmlFor={`test-config-${index}`}
+                      required={field.required}
+                      hint={field.description}
+                    >
+                      {field.type === 'boolean' ? (
+                        <Select
+                          id={`test-config-${index}`}
+                          size="sm"
+                          value={secrets[field.key] ?? field.default ?? 'false'}
+                          onChange={(event) => setSecrets({
+                            ...secrets, [field.key]: event.target.value,
+                          })}
+                        >
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </Select>
+                      ) : (
+                        <Input
+                          id={`test-config-${index}`}
+                          size="sm"
+                          type={field.secret ? 'password'
+                            : ['integer', 'number'].includes(field.type ?? '') ? 'number' : 'text'}
+                          value={secrets[field.key] ?? ''}
+                          placeholder={field.default ?? ''}
+                          autoComplete="off"
+                          onChange={(event) => setSecrets({
+                            ...secrets, [field.key]: event.target.value,
+                          })}
+                        />
+                      )}
+                    </Field>
+                  ))}
+                  {needsApiKey && !configuredTestInputs.some((field) => field.key === 'api_key') && (
                     <Field label={t('builder.apiKey')} htmlFor="test-api-key">
-                      <Input id="test-api-key" size="sm" type="password"
+                      <Input id="test-api-key" size="sm" type="password" autoComplete="off"
                              value={secrets.api_key ?? ''}
                              onChange={(e) => setSecrets({ ...secrets, api_key: e.target.value })} />
                     </Field>
                   )}
                   {needsBasic && (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Field label={t('builder.username')} htmlFor="test-username">
-                        <Input id="test-username" size="sm" value={secrets.username ?? ''}
-                               onChange={(e) => setSecrets({ ...secrets, username: e.target.value })} />
-                      </Field>
-                      <Field label={t('builder.password')} htmlFor="test-password">
-                        <Input id="test-password" size="sm" type="password"
-                               value={secrets.password ?? ''}
-                               onChange={(e) => setSecrets({ ...secrets, password: e.target.value })} />
-                      </Field>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                      {!configuredTestInputs.some((field) => field.key === 'username') && (
+                        <Field label={t('builder.username')} htmlFor="test-username">
+                          <Input id="test-username" size="sm" autoComplete="off"
+                                 value={secrets.username ?? ''}
+                                 onChange={(e) => setSecrets({ ...secrets, username: e.target.value })} />
+                        </Field>
+                      )}
+                      {!configuredTestInputs.some((field) => field.key === 'password') && (
+                        <Field label={t('builder.password')} htmlFor="test-password">
+                          <Input id="test-password" size="sm" type="password" autoComplete="off"
+                                 value={secrets.password ?? ''}
+                                 onChange={(e) => setSecrets({ ...secrets, password: e.target.value })} />
+                        </Field>
+                      )}
                     </div>
                   )}
                 </div>
               )}
 
+              <Button
+                className="w-full"
+                variant="primary"
+                loading={runTest.isPending}
+                disabled={!stream || missingRequiredTestInput}
+                title={missingRequiredTestInput ? t('builder.testMissingRequired') : undefined}
+                leadingIcon={<Play className="h-3.5 w-3.5" />}
+                onClick={() => runTest.mutate()}
+              >
+                {t('builder.runTestStream')}
+              </Button>
+
               {runTest.isPending ? (
-                <div className="space-y-2">
+                <div className="space-y-2 py-2">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-24 w-full" />
                   <p className="text-tiny text-text-quaternary">{t('builder.testRunning')}</p>
@@ -766,6 +970,8 @@ export default function BuilderEditorPage() {
               ) : testResult ? (
                 <TestOutcome
                   result={testResult}
+                  view={testView}
+                  onViewChange={(next) => setQuery({ result: next }, { replace: true })}
                   t={t}
                   onApplySchema={canEdit && testResult.inferred_schema
                     ? () => {
@@ -775,9 +981,17 @@ export default function BuilderEditorPage() {
                     : undefined}
                 />
               ) : (
-                <p className="rounded-md border border-dashed border-[rgb(var(--border-strong))] px-3 py-6 text-center text-caption text-text-quaternary">
-                  {t('builder.testIdle')}
-                </p>
+                <div className="rounded-md bg-surface-2 px-4 py-6 text-center">
+                  <span className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-1 text-text-tertiary shadow-linear-sm">
+                    <Play className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                  <p className="text-caption font-emphasis text-text-secondary">
+                    {t('builder.testIdleTitle')}
+                  </p>
+                  <p className="mt-1 text-tiny text-text-quaternary">
+                    {t('builder.testIdle')}
+                  </p>
+                </div>
               )}
             </Section>
           </aside>
@@ -792,17 +1006,17 @@ export default function BuilderEditorPage() {
 function Section({
   title, action, children,
 }: {
-  title: string;
+  title: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
       <header className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border-line))] px-4 py-2.5">
-        <h2 className="text-caption font-strong text-text-primary">{title}</h2>
-        {action}
+        <h2 className="min-w-0 flex-1 text-caption font-strong text-text-primary">{title}</h2>
+        {action && <div className="shrink-0">{action}</div>}
       </header>
-      <div className="space-y-3 p-4">{children}</div>
+      <div className="min-w-0 space-y-3 p-4">{children}</div>
     </section>
   );
 }
@@ -903,9 +1117,11 @@ function statusTone(status: number | null): 'success' | 'danger' | 'subtle' {
 }
 
 function TestOutcome({
-  result, t, onApplySchema,
+  result, view, onViewChange, t, onApplySchema,
 }: {
   result: BuilderTestResult;
+  view: TestView;
+  onViewChange: (view: TestView) => void;
   t: (key: string, vars?: Record<string, string>) => string;
   onApplySchema?: () => void;
 }) {
@@ -916,19 +1132,22 @@ function TestOutcome({
     }
     return keys.slice(0, 6);
   }, [result.records]);
+  const schemaProperties = (result.inferred_schema?.properties ?? {}) as Record<
+    string, Record<string, unknown>
+  >;
 
   return (
     <div className="space-y-3">
       {result.ok ? (
         <div className="space-y-1">
-          <p className="flex items-center gap-1.5 text-caption text-success">
-            <CheckCircle2 className="h-4 w-4" />
+          <Badge variant="success" size="sm" pill={false}>
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
             {result.record_preview_supported
               ? t('builder.testOk', { n: String(result.record_count) })
               : t('builder.testOkNoPreview')}
-          </p>
+          </Badge>
           {!result.record_preview_supported && (
-            <p className="pl-[1.375rem] text-tiny text-text-tertiary">
+            <p className="text-tiny text-text-tertiary">
               {t('builder.noPreviewHint')}
             </p>
           )}
@@ -962,9 +1181,48 @@ function TestOutcome({
         </div>
       )}
 
-      {result.requests.length > 0 && (
+      <Tabs
+        value={view}
+        onChange={(next) => onViewChange(next as TestView)}
+        items={[
+          { id: 'records', label: t('builder.resultRecords'), count: result.records.length },
+          { id: 'schema', label: t('builder.resultSchema'), count: Object.keys(schemaProperties).length },
+          { id: 'requests', label: t('builder.resultRequests'), count: result.requests.length },
+          { id: 'logs', label: t('builder.resultLogs'), count: result.logs.length },
+        ]}
+      />
+
+      {view === 'schema' && (
+        Object.keys(schemaProperties).length > 0 ? (
+          <div className="max-h-72 overflow-auto rounded-md border border-[rgb(var(--border-line))]">
+            <table className="w-full text-left">
+              <thead className="sticky top-0 bg-surface-2 text-tiny text-text-quaternary">
+                <tr>
+                  <th className="px-2.5 py-1.5 font-emphasis">{t('builder.schemaField')}</th>
+                  <th className="px-2.5 py-1.5 font-emphasis">{t('builder.schemaType')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgb(var(--border-line))]">
+                {Object.entries(schemaProperties).map(([name, definition]) => (
+                  <tr key={name}>
+                    <td className="max-w-[12rem] truncate px-2.5 py-1.5 font-mono text-tiny text-text-secondary"
+                        title={name}>{name}</td>
+                    <td className="px-2.5 py-1.5 text-tiny text-text-tertiary">
+                      {Array.isArray(definition.type)
+                        ? definition.type.join(' | ')
+                        : String(definition.type ?? 'unknown')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <ResultEmpty text={t('builder.resultNoSchema')} />
+      )}
+
+      {view === 'requests' && result.requests.length > 0 && (
         <div className="space-y-1.5">
-          {result.requests.slice(0, 3).map((exchange, index) => (
+          {result.requests.map((exchange, index) => (
             <details key={index} className="rounded-md border border-[rgb(var(--border-line))]">
               <summary className="flex cursor-pointer items-center gap-1.5 px-2.5 py-1.5">
                 <Badge
@@ -985,8 +1243,11 @@ function TestOutcome({
           ))}
         </div>
       )}
+      {view === 'requests' && result.requests.length === 0 && (
+        <ResultEmpty text={t('builder.resultNoRequests')} />
+      )}
 
-      {result.records.length > 0 && (
+      {view === 'records' && result.records.length > 0 && (
         <div className="overflow-hidden rounded-md border border-[rgb(var(--border-line))]">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -1024,17 +1285,27 @@ function TestOutcome({
           </div>
         </div>
       )}
+      {view === 'records' && result.records.length === 0 && (
+        <ResultEmpty text={result.record_preview_supported
+          ? t('builder.resultNoRecords') : t('builder.noPreviewHint')} />
+      )}
 
-      {result.logs.length > 0 && (
-        <details className="rounded-md border border-[rgb(var(--border-line))]">
-          <summary className="cursor-pointer px-2.5 py-1.5 text-tiny font-emphasis text-text-tertiary">
-            {t('builder.testLogs', { n: String(result.logs.length) })}
-          </summary>
-          <pre className="max-h-48 overflow-auto px-2.5 py-2 font-mono text-tiny leading-relaxed text-text-quaternary">
+      {view === 'logs' && result.logs.length > 0 && (
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-2 px-2.5 py-2 font-mono text-tiny leading-relaxed text-text-tertiary">
             {result.logs.join('\n')}
           </pre>
-        </details>
+      )}
+      {view === 'logs' && result.logs.length === 0 && (
+        <ResultEmpty text={t('builder.resultNoLogs')} />
       )}
     </div>
+  );
+}
+
+function ResultEmpty({ text }: { text: string }) {
+  return (
+    <p className="rounded-md border border-dashed border-[rgb(var(--border-strong))] px-3 py-5 text-center text-tiny text-text-quaternary">
+      {text}
+    </p>
   );
 }

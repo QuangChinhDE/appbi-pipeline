@@ -17,8 +17,19 @@ from app.core.errors import ErrorCategory
 _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
     # (regex, category, product code, remediation action)
     (r"password authentication failed|authentication failed|invalid credentials"
+          # "Request had invalid authentication credentials" is Google's standard
+     # wording across Ads and Sheets, and `invalid credentials` alone misses it.
+     r"|invalid (\w+ )?credentials"
      r"|access denied for user|401 unauthorized|invalid[_ ]?grant|bad credentials"
-     r"|token (has )?expired|invalid api key|authenticationexception",
+     r"|token (has )?expired|invalid api key|authenticationexception"
+     # OAuth phrasing, which none of the above catches. Facebook Marketing
+     # answers a bad token with "The access token for this connection is
+     # invalid or corrupted" and "Invalid OAuth access token"; the product
+     # classified that as UNKNOWN and showed "lỗi chưa phân loại" while the
+     # connector's own explanation sat unread in the technical detail. Every
+     # OAuth connector in the catalogue can produce one of these.
+     r"|invalid oauth|(access|refresh) token[^.]{0,60}(invalid|corrupt|expired|revoked)"
+     r"|cannot parse access token|unauthenticated|re-?authenticate",
      ErrorCategory.AUTHENTICATION, "SOURCE_AUTHENTICATION_FAILED", "UPDATE_CREDENTIALS"),
 
     (r"permission denied|insufficient privile|not authorized|403 forbidden"

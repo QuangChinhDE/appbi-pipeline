@@ -29,7 +29,7 @@ broken way three runs in a row.
 Why not keep the YAML
 ---------------------
 
-The ten manifests in `docs/base-api/` worked, and they are the origin of
+The ten reviewed YAML manifests worked, and they are the origin of
 everything here. They were also ten copies of the same conventions, which is how
 they drifted: eight of twenty-five HRM streams paginated, one application
 required `domain` and `version` config to reach a fixed host, one had a
@@ -42,6 +42,8 @@ each of them a one-line fix instead of ten.
 from __future__ import annotations
 
 from typing import Any
+
+from app.connectors import ConnectorProvider
 
 from ._shared import (
     RUNNER_REPOSITORY, RUNNER_VERSION, TOKEN_FIELD, BaseConnector,
@@ -150,9 +152,19 @@ def stream_inventory() -> list[dict[str, Any]]:
     return rows
 
 
+#: How `app.connectors` finds this group. The category is owned exclusively by
+#: Base.vn -- see `RESERVED_CATEGORIES` for why it may not be `API`.
+PROVIDER = ConnectorProvider(
+    key="base_vn",
+    category="Base.vn",
+    title="Base.vn",
+    entries=catalogue_entries,
+)
+
+
 __all__ = [
     "ACCOUNT", "BY_KEY", "CONNECTORS", "CRM", "CRM_LEADS", "HIRING", "HRM",
-    "INCOME", "PAYROLL",
+    "INCOME", "PAYROLL", "PROVIDER",
     "REQUEST", "SERVICE", "TIMEOFF", "WEWORK", "WORKFLOW",
     "BaseConnector", "ConfigField", "Incremental", "Parent", "Stream",
     "RUNNER_REPOSITORY", "RUNNER_VERSION", "TOKEN_FIELD",

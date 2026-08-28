@@ -19,8 +19,18 @@ import { ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
 import { CertificationBadge } from '@/components/integrations/Badges';
 import { ConnectorIcon } from '@/components/integrations/ConnectorIcon';
 
-/** How many connector cards to render before asking for more. */
-const PAGE = 24;
+/** How many connector cards to render before asking for more.
+ *
+ * 24 was chosen when the catalogue was the whole upstream registry and 654
+ * cards were a wall of text. The catalogue is curated now -- 27 connectors --
+ * so 24 truncated a list that fits, and the rows it cut were the newest ones:
+ * TikTok Marketing sorts last alphabetically among the BETA entries and simply
+ * was not on screen. "Where is TikTok" is what surfaced it.
+ *
+ * The paging stays for the day this grows again; the first page just has to
+ * hold what the product actually ships.
+ */
+const PAGE = 48;
 
 export default function ConnectorsPage() {
   const { t } = useI18n();
@@ -30,8 +40,8 @@ export default function ConnectorsPage() {
 
   const [search, setSearch] = React.useState('');
   const [type, setType] = React.useState('');
-  // The catalogue is the full upstream registry; 650+ detail cards at once is a
-  // wall of text, so it is paged and the count is always stated.
+  // Paged, and the count is always stated -- see PAGE for why the first
+  // page is now larger than the catalogue rather than smaller.
   const [limit, setLimit] = React.useState(PAGE);
 
   React.useEffect(() => setLimit(PAGE), [search, type]);

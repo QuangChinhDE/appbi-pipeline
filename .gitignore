@@ -71,3 +71,25 @@ vendor/engine/*.tar
 
 # Editor and assistant project state.
 .serena/
+
+# ── kept on the machine, not in the repository ─────────────────────────────
+#
+# The repository carries the product: the application, the deployment
+# descriptors and the operational scripts. Tests, documentation and release
+# evidence live beside it on the machines that run them.
+#
+# This is safe because nothing in `backend/` reads any of it. The Base field
+# contracts used to be generated from YAML under `docs/`, which made a
+# documentation folder a build input -- deleting it wrote an empty registry
+# over the schemas of ten connectors. They are committed under
+# `backend/app/connectors/base_vn/schemas/` now, and the image never contained
+# `docs/` in the first place: the Dockerfile copies `backend/`.
+#
+# What this costs, stated rather than discovered later: a fresh clone has no
+# test suite, so `pytest` has nothing to run and CI has nothing to check. Copy
+# `qa/`, `pytest.ini` and `.github/` from a working machine to get them back.
+qa/
+docs/
+evidence/
+pytest.ini
+.github/

@@ -195,6 +195,80 @@ connectors:
       # refresh_generations is deliberately absent: 2.0.10 predates the refresh
       # protocol. Claiming it here would claim the very behaviour this pin
       # exists to avoid.
+  # ── advertising platforms ──────────────────────────────────────────────
+  # BETA, and the reason is the same for all four: every one of them
+  # authenticates with OAuth against somebody's ad account, and this deployment
+  # has no advertising credentials. `spec` was run on the engine so the form the
+  # user sees is the connector's own, and the image starts under 0.59.1 -- but
+  # `check`, `discover` and a read were never exercised, so nothing here claims
+  # they were.
+  #
+  # Unpinned on purpose: the tag comes from Airbyte's registry, the same place
+  # the bundled spec comes from, so the form and the connector cannot disagree.
+  # Promote one to SUPPORTED when a real ad account has run it end to end.
+  source-facebook-marketing:
+    image: airbyte/source-facebook-marketing
+    pinned_version: null
+    certification: BETA
+    verified:
+      spec: true           # form renders from the connector's own spec
+      check: false         # no Facebook ad account available here
+      discover: false
+      full_refresh: false
+  source-google-ads:
+    image: airbyte/source-google-ads
+    pinned_version: null
+    certification: BETA
+    verified:
+      spec: true
+      check: false         # needs a developer token and a customer ID
+      discover: false
+      full_refresh: false
+  source-bing-ads:
+    image: airbyte/source-bing-ads
+    pinned_version: null
+    certification: BETA
+    verified:
+      spec: true
+      check: false         # needs a Microsoft Advertising account
+      discover: false
+      full_refresh: false
+  source-tiktok-marketing:
+    image: airbyte/source-tiktok-marketing
+    pinned_version: null
+    certification: BETA
+    # `check` on this connector is not evidence of anything, and that is its own
+    # behaviour rather than the product's. Run with a deliberately invalid
+    # sandbox token it logs "Resource not accessible (error 40002)", then
+    # "Successfully connected to stream advertisers, but got 0 records", then
+    # returns SUCCEEDED. So a green Test here does not mean the credentials
+    # work, and this must not be promoted on the strength of one.
+    verified:
+      spec: true
+      check: false         # returns SUCCEEDED even for a bad token; see above
+      discover: false
+      full_refresh: false
+  # Written here, not pulled: Python in `app/connectors/zalo`, compiled to a
+  # declarative manifest. BETA because nobody here has a Zalo Ads application.
+  #
+  # What was verified without one:
+  #   - `open-api/oauth/token` exists and speaks OAuth2 -- probed with a wrong
+  #     client id, it answers `No application registered for client_id`.
+  #   - `open-api/ads` exists and refuses an unauthenticated call.
+  #   - The compiled manifest loads on the runner and reaches the token
+  #     endpoint: `check` fails with a real 401, not a manifest error.
+  #
+  # `check` against a real account, `discover` and a read were not exercised.
+  source-zalo-ads:
+    image: airbyte/source-declarative-manifest
+    pinned_version: null
+    certification: BETA
+    verified:
+      spec: true
+      manifest_loads: true   # runner accepted it and called the token endpoint
+      check: false           # no Zalo Ads application available here
+      discover: false
+      full_refresh: false
   source-mssql:
     image: airbyte/source-mssql
     pinned_version: "5.0.0"

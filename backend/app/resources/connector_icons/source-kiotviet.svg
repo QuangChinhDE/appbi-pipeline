@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- KiotViet's own mark, lifted from the published horizontal lockup and
+     cropped to the symbol: at 24px the wordmark is an unreadable smear. -->
+<svg width="64" height="64" viewBox="-4 -4 92 100" xmlns="http://www.w3.org/2000/svg"><defs>
+<radialGradient id="paint0_radial_1960_1122" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(-11.3026 46.014) scale(66.031 95.596)">
+<stop stop-color="#3AE3FF"></stop>
+<stop offset="1" stop-color="#0070F4"></stop>
+</radialGradient>
+<radialGradient id="paint1_radial_1960_1122" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(51.3029 45.7941) scale(41.2594 67.9409)">
+<stop stop-color="#5BE92A"></stop>
+<stop offset="0.39166" stop-color="#2DCF34"></stop>
+<stop offset="1" stop-color="#00B63E"></stop>
+<stop offset="1" stop-color="#00B63E"></stop>
+</radialGradient>
+</defs><path fill-rule="evenodd" clip-rule="evenodd" d="M28.2727 2.98791C11.8294 10.3389 0.371094 26.8343 0.371094 46.003C0.371094 65.1691 11.8294 81.6619 28.2727 89.0142C32.3642 90.8114 34.8979 91.2578 37.0608 91.2578C45.2554 91.2578 49.0083 65.0212 49.0083 46.0017C49.0083 26.9797 45.2566 0.741699 37.0608 0.741699C34.8979 0.741699 32.3642 1.19068 28.2727 2.98533V2.98791Z" fill="url(#paint0_radial_1960_1122)"></path><path fill-rule="evenodd" clip-rule="evenodd" d="M76.5424 20.3537L55.1653 41.7134C53.7733 43.1044 52.8599 44.462 52.8599 46.0564C52.8599 47.6523 53.7733 49.0068 55.1653 50.3978L76.5424 71.7576C77.8777 73.0962 79.0747 73.6689 80.698 73.6689C86.4346 73.6689 92.3953 59.4251 92.3953 46.0564C92.3953 32.6862 86.4361 18.4453 80.698 18.4453C79.0733 18.4453 77.8777 19.018 76.5424 20.3552V20.3537Z" fill="url(#paint1_radial_1960_1122)"></path></svg>

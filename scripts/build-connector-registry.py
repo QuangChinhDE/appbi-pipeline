@@ -155,6 +155,41 @@ CURATED: dict[str, dict] = {
                        "mà không cần hệ thống ngoài.",
         "icon": "faker",
     },
+
+    # ── advertising platforms ────────────────────────────────────────────
+    # Deliberately unpinned, unlike everything above: `version` is omitted so
+    # the tag comes from Airbyte's registry, which is also where the bundled
+    # spec comes from. Pinning a tag we have not tested would ship a form
+    # describing a *different* release -- the mistake `destination-mssql`
+    # documents above, where pinning 1.0.0 asked for `user` and `load_type`
+    # against a connector that wants `username` and has no `load_type`.
+    #
+    # These four are sources, so the destination-side refresh protocol that
+    # holds the warehouse destinations below upstream does not apply.
+    #
+    # All four authenticate with OAuth against an ad account. This deployment
+    # has no advertising credentials, so none of them is certified: see
+    # `compatibility.yaml` for exactly what was and was not verified.
+    "source-facebook-marketing": {
+        "description": "Đọc chiến dịch, ad set, quảng cáo và số liệu insights "
+                       "từ Facebook Marketing API theo từng tài khoản quảng cáo.",
+        "icon": "facebook-marketing",
+    },
+    "source-google-ads": {
+        "description": "Đọc chiến dịch, nhóm quảng cáo, từ khoá và báo cáo hiệu "
+                       "quả từ Google Ads; cần developer token và customer ID.",
+        "icon": "google-ads",
+    },
+    "source-bing-ads": {
+        "description": "Đọc chiến dịch và báo cáo hiệu quả từ Microsoft "
+                       "Advertising (Bing Ads).",
+        "icon": "bing-ads",
+    },
+    "source-tiktok-marketing": {
+        "description": "Đọc chiến dịch, nhóm quảng cáo và số liệu báo cáo từ "
+                       "TikTok Marketing API.",
+        "icon": "tiktok-marketing",
+    },
 }
 
 # Airbyte types sources but not destinations, so destinations are grouped by what
@@ -319,7 +354,12 @@ def entry(raw: dict, kind: str, certified: dict[str, str]) -> dict | None:
         "support_level": support_level,
         # Absent from the evidence file means nobody verified it.
         "certification": certified.get(key, "BETA"),
-        "supports_oauth": "credentials" in connection_spec.get("properties", {}),
+        # `advanced_auth`, the same signal both adapters read, rather than
+        # guessing from a `credentials` property. Bing Ads is why: it declares
+        # OAuth with `auth_method` at the top level and no `credentials` object,
+        # so the guess said no while the engine said yes -- the registry and the
+        # engine disagreeing about the same connector.
+        "supports_oauth": bool((raw.get("spec") or {}).get("advanced_auth")),
         "supports_incremental": supports_incremental,
         "supports_cdc": detect_cdc(connection_spec) if kind == "SOURCE" else False,
         "supports_namespaces": kind == "DESTINATION",

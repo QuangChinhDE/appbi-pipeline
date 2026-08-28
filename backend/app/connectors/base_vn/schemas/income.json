@@ -1,0 +1,3185 @@
+{
+ "income": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "edit": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "follow": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "amount_excl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_incl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_received": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_tax": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cash_account_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "categories": {
+    "items": {
+     "properties": {
+      "loaihopdong": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "code_sysfix_c_transaction": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "created_from_source": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "customer_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dedution_is_all_income_tax": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "due_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "edit_time": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "editor_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "array",
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "income_type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "income_value": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "inflow_code_id": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "invoice_files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "invoice_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "is_edited": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_invoiced": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_itemizable": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_multiple_due_date": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "item_line_is_all_income_tax": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "linked_estimate_inflow_ids": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_income_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "previous_income_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "receivable_deduction_amount": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "record_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reference": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "revenue_unit_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sale_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "salesperson": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "to_be_received": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "uuid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "income_customer": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "address": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "buyer": {
+    "properties": {
+     "buyer_email": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "buyer_full_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "buyer_phone_number": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "deleted": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "email": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "invoice_receive": {
+    "properties": {
+     "ir_email": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ir_full_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ir_phone_number": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "phone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "source": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "tax_code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "uid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "income_estimate": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "due_date": {
+    "type": "string"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "inflow_ids": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "object_id": {
+    "type": "string"
+   },
+   "object_type": {
+    "type": "string"
+   },
+   "portion": {
+    "type": "string"
+   },
+   "received": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "to_be_received": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "income_inflow": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "edit": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "follow": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "amount_excl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_incl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_received": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_tax": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_unused": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cash_account_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cash_transaction_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "categories": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "code_sysfix_c_transaction": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "created_from_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "created_from_source": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "customer_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "customer_prepayment_id": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "code_sysfix_c_transaction": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "created_from_app": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "revenue_amount": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "inflow_code_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "inflow_type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_itemizable": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "receive_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reference": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "revenue_amount": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "tax": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "uuid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "income_item_line": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "amount_excl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_incl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_tax": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "categories": {
+    "items": {
+     "properties": {
+      "loaihopdong": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "discount_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "inflow_code_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_invalid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_line_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "previous_line_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "product_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "quantity": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "root_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "unit": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "income_payment": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "amount_received": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_revenue": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cash_account_id": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "code_id": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "code_sysfix_c_transaction": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "customer_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "income_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "inflow_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "inflow_itemlines": {
+    "properties": {
+     "ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "itemlines": {
+      "items": {
+       "properties": {
+        "amount_excl": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "amount_incl": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "amount_tax": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "categories": {
+         "items": {
+          "properties": {
+           "loaihopdong": {
+            "type": [
+             "string",
+             "null"
+            ]
+           }
+          },
+          "type": [
+           "object",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "content": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "discount_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "hid": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "inflow_code_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "is_invalid": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "last_update": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "object_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "object_type": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "origin_line_id": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "previous_line_id": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "product_id": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "quantity": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "root_object_id": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "tax_id": {
+         "type": [
+          "number",
+          "string",
+          "null"
+         ]
+        },
+        "token": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "unit": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "user_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "is_created_transaction_manually": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "number"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "revenue_unit_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "salesperson": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "inflow": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "edit": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "follow": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "amount_excl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_incl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_received": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_tax": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_unused": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cash_account_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cash_transaction_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "categories": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "code_sysfix_c_transaction": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "created_from_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "created_from_source": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "customer_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "customer_prepayment_id": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "created_from_app": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "revenue_amount": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "inflow_code_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "inflow_type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_itemizable": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "receive_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reference": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "revenue_amount": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "tax": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "uuid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "inflow_code": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "accounting_account_code": {
+    "type": "string"
+   },
+   "cashflow_type": {
+    "type": "string"
+   },
+   "code": {
+    "type": "string"
+   },
+   "content": {
+    "type": "string"
+   },
+   "deleted": {
+    "type": "string"
+   },
+   "followers": {
+    "type": "array"
+   },
+   "from_account": {
+    "type": "string"
+   },
+   "group_id": {
+    "type": "string"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "owners": {
+    "type": "array"
+   },
+   "parent_id": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "source": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "to_account": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   },
+   "watchers": {
+    "type": "array"
+   }
+  },
+  "type": "object"
+ },
+ "inflow_code_group": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "content": {
+    "type": "string"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "parent_id": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "source": {
+    "type": "string"
+   },
+   "system_id": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "inflow_customer": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "address": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "buyer": {
+    "properties": {
+     "buyer_email": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "buyer_full_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "buyer_phone_number": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "deleted": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "email": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "invoice_receive": {
+    "properties": {
+     "ir_email": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ir_full_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ir_phone_number": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "phone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "source": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "tax_code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "uid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "inflow_income": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "edit": {
+      "type": "number"
+     },
+     "follow": {
+      "type": "number"
+     },
+     "manage": {
+      "type": "number"
+     },
+     "view": {
+      "type": "number"
+     }
+    },
+    "type": "object"
+   },
+   "amount_excl": {
+    "type": "string"
+   },
+   "amount_incl": {
+    "type": "string"
+   },
+   "amount_received": {
+    "type": "string"
+   },
+   "amount_tax": {
+    "type": "string"
+   },
+   "cash_account_id": {
+    "type": "string"
+   },
+   "categories": {
+    "type": "object"
+   },
+   "code_sysfix_c_transaction": {
+    "type": "number"
+   },
+   "content": {
+    "type": "string"
+   },
+   "created_from_source": {
+    "type": "string"
+   },
+   "customer_id": {
+    "type": "string"
+   },
+   "due_date": {
+    "type": "string"
+   },
+   "fee_record_date": {
+    "type": "number"
+   },
+   "files": {
+    "type": "array"
+   },
+   "followers": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": "string"
+      },
+      "enabled": {
+       "type": "number"
+      },
+      "id": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string"
+      },
+      "options": {
+       "type": "array"
+      },
+      "placeholder": {
+       "type": "string"
+      },
+      "required": {
+       "type": "number"
+      },
+      "type": {
+       "type": "string"
+      },
+      "value": {
+       "type": [
+        "number",
+        "string"
+       ]
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "income_type_id": {
+    "type": "string"
+   },
+   "inflow_code_id": {
+    "type": "number"
+   },
+   "invoice_files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "type": "array"
+      },
+      "download": {
+       "type": "string"
+      },
+      "fid": {
+       "type": "string"
+      },
+      "id": {
+       "type": "string"
+      },
+      "image": {
+       "type": "number"
+      },
+      "invoice_id": {
+       "type": "string"
+      },
+      "is_templated": {
+       "type": "number"
+      },
+      "name": {
+       "type": "string"
+      },
+      "origin": {
+       "type": "number"
+      },
+      "since": {
+       "type": "number"
+      },
+      "size": {
+       "type": "number"
+      },
+      "src": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string"
+      },
+      "url": {
+       "type": "string"
+      },
+      "username": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "type": "array"
+   },
+   "is_invoiced": {
+    "type": "string"
+   },
+   "is_itemizable": {
+    "type": "string"
+   },
+   "is_multiple_due_date": {
+    "type": "number"
+   },
+   "keywords": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": "string"
+   },
+   "linked_estimate_inflow_ids": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "name": {
+    "type": "string"
+   },
+   "receivable_deduction_amount": {
+    "type": "string"
+   },
+   "record_date": {
+    "type": "string"
+   },
+   "reference": {
+    "type": "string"
+   },
+   "revenue_unit_id": {
+    "type": "string"
+   },
+   "sale_type": {
+    "type": "string"
+   },
+   "salesperson": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": "number"
+     },
+     "posts": {
+      "type": "number"
+     },
+     "views": {
+      "type": "number"
+     }
+    },
+    "type": "object"
+   },
+   "status": {
+    "type": "string"
+   },
+   "tax": {
+    "type": "object"
+   },
+   "to_be_received": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   },
+   "uuid": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "inflow_item_line": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "amount_excl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_incl": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "amount_tax": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "categories": {
+    "items": {
+     "properties": {
+      "loaihopdong": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "discount_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "inflow_code_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_invalid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_line_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "previous_line_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "product_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "quantity": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "root_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "unit": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "inflow_payment": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "amount_received": {
+    "type": "string"
+   },
+   "amount_revenue": {
+    "type": "string"
+   },
+   "cash_account_id": {
+    "type": "number"
+   },
+   "code_id": {
+    "type": "number"
+   },
+   "code_sysfix_c_transaction": {
+    "type": "number"
+   },
+   "customer_id": {
+    "type": "string"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "income_id": {
+    "type": "string"
+   },
+   "inflow_id": {
+    "type": "string"
+   },
+   "inflow_itemlines": {
+    "properties": {
+     "ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "itemlines": {
+      "items": {
+       "properties": {
+        "amount_excl": {
+         "type": "number"
+        },
+        "amount_incl": {
+         "type": "number"
+        },
+        "amount_tax": {
+         "type": "number"
+        },
+        "content": {
+         "type": "string"
+        },
+        "hid": {
+         "type": "string"
+        },
+        "id": {
+         "type": "string"
+        },
+        "inflow_code_id": {
+         "type": "string"
+        },
+        "last_update": {
+         "type": "number"
+        },
+        "name": {
+         "type": "string"
+        },
+        "object_id": {
+         "type": "string"
+        },
+        "object_type": {
+         "type": "string"
+        },
+        "since": {
+         "type": "number"
+        },
+        "tax_id": {
+         "type": "number"
+        },
+        "token": {
+         "type": "string"
+        },
+        "type": {
+         "type": "string"
+        },
+        "user_id": {
+         "type": "string"
+        },
+        "username": {
+         "type": "string"
+        }
+       },
+       "type": "object"
+      },
+      "type": "array"
+     }
+    },
+    "type": "object"
+   },
+   "is_created_transaction_manually": {
+    "type": "number"
+   },
+   "last_update": {
+    "type": "number"
+   },
+   "link": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "revenue_unit_id": {
+    "type": "string"
+   },
+   "salesperson": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "revenue_center": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "link": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "parent_id": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "source": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ },
+ "revenue_unit": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "manage": {
+      "type": "number"
+     },
+     "view": {
+      "type": "number"
+     }
+    },
+    "type": "object"
+   },
+   "content": {
+    "type": "string"
+   },
+   "followers": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "hid": {
+    "type": "string"
+   },
+   "id": {
+    "type": "string"
+   },
+   "link": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": "string"
+   },
+   "name": {
+    "type": "string"
+   },
+   "owners": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "parent_id": {
+    "type": "string"
+   },
+   "periods": {
+    "items": {
+     "type": "string"
+    },
+    "type": "array"
+   },
+   "revenue_center_id": {
+    "type": "string"
+   },
+   "since": {
+    "type": "string"
+   },
+   "source": {
+    "type": "string"
+   },
+   "status": {
+    "type": "string"
+   },
+   "token": {
+    "type": "string"
+   },
+   "type": {
+    "type": "string"
+   },
+   "user_id": {
+    "type": "string"
+   },
+   "username": {
+    "type": "string"
+   }
+  },
+  "type": "object"
+ }
+}

@@ -1,0 +1,2242 @@
+{
+ "group": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "alias": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "approval_flow_priority_order": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "approvers": {
+    "items": {
+     "properties": {
+      "data": {
+       "properties": {
+        "setup": {
+         "type": [
+          "number",
+          "string",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "authorizations": {
+    "items": {
+     "properties": {
+      "authorized_user_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "authorizing_user_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "end_date": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "start_date": {
+       "type": [
+        "number",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dm": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dm_confirm": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "doc_template": {
+    "anyOf": [
+     {
+      "type": "array"
+     },
+     {
+      "properties": {
+       "enabled": {
+        "type": "number"
+       },
+       "fid": {
+        "type": "string"
+       },
+       "url": {
+        "type": "string"
+       }
+      },
+      "type": "object"
+     }
+    ]
+   },
+   "email_on": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "values": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "funds": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "limit_annual_request_create": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "limit_day": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "limit_distance": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "limit_enforce": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "limit_request": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "limit_request_create": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "options": {
+    "properties": {
+     "approve_batch_process": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_print_template": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "authorization": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "confirm_batch_process": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "notis_sequential": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "setup_direct_manager_for_reviewer": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "setup_direct_managers": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "paid_timeoff": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "permission_import": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "priority_fund": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reviewers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sla": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sla_confirm": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "teams": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "workflow": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "type": "object"
+ },
+ "timeoff": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "abs_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "acl": {
+    "properties": {
+     "approve": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "confirm": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "approvals": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "checkin_logs": {
+    "items": {
+     "properties": {
+      "computed": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "date": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "embed_link": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "employee_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "finalized": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "hid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "link": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "logs": {
+       "items": {
+        "properties": {
+         "checkout": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "client_id": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "content": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "device_id": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "device_name": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "files": {
+          "items": {
+           "properties": {
+            "dimension": {
+             "type": [
+              "array",
+              "null"
+             ]
+            },
+            "download": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "fid": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "id": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "image": {
+             "type": [
+              "number",
+              "null"
+             ]
+            },
+            "is_templated": {
+             "type": [
+              "number",
+              "null"
+             ]
+            },
+            "name": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "origin": {
+             "type": [
+              "number",
+              "null"
+             ]
+            },
+            "since": {
+             "type": [
+              "number",
+              "null"
+             ]
+            },
+            "size": {
+             "type": [
+              "number",
+              "null"
+             ]
+            },
+            "src": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "type": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "url": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "username": {
+             "type": [
+              "string",
+              "null"
+             ]
+            }
+           },
+           "type": [
+            "object",
+            "null"
+           ]
+          },
+          "type": [
+           "array",
+           "null"
+          ]
+         },
+         "img": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "ip": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "lat": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "lng": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "metatype": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "note": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "office_id": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "time": {
+          "type": [
+           "number",
+           "string",
+           "null"
+          ]
+         }
+        },
+        "type": [
+         "object",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "month_index": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "stats": {
+       "properties": {
+        "comments": {
+         "type": [
+          "number",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "timesheet_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "token": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "user_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "confirm": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cut_off": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "__actions": {
+      "items": {
+       "properties": {
+        "action": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "gid": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "message": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "user_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_conditional_approver_ld_khoi": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_direct_manager": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_Quynhanh": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_anhpham05": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_chipham": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_dunglam": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_dungnguyen05": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_ha": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_huenguyen02": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_linhpham06": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_luyenbui": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_nghiatran": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_trangnguyen18": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "approver_fixed_approver_tuananh": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "canceler": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "confirmed": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "employee_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "final_approved": {
+      "properties": {
+       "message": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "time": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "user_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "hours_per_day": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "leaves": {
+      "properties": {
+       "annual": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "compensatory": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "list_approved": {
+      "items": {
+       "properties": {
+        "message": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "time": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "user_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "load_shifts_method": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "num_shifts": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_approver_conditional_approver_ld_khoi": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_direct_manager": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_Quynhanh": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_anhpham05": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_chipham": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_dunglam": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_dungnguyen05": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_ha": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_huenguyen02": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_linhpham06": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_luyenbui": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_nghiatran": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_trangnguyen18": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_tuananh": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "priority_fund": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "pto": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "timesheet_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "timesheet_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "deadline_confirm": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "display_shifts": {
+    "items": {
+     "properties": {
+      "datetime": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "shifts": {
+       "items": {
+        "properties": {
+         "date": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "etime": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "key": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "mode": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "stime": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "value": {
+          "type": [
+           "string",
+           "null"
+          ]
+         }
+        },
+        "type": [
+         "object",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "end_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "file_fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "file_name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "file_url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form_origin": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "file_fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "file_name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "file_url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "gavatar": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "group_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "load_shifts_method": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "locked": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "overlaps": {
+    "items": {
+     "properties": {
+      "datetime": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "overlaps": {
+       "items": {
+        "properties": {
+         "etime": {
+          "type": [
+           "number",
+           "string",
+           "null"
+          ]
+         },
+         "metatype": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "percentage": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "points_per_day": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "shift_end": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "shift_start": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "standard_point": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "stime": {
+          "type": [
+           "number",
+           "string",
+           "null"
+          ]
+         },
+         "timeoff_end": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "timeoff_start": {
+          "type": [
+           "number",
+           "null"
+          ]
+         }
+        },
+        "type": [
+         "object",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "properties": {
+      "approved": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "paid_timeoff": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "rejections": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "results": {
+    "items": {
+     "properties": {
+      "action": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "data": {
+       "properties": {
+        "approved": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "authorized_username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "forwarder": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "note": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "time": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "reviewers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "shifts": {
+    "items": {
+     "properties": {
+      "datetime": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "shifts": {
+       "items": {
+        "properties": {
+         "date": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "etime": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "hours_per_day": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "key": {
+          "type": [
+           "number",
+           "string",
+           "null"
+          ]
+         },
+         "leave_fund": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "mode": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "num_leave": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "num_shifts": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "points_per_day": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "standard_point": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "stime": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "timesheet_metatype": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "value": {
+          "type": [
+           "string",
+           "null"
+          ]
+         }
+        },
+        "type": [
+         "object",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "state": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "timesheet_shifts": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "warning": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "workflow": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ }
+}

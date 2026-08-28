@@ -1,0 +1,4766 @@
+{
+ "area": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "career_record": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acting": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "basic_salary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "disable_salary": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_title": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "items": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "finalized_at": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "finalized_by": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "intent": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_current": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "office_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "payroll_policy_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "pic": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "policy_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "position_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "proposer_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "rate": {
+    "properties": {
+     "rating": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "reviewers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "salary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sla": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "system_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "team_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "timesheet_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "update_compensation": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "contract": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "basic_salary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cache_employee_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "employee_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "salary_detail": {
+      "properties": {
+       "basic_salary": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "salary": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "sc_form": {
+        "items": {
+         "properties": {
+          "display": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "enabled": {
+           "type": [
+            "number",
+            "null"
+           ]
+          },
+          "expression": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "id": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "name": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "options": {
+           "items": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "type": [
+            "array",
+            "null"
+           ]
+          },
+          "placeholder": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "required": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "type": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "value": {
+           "type": [
+            "string",
+            "null"
+           ]
+          }
+         },
+         "type": [
+          "object",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "end_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "is_current": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_probation": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "office_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "probation_reqs": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reminder_time": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "salary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sc_form": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "system_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type_export": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "metatype": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "view_full": {
+    "type": [
+     "number",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "contract_type": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "config": {
+    "properties": {
+     "_reminder_receivers": {
+      "items": {
+       "properties": {
+        "__cached": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "__deleted": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "_devices": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "_image": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "accesses": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "authkey": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "color": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "counter": {
+         "type": [
+          "object",
+          "null"
+         ]
+        },
+        "data": {
+         "properties": {
+          "authkey": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "confirm_code": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "ip": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "lang": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "last_time_password_changed": {
+           "type": [
+            "number",
+            "null"
+           ]
+          }
+         },
+         "type": [
+          "object",
+          "null"
+         ]
+        },
+        "dbk": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "devices": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "direct_reports": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "email": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "estatus": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "etoken": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "first_name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "image": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "last_name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "link": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "manager": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "metatype": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "networks": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "notis": {
+         "type": [
+          "object",
+          "null"
+         ]
+        },
+        "openid": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "password": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "role": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "sas": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "sessions": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "status": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "system_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "systems": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "timesheet": {
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "title": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "token": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "uid": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "insurance_id": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "probation": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "red": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "remind_expiration": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "remind_receivers": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "tax_id": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "update_red": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "update_remind_exp": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "insurance_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "is_probation": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "employee": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "bank": {
+    "properties": {
+     "branch": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "holder": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "number": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "basic_salary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dob_day": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dob_month": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dob_year": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "email": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "first_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "group_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "gender": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "insurance_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_primary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "is_terminated": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "office_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "official_start_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "payroll_policy_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "phone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "position_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "profile": {
+    "properties": {
+     "address": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "degree": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "dependants": {
+      "items": {
+       "properties": {
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "insurance_enrollment_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "m1": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "m2": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "m3": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "marital": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "nationality": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "note": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "num_dependants": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "p1": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "p2": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "p3": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "p4": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "p5": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "permanent_residence": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "pob": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ssn": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "tax_enrollment_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "review": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "salary": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "team_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "terminated_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "timesheet_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "title": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "employee_education": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "degree": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "duration": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "items": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "highest": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "location": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "school": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "employee_legal": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "inso_no": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "inso_place": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "personal_deduction": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "ssn_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ssn_no": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ssn_place": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax_no": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "employee_relation": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "accepted_date": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "address": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dob": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "end_date": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "items": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "is_dependant": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "is_emergency": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "job": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "note": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "phone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "rel": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tax_no": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "employee_type": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "config": {
+    "properties": {
+     "fte": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "fte": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "employee_work": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "company": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "desc": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "duration": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "location": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "title": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "insurance": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "eba": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "percent_company": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "percent_employee": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "merit_award": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "create_privacy": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "create_users": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers_create": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "public_create": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "reward": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "template_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "merit_cert": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "create_privacy": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "create_users": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers_create": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "public_create": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "template_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "merit_record": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "points": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "policy_export": {
+    "properties": {
+     "area_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "metatype": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "policy_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "policy_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "merit_rule": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "board_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_create": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "custom_create_by": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_create_for": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_users": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers_create": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "image": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "managers_create": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "points": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "privacy": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "svg": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "merit_template": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "display_image": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "placements": {
+    "items": {
+     "properties": {
+      "align": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "label": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "left": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "top": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "width": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "merit_type": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "office": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "address": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "__io": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "code": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "email": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "phone": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "email": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hq": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "num_people": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "phone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "payroll_cycle": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "computed": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "end_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "expense": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "group_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "policy_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "revenue": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "sequence": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_date": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "unbalanced": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "year": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "payroll_record": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "benefits": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "computed": {
+    "properties": {
+     "comp_extra_costs": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "comp_insurances": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "comp_total": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "emp_benefits": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "emp_extra_deductions": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "emp_insurances": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "emp_takehome": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "emp_taxes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "total_income": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cycle_export": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "sequence": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "year": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "cycle_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cycle_policy_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "employee_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "display": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "group_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "profile": {
+    "properties": {
+     "area_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "basic_salary": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "contract_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "employee_type_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "insurance_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "is_probation": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "is_terminated": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "office_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "position_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "salary": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "tax_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "timesheet_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "position": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "__io": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "employee_hide": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "image": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "links": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "objs": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "promotion_reqs": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "salary": {
+    "properties": {
+     "hide": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "max": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "min": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "strict": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "position_type": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "fill": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "objs": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "promotion_reqs": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "tax": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "config": {
+    "properties": {
+     "eba": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "percent": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "eba": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "percent": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "team": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "area_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "dept_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "watchers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "timesheet": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "code": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "config": {
+    "properties": {
+     "auto_scheduling": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "checkin_gap": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "checkout_gap": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "eba": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "first_run": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "required_checkout": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "schedule_day": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "schedule_from": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "to_date": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "df": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "eba": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "hours_per_day": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "num_shifts": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "owners": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "points_per_day": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "shifts": {
+    "items": {
+     "items": {
+      "properties": {
+       "index": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "time": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "type": [
+      "array",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "timezone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "working_days": {
+    "items": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ }
+}

@@ -1,0 +1,8402 @@
+{
+ "compound": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "perform": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view_ticket": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "action": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "assignees": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "conditions": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_object": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "fi_comparable_fields": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fi_variable": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "index": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "reference_variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required_check_value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "group_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "managers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "origin_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "properties": {
+    "properties": {
+     "duration": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "next_block_connections": {
+      "items": {
+       "properties": {
+        "from_entry_ids": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_block_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_entity_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "output_block_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "prev_service_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "root_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "service_flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_x": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_y": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "transaction_categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transformer_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "view_by": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "x": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "y": {
+      "type": [
+       "boolean",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "rules": {
+    "properties": {
+     "assignee_move_next": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "assignment_rule": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "calculate_deadline": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "fixed_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "keep_prev_followers": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "lock_service_form": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "remove_last_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "required_manager": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "start_sla": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "teams": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "transformers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "group": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "perform": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "config": {
+    "properties": {
+     "color": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_object": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "teams": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "service": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "perform": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view_ticket": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "action": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "assignees": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "conditions": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_object": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "config": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "extra": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fi_comparable_fields": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fi_variable": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "index": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "linked_table": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "reference_variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "required_check_value": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "validations": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "group_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "managers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "origin_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "properties": {
+    "properties": {
+     "duration": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "next_block_connections": {
+      "items": {
+       "properties": {
+        "from_entry_ids": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_block_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_service_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_entity_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "output_block_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "prev_service_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "service_flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_x": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_y": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "transaction_categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transformer_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "view_by": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "x": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "y": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "rules": {
+    "properties": {
+     "allow_customize_view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "assignee_move_next": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "assignment_rule": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "enable_esign": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "form_configs": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keep_prev_followers": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "lock_service_form": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "only_create_from_service": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "proposers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "remove_last_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "required_manager": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view_all_tickets": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "teams": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "transformers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "properties": {
+     "events": {
+      "properties": {
+       "onEdited": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "process_enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "server_token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "transformers": {
+      "items": {
+       "properties": {
+        "datatype": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "property": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "transform_type": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "value": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "stage": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "duplicate_ticket": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "perform": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view_ticket": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "action": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "assignees": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "conditions": {
+    "items": {
+     "properties": {
+      "datatypes": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "formulas": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "operators": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "properties": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "values": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_object": {
+    "items": {
+     "properties": {
+      "config": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "fi_comparable_fields": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fi_variable": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "index": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "reference_variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "required_check_value": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "validations": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "data": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "items": {
+     "properties": {
+      "config": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "enabled": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "fi_comparable_fields": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fi_variable": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "index": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "options": {
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "placeholder": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "reference_variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "required": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "required_check_value": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "validations": {
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "variable_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "group_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "managers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "origin_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "properties": {
+    "properties": {
+     "default_outputs": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "duration": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "extend": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_followers": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "next_block_connections": {
+      "items": {
+       "properties": {
+        "from_entry_ids": {
+         "items": {
+          "type": [
+           "string",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_block_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_connectors": {
+      "items": {
+       "properties": {
+        "from_entry_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "to_block_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_entity_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prev_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "service_flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "service_x": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_y": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "transaction_categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transformer_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "view_by": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "webhook_action": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "webhook_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "x": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "y": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "rules": {
+    "properties": {
+     "assignee_move_next": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "assignment_rule": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "auto_merge": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "auto_update": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "calculate_deadline": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "default_output": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "enable_esign": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "get_response": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "keep_prev_followers": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "lock_service_form": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "proposers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "remove_last_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "required_manager": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "send_webhook": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_variables": {
+      "items": {
+       "properties": {
+        "editable": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "variable_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "start_sla": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "teams": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "transformers": {
+    "items": {
+     "properties": {
+      "datatype": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "property": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "transform_type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "value": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "test": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "perform": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "action": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "assignees": {
+    "items": {
+     "properties": {
+      "last_update": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "note": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "signed": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "block_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "block_metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "branch_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "conditions": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_object": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "block_username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "error_logs": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "group_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hashed_hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "managers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "origin_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "parent_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "parent_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "prev_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "properties": {
+    "properties": {
+     "block_assignees": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "branch_id": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "branches": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "current_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "duration": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "next_block_connections": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_ticket_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_entity_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "output_block_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "prev_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "service_flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_x": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_y": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "sub_compound_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "sub_ticket_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transaction_categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transformer_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "view_by": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "webhook_action": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "webhook_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "x": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "y": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_export": {
+    "properties": {
+     "assignees": {
+      "items": {
+       "properties": {
+        "last_update": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "note": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "signed": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "block_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_metatype": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_object": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "form": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "group_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "icon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "managers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prev_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "root_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "root_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "service_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "start_ticket_at": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "root_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "rules": {
+    "properties": {
+     "assignee_move_next": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "assignment_rule": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "enable_esign": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "get_response": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "keep_prev_followers": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "lock_service_form": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "proposers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "remove_last_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "required_manager": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "send_webhook": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_variables": {
+      "items": {
+       "properties": {
+        "editable": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "variable_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "service_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "service_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_ticket_at": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ticket_root": {
+    "properties": {
+     "acl": {
+      "properties": {
+       "manage": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "perform": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "view": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "action": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "assignees": {
+      "items": {
+       "properties": {
+        "last_update": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "note": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "signed": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "block_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_metatype": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "branch_id": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "conditions": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_object": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "data": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "deadline": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "embed_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "form": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "group_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "hashed_hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "icon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "managers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_app": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_export": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "origin_object_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "parent_export": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "parent_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prev_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "properties": {
+      "properties": {
+       "block_assignees": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "branch_id": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "branches": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "categories": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "current_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "duration": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "flip": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "next_block_connections": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "next_service_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "next_ticket_ids": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "origin_entity_key": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_model_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_model_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_model_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "output_block_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "prev_service_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "service_flip": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "service_x": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "service_y": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "sub_compound_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "sub_ticket_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "transaction_categories": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "transformer_endpoint": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "view_by": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "x": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "y": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "root_export": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "root_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "root_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "rules": {
+      "properties": {
+       "assignee_move_next": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "assignment_rule": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "enable_esign": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "fixed_assignee": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "keep_prev_followers": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "lock_service_form": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "proposers": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "remove_last_assignee": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "required_manager": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "workflow": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "service_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "service_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "start_ticket_at": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "stats": {
+      "properties": {
+       "comments": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "files": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "likes": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "posts": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "views": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "transformers": {
+      "properties": {
+       "__ray": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "abs_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "actions": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approvals": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_last": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_notes": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_notes_textarea": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "base_blocks": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "base_content": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "bot_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "bot_username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "condition_block_keys": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "content": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "counter_code": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "counter_keywords": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "counter_value": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "creator": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "creator_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "creator_username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_co_level_chuyen_mon": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_co_so_de_xuat_csm": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_co_trien_khai": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_customer_id_ma_so_thue": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_deal_value_forecast": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_dealsize_hop_dong_dau_tien": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_form": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_form_approval": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ghi_chu": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_gia_tri_arr": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_level_chuyen_mon": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_link_deal": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ngay_bat_dau_tinh_phi_dau_tien": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ngay_het_han_am_theo_chinh_sach": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ngay_het_han_he_thong": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_nhan_su_sales": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_1": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_2": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_3": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_4": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_5": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_6": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_7": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_primary_customer_id_ma_khach_han": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_san_pham_tiem_nang_mo_rong": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_so_luong_nhan_su": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_system_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_the_first_deal_information": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thoi_han_phu_trach_ka": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thong_tin_account": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thong_tin_nhan_su_phu_trach": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thuoc_nhom_kinh_doanh": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_tiem_nang_khach_hang": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_tiem_nang_toc_do_tang_truong": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_toi_cam_ket": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_type_2": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_up_cross_sales_products": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "data": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "deadline": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "esign_requests": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "esigned_file_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "file_names": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "final_approver": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "follower_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "followers": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "form_approval": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "form_approval_origin": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gavatar": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_prev": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "group_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "group_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "ignore_error_value": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "inline_value": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "invalidate": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "keywords": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "last_update": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "list_origin_approver_fixed_approver_tramle03": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_approver_fixed_approver_tramle03": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_direct_manager_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_flexible_approver_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "owner_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "owners": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "rejecters": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "results": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "since": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_appkey": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_collector": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_collector": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_system_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "state": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "stats": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "status": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "table_custom_performance_kam_hien_tai": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "time": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "user": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "user_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "workflow": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "transformers": {
+    "properties": {
+     "__ray": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "abs_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "actions": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approvals": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_last": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_notes": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_notes_textarea": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "base_blocks": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "base_content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "bot_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "bot_username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "condition_block_keys": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_code": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_value": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "creator": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "creator_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "creator_username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_co_level_chuyen_mon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_co_so_de_xuat_csm": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_co_trien_khai": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_customer_id_ma_so_thue": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_deal_value_forecast": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_dealsize_hop_dong_dau_tien": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_form": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_form_approval": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ghi_chu": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_gia_tri_arr": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_level_chuyen_mon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_link_deal": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ngay_bat_dau_tinh_phi_dau_tien": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ngay_het_han_am_theo_chinh_sach": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ngay_het_han_he_thong": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_nhan_su_sales": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_1": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_2": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_3": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_4": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_5": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_6": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_7": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_primary_customer_id_ma_khach_han": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_san_pham_tiem_nang_mo_rong": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_so_luong_nhan_su": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_system_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_the_first_deal_information": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thoi_han_phu_trach_ka": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thong_tin_account": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thong_tin_nhan_su_phu_trach": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thuoc_nhom_kinh_doanh": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_tiem_nang_khach_hang": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_tiem_nang_toc_do_tang_truong": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_toi_cam_ket": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_type_2": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_up_cross_sales_products": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "data": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "deadline": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "esign_requests": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "esigned_file_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "file_names": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "final_approver": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "follower_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "followers": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "form_approval": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "form_approval_origin": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gavatar": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_prev": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "group_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "group_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ignore_error_value": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "inline_value": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "invalidate": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "list_origin_approver_fixed_approver_tramle03": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_tramle03": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_direct_manager_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_flexible_approver_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "owner_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "owners": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "rejecters": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "results": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_appkey": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_collector": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_collector": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_system_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "state": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "stats": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "table_custom_performance_kam_hien_tai": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "time": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "ticket": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "manage": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "perform": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "action": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "assignees": {
+    "items": {
+     "properties": {
+      "last_update": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "note": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "signed": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "block_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "block_metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "branch_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "conditions": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "custom_object": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "block_username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "error_logs": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "embed_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "group_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hashed_hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "managers": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_app": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "origin_object_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "origin_object_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "parent_export": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "parent_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "prev_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "properties": {
+    "properties": {
+     "block_assignees": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "branch_id": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "branches": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "current_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "duration": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "next_block_connections": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "next_ticket_ids": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "origin_entity_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_model_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_key": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "output_block_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "prev_service_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "service_flip": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_x": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_y": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "sub_compound_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "sub_ticket_ids": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transaction_categories": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "transformer_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "view_by": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "webhook_action": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "webhook_endpoint": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "x": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "y": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_export": {
+    "properties": {
+     "assignees": {
+      "items": {
+       "properties": {
+        "last_update": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "note": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "signed": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "block_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_metatype": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_object": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "form": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "group_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "icon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "managers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prev_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "root_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "root_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "service_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "start_ticket_at": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "root_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "root_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "rules": {
+    "properties": {
+     "assignee_move_next": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "assignment_rule": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "enable_esign": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "fixed_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "get_response": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "keep_prev_followers": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "lock_service_form": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "proposers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "remove_last_assignee": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "required_manager": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "send_webhook": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "service_variables": {
+      "items": {
+       "properties": {
+        "editable": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "variable_id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "service_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "service_link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_ticket_at": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ticket_root": {
+    "properties": {
+     "acl": {
+      "properties": {
+       "manage": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "perform": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "view": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "action": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "assignees": {
+      "items": {
+       "properties": {
+        "last_update": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "note": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "signed": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "block_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_metatype": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "branch_id": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "conditions": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_object": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "data": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "deadline": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "embed_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "followers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "form": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "group_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "hashed_hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "icon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "managers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_app": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_export": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "origin_object_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_object_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "parent_export": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "parent_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "prev_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "properties": {
+      "properties": {
+       "block_assignees": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "branch_id": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "branches": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "categories": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "current_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "duration": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "flip": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "next_block_connections": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "next_service_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "next_ticket_ids": {
+        "items": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "origin_entity_key": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_model_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_model_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_model_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "output_block_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "prev_service_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "service_flip": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "service_x": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "service_y": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "sub_compound_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "sub_ticket_ids": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "transaction_categories": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "transformer_endpoint": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "view_by": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "x": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "y": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "root_export": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "root_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "root_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "rules": {
+      "properties": {
+       "assignee_move_next": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "assignment_rule": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "enable_esign": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "fixed_assignee": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "keep_prev_followers": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "lock_service_form": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "proposers": {
+        "type": [
+         "array",
+         "null"
+        ]
+       },
+       "remove_last_assignee": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "required_manager": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "workflow": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "service_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "service_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "start_ticket_at": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "stats": {
+      "properties": {
+       "comments": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "files": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "likes": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "posts": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "views": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "transformers": {
+      "properties": {
+       "__ray": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "abs_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "actions": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approvals": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_last": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_notes": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "approved_notes_textarea": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "base_blocks": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "base_content": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "bot_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "bot_username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "condition_block_keys": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "content": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "counter_code": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "counter_keywords": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "counter_value": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "creator": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "creator_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "creator_username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_co_level_chuyen_mon": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_co_so_de_xuat_csm": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_co_trien_khai": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_customer_id_ma_so_thue": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_deal_value_forecast": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_dealsize_hop_dong_dau_tien": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_form": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_form_approval": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ghi_chu": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_gia_tri_arr": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_level_chuyen_mon": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_link_deal": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ngay_bat_dau_tinh_phi_dau_tien": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ngay_het_han_am_theo_chinh_sach": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_ngay_het_han_he_thong": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_nhan_su_sales": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_1": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_2": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_3": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_4": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_5": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_6": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_performance_kam_hien_tai_1_7": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_primary_customer_id_ma_khach_han": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_san_pham_tiem_nang_mo_rong": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_so_luong_nhan_su": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_system_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_the_first_deal_information": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thoi_han_phu_trach_ka": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thong_tin_account": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thong_tin_nhan_su_phu_trach": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_thuoc_nhom_kinh_doanh": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_tiem_nang_khach_hang": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_tiem_nang_toc_do_tang_truong": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_toi_cam_ket": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_type_2": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "custom_up_cross_sales_products": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "data": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "deadline": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "esign_requests": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "esigned_file_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "file_names": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "final_approver": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "follower_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "followers": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "form_approval": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "form_approval_origin": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gavatar": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_prev": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "gen_type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "group_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "group_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "ignore_error_value": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "inline_value": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "invalidate": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "keywords": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "last_update": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "list_origin_approver_fixed_approver_tramle03": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_approver_fixed_approver_tramle03": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_direct_manager_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "origin_flexible_approver_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "owner_list": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "owners": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "rejecters": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "results": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "since": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_appkey": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_collector": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_collector": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_container_type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_link": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_name": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_object_type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "source_system_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "state": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "stats": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "status": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "table_custom_performance_kam_hien_tai": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "time": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "user": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "user_id": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "username": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "workflow": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "transformers": {
+    "properties": {
+     "__ray": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "abs_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "actions": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approvals": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_last": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_notes": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "approved_notes_textarea": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "base_blocks": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "base_content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "bot_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "bot_username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "condition_block_keys": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_code": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "counter_value": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "creator": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "creator_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "creator_username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_co_level_chuyen_mon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_co_so_de_xuat_csm": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_co_trien_khai": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_customer_id_ma_so_thue": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_deal_value_forecast": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_dealsize_hop_dong_dau_tien": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_form": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_form_approval": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ghi_chu": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_gia_tri_arr": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_level_chuyen_mon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_link_deal": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ngay_bat_dau_tinh_phi_dau_tien": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ngay_het_han_am_theo_chinh_sach": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_ngay_het_han_he_thong": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_nhan_su_sales": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_1": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_2": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_3": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_4": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_5": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_6": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_performance_kam_hien_tai_1_7": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_primary_customer_id_ma_khach_han": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_san_pham_tiem_nang_mo_rong": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_so_luong_nhan_su": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_system_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_the_first_deal_information": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thoi_han_phu_trach_ka": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thong_tin_account": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thong_tin_nhan_su_phu_trach": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_thuoc_nhom_kinh_doanh": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_tiem_nang_khach_hang": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_tiem_nang_toc_do_tang_truong": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_toi_cam_ket": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_type_2": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "custom_up_cross_sales_products": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "data": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "deadline": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "esign_requests": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "esigned_file_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "file_names": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "final_approver": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "follower_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "followers": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "form_approval": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "form_approval_origin": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gavatar": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_prev": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "gen_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "group_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "group_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "ignore_error_value": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "inline_value": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "invalidate": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "keywords": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "last_update": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "list_origin_approver_fixed_approver_tramle03": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_approver_fixed_approver_tramle03": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_direct_manager_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "origin_flexible_approver_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "owner_list": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "owners": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "rejecters": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "results": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "since": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_appkey": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_collector": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_collector": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_container_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_object_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "source_system_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "state": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "stats": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "table_custom_performance_kam_hien_tai": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "time": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "user_id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "workflow": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ }
+}

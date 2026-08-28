@@ -61,9 +61,28 @@ USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
 
 JsonSchema = dict[str, Any]
 
-_SCHEMA_REGISTRY: dict[str, dict[str, JsonSchema]] = json.loads(
-    Path(__file__).with_name("schemas.json").read_text(encoding="utf-8")
-)
+def _load_schemas() -> dict[str, dict[str, JsonSchema]]:
+    """The field contracts, one file per Base application.
+
+    These are checked in and shipped inside the image. They used to be
+    generated at build time from eleven reviewed YAML contracts, which
+    made a documentation folder a build input: deleting it -- or forgetting to
+    push it -- made the generator write an empty registry over a working one,
+    silently replacing the schema of all ten connectors. That happened.
+
+    So the schemas live here now, next to the connectors that use them, split
+    per application and formatted so a change is readable in a diff. The YAML
+    remains useful as reference, and `scripts/import-base-schemas.py` can
+    re-derive these from it, but nothing at build or run time needs it.
+    """
+    directory = Path(__file__).with_name("schemas")
+    return {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(directory.glob("*.json"))
+    }
+
+
+_SCHEMA_REGISTRY: dict[str, dict[str, JsonSchema]] = _load_schemas()
 
 
 @dataclass(frozen=True)

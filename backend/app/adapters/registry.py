@@ -28,15 +28,19 @@ def _load() -> dict:
 def _registry_entries() -> list[dict]:
     """The JSON catalogue plus the connectors this product writes itself.
 
-    Base.vn connectors are Python in `app/connectors/base_vn`, compiled to a
-    declarative manifest at import. Joining them here means they are seeded,
-    listed, permissioned and synced through exactly the same path as an Airbyte
-    connector -- there is no second kind of connector for the rest of the
-    product to know about.
-    """
-    from app.connectors.base_vn import catalogue_entries
+    The connectors this product writes itself are Python in `app/connectors/`,
+    compiled to a declarative manifest at import. Joining them here means they
+    are seeded, listed, permissioned and synced through exactly the same path
+    as an Airbyte connector -- there is no second kind of connector for the
+    rest of the product to know about.
 
-    return list(_load()["connectors"]) + catalogue_entries()
+    Which groups exist is not decided here. `app.connectors` discovers them and
+    refuses two that would claim the same category or connector key, so adding
+    a group is adding a package rather than editing this function.
+    """
+    from app.connectors import catalogue_entries as written_here
+
+    return list(_load()["connectors"]) + written_here()
 
 
 @lru_cache(maxsize=1)

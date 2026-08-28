@@ -1,0 +1,531 @@
+{
+ "group": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "about": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "disabled_message": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "has_image": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "leader": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "image": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "num_people": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "official": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "parent_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "path": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "role": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "system_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "timesheet": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "type": "object"
+ },
+ "user": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "accesses": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "address": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "bg": {
+    "properties": {
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "value": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "delegate": {
+    "properties": {
+     "edate": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "sdate": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "devices": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "direct_reports": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "disabled_message": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "dob": {
+    "properties": {
+     "day": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "month": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     },
+     "year": {
+      "type": [
+       "number",
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "email": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "first_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "gavatar": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "has_image": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "image": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "lang": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_time_password_changed": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "manager": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "networks": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "phone": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "reqip": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "role": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "sas": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "social": {
+    "properties": {},
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stoken": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "system_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "taken_tour": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "tfa": {
+    "properties": {
+     "status": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "timesheet": {
+    "items": {
+     "items": {
+      "items": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "type": [
+      "array",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "timezone": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "title": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "voip_devices": {
+    "type": [
+     "array",
+     "null"
+    ]
+   }
+  },
+  "type": "object"
+ }
+}

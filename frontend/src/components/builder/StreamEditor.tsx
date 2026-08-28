@@ -1,25 +1,35 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Input, Select } from '@/components/ui/Input';
+import { Tabs } from '@/components/ui/Tabs';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Field, JinjaInput } from '@/components/builder/BuilderField';
 import type { BuilderKeyValue, BuilderStream, BuilderUserInput } from '@/lib/types';
-import { cn } from '@/lib/utils';
+
+export type BuilderStreamSection =
+  | 'request'
+  | 'pagination'
+  | 'incremental'
+  | 'partition'
+  | 'transform'
+  | 'errors';
 
 /**
  * The full low-code surface for one stream.
  *
  * Airbyte's CDK offers far more than a request URL, and a builder that hides
  * pagination, partitioning, transformations and retries is a demo. It is also
- * a lot of fields at once, so everything beyond the request itself lives in a
- * disclosure: open only what the API you are describing actually needs.
+ * a lot of fields at once, so the editor keeps one focused section visible and
+ * lets the page persist that section in the URL.
  */
 export function StreamEditor({
-  stream, streamNames, fields, userInputs, onCreateInput, disabled, onChange,
+  stream, streamNames, fields, userInputs, activeSection, onSectionChange,
+  onCreateInput, disabled, onChange,
 }: {
   stream: BuilderStream;
   /** Other streams, offered as a parent for substream partitioning. */
@@ -28,6 +38,9 @@ export function StreamEditor({
   fields: string[];
   /** The connector's own inputs, offered on every field that is a template. */
   userInputs: BuilderUserInput[];
+  /** The focused editor section. Kept by the page in the URL. */
+  activeSection: BuilderStreamSection;
+  onSectionChange: (section: BuilderStreamSection) => void;
   onCreateInput?: () => void;
   disabled?: boolean;
   onChange: (next: Partial<BuilderStream>) => void;
@@ -39,8 +52,62 @@ export function StreamEditor({
   const jinja = { userInputs, onCreateInput, disabled };
 
   return (
-    <div className="space-y-2">
-      <Group title={t('builder.groupRequest')} defaultOpen>
+    <div className="space-y-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <code
+          className="max-w-full truncate rounded-sm bg-surface-2 px-2 py-1 text-tiny text-text-tertiary"
+          title={stream.path || '/'}
+        >
+          {stream.path || '/'}
+        </code>
+        {stream.pagination?.mode && stream.pagination.mode !== 'none' && (
+          <Badge variant="info" size="xs" pill={false}>
+            {t('builder.chipPagination', {
+              mode: t(`builder.page${paginationLabel(stream.pagination.mode)}`),
+            })}
+          </Badge>
+        )}
+        {stream.incremental && (
+          <Badge variant="success" size="xs" pill={false}>
+            {t('builder.chipIncremental')}
+          </Badge>
+        )}
+        {stream.partition?.mode === 'parent' && stream.partition.parent_stream && (
+          <Badge variant="brand" size="xs" pill={false}>
+            {t('builder.chipParent', { name: stream.partition.parent_stream })}
+          </Badge>
+        )}
+        {(stream.transformations ?? []).length > 0 && (
+          <Badge variant="neutral" size="xs" pill={false}>
+            {t('builder.chipTransforms', {
+              n: String((stream.transformations ?? []).length),
+            })}
+          </Badge>
+        )}
+        {(stream.error_handler?.max_retries ?? 0) > 0 && (
+          <Badge variant="warning" size="xs" pill={false}>
+            {t('builder.chipRetries', {
+              n: String(stream.error_handler?.max_retries ?? 0),
+            })}
+          </Badge>
+        )}
+      </div>
+
+      <Tabs
+        value={activeSection}
+        onChange={(section) => onSectionChange(section as BuilderStreamSection)}
+        className="-mt-1"
+        items={[
+          { id: 'request', label: t('builder.groupRequest') },
+          { id: 'pagination', label: t('builder.groupPagination') },
+          { id: 'incremental', label: t('builder.groupIncremental') },
+          { id: 'partition', label: t('builder.groupPartition') },
+          { id: 'transform', label: t('builder.groupTransform') },
+          { id: 'errors', label: t('builder.groupErrors') },
+        ]}
+      />
+
+      <Group title={t('builder.groupRequest')} active={activeSection === 'request'}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('builder.streamName')} htmlFor="stream-name" required>
             <Input id="stream-name" size="sm" value={stream.name} disabled={disabled}
@@ -120,7 +187,7 @@ export function StreamEditor({
         )}
       </Group>
 
-      <Group title={t('builder.groupPagination')}
+      <Group title={t('builder.groupPagination')} active={activeSection === 'pagination'}
              summary={t(`builder.page${paginationLabel(stream.pagination?.mode)}`)}>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={t('builder.paginationMode')} htmlFor="stream-pagination">
@@ -208,7 +275,7 @@ export function StreamEditor({
         )}
       </Group>
 
-      <Group title={t('builder.groupIncremental')}
+      <Group title={t('builder.groupIncremental')} active={activeSection === 'incremental'}
              summary={stream.incremental ? (stream.cursor_field || '—') : t('builder.off')}>
         <label className="flex items-center gap-2 text-caption text-text-secondary">
           <input type="checkbox" checked={stream.incremental} disabled={disabled}
@@ -299,7 +366,7 @@ export function StreamEditor({
         )}
       </Group>
 
-      <Group title={t('builder.groupPartition')}
+      <Group title={t('builder.groupPartition')} active={activeSection === 'partition'}
              summary={stream.partition?.mode && stream.partition.mode !== 'none'
                ? t(`builder.partition${stream.partition.mode === 'list' ? 'List' : 'Parent'}`)
                : t('builder.off')}>
@@ -430,7 +497,7 @@ export function StreamEditor({
         )}
       </Group>
 
-      <Group title={t('builder.groupTransform')}
+      <Group title={t('builder.groupTransform')} active={activeSection === 'transform'}
              summary={String((stream.transformations ?? []).length || t('builder.off'))}>
         <Field label={t('builder.recordFilter')} htmlFor="record-filter"
                hint={t('builder.recordFilterHint')}>
@@ -487,7 +554,7 @@ export function StreamEditor({
         </div>
       </Group>
 
-      <Group title={t('builder.groupErrors')}
+      <Group title={t('builder.groupErrors')} active={activeSection === 'errors'}
              summary={stream.error_handler?.backoff?.mode
                && stream.error_handler.backoff.mode !== 'none'
                ? stream.error_handler.backoff.mode : t('builder.default')}>
@@ -566,36 +633,20 @@ function paginationLabel(mode?: string): string {
   return 'None';
 }
 
-/** A disclosure that names what is inside it, so it can be skipped confidently. */
+/** The selected stream section. Tabs above it keep the form short and stable. */
 function Group({
-  title, summary, defaultOpen, children,
+  title, active, children,
 }: {
   title: string;
+  active: boolean;
   summary?: React.ReactNode;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(Boolean(defaultOpen));
+  if (!active) return null;
   return (
-    <section className="rounded-md border border-[rgb(var(--border-line))] bg-surface-0">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
-      >
-        <ChevronRight className={cn('h-3.5 w-3.5 flex-shrink-0 text-text-quaternary transition-transform',
-          open && 'rotate-90')} />
-        <span className="flex-1 text-caption font-emphasis text-text-primary">{title}</span>
-        {!open && summary && (
-          <span className="truncate text-tiny text-text-quaternary">{summary}</span>
-        )}
-      </button>
-      {open && (
-        <div className="space-y-3 border-t border-[rgb(var(--border-line))] px-3 py-3">
-          {children}
-        </div>
-      )}
+    <section aria-label={title} className="space-y-3">
+      {children}
     </section>
   );
 }

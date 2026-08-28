@@ -1,6 +1,6 @@
 """Base CRM - Deals, which speaks a different dialect from every other app.
 
-Ported from `docs/base-api/base_crm_sale.yaml` and the published Postman
+Ported from the reviewed `base_crm_sale` contract and the published Postman
 collection, then checked endpoint by endpoint against the live API. Every
 claim below is a measurement, not a reading of the YAML -- which turned out to
 be wrong in several places.

@@ -1,0 +1,2277 @@
+{
+ "dept": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "alias": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "path": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "teams": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "milestone": {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": true,
+  "properties": {},
+  "type": "object"
+ },
+ "project": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "acl": {
+    "properties": {
+     "active": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "full_view": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     },
+     "managed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "member_edit": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     },
+     "task_create": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     },
+     "tasklist_create": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "base": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "bg": {
+    "properties": {
+     "blurry": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "cached_tasklists": {
+    "items": {
+     "properties": {
+      "id": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "category": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "color": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "__swework": {
+      "properties": {
+       "block_task_edit": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "block_task_remove": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "block_task_time": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "file_upload": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "project_delete": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "project_edit": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "reminder_daily": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "remove_project": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "style": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "task_assign": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "task_delete": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "task_edit": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "task_overdue": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "task_status_update": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "team_base": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "team_stack": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "view": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "active": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "block_info_update_after_done": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_result_update_after_done": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "category": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "complete": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "deadline_has_time": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "icon": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "overdue": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "percent_completion": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "remove_assign": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "stats_changed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "task_cannot_remove": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "task_duration": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "tasklists": {
+      "items": {
+       "properties": {
+        "id": {
+         "type": [
+          "number",
+          "string",
+          "null"
+         ]
+        },
+        "name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "total": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "update_completed_time": {
+      "properties": {
+       "enabled": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "users": {
+        "type": [
+         "array",
+         "null"
+        ]
+       }
+      },
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "v31sysfix": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline_has_time": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "demo": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "dept_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "etime": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "external": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "icon": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "incoming_webhook": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "managed": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "options": {
+    "properties": {
+     "block_task_edit": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_task_remove": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "block_task_time": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "file_upload": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "project_delete": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "project_edit": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reminder_daily": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "remove_project": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "style": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "task_assign": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "task_delete": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "task_edit": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "task_overdue": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "task_status_update": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "team_base": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "team_stack": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "view": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "owners": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "path": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "percent_completion": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "privacy": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "remove_assign": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "review": {
+    "properties": {
+     "assigner": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "review_subtask": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "sla_review_subtask": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "sla_review_task": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "users": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "review_enabled": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stage": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "active": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "complete": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "overdue": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "total": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "status_obj": {
+    "properties": {
+     "color": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "stage": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "status": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "stime": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "tags": {
+    "items": {
+     "properties": {
+      "color": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "key": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "task_cannot_remove": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "task_duration": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "webhooks": {
+    "type": [
+     "object",
+     "null"
+    ]
+   }
+  },
+  "type": "object"
+ },
+ "task": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "__compute": {
+    "properties": {
+     "files": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "acl": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "ancestor_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "avatar": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cached_subtasks": {
+    "items": {
+     "properties": {
+      "creator_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "deadline": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "review": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "status": {
+       "type": [
+        "number",
+        "string",
+        "null"
+       ]
+      },
+      "user_id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "checklists": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "complete": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "completed_time": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "content_short": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cover": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "creator_username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "deadline_has_time": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "deadline_user": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "review_time": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "reviewers": {
+      "items": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     },
+     "subtasks": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "tasklist_reviewers": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "deadline_has_time": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "display_name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "duration": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "etime": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "form": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "gid": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "has_deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "important": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "input_type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "keywords": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "last_update": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "logged_duration": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "metatype": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "milestone_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ns": {
+    "properties": {
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "path": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "origin_export": {
+    "properties": {
+     "abs_link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "token": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "overdue": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "owners": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "parent_id": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "project_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "real_order": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "result": {
+    "properties": {
+     "content": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "files": {
+      "items": {
+       "properties": {
+        "dimension": {
+         "items": {
+          "type": [
+           "number",
+           "null"
+          ]
+         },
+         "type": [
+          "array",
+          "null"
+         ]
+        },
+        "download_url": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "fid": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "image": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "is_templated": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "origin": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "since": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "size": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "type": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "url": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "username": {
+         "type": [
+          "string",
+          "null"
+         ]
+        }
+       },
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "result_content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "result_files": {
+    "items": {
+     "properties": {
+      "dimension": {
+       "items": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "type": [
+        "array",
+        "null"
+       ]
+      },
+      "download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "download_url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "ext_download": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "fid": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "id": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "image": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "is_templated": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "name": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "origin": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "since": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "size": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "src": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "type": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "url": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "review": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "score": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "starred": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "start_time": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "started": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "comments": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "status": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stime": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "tags": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "tasklist": {
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "tasklist_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "urgent": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id",
+   "last_update"
+  ],
+  "type": "object"
+ },
+ "tasklist": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "complete": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "content": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "cs": {
+    "properties": {
+     "etime": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "stime": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "data": {
+    "properties": {
+     "__io": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "cs_etime": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "cs_stime": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "review_enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "review_users": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "etime": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "has_deadline": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "link": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ns_export": {
+    "properties": {
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "path": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "ns_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "order": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "percent": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "privacy": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "review": {
+    "properties": {
+     "enabled": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "users": {
+      "type": [
+       "array",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "active": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "done": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "failed": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "total": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "total_display": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "stime": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ },
+ "topic": {
+  "$schema": "http://json-schema.org/schema#",
+  "additionalProperties": true,
+  "properties": {
+   "box_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "files": {
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "followers": {
+    "items": {
+     "properties": {
+      "gavatar": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "username": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     },
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "type": [
+     "array",
+     "null"
+    ]
+   },
+   "gid": {
+    "type": [
+     "number",
+     "null"
+    ]
+   },
+   "hid": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "id": {
+    "type": "string"
+   },
+   "last_update": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "name": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "ns_export": {
+    "properties": {
+     "hid": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "link": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "path": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "ns_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "overview": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "privacy": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "since": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "stats": {
+    "properties": {
+     "files": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "likes": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "posts": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "total": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "views": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "token": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "type": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "user": {
+    "properties": {
+     "avatar": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "id": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "username": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    },
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "user_id": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "username": {
+    "type": [
+     "string",
+     "null"
+    ]
+   }
+  },
+  "required": [
+   "id"
+  ],
+  "type": "object"
+ }
+}
