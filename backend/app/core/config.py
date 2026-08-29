@@ -165,6 +165,21 @@ class Settings(BaseSettings):
     #: Where to send the browser after the provider redirects back.
     frontend_base_url: str = "http://localhost:8080"
 
+    # --- AI-assisted Connector Builder -----------------------------------
+    # Optional by design: the manual Builder must remain usable when an
+    # installation has not enabled OpenAI. AI endpoints fail with a focused
+    # AI_NOT_CONFIGURED response instead of making the whole API fail at boot.
+    openai_api_key: str = ""
+    openai_model_planner: str = "gpt-5-mini"
+    openai_model_agent: str = "gpt-5-mini"
+    openai_model_vision: str = "gpt-5-mini"
+    openai_timeout_seconds: float = 90.0
+    builder_ai_source_max_bytes: int = 10 * 1024 * 1024
+    builder_ai_crawl_max_pages: int = 30
+    builder_ai_crawl_max_depth: int = 2
+    builder_ai_crawl_max_bytes: int = 5 * 1024 * 1024
+    builder_test_session_ttl_seconds: int = 20 * 60
+
     # --- policy / quota ---
     max_concurrent_runs_global: int = 4
     max_concurrent_runs_per_workspace: int = 3

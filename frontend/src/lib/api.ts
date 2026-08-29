@@ -8,7 +8,8 @@
 
 import type {
   Actor, ActorDetail, ActorTestResult, AlertRule, AppNotification, AuditEvent,
-  BuilderDefinition, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
+  BuilderAIChangeResult, BuilderAIPlan, BuilderAISession, BuilderAISource,
+  BuilderDefinition, BuilderIconKey, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
   ConnectorDetail, CurrentUser, EngineStatus, Member, MonitoringResponse, Overview, Paginated,
   ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
   SchemaSnapshot,
@@ -161,12 +162,12 @@ export const workspaceApi = {
 export const builderApi = {
   list: () => get<BuilderProject[]>('/builder/projects'),
   detail: (id: string) => get<BuilderProjectDetail>(`/builder/projects/${id}`),
-  create: (body: { name: string; description?: string }) =>
+  create: (body: { name: string; description?: string; icon?: BuilderIconKey }) =>
     post<BuilderProjectDetail>('/builder/projects', body),
-  update: (id: string, body: { name?: string; description?: string; definition?: BuilderDefinition }) =>
+  update: (id: string, body: { name?: string; description?: string; icon?: BuilderIconKey; definition?: BuilderDefinition }) =>
     patch<BuilderProjectDetail>(`/builder/projects/${id}`, body),
   remove: (id: string) => del<void>(`/builder/projects/${id}`),
-  test: (id: string, body: { stream_name?: string; config?: Record<string, unknown> }) =>
+  test: (id: string, body: { stream_name?: string; config?: Record<string, unknown>; test_session_id?: string | null }) =>
     post<BuilderTestResult>(`/builder/projects/${id}/test`, body),
   publish: (id: string) => post<BuilderProjectDetail>(`/builder/projects/${id}/publish`),
   manifest: (id: string) => get<Record<string, unknown>>(`/builder/projects/${id}/manifest`),
@@ -179,6 +180,104 @@ export const builderApi = {
   },
   importManifest: (id: string, manifest: string) =>
     post<BuilderProjectDetail>(`/builder/projects/${id}/import`, { manifest }),
+};
+
+async function requestForm<T>(method: string, path: string, body: FormData): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    method, credentials: 'include', body, cache: 'no-store',
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new ApiError(response.status, payload?.error ?? {
+      code: 'NETWORK_ERROR', message: 'Could not reach the server.',
+      category: 'UNKNOWN', trace_id: '',
+    });
+  }
+  return payload as T;
+}
+
+export const builderAiApi = {
+  uploadSource: (file: File, projectId?: string) => {
+    const form = new FormData();
+    form.set('file', file);
+    if (projectId) form.set('project_id', projectId);
+    return requestForm<BuilderAISource>('POST', '/builder/ai/sources', form);
+  },
+  addUrl: (url: string, projectId?: string) =>
+    post<BuilderAISource>('/builder/ai/sources/url', { url, project_id: projectId }),
+  removeSource: (id: string) => del<void>(`/builder/ai/sources/${id}`),
+  analyzeSource: (id: string) =>
+    post<{ source: BuilderAISource; knowledge: Record<string, unknown> }>(`/builder/ai/sources/${id}/analyze`),
+  createPlan: (sourceIds: string[], intent?: string) =>
+    post<BuilderAIPlan>('/builder/ai/plans', { source_ids: sourceIds, intent }),
+  removePlan: (id: string) => del<void>(`/builder/ai/plans/${id}`),
+  createProject: (
+    planId: string,
+    review: {
+      name: string;
+      description: string;
+      icon: import('./types').BuilderIconKey;
+      streams: { source_name: string; name: string; enabled: boolean }[];
+    },
+  ) => post<BuilderProjectDetail>('/builder/projects/from-plan', {
+    plan_id: planId, ...review,
+  }),
+  session: (projectId: string) =>
+    get<BuilderAISession>(`/builder/projects/${projectId}/ai/session`),
+  changeSet: (projectId: string, changeSetId: string) =>
+    get<import('./types').BuilderAIChangeSet>(
+      `/builder/projects/${projectId}/ai/change-sets/${changeSetId}`,
+    ),
+  apply: (projectId: string, changeSetId: string) =>
+    post<BuilderAIChangeResult>(
+      `/builder/projects/${projectId}/ai/change-sets/${changeSetId}/apply`,
+    ),
+  reject: (projectId: string, changeSetId: string) =>
+    post<BuilderAIChangeResult>(
+      `/builder/projects/${projectId}/ai/change-sets/${changeSetId}/reject`,
+    ),
+  undo: (projectId: string, changeSetId: string) =>
+    post<BuilderAIChangeResult>(
+      `/builder/projects/${projectId}/ai/change-sets/${changeSetId}/undo`,
+    ),
+  chat: async (
+    projectId: string,
+    body: { message: string; stream_name?: string; section?: string; test_run_id?: string },
+    onEvent: (event: 'progress' | 'final', data: Record<string, unknown>) => void,
+  ) => {
+    const response = await fetch(`${BASE}/builder/projects/${projectId}/ai/chat`, {
+      method: 'POST', credentials: 'include', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!response.ok || !response.body) {
+      const payload = await response.json().catch(() => null);
+      throw new ApiError(response.status, payload?.error ?? {
+        code: 'NETWORK_ERROR', message: 'Could not reach the server.',
+        category: 'UNKNOWN', trace_id: '',
+      });
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop() ?? '';
+      for (const block of blocks) {
+        const event = block.split('\n').find((line) => line.startsWith('event:'))?.slice(6).trim();
+        const raw = block.split('\n').find((line) => line.startsWith('data:'))?.slice(5).trim();
+        if (!event || !raw) continue;
+        const data = JSON.parse(raw) as Record<string, unknown>;
+        if (event === 'error') {
+          throw new ApiError(502, data as unknown as ErrorEnvelope);
+        }
+        if (event === 'progress' || event === 'final') onEvent(event, data);
+      }
+      if (done) break;
+    }
+  },
 };
 
 // ── connector OAuth ────────────────────────────────────────────────────────

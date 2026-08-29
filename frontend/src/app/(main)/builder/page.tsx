@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, CircleDashed, Hammer, Plus } from 'lucide-react';
 
 import { builderApi } from '@/lib/api';
@@ -11,13 +11,13 @@ import { qk } from '@/lib/queryKeys';
 import { formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { usePermissions } from '@/hooks/use-permissions';
-import { toastError } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
+import { BuilderCreateDialog } from '@/components/builder/BuilderCreateDialog';
+import { ConnectorIcon } from '@/components/integrations/ConnectorIcon';
 
 export default function BuilderPage() {
   const { t, locale } = useI18n();
@@ -29,21 +29,10 @@ export default function BuilderPage() {
 
   const [search, setSearch] = React.useState('');
   const [creating, setCreating] = React.useState(false);
-  const [name, setName] = React.useState('');
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: qk.builderProjects(workspaceId),
     queryFn: () => builderApi.list(),
-  });
-
-  const create = useMutation({
-    mutationFn: () => builderApi.create({ name: name.trim() }),
-    onSuccess: (project) => {
-      queryClient.invalidateQueries({ queryKey: qk.builderProjects(workspaceId) });
-      // Straight into the editor: the point of creating is to start building.
-      router.push(`/builder/${project.id}`);
-    },
-    onError: (caught) => toastError(caught),
   });
 
   const items = (data ?? []).filter((project) =>
@@ -82,40 +71,14 @@ export default function BuilderPage() {
         />
       }
     >
-      {creating && (
-        <form
-          className="mb-3 flex flex-col gap-2 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-3 sm:flex-row sm:items-end"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (name.trim()) create.mutate();
-          }}
-        >
-          <div className="flex-1">
-            <label htmlFor="builder-name"
-                   className="mb-1 block text-label text-text-secondary">
-              {t('builder.nameLabel')}
-            </label>
-            <Input
-              id="builder-name"
-              size="sm"
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t('builder.namePlaceholder')}
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" variant="primary" size="sm"
-                    loading={create.isPending} disabled={!name.trim()}>
-              {t('builder.createAndOpen')}
-            </Button>
-            <Button type="button" variant="ghost" size="sm"
-                    onClick={() => { setCreating(false); setName(''); }}>
-              {t('common.cancel')}
-            </Button>
-          </div>
-        </form>
-      )}
+      <BuilderCreateDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={(project) => {
+          queryClient.invalidateQueries({ queryKey: qk.builderProjects(workspaceId) });
+          router.push(`/builder/${project.id}`);
+        }}
+      />
 
       {error ? (
         <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
@@ -163,11 +126,16 @@ export default function BuilderPage() {
                   <tr key={project.id} className="transition-colors hover:bg-surface-2/60">
                     <td className="px-4 py-2.5">
                       <Link href={`/builder/${project.id}`} className="block min-w-0">
-                        <span className="block truncate text-caption font-emphasis text-text-primary hover:text-brand">
-                          {project.name}
-                        </span>
-                        <span className="block truncate font-mono text-tiny text-text-quaternary">
-                          {project.connector_key}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <ConnectorIcon icon={project.icon} size="md" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-caption font-emphasis text-text-primary hover:text-brand">
+                              {project.name}
+                            </span>
+                            <span className="block truncate font-mono text-tiny text-text-quaternary">
+                              {project.connector_key}
+                            </span>
+                          </span>
                         </span>
                       </Link>
                     </td>

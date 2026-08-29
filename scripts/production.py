@@ -199,6 +199,12 @@ def validate(config: dict, *, strict: bool) -> list[str]:
         _require(config, "engine.connector_policy_overlay")
         _require(config, "datastores.database_url_ref")
 
+        ai = config.get("ai") or {}
+        if ai.get("enabled"):
+            key_ref = str(ai.get("openai_api_key_ref") or "")
+            if not key_ref.startswith(("secret://", "env://", "file://")):
+                raise Stop("ai.openai_api_key_ref must be a secret reference when AI is enabled")
+
         # Fatal, not a warning. The Config API carries connector credentials in
         # request bodies and the product's own API carries session cookies; a
         # warning here is a warning nobody reads on the one deployment that
@@ -590,6 +596,13 @@ def render_from_config(config: dict, workdir: Path) -> Path:
         "COOKIE_SECURE": "true",
         "SEED_DEMO_DATA": "false",
     }
+    ai = config.get("ai") or {}
+    if ai.get("enabled"):
+        literals.update({
+            "OPENAI_MODEL_PLANNER": str(ai.get("planner_model") or "gpt-5-mini"),
+            "OPENAI_MODEL_AGENT": str(ai.get("agent_model") or "gpt-5-mini"),
+            "OPENAI_MODEL_VISION": str(ai.get("vision_model") or "gpt-5-mini"),
+        })
     config_patch = [{"op": "replace", "path": f"/data/{key}", "value": value}
                     for key, value in literals.items()]
 
@@ -601,8 +614,7 @@ def render_from_config(config: dict, workdir: Path) -> Path:
                          "value": str(engine["workspace_id"])})
 
     secret_env = _secret_env(config)
-    env_patch = [{"op": "add", "path": "/spec/template/spec/containers/0/env",
-                  "value": secret_env}] if secret_env else []
+    api_secret_env = secret_env + _ai_secret_env(config)
 
     kustomization = {
         "apiVersion": "kustomize.config.k8s.io/v1beta1",
@@ -620,8 +632,13 @@ def render_from_config(config: dict, workdir: Path) -> Path:
 
     (generated / "config.yaml").write_text(yaml_dump(config_patch), encoding="utf-8")
 
-    if secret_env:
-        for name in ("appbi-api", "appbi-worker"):
+    if api_secret_env:
+        workloads = [("appbi-api", api_secret_env)]
+        if secret_env:
+            workloads.append(("appbi-worker", secret_env))
+        for name, workload_env in workloads:
+            env_patch = [{"op": "add", "path": "/spec/template/spec/containers/0/env",
+                          "value": workload_env}]
             (generated / f"env-{name}.yaml").write_text(yaml_dump(env_patch), encoding="utf-8")
             kustomization["patches"].append(
                 {"path": f"env-{name}.yaml",
@@ -750,6 +767,20 @@ def _secret_env(config: dict) -> list[dict]:
     return env
 
 
+def _ai_secret_env(config: dict) -> list[dict]:
+    ai = config.get("ai") or {}
+    if not ai.get("enabled"):
+        return []
+    reference = str(ai.get("openai_api_key_ref") or "")
+    if not reference.startswith("secret://"):
+        return []
+    name, _, key = reference[len("secret://"):].partition("/")
+    return [{
+        "name": "OPENAI_API_KEY",
+        "valueFrom": {"secretKeyRef": {"name": name, "key": key}},
+    }]
+
+
 def yaml_dump(document) -> str:
     import yaml
 
@@ -802,13 +833,14 @@ def assert_rendered_matches(config: dict, rendered: Path) -> None:
     # the Pod read a different one entirely.
     # Name -> (secret, key), not just the variable name. Comparing names alone
     # passed a config that pointed the same variable at a different Secret.
-    declared = {entry["name"]: (entry["valueFrom"]["secretKeyRef"]["name"],
-                                entry["valueFrom"]["secretKeyRef"]["key"])
-                for entry in _secret_env(config)}
     for document in documents:
         if document.get("metadata", {}).get("name") not in ("appbi-api", "appbi-worker"):
             continue
         name = document["metadata"]["name"]
+        expected_env = _secret_env(config) + (_ai_secret_env(config) if name == "appbi-api" else [])
+        declared = {entry["name"]: (entry["valueFrom"]["secretKeyRef"]["name"],
+                                    entry["valueFrom"]["secretKeyRef"]["key"])
+                    for entry in expected_env}
         for spec in _pod_specs(document):
             container = spec["containers"][0]
             bound = {

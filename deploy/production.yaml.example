@@ -75,6 +75,16 @@ datastores:
   # because psycopg and asyncpg do not share one.
   database_url_sync_ref: secret://appbi-secrets/DATABASE_URL_SYNC
 
+# Optional at platform level, enabled here because this product ships the
+# AI-assisted Builder. The key remains a Kubernetes Secret reference and is
+# bound only into the API pod, never the worker, migration Job or frontend.
+ai:
+  enabled: true
+  openai_api_key_ref: secret://appbi-secrets/OPENAI_API_KEY
+  planner_model: gpt-5-mini
+  agent_model: gpt-5-mini
+  vision_model: gpt-5-mini
+
 secrets:
   # References only. `secret://` is resolved by Kubernetes at pod start and not
   # by the installer: a process that can read every secret is a bigger target

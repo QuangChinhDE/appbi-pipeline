@@ -59,6 +59,11 @@ INJECT_LOCATIONS = {"request_parameter", "header", "body_data", "body_json"}
 
 _CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CONFIG_REFERENCE_RE = re.compile(r"config\[\s*['\"]([A-Za-z0-9_]*)['\"]\s*\]")
+_RESPONSE_PREDICATE_BLOCKED = (
+    "{%", "__", "import", "open(", "eval(", "exec(", "subprocess", "os.",
+    "sys.", "cycler", "joiner", "namespace", "|attr", ".mro", "globals",
+)
+_RESPONSE_PREDICATE_MAX_LENGTH = 500
 
 
 def _runtime_template_values(definition: dict[str, Any]):
@@ -76,6 +81,35 @@ def _runtime_template_values(definition: dict[str, Any]):
                 yield (item or {}).get("value") or ""
         for item in stream.get("transformations") or []:
             yield (item or {}).get("value") or ""
+        for item in ((stream.get("error_handler") or {}).get("filters") or []):
+            yield (item or {}).get("predicate") or ""
+
+
+def _validate_response_predicate(
+    predicate: str,
+    *,
+    field: str,
+    stream_name: str,
+) -> None:
+    if len(predicate) > _RESPONSE_PREDICATE_MAX_LENGTH:
+        raise ValidationError(
+            f"Stream '{stream_name}' co dieu kien response qua dai.",
+            code="BUILDER_RESPONSE_PREDICATE_INVALID",
+            details={"field": field, "max_length": _RESPONSE_PREDICATE_MAX_LENGTH},
+        )
+    if not (predicate.startswith("{{") and predicate.endswith("}}")):
+        raise ValidationError(
+            f"Stream '{stream_name}' co dieu kien response khong hop le.",
+            code="BUILDER_RESPONSE_PREDICATE_INVALID",
+            details={"field": field, "expected": "{{ expression }}"},
+        )
+    lowered = predicate.lower()
+    if any(token in lowered for token in _RESPONSE_PREDICATE_BLOCKED):
+        raise ValidationError(
+            f"Stream '{stream_name}' co dieu kien response khong duoc ho tro.",
+            code="BUILDER_RESPONSE_PREDICATE_INVALID",
+            details={"field": field},
+        )
 
 
 def slugify(name: str) -> str:
@@ -468,13 +502,24 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 normalized_codes = [int(code) for code in codes]
             except (TypeError, ValueError):
                 normalized_codes = []
-            if not normalized_codes or any(code < 100 or code > 599 for code in normalized_codes):
+            predicate = str((response_filter or {}).get("predicate") or "").strip()
+            field_prefix = f"streams[{index}].error_handler.filters[{filter_index}]"
+            if codes and (not normalized_codes
+                          or any(code < 100 or code > 599 for code in normalized_codes)):
                 raise ValidationError(
                     f"Stream '{name}' có quy tắc với mã HTTP không hợp lệ.",
                     code="BUILDER_RESPONSE_CODES_INVALID",
-                    details={
-                        "field": f"streams[{index}].error_handler.filters[{filter_index}].http_codes",
-                    },
+                    details={"field": f"{field_prefix}.http_codes"},
+                )
+            if not normalized_codes and not predicate:
+                raise ValidationError(
+                    f"Stream '{name}' needs an HTTP code or response condition.",
+                    code="BUILDER_RESPONSE_FILTER_CONDITION_REQUIRED",
+                    details={"field": field_prefix},
+                )
+            if predicate:
+                _validate_response_predicate(
+                    predicate, field=f"{field_prefix}.predicate", stream_name=name,
                 )
             action = ((response_filter or {}).get("action") or "").upper()
             if action not in allowed_response_actions:
@@ -898,13 +943,17 @@ def _error_handler(config: dict[str, Any]) -> dict[str, Any] | None:
     filters = []
     for item in config.get("filters") or []:
         codes = [int(c) for c in (item.get("http_codes") or []) if str(c).strip()]
-        if not codes:
+        predicate = str(item.get("predicate") or "").strip()
+        if not codes and not predicate:
             continue
         entry: dict[str, Any] = {
             "type": "HttpResponseFilter",
-            "http_codes": codes,
             "action": (item.get("action") or "RETRY").upper(),
         }
+        if codes:
+            entry["http_codes"] = codes
+        if predicate:
+            entry["predicate"] = predicate
         if item.get("message"):
             entry["error_message"] = item["message"]
         filters.append(entry)
@@ -1600,6 +1649,7 @@ def _import_error_handler(component: Any, stream_index: int) -> dict[str, Any]:
             )
         filters.append({
             "http_codes": response_filter.get("http_codes") or [],
+            "predicate": response_filter.get("predicate") or "",
             "action": response_filter.get("action") or "RETRY",
             "message": response_filter.get("error_message") or "",
         })

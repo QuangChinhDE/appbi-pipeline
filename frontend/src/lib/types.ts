@@ -561,7 +561,7 @@ export interface BuilderBackoff {
 export interface BuilderErrorHandler {
   max_retries?: number;
   backoff?: BuilderBackoff;
-  filters?: { http_codes: number[]; action: string; message?: string }[];
+  filters?: { http_codes: number[]; predicate?: string; action: string; message?: string }[];
 }
 
 export interface BuilderStream {
@@ -624,11 +624,16 @@ export interface BuilderDefinition {
   streams: BuilderStream[];
 }
 
+export type BuilderIconKey =
+  | 'api' | 'database' | 'users' | 'commerce' | 'finance' | 'analytics'
+  | 'workflow' | 'support' | 'files' | 'custom';
+
 export interface BuilderProject {
   id: string;
   name: string;
   description: string | null;
   connector_key: string;
+  icon: BuilderIconKey;
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   published_version: number;
   published_at: string | null;
@@ -654,4 +659,80 @@ export interface BuilderTestResult {
   /** False when the engine validated the connector but cannot return sample
    *  rows, so an empty `records` is a property of the engine, not a result. */
   record_preview_supported: boolean;
+  test_run_id: string;
+  test_session_id: string | null;
+}
+
+export type BuilderAIConfidence = 'confirmed' | 'likely' | 'unknown';
+
+export interface BuilderAISource {
+  id: string;
+  name: string;
+  source_type: 'FILE' | 'URL';
+  mime_type: string | null;
+  source_url: string | null;
+  size_bytes: number;
+  status: 'UPLOADED' | 'ANALYZED' | 'FAILED';
+  knowledge: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface BuilderAIPlanStream {
+  name: string;
+  path: string;
+  http_method: 'GET' | 'POST';
+  confidence: BuilderAIConfidence;
+  evidence: { source_id: string; location: string; detail: string }[];
+}
+
+export interface BuilderAIPlan {
+  id: string;
+  status: string;
+  plan: {
+    name: string;
+    description: string;
+    icon: BuilderIconKey;
+    base_url: string;
+    auth: { method: string; confidence: BuilderAIConfidence };
+    streams: BuilderAIPlanStream[];
+    unknowns: string[];
+    assumptions: string[];
+  };
+}
+
+export interface BuilderAIChangeSet {
+  id: string;
+  project_id: string;
+  base_hash: string;
+  status: 'PROPOSED' | 'APPLIED' | 'REJECTED' | 'UNDONE';
+  operations: { op: 'add' | 'replace' | 'remove'; path: string; value_json: string; label: string }[];
+  reason: string;
+  evidence: { source_id: string; location: string; detail: string }[];
+  model: string;
+  prompt_version: string;
+  created_at: string;
+}
+
+export interface BuilderAISession {
+  id: string;
+  available: boolean;
+  sources: {
+    id: string;
+    name: string;
+    source_type: 'FILE' | 'URL';
+    status: 'UPLOADED' | 'ANALYZED' | 'FAILED';
+  }[];
+  messages: {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    context: Record<string, unknown>;
+    created_at: string;
+  }[];
+  change_set: BuilderAIChangeSet | null;
+}
+
+export interface BuilderAIChangeResult {
+  project: BuilderProjectDetail;
+  change_set: BuilderAIChangeSet;
 }

@@ -188,3 +188,32 @@ def check_url(url: str, *, field: str = "base_url") -> None:
                 code="EGRESS_PRIVATE_ADDRESS",
                 details={"field": field, "host": host, "resolved": str(address)},
             )
+
+
+def check_connected_address(url: str, address: str, *, field: str = "base_url") -> None:
+    """Validate the peer an HTTP client actually connected to.
+
+    URL ingestion runs inside the product API, not a connector worker. Checking
+    DNS before the request is therefore insufficient: a rebinding hostname can
+    answer publicly during validation and privately during connect. HTTP clients
+    call this after connect and before consuming a response body.
+    """
+    parsed = urlparse((url or "").strip())
+    host = (parsed.hostname or "").strip().lower()
+    if settings.egress_allow_private or host in _allowlisted_hosts():
+        return
+    try:
+        peer = ipaddress.ip_address(address)
+    except ValueError:
+        raise ValidationError(
+            "Không xác định được địa chỉ máy chủ đã kết nối.",
+            code="EGRESS_PEER_UNKNOWN", details={"field": field, "host": host},
+        ) from None
+    if any(peer in network for network in _allowlisted_networks()):
+        return
+    if not _is_public(peer):
+        raise ValidationError(
+            f"Kết nối tới '{host}' đã đi vào mạng nội bộ ({peer}).",
+            code="EGRESS_PRIVATE_ADDRESS",
+            details={"field": field, "host": host, "resolved": str(peer)},
+        )

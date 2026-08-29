@@ -1,7 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowRight, Boxes, Database, FileText, Sparkles, Warehouse } from 'lucide-react';
+import {
+  ArrowRight, BarChart3, Boxes, Braces, Database, FileText, GitBranch,
+  Headphones, ShoppingBag, Sparkles, Users, WalletCards, Warehouse,
+} from 'lucide-react';
 
 import type { ActorRef } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -14,11 +17,34 @@ import { cn } from '@/lib/utils';
  * missing file is a cosmetic detail rather than a broken card.
  */
 
+export const BUILDER_ICON_OPTIONS = [
+  { key: 'api', label: 'API' },
+  { key: 'database', label: 'Database' },
+  { key: 'users', label: 'People' },
+  { key: 'commerce', label: 'Commerce' },
+  { key: 'finance', label: 'Finance' },
+  { key: 'analytics', label: 'Analytics' },
+  { key: 'workflow', label: 'Workflow' },
+  { key: 'support', label: 'Support' },
+  { key: 'files', label: 'Files' },
+  { key: 'custom', label: 'Custom' },
+] as const;
+
 const GLYPHS: Record<string, { Icon: React.ElementType; tint: string }> = {
   postgres: { Icon: Database, tint: 'text-[#336791] bg-[#336791]/10' },
   faker: { Icon: Sparkles, tint: 'text-brand bg-brand/10' },
   file: { Icon: FileText, tint: 'text-warning bg-warning/10' },
   warehouse: { Icon: Warehouse, tint: 'text-success bg-success/10' },
+  api: { Icon: Braces, tint: 'text-brand bg-brand/10' },
+  database: { Icon: Database, tint: 'text-[#336791] bg-[#336791]/10' },
+  users: { Icon: Users, tint: 'text-info bg-info/10' },
+  commerce: { Icon: ShoppingBag, tint: 'text-success bg-success/10' },
+  finance: { Icon: WalletCards, tint: 'text-warning bg-warning/10' },
+  analytics: { Icon: BarChart3, tint: 'text-[#0f766e] bg-[#0f766e]/10' },
+  workflow: { Icon: GitBranch, tint: 'text-[#7c3aed] bg-[#7c3aed]/10' },
+  support: { Icon: Headphones, tint: 'text-danger bg-danger/10' },
+  files: { Icon: FileText, tint: 'text-text-secondary bg-surface-2' },
+  custom: { Icon: Boxes, tint: 'text-text-secondary bg-surface-2' },
 };
 
 const SIZES = {

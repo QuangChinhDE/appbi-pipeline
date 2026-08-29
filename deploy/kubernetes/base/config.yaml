@@ -31,6 +31,12 @@ data:
   EGRESS_ALLOW_PRIVATE: "false"
   ALLOW_DERIVED_ENCRYPTION_KEY: "false"
 
+  # AI key is a Secret and is bound only into the API pod by production.py.
+  # Model routing is non-secret and can change without rebuilding the image.
+  OPENAI_MODEL_PLANNER: "gpt-5-mini"
+  OPENAI_MODEL_AGENT: "gpt-5-mini"
+  OPENAI_MODEL_VISION: "gpt-5-mini"
+
   # No demo identities. This was already false and had no effect: `seed()` did
   # not read it, so production got admin@appbi.local and three more accounts
   # sharing a password published in this repository. It is honoured now, and

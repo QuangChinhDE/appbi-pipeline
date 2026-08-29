@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Code2, CornerDownRight, Eye, EyeOff, ListTree,
-  Play, Plus, Rocket, Save, Settings2, Trash2, Variable, X,
+  Play, Plus, Rocket, Save, Settings2, Sparkles, Trash2, Variable, X,
 } from 'lucide-react';
 
 import { ApiError, builderApi } from '@/lib/api';
@@ -21,15 +21,19 @@ import { ErrorState, Skeleton } from '@/components/ui/Feedback';
 import { DetailHeader } from '@/components/layout/PageLayout';
 import { Modal } from '@/components/ui/Modal';
 import type {
-  BuilderDefinition, BuilderStream, BuilderTestResult, BuilderUserInput,
+  BuilderDefinition, BuilderIconKey, BuilderProjectDetail, BuilderStream,
+  BuilderTestResult, BuilderUserInput,
 } from '@/lib/types';
 import { configReference, Field, JinjaInput } from '@/components/builder/BuilderField';
 import {
   StreamEditor, type BuilderStreamSection,
 } from '@/components/builder/StreamEditor';
-import { Tabs } from '@/components/ui/Tabs';
+import { SegmentedControl, Tabs } from '@/components/ui/Tabs';
 import { useUrlTab } from '@/hooks/use-url-tab';
 import { cn } from '@/lib/utils';
+import { BuilderAIPanel } from '@/components/builder/BuilderAIPanel';
+import { BuilderIconPicker } from '@/components/builder/BuilderIconPicker';
+import { ConnectorIcon } from '@/components/integrations/ConnectorIcon';
 
 const BUILDER_VIEWS = ['api', 'inputs', 'stream'] as const;
 const STREAM_SECTIONS: readonly BuilderStreamSection[] = [
@@ -276,6 +280,7 @@ export default function BuilderEditorPage() {
   });
 
   const [draft, setDraft] = React.useState<BuilderDefinition | null>(null);
+  const [projectIcon, setProjectIcon] = React.useState<BuilderIconKey | null>(null);
   const requestedStream = Number.parseInt(queryValue('stream') ?? '0', 10);
   const activeStream = draft && Number.isInteger(requestedStream)
     ? Math.min(Math.max(requestedStream, 0), Math.max(draft.streams.length - 1, 0))
@@ -286,6 +291,7 @@ export default function BuilderEditorPage() {
   const requestedTestView = queryValue('result') as TestView | null;
   const testView = requestedTestView && TEST_VIEWS.includes(requestedTestView)
     ? requestedTestView : 'records';
+  const sidePanel = queryValue('panel') === 'ai' ? 'ai' : 'test';
   const [adding, setAdding] = React.useState(false);
   const [newStream, setNewStream] = React.useState({ name: '', path: '' });
   const [dirty, setDirty] = React.useState(false);
@@ -312,7 +318,8 @@ export default function BuilderEditorPage() {
   // is never interrupted by a refetch.
   React.useEffect(() => {
     if (data && draft === null) setDraft(data.definition);
-  }, [data, draft]);
+    if (data && projectIcon === null) setProjectIcon(data.icon);
+  }, [data, draft, projectIcon]);
 
   const patch = (
     next: Partial<BuilderDefinition>,
@@ -436,7 +443,9 @@ export default function BuilderEditorPage() {
   );
 
   const save = useMutation({
-    mutationFn: () => builderApi.update(params.id, { definition: draft! }),
+    mutationFn: () => builderApi.update(params.id, {
+      definition: draft!, icon: projectIcon ?? undefined,
+    }),
     onSuccess: (project) => {
       setDirty(false);
       queryClient.setQueryData(qk.builderProject(workspaceId, params.id), project);
@@ -451,7 +460,9 @@ export default function BuilderEditorPage() {
       // Save first: the server tests what is stored, so an untested edit would
       // silently produce a result for the previous version.
       if (dirty) {
-        const saved = await builderApi.update(params.id, { definition: draft! });
+        const saved = await builderApi.update(params.id, {
+          definition: draft!, icon: projectIcon ?? undefined,
+        });
         queryClient.setQueryData(qk.builderProject(workspaceId, params.id), saved);
         setDirty(false);
       }
@@ -492,6 +503,37 @@ export default function BuilderEditorPage() {
       queryClient.invalidateQueries({ queryKey: qk.builderProject(workspaceId, params.id) });
     },
   });
+
+  const acceptAIProject = (project: BuilderProjectDetail) => {
+    setDraft(project.definition);
+    setProjectIcon(project.icon);
+    setDirty(false);
+    setTestResult(null);
+    queryClient.setQueryData(qk.builderProject(workspaceId, params.id), project);
+    queryClient.invalidateQueries({ queryKey: qk.builderProjects(workspaceId) });
+  };
+
+  const retestAIProject = async (project: BuilderProjectDetail) => {
+    const index = Math.min(activeStream, Math.max(project.definition.streams.length - 1, 0));
+    try {
+      const result = await builderApi.test(params.id, {
+        stream_name: project.definition.streams[index]?.name,
+        test_session_id: testResult?.test_session_id,
+      });
+      setTestResult(result);
+      setQuery({
+        panel: 'test',
+        result: result.ok ? 'records' : result.logs.length > 0 ? 'logs' : 'requests',
+      }, { replace: true });
+      toastSuccess(result.ok
+        ? t('builder.testOk', { n: String(result.record_count) })
+        : t('builder.testFailed'));
+    } catch (caught) {
+      toastError(caught);
+    } finally {
+      queryClient.invalidateQueries({ queryKey: qk.builderProject(workspaceId, params.id) });
+    }
+  };
 
   const publish = useMutation({
     mutationFn: () => builderApi.publish(params.id),
@@ -568,7 +610,7 @@ export default function BuilderEditorPage() {
     );
   }
 
-  if (isLoading || !data || !draft) {
+  if (isLoading || !data || !draft || !projectIcon) {
     return (
       <div className="space-y-3 px-4 py-6 sm:px-6 xl:px-8">
         <Skeleton className="h-8 w-64" />
@@ -600,7 +642,12 @@ export default function BuilderEditorPage() {
         backHref="/builder"
         backLabel={t('builder.title')}
         title={data.name}
-        subtitle={<span className="font-mono text-tiny">{data.connector_key}</span>}
+        subtitle={(
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <ConnectorIcon icon={projectIcon} size="xs" />
+            <span className="truncate font-mono text-tiny">{data.connector_key}</span>
+          </span>
+        )}
         badgesInline
         badges={
           <>
@@ -761,6 +808,15 @@ export default function BuilderEditorPage() {
           <div className="min-w-0 space-y-4">
             {view === 'api' && (
             <Section title={t('builder.sectionApi')}>
+              <BuilderIconPicker
+                value={projectIcon}
+                disabled={!canEdit}
+                label={t('builder.iconLabel')}
+                onChange={(next) => {
+                  setProjectIcon(next);
+                  setDirty(true);
+                }}
+              />
               <Field label={t('builder.baseUrl')} htmlFor="base-url" required>
                 <Input
                   id="base-url"
@@ -1155,23 +1211,32 @@ export default function BuilderEditorPage() {
           {/* ── test panel ─────────────────────────────────────────── */}
           <aside className="builder-test-panel space-y-3 self-start">
             <Section
-              title={t('builder.sectionTest')}
-              action={stream ? (
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <Badge
-                    variant={stream.http_method === 'POST' ? 'info' : 'outline'}
-                    size="xs"
-                    pill={false}
-                    className="font-mono"
-                  >
+              title={t('builder.sidePanelTitle')}
+              action={(
+                <SegmentedControl
+                  size="xs"
+                  value={sidePanel}
+                  onChange={(panel) => setQuery({ panel }, { replace: true })}
+                  options={[
+                    { value: 'test', label: t('builder.sectionTest') },
+                    { value: 'ai', label: t('builder.sectionAI') },
+                  ]}
+                />
+              )}
+            >
+              {sidePanel === 'test' ? (
+              <>
+              {stream && (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Badge variant={stream.http_method === 'POST' ? 'info' : 'outline'}
+                         size="xs" pill={false} className="font-mono">
                     {stream.http_method}
                   </Badge>
-                  <Badge variant="subtle" size="xs" className="max-w-32 truncate">
+                  <Badge variant="subtle" size="xs" className="max-w-48 truncate">
                     {stream.name}
                   </Badge>
-                </span>
-              ) : null}
-            >
+                </div>
+              )}
               {(configuredTestInputs.length > 0 || needsApiKey || needsBasic
                 || needsOAuth || needsJwt) && (
                 <div className="space-y-2.5 border-b border-[rgb(var(--border-line))] pb-3">
@@ -1302,6 +1367,9 @@ export default function BuilderEditorPage() {
                   onViewChange={(next) => setQuery({ result: next }, { replace: true })}
                   onDismiss={() => setTestResult(null)}
                   t={t}
+                  onFixWithAI={!testResult.ok && canEdit
+                    ? () => setQuery({ panel: 'ai' }, { replace: true })
+                    : undefined}
                   onApplySchema={canEdit && testResult.inferred_schema
                     ? () => {
                         patchStream(
@@ -1325,6 +1393,18 @@ export default function BuilderEditorPage() {
                     {t('builder.testIdle')}
                   </p>
                 </div>
+              )}
+              </>
+              ) : (
+                <BuilderAIPanel
+                  project={{ ...data, definition: draft, icon: projectIcon }}
+                  streamName={stream?.name}
+                  section={view === 'stream' ? streamSection : view}
+                  testRunId={testResult?.test_run_id}
+                  canEdit={canEdit}
+                  onApplied={acceptAIProject}
+                  onRetest={retestAIProject}
+                />
               )}
             </Section>
           </aside>
@@ -1445,7 +1525,7 @@ function statusTone(status: number | null): 'success' | 'danger' | 'subtle' {
 }
 
 function TestOutcome({
-  result, view, onViewChange, onDismiss, t, onApplySchema,
+  result, view, onViewChange, onDismiss, t, onApplySchema, onFixWithAI,
 }: {
   result: BuilderTestResult;
   view: TestView;
@@ -1453,6 +1533,7 @@ function TestOutcome({
   onDismiss: () => void;
   t: (key: string, vars?: Record<string, string>) => string;
   onApplySchema?: () => void;
+  onFixWithAI?: () => void;
 }) {
   const columns = React.useMemo(() => {
     const keys: string[] = [];
@@ -1503,6 +1584,13 @@ function TestOutcome({
             <p className="mt-1.5 break-words font-mono text-tiny text-text-tertiary">
               {result.error.technical_message.slice(0, 400)}
             </p>
+          )}
+          {onFixWithAI && (
+            <Button className="mt-2" size="xs" variant="secondary"
+                    leadingIcon={<Sparkles className="h-3 w-3" />}
+                    onClick={onFixWithAI}>
+              {t('builder.aiFixWithAI')}
+            </Button>
           )}
         </div>
       )}

@@ -735,10 +735,10 @@ export function StreamEditor({
           {(stream.error_handler?.filters ?? []).map((filter, index) => (
             <div
               key={index}
-              className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[minmax(8rem,0.8fr)_minmax(9rem,0.8fr)_minmax(10rem,1.4fr)_2rem] sm:border-0 sm:p-0"
+              className="grid grid-cols-[minmax(0,1fr)_2rem] gap-1.5 rounded-md border border-[rgb(var(--border-line))] p-2 sm:grid-cols-[minmax(7rem,0.7fr)_minmax(8rem,0.7fr)_minmax(12rem,1.25fr)_minmax(10rem,1fr)_2rem] sm:border-0 sm:p-0"
             >
               <HttpCodesInput
-                codes={filter.http_codes}
+                codes={filter.http_codes ?? []}
                 label={`${t('builder.responseCodes')} ${index + 1}`}
                 disabled={disabled}
                 errorText={t('builder.responseCodesInvalid')}
@@ -771,6 +771,21 @@ export function StreamEditor({
               <Input
                 size="sm"
                 className="col-span-2 min-w-0 sm:col-span-1"
+                aria-label={`${t('builder.responsePredicate')} ${index + 1}`}
+                disabled={disabled}
+                value={filter.predicate ?? ''}
+                placeholder="{{ response.get('code') == 0 }}"
+                onChange={(event) => onChange({
+                  error_handler: {
+                    ...stream.error_handler,
+                    filters: (stream.error_handler?.filters ?? []).map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, predicate: event.target.value } : item),
+                  },
+                })}
+              />
+              <Input
+                size="sm"
+                className="col-span-2 min-w-0 sm:col-span-1"
                 aria-label={`${t('builder.responseMessage')} ${index + 1}`}
                 disabled={disabled}
                 value={filter.message ?? ''}
@@ -786,10 +801,10 @@ export function StreamEditor({
               <IconButton
                 size="xs"
                 variant="ghost"
-                className="col-start-2 row-start-1 sm:col-start-4"
                 aria-label={t('builder.removeResponseFilter')}
                 title={t('builder.removeResponseFilter')}
                 disabled={disabled}
+                className="col-start-2 row-start-1 sm:col-start-5"
                 onClick={() => onChange({
                   error_handler: {
                     ...stream.error_handler,
@@ -812,7 +827,7 @@ export function StreamEditor({
                   ...stream.error_handler,
                   filters: [
                     ...(stream.error_handler?.filters ?? []),
-                    { http_codes: [429], action: 'RATE_LIMITED', message: '' },
+                    { http_codes: [429], predicate: '', action: 'RATE_LIMITED', message: '' },
                   ],
                 },
               })}

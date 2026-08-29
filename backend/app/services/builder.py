@@ -181,7 +181,7 @@ async def publish(
         "connector_type": ConnectorType.SOURCE,
         "category": "Custom",
         "description": project.description,
-        "icon": "custom",
+        "icon": project.icon,
         "docker_repository": runner_repository,
         # `version` is the runner tag because it becomes the image tag the
         # engine pulls. What the user reasons about is their own revision, which
