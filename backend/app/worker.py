@@ -37,9 +37,10 @@ from app.models.enums import (
 )
 from app.models.integration import Destination, Pipeline, Source
 from app.models.run import PipelineRun
+from app.models.transform import Transform
 from app.services import (
     alerts as alert_service, catalog, pipelines as pipeline_service, runs as run_service,
-    scheduling,
+    scheduling, transforms as transform_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,8 +132,14 @@ class Worker:
         if hasattr(adapter, "forget"):
             adapter.forget(run.engine_job_ref)
 
+        queued_transforms = await transform_service.enqueue_after_upstream(session, run)
         notifications = await alert_service.evaluate_run(session, run)
         await session.commit()
+        if queued_transforms:
+            log_event(
+                logger, logging.INFO, "transforms.queued_after_upstream",
+                run_id=str(run.id), count=len(queued_transforms),
+            )
         if notifications:
             log_event(logger, logging.INFO, "alerts.created",
                       run_id=str(run.id), count=len(notifications))
@@ -158,6 +165,54 @@ class Worker:
             except Exception as exc:  # noqa: BLE001
                 log_event(logger, logging.ERROR, "scheduler.error", error=str(exc))
             await self._sleep(10)
+
+    async def transform_scheduler_loop(self) -> None:
+        while not self.stopping.is_set():
+            try:
+                async with SessionLocal() as session:
+                    now = utcnow()
+                    due = list((await session.scalars(
+                        select(Transform).where(
+                            Transform.status == "ACTIVE",
+                            Transform.deleted_at.is_(None),
+                            Transform.next_run_at.is_not(None),
+                            Transform.next_run_at <= now,
+                        ).limit(50)
+                    )).all())
+                    for transform in due:
+                        await self._fire_transform(session, transform)
+                    if due:
+                        await session.commit()
+            except Exception as exc:  # noqa: BLE001
+                log_event(logger, logging.ERROR, "transform_scheduler.error", error=str(exc))
+            await self._sleep(10)
+
+    async def _fire_transform(self, session, transform: Transform) -> None:
+        fired_for = transform.next_run_at
+        # Advance first, exactly as the pipeline scheduler does, so a skipped
+        # tick cannot become a retry loop.
+        transform.next_run_at = scheduling.next_run_at(
+            transform.schedule_type, transform.schedule_config, transform.timezone,
+        )
+        # A schedule runs published code. With nothing published there is
+        # nothing safe to run unattended, so skip rather than fall back to a
+        # draft somebody may be halfway through editing.
+        if transform.active_release_id is None:
+            log_event(logger, logging.WARNING, "transform_scheduler.skipped_unpublished",
+                      transform_id=str(transform.id))
+            return
+
+        ctx = RequestContext.system(transform.workspace_id, new_trace_id(), transform.timezone)
+        try:
+            await transform_service.enqueue(
+                session, ctx, transform, operation="BUILD", model_id=None,
+                source="RELEASE", trigger_type=TriggerType.SCHEDULE,
+                enforce_permission=False,
+                idempotency_key=f"schedule:{transform.id}:{fired_for.isoformat()}",
+            )
+        except AppError as exc:
+            log_event(logger, logging.INFO, "transform_scheduler.rejected",
+                      transform_id=str(transform.id), error=str(exc))
 
     async def _fire(self, session, pipeline: Pipeline) -> None:
         # Always advance the clock first, so a skipped or rejected tick cannot
@@ -355,6 +410,7 @@ class Worker:
             asyncio.create_task(self.executor_loop(), name="executor"),
             asyncio.create_task(self.reconciler_loop(), name="reconciler"),
             asyncio.create_task(self.scheduler_loop(), name="scheduler"),
+            asyncio.create_task(self.transform_scheduler_loop(), name="transform-scheduler"),
             asyncio.create_task(self.catalog_loop(), name="catalog"),
             asyncio.create_task(self.janitor_loop(), name="janitor"),
             asyncio.create_task(self.outbox_loop(), name="outbox"),

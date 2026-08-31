@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 export interface MenuItem {
   id: string;
   label: string;
+  /** One line on what the action does; shown under the label. */
+  description?: string;
   icon?: React.ReactNode;
   onSelect: () => void;
   destructive?: boolean;
@@ -136,7 +138,7 @@ export function Menu({
               onClick={() => { close(); item.onSelect(); }}
               onMouseEnter={() => setActive(index)}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption',
+                'flex w-full items-start gap-2 px-3 py-1.5 text-left text-caption',
                 'transition-colors focus:outline-none',
                 item.destructive ? 'text-danger' : 'text-text-secondary',
                 index === active && (item.destructive
@@ -145,7 +147,14 @@ export function Menu({
               )}
             >
               {item.icon && <span className="text-text-quaternary">{item.icon}</span>}
-              {item.label}
+              <span className="min-w-0 flex-1">
+                <span className="block">{item.label}</span>
+                {item.description && (
+                  <span className="mt-0.5 block text-tiny leading-4 text-text-quaternary">
+                    {item.description}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </div>

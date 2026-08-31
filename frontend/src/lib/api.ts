@@ -12,7 +12,9 @@ import type {
   BuilderDefinition, BuilderIconKey, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
   ConnectorDetail, CurrentUser, EngineStatus, Member, MonitoringResponse, Overview, Paginated,
   ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
-  SchemaSnapshot,
+  SchemaSnapshot, DataAsset, Transform, TransformDestinationCapability, TransformDetail,
+  TransformExecution, TransformInputCandidates, TransformLineage, TransformModel,
+  TransformDiffEntry, TransformOperation, TransformRelease, TransformTest,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
 
@@ -420,9 +422,60 @@ export const pipelineApi = {
 };
 
 // ── runs ───────────────────────────────────────────────────────────────────
+export const transformApi = {
+  list: (query?: { search?: string; limit?: number; offset?: number }) =>
+    get<Paginated<Transform>>('/transforms', query as Query),
+  detail: (id: string) => get<TransformDetail>(`/transforms/${id}`),
+  destinations: () => get<TransformDestinationCapability[]>('/transforms/destinations'),
+  inputCandidates: (destinationId: string) =>
+    get<TransformInputCandidates>(`/transforms/destinations/${destinationId}/inputs`),
+  registerAsset: (destinationId: string, body: {
+    catalog_name?: string; schema_name: string; relation_name: string;
+    pipeline_id?: string; pipeline_stream_id?: string;
+  }) => post<DataAsset>(`/transforms/destinations/${destinationId}/assets`, body),
+  create: (body: {
+    name: string; description?: string; destination_id: string;
+    default_schema: string; input_asset_ids: string[];
+  }) => post<TransformDetail>('/transforms', body),
+  update: (id: string, body: unknown) => patch<TransformDetail>(`/transforms/${id}`, body),
+  remove: (id: string) => del<void>(`/transforms/${id}`),
+  createModel: (id: string, body: unknown) =>
+    post<TransformModel>(`/transforms/${id}/models`, body),
+  updateModel: (id: string, modelId: string, body: unknown) =>
+    patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
+  removeModel: (id: string, modelId: string) =>
+    del<void>(`/transforms/${id}/models/${modelId}`),
+  addTest: (id: string, modelId: string, body: unknown) =>
+    post<TransformTest>(`/transforms/${id}/models/${modelId}/tests`, body),
+  removeTest: (id: string, modelId: string, testId: string) =>
+    del<void>(`/transforms/${id}/models/${modelId}/tests/${testId}`),
+  run: (
+    id: string,
+    operation: TransformOperation,
+    modelId?: string,
+    options?: { fullRefresh?: boolean; source?: 'DRAFT' | 'RELEASE' },
+  ) => post<TransformExecution>(`/transforms/${id}/runs`, {
+    operation, model_id: modelId, full_refresh: options?.fullRefresh ?? false,
+    source: options?.source ?? 'DRAFT',
+  }),
+  releases: (id: string) => get<TransformRelease[]>(`/transforms/${id}/releases`),
+  diff: (id: string) =>
+    get<{ changes: TransformDiffEntry[] }>(`/transforms/${id}/diff`),
+  publish: (id: string, body: { notes?: string | null; activate?: boolean }) =>
+    post<TransformRelease>(`/transforms/${id}/releases`, body),
+  activateRelease: (id: string, releaseId: string) =>
+    post<TransformRelease>(`/transforms/${id}/releases/${releaseId}/activate`, {}),
+  execution: (runId: string) => get<TransformExecution>(`/transforms/runs/${runId}`),
+  cancel: (runId: string) => post<TransformExecution>(`/transforms/runs/${runId}/cancel`),
+  lineage: (id: string) => get<TransformLineage>(`/transforms/${id}/lineage`),
+  project: (id: string) => get<Record<string, string>>(`/transforms/${id}/project`),
+  exportUrl: (id: string) => `/api/v1/transforms/${id}/export`,
+};
+
 export const runApi = {
   list: (query?: {
-    pipeline_id?: string; status?: string; trigger_type?: string; error_category?: string;
+    type?: string; pipeline_id?: string; transform_id?: string; status?: string;
+    trigger_type?: string; error_category?: string;
     since?: string; until?: string; limit?: number; offset?: number;
   }) => get<Paginated<Run>>('/runs', query as Query),
   detail: (id: string) => get<RunDetail>(`/runs/${id}`),

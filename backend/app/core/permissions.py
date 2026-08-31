@@ -24,6 +24,7 @@ class Module(str, Enum):
     SOURCES = "sources"
     DESTINATIONS = "destinations"
     PIPELINES = "pipelines"
+    TRANSFORMS = "transforms"
     MONITORING = "monitoring"
     ALERTS = "alerts"
     AUDIT = "audit"
@@ -52,6 +53,7 @@ MATRIX: dict[Role, dict[Module, set[Action]]] = {
         Module.SOURCES: {Action.VIEW, Action.CREATE, Action.EDIT, Action.OPERATE, Action.DELETE},
         Module.DESTINATIONS: {Action.VIEW, Action.CREATE, Action.EDIT, Action.OPERATE, Action.DELETE},
         Module.PIPELINES: {Action.VIEW, Action.CREATE, Action.EDIT, Action.OPERATE, Action.DELETE},
+        Module.TRANSFORMS: {Action.VIEW, Action.CREATE, Action.EDIT, Action.OPERATE, Action.DELETE},
         Module.MONITORING: {Action.VIEW, Action.OPERATE},
         Module.ALERTS: {Action.VIEW, Action.CREATE, Action.EDIT, Action.OPERATE, Action.DELETE},
         Module.AUDIT: _RO,
@@ -63,6 +65,7 @@ MATRIX: dict[Role, dict[Module, set[Action]]] = {
         Module.SOURCES: {Action.VIEW, Action.OPERATE},
         Module.DESTINATIONS: {Action.VIEW, Action.OPERATE},
         Module.PIPELINES: {Action.VIEW, Action.OPERATE},
+        Module.TRANSFORMS: {Action.VIEW, Action.OPERATE},
         Module.MONITORING: {Action.VIEW, Action.OPERATE},
         Module.ALERTS: {Action.VIEW, Action.OPERATE},
         Module.AUDIT: set(),
@@ -74,6 +77,7 @@ MATRIX: dict[Role, dict[Module, set[Action]]] = {
         Module.SOURCES: _RO,
         Module.DESTINATIONS: _RO,
         Module.PIPELINES: _RO,
+        Module.TRANSFORMS: _RO,
         Module.MONITORING: _RO,
         Module.ALERTS: _RO,
         Module.AUDIT: set(),
@@ -85,6 +89,7 @@ MATRIX: dict[Role, dict[Module, set[Action]]] = {
         Module.SOURCES: _RO,
         Module.DESTINATIONS: _RO,
         Module.PIPELINES: _RO,
+        Module.TRANSFORMS: _RO,
         Module.MONITORING: _RO,
         Module.ALERTS: _RO,
         Module.AUDIT: {Action.VIEW, Action.ADMIN},

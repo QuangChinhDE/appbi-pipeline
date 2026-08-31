@@ -15,6 +15,11 @@ from app.models.oauth import OAuthGrant
 from app.models.outbox import EngineOperation, EngineOperationState
 from app.models.ops import AlertRule, AuditEvent, Notification, Operation, SecretRecord
 from app.models.run import PipelineRun, RunAttempt
+from app.models.transform import (
+    DataAsset, Transform, TransformArtifact, TransformDependency, TransformInput,
+    TransformRelease,
+    TransformModel, TransformRun, TransformRunAttempt, TransformRunNode, TransformTest,
+)
 
 __all__ = [
     "AlertRule", "AuditEvent", "BuilderAIChangeSet", "BuilderAIMessage", "BuilderAIPlan",
@@ -22,5 +27,8 @@ __all__ = [
     "BuilderTestRun", "BuilderTestSession", "ConnectorDefinition", "Destination", "EngineInstance",
     "EngineMapping", "Membership", "Notification", "Operation", "Pipeline", "PipelineRun",
     "PipelineStream", "PipelineStreamStat", "RunAttempt", "SchemaSnapshot", "SecretRecord",
-    "Source", "User", "Workspace",
+    "Source", "User", "Workspace", "DataAsset", "Transform", "TransformArtifact",
+    "TransformRelease",
+    "TransformDependency", "TransformInput", "TransformModel", "TransformRun",
+    "TransformRunAttempt", "TransformRunNode", "TransformTest",
 ]

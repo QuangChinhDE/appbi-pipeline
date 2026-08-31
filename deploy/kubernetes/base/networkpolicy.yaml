@@ -43,7 +43,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [appbi-api, appbi-worker, appbi-migrate]
+        values: [appbi-api, appbi-worker, appbi-transform-worker, appbi-migrate]
   policyTypes: [Egress]
   egress:
     # DNS. Without this every other rule fails in a way that looks like the
@@ -73,3 +73,31 @@ spec:
 
   # Deliberately absent: any rule permitting general outbound. The product
   # calls nothing on the internet. Connectors do, and they do not run here.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: appbi-transform-warehouse-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: appbi-transform-worker}
+  policyTypes: [Egress]
+  egress:
+    # Transform is the exception to the product-wide internet rule: dbt must
+    # reach the selected warehouse. BigQuery uses HTTPS; managed Postgres may
+    # expose 5432 publicly. Private warehouse CIDRs remain deployment-owned and
+    # must be added narrowly beside the datastore rule above.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 224.0.0.0/4
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}

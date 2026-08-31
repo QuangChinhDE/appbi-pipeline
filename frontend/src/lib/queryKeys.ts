@@ -16,6 +16,16 @@ export const qk = {
   destination: (ws: string, id: string) => ['workspace', ws, 'destination', id] as const,
   pipelines: (ws: string, filters?: unknown) => ['workspace', ws, 'pipelines', filters] as const,
   pipeline: (ws: string, id: string) => ['workspace', ws, 'pipeline', id] as const,
+  transforms: (ws: string, filters?: unknown) => ['workspace', ws, 'transforms', filters] as const,
+  transform: (ws: string, id: string) => ['workspace', ws, 'transform', id] as const,
+  transformReleases: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'releases'] as const,
+  transformDiff: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'diff'] as const,
+  transformDestinations: (ws: string) => ['workspace', ws, 'transform-destinations'] as const,
+  transformInputs: (ws: string, id: string) => ['workspace', ws, 'transform-inputs', id] as const,
+  transformRun: (ws: string, id: string) => ['workspace', ws, 'transform-run', id] as const,
+  transformLineage: (ws: string, id: string) => ['workspace', ws, 'transform-lineage', id] as const,
   // Not workspace-scoped: it is fetched from the engine on demand and never
   // part of the pipeline payload, so it must not be invalidated with it.
   pipelineState: (id: string) => ['pipeline-state', id] as const,

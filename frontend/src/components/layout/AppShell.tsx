@@ -112,7 +112,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="text-caption font-strong text-text-primary">AppBI Integration</span>
         </div>
         <EngineHealthBanner />
-        <main className="min-h-[calc(100vh-3rem)] lg:min-h-screen">{children}</main>
+        {/* A flex column, not a block: pages that fill the viewport (the
+            Transform workbench) size their panes with `h-full`, which
+            resolves against `height` and so collapses to content inside a
+            block parent no matter how tall `min-height` is. */}
+        <main className="flex min-h-[calc(100vh-3rem)] flex-col lg:min-h-screen">{children}</main>
       </div>
     </div>
   );

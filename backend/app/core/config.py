@@ -197,6 +197,20 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 2.0
     worker_max_parallel_syncs: int = 4
 
+    # --- transformation engine -------------------------------------------
+    # The API only queues work. A dedicated process reads these directories
+    # and starts one isolated dbt subprocess per claimed run.
+    transform_workspace_dir: str = "/transform/workspace"
+    transform_log_dir: str = "/transform/logs"
+    transform_timeout_seconds: int = 1800
+    # A queued run that no worker ever claimed holds the active-build slot for
+    # its Transform, so it is released far sooner than a running one.
+    transform_stale_queue_seconds: int = 900
+    transform_worker_max_parallel: int = 2
+    transform_worker_poll_seconds: float = 1.0
+    transform_preview_limit: int = 200
+    dbt_core_version: str = "1.12.3"
+
     # Airbyte application credentials. An auth-enabled Airbyte 1.x rejects HTTP
     # Basic on the Config API -- including the instance admin's own email and
     # password -- and expects a bearer token obtained from these. Basic is kept

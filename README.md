@@ -62,16 +62,45 @@ và không cần chờ bản phát hành mới.
 Cần Docker và khoảng 20 GB đĩa trống.
 
 ```bash
-python scripts/production.py install --config deploy/demo.yaml
+./run.sh          # Linux, macOS, hoặc Git Bash trên Windows
+.\run.ps1         # PowerShell trên Windows
 ```
 
-Một lệnh. Nó tự sinh khoá mã hoá, dựng và khởi động toàn bộ, đợi tới khi thật sự
-phục vụ được, rồi in ra địa chỉ.
+Một lệnh. Nó dựng lại image từ mã nguồn đang có, khởi động toàn bộ, đợi tới khi
+API thật sự phục vụ được, rồi in ra địa chỉ.
 
 Mở **http://localhost:8080**, đăng nhập bằng `admin@appbi.local`.
 
-Chạy lại lệnh đó lần nữa không hỏng gì: khoá cũ được giữ nguyên, vì sinh khoá mới
-sẽ làm cả kho thông tin đăng nhập không giải mã được nữa.
+Khi có mã mới:
+
+```bash
+./run.sh --pull   # git pull rồi dựng lại và khởi động lại tất cả
+```
+
+Dùng `--pull` thay vì `docker compose up` từng dịch vụ: container chạy mã đã
+được nướng vào image, nên khởi động lại một dịch vụ mà không dựng lại image sẽ
+chạy mã cũ, và job migration thì không chạy — hỏng theo kiểu trông hệt như lỗi
+sản phẩm.
+
+| Lệnh | Việc |
+|---|---|
+| `./run.sh` | dựng lại và khởi động tất cả |
+| `./run.sh --pull` | lấy mã mới nhất trước |
+| `./run.sh --fresh` | tạo lại container từ đầu, giữ dữ liệu |
+| `./run.sh --clean` | xoá luôn cơ sở dữ liệu rồi dựng lại (hỏi xác nhận) |
+| `./run.sh --status` | đang chạy những gì |
+| `./run.sh --logs api` | theo dõi nhật ký một dịch vụ |
+| `./run.sh --stop` | dừng, không mất gì |
+
+Chạy lại không hỏng gì: khoá mã hoá trong `.env` được giữ nguyên, vì sinh khoá
+mới sẽ làm cả kho thông tin đăng nhập không giải mã được nữa. Mỗi lần chạy,
+`.env` được sao lưu vào `.env.backups/` chính vì lý do đó.
+
+Muốn dựng theo cấu hình triển khai đầy đủ (Kubernetes, TLS, cấu hình riêng):
+
+```bash
+python scripts/production.py install --config deploy/demo.yaml
+```
 
 ### Thử ngay bằng dữ liệu mẫu
 

@@ -336,12 +336,22 @@ export interface RunError {
   summary: string | null;
   remediation_action: string | null;
   technical_message: string | null;
+  /** Where the engine says the failure is, when it could tell. */
+  location?: {
+    name?: string | null;
+    resource_type?: string | null;
+    path?: string | null;
+    line?: number | null;
+  } | null;
 }
 
 export interface Run {
   id: string;
   short_id: string;
+  run_type: 'PIPELINE' | 'TRANSFORM';
   pipeline: ActorRef | null;
+  transform: ActorRef | null;
+  operation: string | null;
   status: string;
   trigger_type: string;
   triggered_by: UserRef | null;
@@ -353,6 +363,11 @@ export interface Run {
   duration_seconds: number | null;
   records_synced: number | null;
   bytes_synced: number | null;
+  models_built: number | null;
+  tests_passed: number | null;
+  tests_failed: number | null;
+  tests_warned: number | null;
+  rows_affected: number | null;
   error: RunError | null;
   is_stale: boolean;
   actions: { can_cancel?: boolean; can_retry?: boolean; can_view_logs?: boolean };
@@ -380,6 +395,14 @@ export interface RunDetail extends Run {
   destination: ActorRef | null;
   trace_id: string | null;
   technical_metadata: Record<string, unknown>;
+  transform_nodes: {
+    name: string;
+    resource_type: string;
+    status: string;
+    execution_time: number | null;
+    relation_name: string | null;
+    message: string | null;
+  }[];
 }
 
 export interface RunLogPage {
@@ -388,6 +411,184 @@ export interface RunLogPage {
   next_cursor: number | null;
   has_more: boolean;
   total_lines: number | null;
+}
+
+export interface TransformDestinationCapability {
+  destination: ActorRef;
+  supported: boolean;
+  certification: string | null;
+  adapter: string | null;
+  dbt_core_version: string | null;
+  adapter_version: string | null;
+  reason: string | null;
+}
+
+export interface DataAsset {
+  id: string;
+  destination_id: string;
+  catalog_name: string | null;
+  schema_name: string;
+  relation_name: string;
+  relation_type: string;
+  asset_type: string;
+  owner_type: string;
+  pipeline_id: string | null;
+  pipeline_name: string | null;
+  pipeline_stream_id: string | null;
+  resolution_status: string;
+  columns: { name: string; data_type?: string; nullable?: boolean }[];
+  last_ready_at: string | null;
+  fresh_at: string | null;
+  /** dbt alias this relation is reachable by: {{ source(source_name, relation_name) }}. */
+  source_name: string | null;
+  freshness_state: 'READY' | 'STALE' | 'UNRESOLVED' | null;
+}
+
+export interface TransformInputCandidates {
+  destination_id: string;
+  pipelines: {
+    pipeline: ActorRef;
+    last_success_at: string | null;
+    streams: {
+      id: string; name: string; namespace: string | null; selected: boolean;
+      asset_id: string | null;
+    }[];
+  }[];
+  assets: DataAsset[];
+}
+
+export interface TransformTest {
+  id: string;
+  column_name: string | null;
+  rule: string;
+  severity: string;
+  config: Record<string, unknown>;
+  last_status: string;
+  last_run_at: string | null;
+}
+
+export interface TransformModel {
+  id: string;
+  name: string;
+  layer: 'STAGING' | 'CORE' | 'MART';
+  materialization: 'VIEW' | 'TABLE' | 'INCREMENTAL';
+  sql: string;
+  output_schema: string | null;
+  relation_name: string | null;
+  description: string | null;
+  tags: string[];
+  config: Record<string, unknown>;
+  tests: TransformTest[];
+  version: number;
+  updated_at: string;
+}
+
+export interface TransformRunRef {
+  id: string;
+  operation: string;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  models_built: number;
+  tests_passed: number;
+  tests_failed: number;
+}
+
+export interface Transform {
+  id: string;
+  name: string;
+  description: string | null;
+  destination: ActorRef;
+  default_schema: string;
+  status: string;
+  health_status: string;
+  health_message: string | null;
+  model_count: number;
+  test_count: number;
+  last_run: TransformRunRef | null;
+  last_success_at: string | null;
+  dbt_core_version: string;
+  dbt_adapter_name: string;
+  dbt_adapter_version: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  available_actions: string[];
+}
+
+export interface TransformDetail extends Transform {
+  inputs: DataAsset[];
+  models: TransformModel[];
+  execution_trigger: 'MANUAL' | 'AFTER_UPSTREAM' | 'SCHEDULE';
+  trigger_config: Record<string, unknown>;
+  upstream_ready: boolean;
+  schedule?: ScheduleConfig | null;
+  next_run_at?: string | null;
+  /** The published snapshot a schedule executes; null until first publish. */
+  active_release?: TransformRelease | null;
+  /** True when the editor holds edits made after that snapshot was taken. */
+  draft_has_changes?: boolean;
+}
+
+/** Mirrors TransformRunRequest.operation on the API. */
+export type TransformOperation =
+  | 'VALIDATE' | 'COMPILE' | 'PREVIEW' | 'TEST'
+  | 'RUN_MODEL' | 'RUN_UPSTREAM' | 'BUILD';
+
+/** One dbt node in a run: a model, a test, or a seed. */
+export interface TransformRunNode {
+  name: string;
+  resource_type: string;
+  status: string;
+  execution_time: number | null;
+  relation_name: string | null;
+  message: string | null;
+}
+
+/** A published snapshot: what a schedule and unattended triggers execute. */
+export interface TransformRelease {
+  id: string;
+  release_number: number;
+  notes: string | null;
+  default_schema: string;
+  model_count: number;
+  created_at: string;
+  is_active: boolean;
+}
+
+/** One model's difference between the draft and the published version. */
+export interface TransformDiffEntry {
+  name: string;
+  change: 'ADDED' | 'REMOVED' | 'MODIFIED';
+  before: string | null;
+  after: string | null;
+}
+
+export interface TransformExecution {
+  id: string;
+  transform_id: string;
+  operation: TransformOperation;
+  selected_model_id: string | null;
+  status: string;
+  trigger_type: string;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  models_built: number;
+  tests_passed: number;
+  tests_failed: number;
+  tests_warned: number;
+  rows_affected: number | null;
+  error: RunError | null;
+  preview: Record<string, unknown> | null;
+  compiled_sql: Record<string, string>;
+  nodes: TransformRunNode[];
+}
+
+export interface TransformLineage {
+  nodes: { id: string; type: string; label: string; layer?: string; materialization?: string }[];
+  edges: { from: string; to: string; type: string }[];
 }
 
 export interface OverviewKpis {

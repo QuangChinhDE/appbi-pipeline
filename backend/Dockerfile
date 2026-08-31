@@ -31,7 +31,7 @@ RUN apt-get update \
 WORKDIR /srv
 
 COPY requirements.txt ./
-RUN pip install -r requirements.txt
+RUN pip install --default-timeout=120 --retries=10 -r requirements.txt
 
 # The test suite is deliberately not in the runtime image. It used to be, and
 # an image that carries its own tests ships code nobody reviewed as product
@@ -44,7 +44,7 @@ COPY app ./app
 COPY alembic.ini ./
 COPY migrations ./migrations
 
-RUN mkdir -p /engine/workspace /engine/logs
+RUN mkdir -p /engine/workspace /engine/logs /transform/workspace /transform/logs
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

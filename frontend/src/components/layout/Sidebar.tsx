@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Hammer,
   Activity, Bell, Boxes, ChevronLeft, ChevronRight, ChevronsUpDown, Check, Database,
-  GitBranch, Globe, Home, LogOut, PlayCircle, Radar, ScrollText, Settings, Warehouse, X,
+  GitBranch, Globe, Home, LogOut, PlayCircle, Radar, ScrollText, Settings, Warehouse, Workflow, X,
 } from 'lucide-react';
 
 import { authApi, opsApi, pipelineApi } from '@/lib/api';
@@ -51,6 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
       { labelKey: 'sidebar.sources', href: '/sources', icon: <Database className="h-4 w-4" />, module: 'sources' },
       { labelKey: 'sidebar.destinations', href: '/destinations', icon: <Warehouse className="h-4 w-4" />, module: 'destinations' },
       { labelKey: 'sidebar.pipelines', href: '/pipelines', icon: <GitBranch className="h-4 w-4" />, module: 'pipelines' },
+      { labelKey: 'sidebar.transforms', href: '/transforms', icon: <Workflow className="h-4 w-4" />, module: 'transforms' },
       { labelKey: 'sidebar.builder', href: '/builder', icon: <Hammer className="h-4 w-4" />, module: 'connectors' },
     ],
   },

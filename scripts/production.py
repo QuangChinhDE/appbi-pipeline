@@ -636,9 +636,19 @@ def render_from_config(config: dict, workdir: Path) -> Path:
         workloads = [("appbi-api", api_secret_env)]
         if secret_env:
             workloads.append(("appbi-worker", secret_env))
+            workloads.append(("appbi-transform-worker", secret_env))
         for name, workload_env in workloads:
             env_patch = [{"op": "add", "path": "/spec/template/spec/containers/0/env",
                           "value": workload_env}]
+            schema_env = [
+                entry for entry in workload_env
+                if entry.get("name") == "DATABASE_URL_SYNC"
+            ]
+            if schema_env:
+                env_patch.append({
+                    "op": "add", "path": "/spec/template/spec/initContainers/0/env",
+                    "value": schema_env,
+                })
             (generated / f"env-{name}.yaml").write_text(yaml_dump(env_patch), encoding="utf-8")
             kustomization["patches"].append(
                 {"path": f"env-{name}.yaml",
@@ -834,7 +844,9 @@ def assert_rendered_matches(config: dict, rendered: Path) -> None:
     # Name -> (secret, key), not just the variable name. Comparing names alone
     # passed a config that pointed the same variable at a different Secret.
     for document in documents:
-        if document.get("metadata", {}).get("name") not in ("appbi-api", "appbi-worker"):
+        if document.get("metadata", {}).get("name") not in (
+            "appbi-api", "appbi-worker", "appbi-transform-worker",
+        ):
             continue
         name = document["metadata"]["name"]
         expected_env = _secret_env(config) + (_ai_secret_env(config) if name == "appbi-api" else [])

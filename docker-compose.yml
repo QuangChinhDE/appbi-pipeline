@@ -78,6 +78,10 @@ x-backend-env: &backend-env
   MAX_CONCURRENT_RUNS_PER_WORKSPACE: ${MAX_CONCURRENT_RUNS_PER_WORKSPACE:-3}
   MIN_SCHEDULE_INTERVAL_SECONDS: ${MIN_SCHEDULE_INTERVAL_SECONDS:-300}
   RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-7200}
+  TRANSFORM_TIMEOUT_SECONDS: ${TRANSFORM_TIMEOUT_SECONDS:-1800}
+  TRANSFORM_WORKER_MAX_PARALLEL: ${TRANSFORM_WORKER_MAX_PARALLEL:-2}
+  TRANSFORM_WORKSPACE_DIR: /transform/workspace
+  TRANSFORM_LOG_DIR: /transform/logs
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
 services:
@@ -153,6 +157,7 @@ services:
       # Local demo mode adds it back via docker-compose.embedded.yml.
       - engine_workspace:/engine/workspace
       - engine_logs:/engine/logs
+      - transform_logs:/transform/logs:ro
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
@@ -186,6 +191,26 @@ services:
       # See the API service: the socket is a local-demo overlay, not a default.
       - engine_workspace:/engine/workspace
       - engine_logs:/engine/logs
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [appbi]
+
+  transform-worker:
+    build:
+      context: ./backend
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-}
+    image: appbi-pipeline-backend
+    container_name: appbi-pipeline-transform-worker
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: transform-worker
+    command: ["python", "-m", "app.transform_worker"]
+    volumes:
+      - transform_workspace:/transform/workspace
+      - transform_logs:/transform/logs
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
@@ -231,6 +256,8 @@ volumes:
   engine_workspace:
     name: appbi-pipeline_engine_workspace
   engine_logs:
+  transform_workspace:
+  transform_logs:
 
 networks:
   appbi:

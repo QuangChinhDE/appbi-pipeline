@@ -9,6 +9,7 @@ resources:
   - api.yaml
   - frontend.yaml
   - worker.yaml
+  - transform-worker.yaml
   - networkpolicy.yaml
   - pdb.yaml
   - ingress.yaml

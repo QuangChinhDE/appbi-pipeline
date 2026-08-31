@@ -1,0 +1,31 @@
+{
+  "contract_version": "2",
+  "dbt_core": "1.12.3",
+  "adapters": {
+    "destination-postgres": {
+      "package": "dbt-postgres",
+      "version": "1.11.0",
+      "profile_type": "postgres",
+      "certification": "SUPPORTED",
+      "incremental_strategies": ["append", "merge", "delete+insert"],
+      "default_incremental_strategy": "append"
+    },
+    "destination-bigquery": {
+      "package": "dbt-bigquery",
+      "version": "1.12.0",
+      "profile_type": "bigquery",
+      "certification": "SUPPORTED",
+      "incremental_strategies": ["merge", "insert_overwrite"],
+      "default_incremental_strategy": "merge"
+    },
+    "destination-mssql": {
+      "package": "dbt-sqlserver",
+      "version": null,
+      "profile_type": "sqlserver",
+      "certification": "BETA",
+      "enabled": false,
+      "incremental_strategies": ["append", "merge", "delete+insert"],
+      "default_incremental_strategy": "append"
+    }
+  }
+}

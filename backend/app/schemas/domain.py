@@ -466,6 +466,243 @@ class PipelineDetail(PipelineView):
 # ── runs ───────────────────────────────────────────────────────────────────
 
 
+class TransformDestinationCapability(BaseModel):
+    destination: ActorRef
+    supported: bool
+    certification: str | None = None
+    adapter: str | None = None
+    dbt_core_version: str | None = None
+    adapter_version: str | None = None
+    reason: str | None = None
+
+
+class DataAssetView(BaseModel):
+    id: uuid.UUID
+    destination_id: uuid.UUID
+    catalog_name: str | None = None
+    schema_name: str
+    relation_name: str
+    relation_type: str
+    asset_type: str
+    owner_type: str
+    pipeline_id: uuid.UUID | None = None
+    pipeline_name: str | None = None
+    pipeline_stream_id: uuid.UUID | None = None
+    resolution_status: str
+    columns: list[dict[str, Any]] = Field(default_factory=list)
+    last_ready_at: datetime | None = None
+    fresh_at: datetime | None = None
+    # The dbt alias this relation is reachable by, so the editor can offer
+    # `{{ source('<source_name>', '<relation_name>') }}` instead of leaving the
+    # user to guess it from the warehouse name.
+    source_name: str | None = None
+    freshness_state: str | None = None
+
+
+class PipelineInputCandidate(BaseModel):
+    pipeline: ActorRef
+    last_success_at: datetime | None = None
+    streams: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TransformInputCandidates(BaseModel):
+    destination_id: uuid.UUID
+    pipelines: list[PipelineInputCandidate] = Field(default_factory=list)
+    assets: list[DataAssetView] = Field(default_factory=list)
+
+
+class DataAssetRegister(BaseModel):
+    catalog_name: str | None = Field(default=None, max_length=200)
+    schema_name: str = Field(min_length=1, max_length=200)
+    relation_name: str = Field(min_length=1, max_length=300)
+    pipeline_id: uuid.UUID | None = None
+    pipeline_stream_id: uuid.UUID | None = None
+
+
+class TransformCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    destination_id: uuid.UUID
+    default_schema: str = Field(min_length=1, max_length=200)
+    input_asset_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class TransformUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    default_schema: str | None = Field(default=None, min_length=1, max_length=200)
+    execution_trigger: Literal["MANUAL", "AFTER_UPSTREAM", "SCHEDULE"] | None = None
+    schedule: ScheduleConfig | None = None
+    trigger_config: dict[str, Any] | None = None
+    input_asset_ids: list[uuid.UUID] | None = None
+    version: int | None = None
+
+
+class TransformTestCreate(BaseModel):
+    column_name: str | None = Field(default=None, max_length=200)
+    rule: Literal["NOT_NULL", "UNIQUE", "ACCEPTED_VALUES", "RELATIONSHIPS"]
+    severity: Literal["ERROR", "WARN"] = "ERROR"
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class TransformTestView(BaseModel):
+    id: uuid.UUID
+    column_name: str | None = None
+    rule: str
+    severity: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    last_status: str
+    last_run_at: datetime | None = None
+
+
+class TransformModelCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    layer: Literal["STAGING", "CORE", "MART"] = "STAGING"
+    materialization: Literal["VIEW", "TABLE", "INCREMENTAL"] = "VIEW"
+    sql: str | None = None
+
+
+class TransformModelUpdate(BaseModel):
+    sql: str | None = None
+    layer: Literal["STAGING", "CORE", "MART"] | None = None
+    materialization: Literal["VIEW", "TABLE", "INCREMENTAL"] | None = None
+    output_schema: str | None = Field(default=None, max_length=200)
+    relation_name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    tags: list[str] | None = None
+    config: dict[str, Any] | None = None
+    version: int | None = None
+
+
+class TransformModelView(BaseModel):
+    id: uuid.UUID
+    name: str
+    layer: str
+    materialization: str
+    sql: str
+    output_schema: str | None = None
+    relation_name: str | None = None
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    config: dict[str, Any] = Field(default_factory=dict)
+    tests: list[TransformTestView] = Field(default_factory=list)
+    version: int
+    updated_at: datetime
+
+
+class TransformRunRef(BaseModel):
+    id: uuid.UUID
+    operation: str
+    status: str
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    created_at: datetime
+    models_built: int = 0
+    tests_passed: int = 0
+    tests_failed: int = 0
+
+
+class TransformView(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+    destination: ActorRef
+    default_schema: str
+    status: str
+    health_status: str
+    health_message: str | None = None
+    model_count: int = 0
+    test_count: int = 0
+    last_run: TransformRunRef | None = None
+    last_success_at: datetime | None = None
+    dbt_core_version: str
+    dbt_adapter_name: str
+    dbt_adapter_version: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    available_actions: list[str] = Field(default_factory=list)
+
+
+class TransformReleaseView(BaseModel):
+    id: uuid.UUID
+    release_number: int
+    notes: str | None
+    default_schema: str
+    model_count: int
+    created_at: datetime
+    created_by: UserRef | None = None
+    is_active: bool = False
+
+
+class TransformReleaseCreate(BaseModel):
+    notes: str | None = Field(default=None, max_length=500)
+    activate: bool = True
+
+
+class TransformDetail(TransformView):
+    inputs: list[DataAssetView] = Field(default_factory=list)
+    models: list[TransformModelView] = Field(default_factory=list)
+    execution_trigger: str = "MANUAL"
+    trigger_config: dict[str, Any] = Field(default_factory=dict)
+    upstream_ready: bool = True
+    schedule: ScheduleConfig | None = None
+    next_run_at: datetime | None = None
+    # The published snapshot a schedule executes, and whether the draft has
+    # moved on since -- the two facts a user needs to answer "will tonight's
+    # run include what I just typed?"
+    active_release: TransformReleaseView | None = None
+    draft_has_changes: bool = False
+
+
+class TransformRunRequest(BaseModel):
+    operation: Literal[
+        "VALIDATE", "COMPILE", "PREVIEW", "TEST", "RUN_MODEL", "RUN_UPSTREAM", "BUILD",
+    ]
+    model_id: uuid.UUID | None = None
+    # dbt's `--full-refresh`: rebuild incremental models from scratch. Without
+    # it an incremental whose SQL or columns changed cannot be corrected.
+    full_refresh: bool = False
+    # DRAFT compiles what the editor holds now; RELEASE executes the published
+    # snapshot, which is what a schedule and an unattended trigger use.
+    source: Literal["DRAFT", "RELEASE"] = "DRAFT"
+
+
+class TransformRunNodeView(BaseModel):
+    name: str
+    resource_type: str
+    status: str
+    execution_time: float | None = None
+    relation_name: str | None = None
+    message: str | None = None
+
+
+class TransformExecutionView(BaseModel):
+    id: uuid.UUID
+    transform_id: uuid.UUID
+    operation: str
+    selected_model_id: uuid.UUID | None = None
+    status: str
+    trigger_type: str
+    created_at: datetime
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    models_built: int = 0
+    tests_passed: int = 0
+    tests_failed: int = 0
+    tests_warned: int = 0
+    rows_affected: int | None = None
+    error: dict[str, Any] | None = None
+    preview: dict[str, Any] | None = None
+    compiled_sql: dict[str, str] = Field(default_factory=dict)
+    nodes: list[TransformRunNodeView] = Field(default_factory=list)
+
+
+class TransformLineage(BaseModel):
+    nodes: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class RunTriggerRequest(BaseModel):
     reason: str | None = None
 
@@ -500,7 +737,10 @@ class RunError(BaseModel):
 class RunView(BaseModel):
     id: uuid.UUID
     short_id: str
+    run_type: Literal["PIPELINE", "TRANSFORM"] = "PIPELINE"
     pipeline: ActorRef | None = None
+    transform: ActorRef | None = None
+    operation: str | None = None
     status: str
     trigger_type: str
     triggered_by: UserRef | None = None
@@ -512,6 +752,11 @@ class RunView(BaseModel):
     duration_seconds: float | None = None
     records_synced: int | None = None
     bytes_synced: int | None = None
+    models_built: int | None = None
+    tests_passed: int | None = None
+    tests_failed: int | None = None
+    tests_warned: int | None = None
+    rows_affected: int | None = None
     error: RunError | None = None
     is_stale: bool = False
     actions: dict[str, bool] = Field(default_factory=dict)
@@ -524,6 +769,7 @@ class RunDetail(RunView):
     destination: ActorRef | None = None
     trace_id: str | None = None
     technical_metadata: dict[str, Any] = Field(default_factory=dict)
+    transform_nodes: list[TransformRunNodeView] = Field(default_factory=list)
 
 
 class RunLogPage(BaseModel):

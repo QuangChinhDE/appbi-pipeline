@@ -39,6 +39,7 @@ from app.models.enums import (
 )
 from app.models.identity import User
 from app.models.integration import Destination, Pipeline, SchemaSnapshot, Source
+from app.models.transform import Transform
 from app.services import audit, catalog, oauth, outbox
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,16 @@ async def dependent_pipelines(
             Pipeline.deleted_at.is_(None),
         )
     )).all())
+
+
+async def dependent_transforms(
+    session: AsyncSession, workspace_id: uuid.UUID, destination_id: uuid.UUID,
+) -> list[Transform]:
+    return list((await session.scalars(select(Transform).where(
+        Transform.workspace_id == workspace_id,
+        Transform.destination_id == destination_id,
+        Transform.deleted_at.is_(None),
+    ).order_by(Transform.name))).all())
 
 
 async def owner_of(session: AsyncSession, user_id: uuid.UUID | None) -> User | None:
@@ -495,6 +506,13 @@ async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
     actor.version += 1
     await session.flush()
 
+    if kind.side == "DESTINATION" and (payload.configuration is not None or incoming):
+        for transform in await dependent_transforms(session, ctx.workspace_id, actor.id):
+            transform.health_status = HealthLevel.UNKNOWN
+            transform.health_message = (
+                "Destination settings changed. Validate the Transform connection before the next build."
+            )
+
     ref = await engine_ref(session, kind, actor.id)
     if ref:
         adapter = get_adapter()
@@ -617,6 +635,18 @@ async def set_enabled(session: AsyncSession, ctx: RequestContext, kind: ActorKin
     ctx.require(kind.module, Action.EDIT)
     actor = await get(session, ctx, kind, actor_id)
     if not enabled:
+        transform_dependents = (
+            await dependent_transforms(session, ctx.workspace_id, actor_id)
+            if kind.side == "DESTINATION" else []
+        )
+        if transform_dependents:
+            raise ResourceInUseError(
+                "Destination is used by active Transforms and cannot be disabled.",
+                constraints=[
+                    {"type": "TRANSFORM", "id": str(item.id), "name": item.name}
+                    for item in transform_dependents
+                ],
+            )
         active = [p for p in await dependent_pipelines(session, ctx.workspace_id, kind, actor_id)
                   if p.status is PipelineStatus.ACTIVE]
         if active:
@@ -641,6 +671,21 @@ async def delete(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
     ctx.require(kind.module, Action.DELETE)
     actor = await get(session, ctx, kind, actor_id)
     dependents = await dependent_pipelines(session, ctx.workspace_id, kind, actor_id)
+    transform_dependents = (
+        await dependent_transforms(session, ctx.workspace_id, actor_id)
+        if kind.side == "DESTINATION" else []
+    )
+    if transform_dependents:
+        raise ResourceInUseError(
+            "Destination is used by one or more Transforms and cannot be deleted.",
+            constraints=[
+                {"type": "TRANSFORM", "id": str(item.id), "name": item.name}
+                for item in transform_dependents
+            ] + [
+                {"type": "PIPELINE", "id": str(item.id), "name": item.name}
+                for item in dependents
+            ],
+        )
     if dependents and not force:
         raise ResourceInUseError(
             f"{'Source' if kind.side == 'SOURCE' else 'Destination'} đang được "

@@ -20,7 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.adapters.registry import close_adapter
 from app.api.v1 import (
-    actors, auth, builder, builder_ai, oauth, ops, pipelines, runs, schema,
+    actors, auth, builder, builder_ai, oauth, ops, pipelines, runs, schema, transforms,
 )
 from app.core.config import settings
 from app.core.readiness import enforce_at_startup, probe_engine_at_startup
@@ -180,7 +180,7 @@ app.include_router(metrics_module.router)
 API_PREFIX = "/api/v1"
 for router in (
     auth.router, actors.sources_router, actors.destinations_router, schema.router,
-    pipelines.router, runs.router, ops.router, ops.admin_router, builder.router, builder_ai.router,
+    pipelines.router, transforms.router, runs.router, ops.router, ops.admin_router, builder.router, builder_ai.router,
     oauth.router,
 ):
     app.include_router(router, prefix=API_PREFIX)

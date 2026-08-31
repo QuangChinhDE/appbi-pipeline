@@ -395,6 +395,14 @@ export function applyDefaults(spec: JsonSchema, current: FormValues = {}): FormV
       out[key] = prop.default;
       continue;
     }
+    // A checkbox always shows a definite state, so the payload must carry one
+    // too. Omitting an unticked boolean lets the connector pick its own
+    // default -- dbt-postgres assumes SSL, which then fails against a server
+    // that has it switched off, while the form still reads "disabled".
+    if (prop.type === 'boolean') {
+      out[key] = false;
+      continue;
+    }
     // Many connector specs give no default but do give an example. For a
     // required, non-secret scalar that example is the conventional value
     // (port 5432, schema "public"), so prefilling it saves a lookup.

@@ -6,7 +6,7 @@ import { useCurrentUser } from './use-current-user';
 import type { PermissionMap } from '@/lib/types';
 
 export type Module =
-  | 'sources' | 'destinations' | 'pipelines' | 'monitoring'
+  | 'sources' | 'destinations' | 'pipelines' | 'transforms' | 'monitoring'
   | 'alerts' | 'audit' | 'members' | 'settings' | 'connectors';
 
 export type Action = 'view' | 'create' | 'edit' | 'operate' | 'delete' | 'admin';

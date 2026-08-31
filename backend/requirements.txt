@@ -16,3 +16,8 @@ python-multipart==0.0.32
 email-validator==2.2.0
 PyYAML==6.0.2
 alembic==1.14.0
+# Transformation runtime.  Versions are certified as a set in
+# resources/transform_engine_lock.json; never replace these with `latest`.
+dbt-core==1.12.3
+dbt-postgres==1.11.0
+dbt-bigquery==1.12.0
