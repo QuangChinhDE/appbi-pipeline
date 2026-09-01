@@ -42,6 +42,10 @@ x-backend-env: &backend-env
   AIRBYTE_API_USERNAME: ${AIRBYTE_API_USERNAME:-}
   AIRBYTE_API_PASSWORD: ${AIRBYTE_API_PASSWORD:-}
   AIRBYTE_WORKSPACE_ID: ${AIRBYTE_WORKSPACE_ID:-}
+  # Local convenience: with no workspace id pinned, resolve the single
+  # workspace the local Airbyte has. Production pins the id instead --
+  # which tenant receives customer data is a decision, not a default.
+  AIRBYTE_WORKSPACE_AUTO: ${AIRBYTE_WORKSPACE_AUTO:-false}
   # Airbyte 1.x rejects Basic on the Config API, including the instance
   # admin's own password. These are an Application's client credentials, and
   # without them AIRBYTE_API mode cannot authenticate at all.

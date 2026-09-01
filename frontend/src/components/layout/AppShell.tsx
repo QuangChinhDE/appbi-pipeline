@@ -99,7 +99,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
       />
-      <div className={cn('transition-[padding] duration-300', collapsed ? 'lg:pl-14' : 'lg:pl-60')}>
+      {/* A viewport-tall flex column: whatever bars sit above `main` -- the
+          mobile header, a health banner -- simply reduce its share, instead of
+          adding their height on top of a `min-h-screen` main and pushing the
+          page past the fold. */}
+      <div className={cn('flex h-screen flex-col transition-[padding] duration-300',
+        collapsed ? 'lg:pl-14' : 'lg:pl-60')}>
         <div className="flex h-12 items-center gap-2 border-b border-[rgb(var(--border-line))] bg-surface-1 px-4 lg:hidden">
           <button
             type="button"
@@ -113,10 +118,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <EngineHealthBanner />
         {/* A flex column, not a block: pages that fill the viewport (the
-            Transform workbench) size their panes with `h-full`, which
-            resolves against `height` and so collapses to content inside a
-            block parent no matter how tall `min-height` is. */}
-        <main className="flex min-h-[calc(100vh-3rem)] flex-col lg:min-h-screen">{children}</main>
+            Transform workbench) size their panes against it. */}
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</main>
       </div>
     </div>
   );

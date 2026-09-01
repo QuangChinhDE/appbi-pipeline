@@ -647,7 +647,7 @@ export default function TransformWorkbenchPage() {
   const transform = query.data;
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Subtitle carries the warehouse only. Output schema and engine
           version are settings, not identity, and putting them in the title
           block hands every visitor two pieces of jargon on arrival. */}
