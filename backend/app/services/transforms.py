@@ -1243,6 +1243,86 @@ async def activate_release(
     return release
 
 
+async def release_models(
+    session: AsyncSession, transform: Transform, release_id: uuid.UUID,
+) -> list[dict[str, Any]]:
+    """The SQL a release froze, and how it differs from the one before it.
+
+    Reverting is only safe if you can read what you are reverting to, so the
+    comparison is against the previous release rather than the draft: that is
+    the question somebody browsing history is asking.
+    """
+    release = await session.scalar(select(TransformRelease).where(
+        TransformRelease.id == release_id,
+        TransformRelease.transform_id == transform.id,
+    ))
+    if release is None:
+        raise NotFoundError("Release was not found for this Transform.")
+    previous = await session.scalar(select(TransformRelease).where(
+        TransformRelease.transform_id == transform.id,
+        TransformRelease.release_number < release.release_number,
+    ).order_by(TransformRelease.release_number.desc()).limit(1))
+    before = {
+        str(item.get("name")): str(item.get("sql") or "")
+        for item in ((previous.model_snapshot if previous else None) or [])
+    }
+    entries: list[dict[str, Any]] = []
+    for item in (release.model_snapshot or []):
+        name = str(item.get("name"))
+        after = str(item.get("sql") or "")
+        entries.append({
+            "name": name,
+            "sql": after,
+            "previous_sql": before.get(name),
+            "change": "ADDED" if name not in before
+            else "MODIFIED" if before[name] != after else "UNCHANGED",
+        })
+    for name, sql_text in before.items():
+        if not any(entry["name"] == name for entry in entries):
+            entries.append({
+                "name": name, "sql": None,
+                "previous_sql": sql_text, "change": "REMOVED",
+            })
+    return sorted(entries, key=lambda entry: entry["name"])
+
+
+async def restore_release(
+    session: AsyncSession, ctx: RequestContext, transform: Transform, release_id: uuid.UUID,
+) -> Transform:
+    """Copy a release's SQL back into the draft, ready to review and publish.
+
+    Deliberately not the same as activating it: this puts the old code in front
+    of the author so they can read it, adjust it, and publish on purpose --
+    rather than silently swapping what production runs.
+    """
+    ctx.require(Module.TRANSFORMS, Action.EDIT)
+    release = await session.scalar(select(TransformRelease).where(
+        TransformRelease.id == release_id,
+        TransformRelease.transform_id == transform.id,
+    ))
+    if release is None:
+        raise NotFoundError("Release was not found for this Transform.")
+    snapshot = {
+        str(item.get("name")): str(item.get("sql") or "")
+        for item in (release.model_snapshot or [])
+    }
+    models = [model for model in transform.models if model.deleted_at is None]
+    for model in models:
+        if model.name in snapshot and model.sql != snapshot[model.name]:
+            model.sql = snapshot[model.name]
+            model.updated_by = ctx.user_id
+            model.version += 1
+    transform.version += 1
+    transform.updated_by = ctx.user_id
+    await audit.record(
+        session, ctx, "transform.release.restored", resource_type="TRANSFORM",
+        resource_id=transform.id, resource_name=transform.name,
+        after={"release_number": release.release_number},
+    )
+    await session.flush()
+    return transform
+
+
 async def list_releases(
     session: AsyncSession, transform: Transform, limit: int = 30,
 ) -> list[TransformRelease]:

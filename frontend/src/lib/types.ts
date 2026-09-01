@@ -565,6 +565,14 @@ export interface TransformDiffEntry {
   after: string | null;
 }
 
+/** One model as a release froze it, beside the version it replaced. */
+export interface TransformReleaseModel {
+  name: string;
+  sql: string | null;
+  previous_sql: string | null;
+  change: 'ADDED' | 'MODIFIED' | 'REMOVED' | 'UNCHANGED';
+}
+
 export interface TransformExecution {
   id: string;
   transform_id: string;

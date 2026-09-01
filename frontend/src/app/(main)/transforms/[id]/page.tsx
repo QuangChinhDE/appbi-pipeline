@@ -470,6 +470,12 @@ export default function TransformWorkbenchPage() {
   const [modelsOpen, toggleModels] = usePaneState('models', true);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [diffWanted, setDiffWanted] = React.useState(false);
+  const [inspectId, setInspectId] = React.useState<string | null>(null);
+  const releaseModels = useQuery({
+    queryKey: qk.transformRelease(workspaceId, transformId, inspectId ?? ''),
+    queryFn: () => transformApi.releaseModels(transformId, inspectId!),
+    enabled: Boolean(inspectId),
+  });
   const diff = useQuery({
     queryKey: qk.transformDiff(workspaceId, transformId),
     queryFn: () => transformApi.diff(transformId),
@@ -501,6 +507,20 @@ export default function TransformWorkbenchPage() {
       queryClient.invalidateQueries({ queryKey: qk.transformReleases(workspaceId, transformId) });
       queryClient.invalidateQueries({ queryKey: qk.transformDiff(workspaceId, transformId) });
       toastSuccess(copy.published.replace('{n}', String(created.release_number)));
+    },
+    onError: (error) => toastError(error),
+  });
+
+  const restoreDraft = useMutation({
+    mutationFn: (releaseId: string) => transformApi.restoreRelease(transformId, releaseId),
+    onSuccess: async (detail) => {
+      await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transformId) });
+      queryClient.invalidateQueries({ queryKey: qk.transformDiff(workspaceId, transformId) });
+      const current = detail.models.find((item) => item.id === selectedId);
+      if (current) { setDraft(structuredClone(current)); setDirty(false); }
+      setInspectId(null);
+      setHistoryOpen(false);
+      toastSuccess(copy.restoredToDraft);
     },
     onError: (error) => toastError(error),
   });
@@ -1145,6 +1165,11 @@ export default function TransformWorkbenchPage() {
         releases={releases.data} loading={releases.isLoading} copy={copy}
         canEdit={canEdit} restoring={restore.isPending}
         onRestore={(id) => restore.mutate(id)}
+        inspecting={(releases.data ?? []).find((item) => item.id === inspectId) ?? null}
+        onInspect={setInspectId}
+        models={releaseModels.data?.models} modelsLoading={releaseModels.isLoading}
+        onRestoreDraft={(id) => restoreDraft.mutate(id)}
+        restoringDraft={restoreDraft.isPending}
       />
 
 
@@ -1856,7 +1881,7 @@ const vi = {
   notes: 'Ghi chú', notesPlaceholder: 'Thay đổi gì trong lần này?',
   history: 'Lịch sử', historyTitle: 'Các phiên bản đã xuất bản',
   noReleases: 'Chưa có phiên bản nào.', restore: 'Khôi phục', active: 'Đang chạy',
-  published: 'Đã xuất bản Phiên bản {n}', restored: 'Đã chuyển sang phiên bản này',
+  published: 'Đã xuất bản Phiên bản {n}', restored: 'Đã chuyển sang phiên bản này', restoredToDraft: 'Đã đưa vào bản nháp',
   scheduleRuns: 'Lịch chạy dùng', columnsShort: 'cột', tools: 'Công cụ',
   moreActions: 'Thao tác khác', syntaxOk: 'SQL hợp lệ', syntaxError: 'SQL có lỗi',
   exploreInput: 'Xem thử bảng này', exploreComment: 'Đọc dữ liệu từ bảng nguồn.',
@@ -1876,6 +1901,10 @@ const vi = {
   runLive: 'Chạy Phiên bản {n} (bản đang chạy)', modelsCounted: 'bảng',
   changes: 'Thay đổi sẽ được xuất bản', noChanges: 'Không có thay đổi nào.',
   changeAdded: 'Thêm', changeRemoved: 'Xóa', changeModified: 'Sửa',
+  changeUnchanged: 'Giữ nguyên', inspect: 'Xem', before: 'Trước khi sửa',
+  after: 'Sau khi sửa', restoreToDraft: 'Đưa về bản nháp',
+  restoreHint: 'Đưa về bản nháp để xem lại rồi tự xuất bản; hoặc chuyển thẳng lịch chạy sang phiên bản này.',
+  backToList: 'Quay lại danh sách', noSqlChange: 'Không đổi SQL.',
   triggerSchedule: 'Theo lịch',
   triggerScheduleHelp: 'Tự chạy theo chu kỳ. Luôn chạy phiên bản đã xuất bản.',
   scheduleEvery: 'Chạy mỗi', timezone: 'Múi giờ', nextRun: 'Lần chạy tới',
@@ -1947,7 +1976,7 @@ const en = {
   notes: 'Notes', notesPlaceholder: 'What changed in this version?',
   history: 'History', historyTitle: 'Published versions',
   noReleases: 'No versions published yet.', restore: 'Restore', active: 'Live',
-  published: 'Published Version {n}', restored: 'Switched to this version',
+  published: 'Published Version {n}', restored: 'Switched to this version', restoredToDraft: 'Copied into the draft',
   scheduleRuns: 'Schedule runs', columnsShort: 'columns', tools: 'Tools',
   moreActions: 'More actions', syntaxOk: 'SQL is valid', syntaxError: 'SQL has an error',
   exploreInput: 'Preview this table', exploreComment: 'Reads from the source table.',
@@ -1967,6 +1996,10 @@ const en = {
   runLive: 'Run Version {n} (the live one)', modelsCounted: 'models',
   changes: 'Changes to publish', noChanges: 'No changes.',
   changeAdded: 'Added', changeRemoved: 'Removed', changeModified: 'Changed',
+  changeUnchanged: 'Unchanged', inspect: 'View', before: 'Before',
+  after: 'After', restoreToDraft: 'Copy into draft',
+  restoreHint: 'Copy into the draft to review then publish yourself, or point the schedule straight at this version.',
+  backToList: 'Back to list', noSqlChange: 'SQL unchanged.',
   triggerSchedule: 'On a schedule',
   triggerScheduleHelp: 'Runs automatically. Always runs the published version.',
   scheduleEvery: 'Run every', timezone: 'Timezone', nextRun: 'Next run',

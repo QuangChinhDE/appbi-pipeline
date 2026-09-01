@@ -34,25 +34,17 @@ export interface SqlEditorHandle {
   focus: () => void;
 }
 
-const paletteLight = HighlightStyle.define([
-  { tag: tags.keyword, color: '#7c3aed', fontWeight: '600' },
-  { tag: [tags.string, tags.special(tags.string)], color: '#0f7b6c' },
-  { tag: tags.comment, color: '#8b949e', fontStyle: 'italic' },
-  { tag: [tags.number, tags.bool, tags.null], color: '#b45309' },
-  { tag: [tags.function(tags.variableName), tags.standard(tags.variableName)], color: '#1d4ed8' },
-  { tag: tags.operator, color: '#57606a' },
-  { tag: tags.typeName, color: '#0550ae' },
+const palette = HighlightStyle.define([
+  { tag: tags.keyword, color: '#6D28D9', fontWeight: '600' },
+  { tag: [tags.string, tags.special(tags.string)], color: '#0F766E' },
+  { tag: tags.comment, color: '#64748B', fontStyle: 'italic' },
+  { tag: [tags.number, tags.bool, tags.null], color: '#A16207' },
+  { tag: [tags.function(tags.variableName), tags.standard(tags.variableName)], color: '#1D4ED8' },
+  { tag: tags.operator, color: '#475569' },
+  { tag: tags.typeName, color: '#0369A1' },
+  { tag: tags.propertyName, color: '#1F2937' },
 ]);
 
-const paletteDark = HighlightStyle.define([
-  { tag: tags.keyword, color: '#c4b5fd', fontWeight: '600' },
-  { tag: [tags.string, tags.special(tags.string)], color: '#7ee2b8' },
-  { tag: tags.comment, color: '#6b7280', fontStyle: 'italic' },
-  { tag: [tags.number, tags.bool, tags.null], color: '#fbbf24' },
-  { tag: [tags.function(tags.variableName), tags.standard(tags.variableName)], color: '#93c5fd' },
-  { tag: tags.operator, color: '#9ca3af' },
-  { tag: tags.typeName, color: '#7dd3fc' },
-]);
 
 const jinjaMark = Decoration.mark({ class: 'cm-jinja' });
 
@@ -71,7 +63,7 @@ const jinjaHighlight = EditorView.decorations.compute(['doc'], (state): Decorati
 });
 
 const baseTheme = EditorView.theme({
-  '&': { height: '100%', fontSize: '13px' },
+  '&': { height: '100%', fontSize: '13px', color: 'rgb(var(--text-primary))' },
   '.cm-scroller': {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     lineHeight: '1.55',
@@ -168,10 +160,6 @@ export const SqlEditor = React.forwardRef<SqlEditorHandle, {
       return { from: word.from, options, validFor: /^[\w.]*$/ };
     };
 
-    const root = document.documentElement;
-    const dark = root.dataset.theme === 'dark'
-      || (!root.dataset.theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
     const extensions: Extension[] = [
       lineNumbers(),
       highlightActiveLineGutter(),
@@ -181,7 +169,7 @@ export const SqlEditor = React.forwardRef<SqlEditorHandle, {
       drawSelection(),
       EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
-      syntaxHighlighting(dark ? paletteDark : paletteLight, { fallback: true }),
+      syntaxHighlighting(palette, { fallback: true }),
       bracketMatching(),
       closeBrackets(),
       autocompletion({ override: [dbtCompletions], activateOnTyping: true }),

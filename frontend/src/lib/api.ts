@@ -14,7 +14,8 @@ import type {
   ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
   SchemaSnapshot, DataAsset, Transform, TransformDestinationCapability, TransformDetail,
   TransformExecution, TransformInputCandidates, TransformLineage, TransformModel,
-  TransformDiffEntry, TransformOperation, TransformRelease, TransformTest,
+  TransformDiffEntry, TransformOperation, TransformRelease, TransformReleaseModel,
+  TransformTest,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
 
@@ -465,6 +466,11 @@ export const transformApi = {
     post<TransformRelease>(`/transforms/${id}/releases`, body),
   activateRelease: (id: string, releaseId: string) =>
     post<TransformRelease>(`/transforms/${id}/releases/${releaseId}/activate`, {}),
+  releaseModels: (id: string, releaseId: string) =>
+    get<{ models: TransformReleaseModel[] }>(
+      `/transforms/${id}/releases/${releaseId}/models`),
+  restoreRelease: (id: string, releaseId: string) =>
+    post<TransformDetail>(`/transforms/${id}/releases/${releaseId}/restore`, {}),
   execution: (runId: string) => get<TransformExecution>(`/transforms/runs/${runId}`),
   cancel: (runId: string) => post<TransformExecution>(`/transforms/runs/${runId}/cancel`),
   lineage: (id: string) => get<TransformLineage>(`/transforms/${id}/lineage`),

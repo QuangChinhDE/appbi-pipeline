@@ -22,6 +22,8 @@ export const qk = {
     ['workspace', ws, 'transform', id, 'releases'] as const,
   transformDiff: (ws: string, id: string) =>
     ['workspace', ws, 'transform', id, 'diff'] as const,
+  transformRelease: (ws: string, id: string, releaseId: string) =>
+    ['workspace', ws, 'transform', id, 'release', releaseId] as const,
   transformDestinations: (ws: string) => ['workspace', ws, 'transform-destinations'] as const,
   transformInputs: (ws: string, id: string) => ['workspace', ws, 'transform-inputs', id] as const,
   transformRun: (ws: string, id: string) => ['workspace', ws, 'transform-run', id] as const,

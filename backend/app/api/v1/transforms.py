@@ -274,6 +274,27 @@ async def list_releases(transform_id: uuid.UUID, session: SessionDep, ctx: CtxDe
     return [await service.release_view(session, transform, item) for item in releases]
 
 
+@router.get("/{transform_id}/releases/{release_id}/models")
+async def release_models(
+    transform_id: uuid.UUID, release_id: uuid.UUID, session: SessionDep, ctx: CtxDep,
+):
+    transform = await service.get(session, ctx, transform_id)
+    return {"models": await service.release_models(session, transform, release_id)}
+
+
+@router.post(
+    "/{transform_id}/releases/{release_id}/restore", response_model=TransformDetail,
+)
+async def restore_release(
+    transform_id: uuid.UUID, release_id: uuid.UUID, session: SessionDep, ctx: CtxDep,
+):
+    transform = await service.get(session, ctx, transform_id)
+    await service.restore_release(session, ctx, transform, release_id)
+    await session.commit()
+    session.expunge(transform)
+    return await service.detail(session, ctx, await service.get(session, ctx, transform_id))
+
+
 @router.post(
     "/{transform_id}/releases/{release_id}/activate", response_model=TransformReleaseView,
 )

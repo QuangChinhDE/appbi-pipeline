@@ -3,7 +3,9 @@
 import * as React from 'react';
 import { CircleCheck, GitBranch, History, Table2, Upload } from 'lucide-react';
 
-import type { TransformDetail, TransformDiffEntry, TransformRelease } from '@/lib/types';
+import type {
+  TransformDetail, TransformDiffEntry, TransformRelease, TransformReleaseModel,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -37,6 +39,14 @@ export type PublishCopy = {
   changeAdded: string;
   changeRemoved: string;
   changeModified: string;
+  changeUnchanged: string;
+  inspect: string;
+  before: string;
+  after: string;
+  restoreToDraft: string;
+  restoreHint: string;
+  backToList: string;
+  noSqlChange: string;
 };
 
 /**
@@ -171,9 +181,16 @@ export function PublishBar({
   );
 }
 
-/** Version history, and the one-click way back to an earlier one. */
+/**
+ * Version history, and the two ways back.
+ *
+ * Reading comes before either: a version is only worth restoring once you can
+ * see what it contains, so opening a row shows the SQL it froze beside the SQL
+ * it replaced.
+ */
 export function ReleaseHistoryModal({
   open, onClose, releases, loading, copy, canEdit, onRestore, restoring,
+  models, modelsLoading, onInspect, inspecting, onRestoreDraft, restoringDraft,
 }: {
   open: boolean;
   onClose: () => void;
@@ -183,16 +200,115 @@ export function ReleaseHistoryModal({
   canEdit: boolean;
   onRestore: (releaseId: string) => void;
   restoring: boolean;
+  /** The opened release's models, once fetched. */
+  models?: TransformReleaseModel[];
+  modelsLoading?: boolean;
+  onInspect: (releaseId: string | null) => void;
+  /** Which release is open, or null for the list. */
+  inspecting: TransformRelease | null;
+  onRestoreDraft: (releaseId: string) => void;
+  restoringDraft: boolean;
 }) {
+  const [openModel, setOpenModel] = React.useState<string | null>(null);
+
+  React.useEffect(() => { setOpenModel(null); }, [inspecting?.id]);
+
   return (
-    <Modal open={open} onClose={onClose} title={copy.historyTitle} size="lg">
-      {loading ? <Spinner /> : !releases?.length ? (
+    <Modal
+      open={open}
+      onClose={() => { onInspect(null); onClose(); }}
+      title={inspecting
+        ? copy.liveVersion.replace('{n}', String(inspecting.release_number))
+        : copy.historyTitle}
+      size="xl"
+      footer={inspecting ? <>
+        <Button size="sm" variant="ghost" onClick={() => onInspect(null)}>
+          {copy.backToList}
+        </Button>
+        {canEdit && (
+          <Button size="sm" variant="secondary" loading={restoringDraft}
+            onClick={() => onRestoreDraft(inspecting.id)}>
+            {copy.restoreToDraft}
+          </Button>
+        )}
+        {canEdit && !inspecting.is_active && (
+          <Button size="sm" variant="primary" loading={restoring}
+            onClick={() => onRestore(inspecting.id)}>
+            {copy.restore}
+          </Button>
+        )}
+      </> : undefined}
+    >
+      {inspecting ? (
+        <div className="space-y-3">
+          <p className="text-tiny text-text-tertiary">{copy.restoreHint}</p>
+          {modelsLoading ? <Spinner /> : (
+            <div className="divide-y divide-[rgb(var(--border-line))]">
+              {(models ?? []).map((model) => {
+                const expanded = openModel === model.name;
+                return (
+                  <div key={model.name}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenModel(expanded ? null : model.name)}
+                      className="flex w-full items-center gap-2 py-2 text-left"
+                    >
+                      <span className={cn(
+                        'w-20 shrink-0 text-tiny font-emphasis uppercase',
+                        model.change === 'ADDED' ? 'text-success'
+                          : model.change === 'REMOVED' ? 'text-danger'
+                            : model.change === 'MODIFIED' ? 'text-warning'
+                              : 'text-text-quaternary',
+                      )}>
+                        {model.change === 'ADDED' ? copy.changeAdded
+                          : model.change === 'REMOVED' ? copy.changeRemoved
+                            : model.change === 'MODIFIED' ? copy.changeModified
+                              : copy.changeUnchanged}
+                      </span>
+                      <Table2 className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
+                      <span className="min-w-0 flex-1 truncate font-mono text-caption text-text-secondary">
+                        {model.name}
+                      </span>
+                      <span className="shrink-0 text-tiny text-brand">{copy.inspect}</span>
+                    </button>
+                    {expanded && (
+                      <div className={cn(
+                        'grid gap-3 pb-3',
+                        model.change === 'MODIFIED' ? 'md:grid-cols-2' : 'grid-cols-1',
+                      )}>
+                        {model.change === 'MODIFIED' && (
+                          <div>
+                            <p className="mb-1 text-tiny font-emphasis uppercase text-text-quaternary">
+                              {copy.before}
+                            </p>
+                            <pre className="max-h-64 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-tiny leading-5 text-text-secondary">
+                              {model.previous_sql}
+                            </pre>
+                          </div>
+                        )}
+                        <div>
+                          <p className="mb-1 text-tiny font-emphasis uppercase text-text-quaternary">
+                            {model.change === 'REMOVED' ? copy.before : copy.after}
+                          </p>
+                          <pre className="max-h-64 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-tiny leading-5 text-text-secondary">
+                            {model.sql ?? model.previous_sql}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : loading ? <Spinner /> : !releases?.length ? (
         <EmptyState title={copy.noReleases} compact />
       ) : (
         <div className="divide-y divide-[rgb(var(--border-line))]">
           {releases.map((release) => (
             <div key={release.id} className="flex items-center gap-3 py-2.5">
-              <span className="w-20 shrink-0 text-caption font-emphasis text-text-primary">
+              <span className="w-24 shrink-0 text-caption font-emphasis text-text-primary">
                 {copy.liveVersion.replace('{n}', String(release.release_number))}
               </span>
               <div className="min-w-0 flex-1">
@@ -205,14 +321,10 @@ export function ReleaseHistoryModal({
                   {release.model_count} {copy.modelsCounted}
                 </p>
               </div>
-              {release.is_active ? (
-                <Badge size="xs" variant="success">{copy.active}</Badge>
-              ) : canEdit && (
-                <Button size="xs" variant="ghost" loading={restoring}
-                  onClick={() => onRestore(release.id)}>
-                  {copy.restore}
-                </Button>
-              )}
+              {release.is_active && <Badge size="xs" variant="success">{copy.active}</Badge>}
+              <Button size="xs" variant="ghost" onClick={() => onInspect(release.id)}>
+                {copy.inspect}
+              </Button>
             </div>
           ))}
         </div>
