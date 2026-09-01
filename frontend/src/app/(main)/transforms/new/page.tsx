@@ -19,11 +19,14 @@ import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 import { cn } from '@/lib/utils';
 import { WarehouseBrowser } from '@/components/transforms/WarehouseBrowser';
+import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
 
 export default function NewTransformPage() {
   const { locale } = useI18n();
   const copy = locale === 'vi' ? {
-    title: 'Transform mới', back: 'Transform', warehouse: 'Warehouse', inputs: 'Dữ liệu đầu vào', create: 'Tạo',
+    title: 'Transform mới', back: 'Transform', warehouse: 'Kết nối', inputs: 'Chọn bảng', create: 'Tạo',
+    accountTitle: 'Tài khoản đọc dữ liệu',
+    accountHelp: 'Tài khoản này quyết định bạn thấy được project và bảng nào ở bước sau. Để mặc định nếu dữ liệu nằm cùng chỗ với Destination.',
     chooseWarehouse: 'Chọn Destination warehouse', supported: 'Hỗ trợ Transform', unavailable: 'Chưa hỗ trợ',
     chooseInputs: 'Chọn relation đầu vào', chooseInputsHelp: 'Chỉ các relation đã được AppBI xác minh mới có thể dùng.',
     noAssets: 'Chưa có relation đã xác minh',
@@ -59,7 +62,9 @@ export default function NewTransformPage() {
     notResolved: 'Chưa xác định được bảng thực tế trong warehouse',
     resolve: 'Xác định', neverRun: 'Chưa chạy', warehouseRelation: 'Relation trong warehouse',
   } : {
-    title: 'New transform', back: 'Transform', warehouse: 'Warehouse', inputs: 'Input data', create: 'Create',
+    title: 'New transform', back: 'Transform', warehouse: 'Connect', inputs: 'Pick tables', create: 'Create',
+    accountTitle: 'Account to read with',
+    accountHelp: 'This account decides which projects and tables you can see in the next step. Leave it as it is if the data lives where the Destination does.',
     chooseWarehouse: 'Choose a warehouse Destination', supported: 'Transform supported', unavailable: 'Unavailable',
     chooseInputs: 'Choose input relations', chooseInputsHelp: 'Only relations verified by AppBI can be selected.',
     noAssets: 'No verified relations yet',
@@ -200,17 +205,21 @@ export default function NewTransformPage() {
     : !name.trim() || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema);
 
   return (
-    <div>
+    // A flex column so the body can claim the height the header leaves, which
+    // is what puts the wizard footer at the foot instead of halfway down.
+    <div className="flex min-h-0 flex-1 flex-col">
       <DetailHeader backHref="/transforms" backLabel={copy.back} title={copy.title} icon={<Database className="h-5 w-5 text-brand" />} />
       <DetailBody>
-        <div className="mx-auto max-w-4xl">
+        {/* Full height with the footer at the foot: a short step used to leave
+            the buttons stranded halfway down the page above an empty half. */}
+        <div className="mx-auto flex w-full min-h-0 max-w-4xl flex-1 flex-col">
           <Stepper steps={[
             { id: 'warehouse', label: copy.warehouse },
             { id: 'inputs', label: copy.inputs },
             { id: 'create', label: copy.create },
           ]} current={step} onStepClick={setStep} />
 
-          <div className="mt-6 min-h-[420px]">
+          <div className="mt-6 min-h-0 flex-1">
             {step === 0 && (
               <section>
                 <h2 className="text-small font-strong text-text-primary">{copy.chooseWarehouse}</h2>
@@ -241,6 +250,23 @@ export default function NewTransformPage() {
                     ))}
                   </div>
                 )}
+
+                {/* The account belongs here, not later: it decides which
+                    projects and tables exist at all, so choosing inputs before
+                    choosing it means choosing from the wrong list. */}
+                {destinationId && (
+                  <div className="mt-4">
+                    <h3 className="text-caption font-emphasis text-text-secondary">
+                      {copy.accountTitle}
+                    </h3>
+                    <p className="mb-2 mt-0.5 text-tiny text-text-tertiary">
+                      {copy.accountHelp}
+                    </p>
+                    <ConnectionPicker
+                      destinationId={destinationId} copy={copy.browse}
+                      connection={connection} onChange={setConnection} />
+                  </div>
+                )}
               </section>
             )}
 
@@ -258,7 +284,7 @@ export default function NewTransformPage() {
                 <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
                   <WarehouseBrowser
                     destinationId={destinationId} copy={copy.browse}
-                    connection={connection} onConnection={setConnection}
+                    connection={connection}
                     adding={addBrowsed.isPending}
                     onAdd={(relations) => addBrowsed.mutate(relations)} />
                   <details className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">

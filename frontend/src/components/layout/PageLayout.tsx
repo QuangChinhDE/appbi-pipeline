@@ -141,7 +141,15 @@ export function DetailHeader({
 }
 
 export function DetailBody({ children }: { children: React.ReactNode }) {
-  return <div className="px-4 py-5 sm:px-6 xl:px-8">{children}</div>;
+  // A flex column that takes the height left over, so a page that wants to
+  // reach the bottom -- a wizard with its buttons at the foot -- can ask for it
+  // with flex-1. Content that does not ask keeps its natural height and sits at
+  // the top exactly as before.
+  return (
+    <div className="flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-6 xl:px-8">
+      {children}
+    </div>
+  );
 }
 
 export function Card({

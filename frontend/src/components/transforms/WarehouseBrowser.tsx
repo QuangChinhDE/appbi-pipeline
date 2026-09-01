@@ -5,8 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, Database, Table2 } from 'lucide-react';
 
 import { transformApi } from '@/lib/api';
-import {
-  ConnectionPicker, type ChosenConnection, type ConnectionPickerCopy,
+import type {
+  ChosenConnection, ConnectionPickerCopy,
 } from '@/components/transforms/ConnectionPicker';
 import { qk } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
@@ -47,13 +47,12 @@ export type WarehouseBrowserCopy = ConnectionPickerCopy & {
  * property of that table, not a different way of finding it.
  */
 export function WarehouseBrowser({
-  destinationId, copy, connection, onConnection, onAdd, adding, disabled,
+  destinationId, copy, connection, onAdd, adding, disabled,
 }: {
   destinationId: string;
   copy: WarehouseBrowserCopy;
-  /** Credential in use, or null for the Destination's own. */
+  /** Credential chosen a step earlier, or null for the Destination's own. */
   connection: ChosenConnection | null;
-  onConnection: (value: ChosenConnection | null) => void;
   /** Register and select the chosen relations. */
   onAdd: (relations: {
     catalog_name: string | null; schema_name: string; relation_name: string;
@@ -69,6 +68,10 @@ export function WarehouseBrowser({
 
   const ref = connection?.secret_ref;
   const scope = ref ?? '';
+
+  // A different account sees a different warehouse, so a project and dataset
+  // chosen under the old one are not answers to the new one.
+  React.useEffect(() => { setCatalog(''); setSchema(''); setPicked(new Set()); }, [scope]);
 
   const catalogs = useQuery({
     queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|catalogs`),
@@ -111,15 +114,6 @@ export function WarehouseBrowser({
   return (
     <div className="space-y-3">
       <p className="text-caption text-text-tertiary">{copy.hint}</p>
-
-      {/* The account leads, because it decides everything below it. */}
-      <ConnectionPicker
-        destinationId={destinationId} copy={copy} disabled={disabled}
-        connection={connection}
-        onChange={(value) => {
-          onConnection(value);
-          setCatalog(''); setSchema(''); setPicked(new Set());
-        }} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div>

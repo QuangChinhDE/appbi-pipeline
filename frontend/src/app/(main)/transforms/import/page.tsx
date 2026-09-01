@@ -88,7 +88,8 @@ export default function ImportTransformPage() {
     onError: (error) => toastError(error),
   });
 
-  const canInspect = /^(https?:\/\/(www\.)?github\.com\/|git@github\.com:)/.test(repoUrl.trim());
+  const canInspect = Boolean(destinationId)
+    && /^(https?:\/\/(www\.)?github\.com\/|git@github\.com:)/.test(repoUrl.trim());
   const canCreate = Boolean(
     preview && name.trim() && destinationId
     && /^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema.trim()),
@@ -104,6 +105,34 @@ export default function ImportTransformPage() {
       />
       <DetailBody>
         <div className="mx-auto w-full max-w-3xl space-y-5">
+          {/* Same first step as creating a Transform by hand: which warehouse,
+              and which account reads it. Everything the repository refers to is
+              checked against this, so asking for it afterwards would mean
+              showing a preview nothing had been compared to. */}
+          <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
+            <h2 className="text-small font-strong text-text-primary">{copy.destination}</h2>
+            <p className="mt-1 text-caption text-text-tertiary">{copy.destinationHelp}</p>
+            <div className="mt-3 max-w-sm">
+              <Label required>{copy.warehouse}</Label>
+              <Select value={destinationId}
+                onChange={(event) => setDestinationId(event.target.value)}>
+                <option value="">{copy.chooseWarehouse}</option>
+                {supported.map((item) => (
+                  <option key={item.destination.id} value={item.destination.id}>
+                    {item.destination.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {destinationId && (
+              <div className="mt-3">
+                <ConnectionPicker
+                  destinationId={destinationId} copy={copy.connection}
+                  connection={connection} onChange={setConnection} />
+              </div>
+            )}
+          </section>
+
           <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
             <h2 className="text-small font-strong text-text-primary">{copy.repository}</h2>
             <p className="mt-1 text-caption text-text-tertiary">{copy.repositoryHelp}</p>
@@ -161,7 +190,7 @@ export default function ImportTransformPage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Tally icon={FileCode2} value={preview.models.length} label={copy.models} />
                   <Tally icon={Table2} value={preview.sources.length} label={copy.sources} />
                   <Tally icon={FileCode2} value={preview.tests.length} label={copy.tests} />
@@ -232,24 +261,12 @@ export default function ImportTransformPage() {
               </section>
 
               <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
-                <h2 className="text-small font-strong text-text-primary">{copy.destination}</h2>
-                <p className="mt-1 text-caption text-text-tertiary">{copy.destinationHelp}</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <h2 className="text-small font-strong text-text-primary">{copy.createTitle}</h2>
+                <p className="mt-1 text-caption text-text-tertiary">{copy.createHelp}</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
                     <Label required>{copy.name}</Label>
                     <Input value={name} onChange={(event) => setName(event.target.value)} />
-                  </div>
-                  <div>
-                    <Label required>{copy.warehouse}</Label>
-                    <Select value={destinationId}
-                      onChange={(event) => setDestinationId(event.target.value)}>
-                      <option value="">{copy.chooseWarehouse}</option>
-                      {supported.map((item) => (
-                        <option key={item.destination.id} value={item.destination.id}>
-                          {item.destination.name}
-                        </option>
-                      ))}
-                    </Select>
                   </div>
                   <div>
                     <Label required>{copy.output}</Label>
@@ -261,14 +278,6 @@ export default function ImportTransformPage() {
                     from Git almost always wants it to keep following Git, and
                     finding the switch later means the first divergence is a
                     surprise. */}
-                {destinationId && (
-                  <div className="mt-3">
-                    <ConnectionPicker
-                      destinationId={destinationId} copy={copy.connection}
-                      connection={connection} onChange={setConnection} />
-                  </div>
-                )}
-
                 <div className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
                   <Checkbox checked={autoPull} onChange={setAutoPull}
                     label={copy.keepPulling} />
@@ -339,8 +348,10 @@ const vi = {
   tests: 'kiểm tra',
   noSources: 'Project này không khai báo bảng nguồn nào.',
   warnings: '{n} điểm cần biết trước khi import',
-  destination: 'Tạo Transform',
-  destinationHelp: 'Các bảng nguồn ở trên sẽ được đối chiếu với kho dữ liệu này; bảng nào không có sẽ được báo lại.',
+  destination: 'Kho dữ liệu & tài khoản',
+  destinationHelp: 'Chọn trước khi đọc repository, để các bảng nguồn trong project được đối chiếu với đúng kho và tài khoản này.',
+  createTitle: 'Tạo Transform',
+  createHelp: 'Đặt tên và chọn schema đích cho các bảng sẽ sinh ra.',
   name: 'Tên Transform',
   warehouse: 'Kho dữ liệu',
   chooseWarehouse: 'Chọn kho dữ liệu',
@@ -385,8 +396,10 @@ const en: typeof vi = {
   tests: 'tests',
   noSources: 'This project declares no source tables.',
   warnings: '{n} things to know before importing',
-  destination: 'Create the Transform',
-  destinationHelp: 'The source tables above are checked against this warehouse; anything missing is reported back.',
+  destination: 'Warehouse & account',
+  destinationHelp: 'Chosen before the repository is read, so its source tables are checked against this warehouse and this account.',
+  createTitle: 'Create the Transform',
+  createHelp: 'Name it, and choose the schema its models write to.',
   name: 'Transform name',
   warehouse: 'Warehouse',
   chooseWarehouse: 'Choose a warehouse',

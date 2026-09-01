@@ -520,6 +520,18 @@ export default function TransformWorkbenchPage() {
   const [railWidth, setRailWidth] = usePaneSize('rail', 224, 176, 420);
   const [sideWidth, setSideWidth] = usePaneSize('side', 260, 200, 520);
   const [editorRatio, setEditorRatio] = usePaneSize('editorRatio', 60, 25, 85);
+  /**
+   * Whether the results pane has anything to hold.
+   *
+   * It used to reserve two fifths of the working area permanently, and until
+   * somebody ran something that area held one line of placeholder text. The
+   * editor is what people are actually looking at, so the space goes there
+   * until there is a result to put in it. Lineage is the exception: it draws
+   * without a run.
+   */
+  const outputIdle = !execution.data
+    && !(execution.isFetching && Boolean(activeRunId))
+    && bottomTab !== 'lineage';
   const splitRef = React.useRef<HTMLElement | null>(null);
   const [modelsOpen, toggleModels] = usePaneState('models', true);
   const [historyOpen, setHistoryOpen] = React.useState(false);
@@ -1044,7 +1056,7 @@ export default function TransformWorkbenchPage() {
             {/* The editor owns the remaining height; the surface token keeps it
                 on the app's palette in both themes rather than a fixed hex. */}
             <div className="min-h-[140px] min-w-0 overflow-hidden bg-surface-2"
-              style={{ flex: `${editorRatio} 1 0%` }}>
+              style={{ flex: outputIdle ? '1 1 0%' : `${editorRatio} 1 0%` }}>
             <SqlEditor
               ref={editorRef} value={draft.sql}
               onChange={(sql) => patchDraft({ sql })}
@@ -1056,14 +1068,18 @@ export default function TransformWorkbenchPage() {
             />
             </div>
             {/* Editor against results. The ratio is a percentage so the split
-                survives a window resize rather than pinning one pane to pixels. */}
-            <Resizer
-              orientation="horizontal" ariaLabel={copy.resizeEditor}
-              value={editorRatio} step={3} scaleFrom={splitRef}
-              onResize={setEditorRatio}
-            />
+                survives a window resize rather than pinning one pane to pixels.
+                While there is no output the seam is hidden: dragging it would
+                only trade editor height for more empty space. */}
+            {!outputIdle && (
+              <Resizer
+                orientation="horizontal" ariaLabel={copy.resizeEditor}
+                value={editorRatio} step={3} scaleFrom={splitRef}
+                onResize={setEditorRatio}
+              />
+            )}
             <OutputPanel
-              ratio={100 - editorRatio}
+              ratio={100 - editorRatio} collapsed={outputIdle}
               tab={bottomTab} setTab={setBottomTab} execution={execution.data}
               loading={execution.isFetching && Boolean(activeRunId)} runId={activeRunId}
               modelName={draft.name} copy={copy}
@@ -1261,15 +1277,21 @@ function RailSection({ title, action, children }: { title: string; action?: Reac
   return <section className="border-b border-[rgb(var(--border-line))] p-2"><div className="mb-1 flex h-7 items-center justify-between px-1"><h2 className="text-[10px] font-emphasis uppercase text-text-quaternary">{title}</h2>{action}</div>{children}</section>;
 }
 
-function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName, copy, onCancel, cancelling, onJump, knownModels, onFixRef, canEdit, lineage, lineageLoading, lineageExpanded, onExpandLineage }: { ratio: number; tab: string; setTab: (tab: string) => void; execution?: import('@/lib/types').TransformExecution; loading: boolean; runId: string | null; modelName: string; copy: typeof en; onCancel?: () => void; cancelling?: boolean; onJump?: (line: number) => void; knownModels?: string[]; onFixRef?: (from: string, to: string) => void; canEdit?: boolean;
+function OutputPanel({ ratio, collapsed, tab, setTab, execution, loading, runId, modelName, copy, onCancel, cancelling, onJump, knownModels, onFixRef, canEdit, lineage, lineageLoading, lineageExpanded, onExpandLineage }: { ratio: number; collapsed?: boolean; tab: string; setTab: (tab: string) => void; execution?: import('@/lib/types').TransformExecution; loading: boolean; runId: string | null; modelName: string; copy: typeof en; onCancel?: () => void; cancelling?: boolean; onJump?: (line: number) => void; knownModels?: string[]; onFixRef?: (from: string, to: string) => void; canEdit?: boolean;
   lineage?: import('@/lib/types').TransformLineage; lineageLoading?: boolean;
   lineageExpanded?: boolean; onExpandLineage?: () => void }) {
   const compiled = execution ? Object.entries(execution.compiled_sql).find(([key]) => key.endsWith(`.${modelName}`))?.[1] : undefined;
   const nodes = execution?.nodes ?? [];
   const models = nodes.filter((node) => node.resource_type === 'MODEL');
   const active = Boolean(execution && ACTIVE.includes(execution.status));
-  return <div className="flex min-h-[120px] flex-col overflow-hidden border-t border-[rgb(var(--border-line))] bg-surface-1"
-    style={{ flex: `${ratio} 1 0%` }}>
+  // Collapsed, this is the tab strip and one line saying what would appear
+  // here. Expanded, it is whatever the last run produced. Nothing in between,
+  // because a pane sized for content it does not have is just lost editor.
+  return <div className={cn(
+    'flex flex-col overflow-hidden border-t border-[rgb(var(--border-line))] bg-surface-1',
+    collapsed ? 'shrink-0' : 'min-h-[120px]',
+  )}
+    style={collapsed ? undefined : { flex: `${ratio} 1 0%` }}>
     <div className="flex h-9 items-center border-b border-[rgb(var(--border-line))] px-2">
       <Tabs className="border-0" value={tab} onChange={setTab} items={[
         { id: 'preview', label: copy.preview },
@@ -1286,6 +1308,9 @@ function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName,
         {runId && <Link className="text-tiny text-brand hover:underline" href={`/runs/${runId}`}>{copy.viewRun}</Link>}
       </div>
     </div>
+    {collapsed ? (
+      <p className="px-3 py-2 text-tiny text-text-quaternary">{copy.noPreview}</p>
+    ) : (
     <div className="min-h-0 flex-1 overflow-auto p-3">
       {execution?.error && <RunErrorCallout error={execution.error} copy={copy} onJump={onJump} knownModels={knownModels} onFixRef={onFixRef} />}
       {tab === 'preview' && <PreviewTable preview={execution?.preview} empty={copy.noPreview} copy={copy} />}
@@ -1301,6 +1326,7 @@ function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName,
       {tab === 'compiled' && <pre className="whitespace-pre-wrap font-mono text-tiny leading-5 text-text-secondary">{compiled ?? copy.noCompiled}</pre>}
       {tab === 'logs' && (runId ? <LogViewer runId={runId} live={active} /> : <p className="text-caption text-text-quaternary">{copy.noLogs}</p>)}
     </div>
+    )}
   </div>;
 }
 
@@ -1482,7 +1508,10 @@ const STRATEGIES: Record<string, string[]> = {
 function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, adapter }: { draft: Draft; patchDraft: (changes: Partial<Draft>) => void; copy: typeof en; canEdit: boolean; onDelete: () => void; deleting: boolean; adapter: string }) {
   const strategies = STRATEGIES[adapter] ?? ['merge', 'append'];
   return (
-    <div className="space-y-4">
+    // Full height with the delete pinned to the foot: left in the flow it hung
+    // in the middle of the column with a band of nothing beneath it, which
+    // reads as an unfinished panel rather than as breathing room.
+    <div className="flex min-h-full flex-col gap-3.5">
       <Field label={copy.materialization} hint={copy.materializationHint[draft.materialization]}>
         <Select disabled={!canEdit} value={draft.materialization}
           onChange={(event) => patchDraft({ materialization: event.target.value as Draft['materialization'] })}>
@@ -1522,7 +1551,7 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
       </Field>
 
       <Field label={copy.description} hint={copy.descriptionHint}>
-        <Textarea disabled={!canEdit} rows={3} value={draft.description ?? ''}
+        <Textarea disabled={!canEdit} rows={2} value={draft.description ?? ''}
           onChange={(event) => patchDraft({ description: event.target.value || null })} />
       </Field>
 
@@ -1547,7 +1576,7 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
         // model destroys its SQL and every test on it, so it should not look
         // like the ghost buttons around it.
         <button type="button" onClick={onDelete} disabled={deleting}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-caption text-danger transition-colors hover:bg-danger/[0.06] disabled:opacity-50">
+          className="mt-auto flex w-full shrink-0 items-center justify-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-caption text-danger transition-colors hover:bg-danger/[0.06] disabled:opacity-50">
           <Trash2 className="h-3.5 w-3.5" />
           {copy.deleteModel}
         </button>
