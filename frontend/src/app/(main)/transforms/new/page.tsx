@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Database, GitBranch, Link2, Plus, Warehouse } from 'lucide-react';
+import { Database, Link2, Table2, X } from 'lucide-react';
 
 import { transformApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
@@ -14,7 +14,7 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { DetailBody, DetailHeader } from '@/components/layout/PageLayout';
 import { Stepper, WizardFooter } from '@/components/integrations/Stepper';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Button, IconButton } from '@/components/ui/Button';
 import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 import { cn } from '@/lib/utils';
@@ -25,11 +25,35 @@ export default function NewTransformPage() {
   const { locale } = useI18n();
   const copy = locale === 'vi' ? {
     title: 'Transform mới', back: 'Transform', warehouse: 'Kết nối', inputs: 'Chọn bảng', create: 'Tạo',
+    connect: {
+      title: 'Chọn key để kết nối kho dữ liệu',
+      help: 'Key quyết định bạn đọc được project và bảng nào ở bước sau. Chọn key có sẵn, hoặc tạo key mới nếu dữ liệu nằm ở nơi key hiện tại không với tới.',
+      defaultKey: 'key mặc định',
+      noAccount: '(chưa đọc được tài khoản)',
+      projects: 'project',
+      addKey: 'Tạo key mới',
+      newKeyTitle: 'Key mới',
+      keyName: 'Tên key',
+      keyNamePlaceholder: 'VD: Key đọc kho Sale',
+      keyWarehouse: 'Kho dữ liệu',
+      credentials: 'Service account JSON',
+      credentialsHint: 'Key này phải vừa đọc được bảng nguồn, vừa ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai. Được mã hoá khi lưu và không hiển thị lại.',
+      save: 'Kiểm tra và lưu',
+      cancel: 'Hủy',
+      remove: 'Xoá key',
+      loadFailed: 'Không tải được danh sách key',
+    },
+    chosenTables: 'Bảng đã chọn',
+    nothingChosen: 'Chưa chọn bảng nào',
+    clearAll: 'Bỏ hết',
+    removeTable: 'Bỏ bảng này',
+    fromTransform: 'Do Transform khác tạo',
+    columnsShort: 'cột',
     accountTitle: 'Tài khoản đọc dữ liệu',
     accountHelp: 'Tài khoản này quyết định bạn thấy được project và bảng nào ở bước sau. Để mặc định nếu dữ liệu nằm cùng chỗ với Destination.',
-    chooseWarehouse: 'Chọn Destination warehouse', supported: 'Hỗ trợ Transform', unavailable: 'Chưa hỗ trợ',
-    chooseInputs: 'Chọn relation đầu vào', chooseInputsHelp: 'Chỉ các relation đã được AppBI xác minh mới có thể dùng.',
-    noAssets: 'Chưa có relation đã xác minh',
+    chooseWarehouse: 'Chọn kho dữ liệu', supported: 'Hỗ trợ Transform', unavailable: 'Chưa hỗ trợ',
+    chooseInputs: 'Chọn bảng cho Transform', chooseInputsHelp: 'Duyệt kho dữ liệu và tích những bảng Transform này sẽ đọc.',
+    noAssets: 'Chưa có bảng nào',
     register: 'Chọn bảng từ kho dữ liệu',
     manualEntry: 'Hoặc nhập tay tên bảng',
     browse: {
@@ -50,24 +74,48 @@ export default function NewTransformPage() {
       loadFailed: 'Không đọc được danh sách bảng',
       alreadyAdded: 'Đã thêm',
       fromPipeline: 'từ',
-      addSelected: 'Thêm bảng đã chọn',
+      addSelected: 'Thêm vào Transform',
       selectedCount: 'Đã chọn {n} bảng',
       nothingSelected: 'Tích vào bảng bạn cần dùng',
     },
-    schema: 'Schema / Dataset', relation: 'Tên relation', catalog: 'Database / Project', pipeline: 'Pipeline nguồn', stream: 'Stream nguồn', verify: 'Xác minh relation',
-    details: 'Thông tin Transform', name: 'Tên Transform', output: 'Output schema',
-    continue: 'Tiếp tục', createAction: 'Tạo Transform', registered: 'Relation đã được xác minh',
+    schema: 'Dataset', relation: 'Tên bảng', catalog: 'Project', pipeline: 'Pipeline nguồn', stream: 'Stream nguồn', verify: 'Kiểm tra và thêm',
+    details: 'Đặt tên cho Transform', name: 'Tên Transform', output: 'Schema đích',
+    continue: 'Tiếp tục', createAction: 'Tạo Transform', registered: 'Đã thêm bảng vào Transform',
     fromPipelines: 'Dữ liệu từ Pipeline đang đổ vào warehouse này',
-    verifiedRelations: 'Relation đã xác minh trong warehouse',
-    notResolved: 'Chưa xác định được bảng thực tế trong warehouse',
-    resolve: 'Xác định', neverRun: 'Chưa chạy', warehouseRelation: 'Relation trong warehouse',
+    verifiedRelations: 'Bảng đã chọn',
+    notResolved: 'Chưa tìm thấy bảng này trong kho dữ liệu',
+    resolve: 'Xác định', neverRun: 'Chưa chạy', warehouseRelation: 'Bảng có sẵn trong kho',
   } : {
     title: 'New transform', back: 'Transform', warehouse: 'Connect', inputs: 'Pick tables', create: 'Create',
+    connect: {
+      title: 'Choose a key to reach the warehouse',
+      help: 'The key decides which projects and tables you can read in the next step. Pick a saved one, or add a key if the data lives somewhere the current one cannot reach.',
+      defaultKey: 'default key',
+      noAccount: '(account unavailable)',
+      projects: 'projects',
+      addKey: 'Add a key',
+      newKeyTitle: 'New key',
+      keyName: 'Key name',
+      keyNamePlaceholder: 'e.g. Sale warehouse reader',
+      keyWarehouse: 'Warehouse',
+      credentials: 'Service account JSON',
+      credentialsHint: 'This key must both read the source tables and write the output schema — dbt uses one connection for both. Encrypted at rest and never shown again.',
+      save: 'Check and save',
+      cancel: 'Cancel',
+      remove: 'Remove key',
+      loadFailed: 'Could not load the key list',
+    },
+    chosenTables: 'Chosen tables',
+    nothingChosen: 'No table chosen yet',
+    clearAll: 'Clear all',
+    removeTable: 'Remove',
+    fromTransform: 'Built by another Transform',
+    columnsShort: 'columns',
     accountTitle: 'Account to read with',
     accountHelp: 'This account decides which projects and tables you can see in the next step. Leave it as it is if the data lives where the Destination does.',
     chooseWarehouse: 'Choose a warehouse Destination', supported: 'Transform supported', unavailable: 'Unavailable',
-    chooseInputs: 'Choose input relations', chooseInputsHelp: 'Only relations verified by AppBI can be selected.',
-    noAssets: 'No verified relations yet',
+    chooseInputs: 'Choose the tables this Transform reads', chooseInputsHelp: 'Browse the warehouse and tick the tables this Transform will read.',
+    noAssets: 'No tables yet',
     register: 'Pick a table from the warehouse',
     manualEntry: 'Or type the table name',
     browse: {
@@ -88,38 +136,35 @@ export default function NewTransformPage() {
       loadFailed: 'Could not list the tables',
       alreadyAdded: 'Added',
       fromPipeline: 'from',
-      addSelected: 'Add selected',
+      addSelected: 'Add to Transform',
       selectedCount: '{n} selected',
       nothingSelected: 'Tick the tables you need',
     },
-    schema: 'Schema / Dataset', relation: 'Relation name', catalog: 'Database / Project', pipeline: 'Upstream Pipeline', stream: 'Upstream stream', verify: 'Verify relation',
-    details: 'Transform details', name: 'Transform name', output: 'Output schema',
-    continue: 'Continue', createAction: 'Create transform', registered: 'Relation verified',
+    schema: 'Dataset', relation: 'Table name', catalog: 'Project', pipeline: 'Upstream Pipeline', stream: 'Upstream stream', verify: 'Check and add',
+    details: 'Name the Transform', name: 'Transform name', output: 'Output schema',
+    continue: 'Continue', createAction: 'Create transform', registered: 'Tables added to the Transform',
     fromPipelines: 'Data from Pipelines loading this warehouse',
-    verifiedRelations: 'Verified relations in the warehouse',
-    notResolved: 'The physical table has not been resolved yet',
-    resolve: 'Resolve', neverRun: 'Never run', warehouseRelation: 'Warehouse relation',
+    verifiedRelations: 'Chosen tables',
+    notResolved: 'This table has not been found in the warehouse yet',
+    resolve: 'Resolve', neverRun: 'Never run', warehouseRelation: 'Table already in the warehouse',
   };
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
   const [step, setStep] = React.useState(0);
-  const [destinationId, setDestinationId] = React.useState(searchParams.get('destination_id') ?? '');
   const [assetIds, setAssetIds] = React.useState<string[]>([]);
   const [name, setName] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
-  const [connection, setConnection] = React.useState<
-    import('@/components/transforms/ConnectionPicker').ChosenConnection | null
+  const [warehouse, setWarehouse] = React.useState<
+    import('@/lib/types').ChosenWarehouse | null
   >(null);
+  const destinationId = warehouse?.destination_id ?? '';
   const [assetForm, setAssetForm] = React.useState({
     catalog_name: '', schema_name: '', relation_name: '',
     pipeline_id: searchParams.get('pipeline_id') ?? '', pipeline_stream_id: '',
   });
 
-  const destinations = useQuery({
-    queryKey: qk.transformDestinations(workspaceId), queryFn: transformApi.destinations,
-  });
   const candidates = useQuery({
     queryKey: qk.transformInputs(workspaceId, destinationId),
     queryFn: () => transformApi.inputCandidates(destinationId), enabled: Boolean(destinationId),
@@ -135,7 +180,7 @@ export default function NewTransformPage() {
       relation_name: assetForm.relation_name,
       pipeline_id: assetForm.pipeline_id || undefined,
       pipeline_stream_id: assetForm.pipeline_stream_id || undefined,
-      secret_ref: connection?.secret_ref,
+      connection_id: warehouse?.connection_id,
     }),
     onSuccess: async (asset) => {
       setAssetIds((current) => Array.from(new Set([...current, asset.id])));
@@ -165,7 +210,7 @@ export default function NewTransformPage() {
           catalog_name: relation.catalog_name || undefined,
           schema_name: relation.schema_name,
           relation_name: relation.relation_name,
-          secret_ref: connection?.secret_ref,
+          connection_id: warehouse?.connection_id,
         }));
       }
       return added;
@@ -192,7 +237,7 @@ export default function NewTransformPage() {
     mutationFn: () => transformApi.create({
       name, destination_id: destinationId, default_schema: outputSchema,
       input_asset_ids: assetIds,
-      warehouse_secret_ref: connection?.secret_ref,
+      warehouse_connection_id: warehouse?.connection_id,
     }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -221,53 +266,11 @@ export default function NewTransformPage() {
 
           <div className="mt-6 min-h-0 flex-1">
             {step === 0 && (
-              <section>
-                <h2 className="text-small font-strong text-text-primary">{copy.chooseWarehouse}</h2>
-                {destinations.isLoading ? <Spinner /> : destinations.error ? (
-                  <ErrorState title={copy.chooseWarehouse} message={(destinations.error as Error).message} onRetry={() => destinations.refetch()} />
-                ) : (
-                  <div className="mt-3 divide-y divide-[rgb(var(--border-line))] overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
-                    {destinations.data?.map((item) => (
-                      <button
-                        key={item.destination.id}
-                        type="button"
-                        disabled={!item.supported}
-                        onClick={() => setDestinationId(item.destination.id)}
-                        className={cn(
-                          'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
-                          item.supported ? 'hover:bg-surface-2' : 'cursor-not-allowed opacity-55',
-                          destinationId === item.destination.id && 'bg-brand/[0.06]',
-                        )}
-                      >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-2 text-text-tertiary"><Warehouse className="h-4 w-4" /></span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-caption font-emphasis text-text-primary">{item.destination.name}</span>
-                          <span className="block text-tiny text-text-tertiary">{item.destination.connector_display_name}</span>
-                        </span>
-                        <Badge variant={item.supported ? 'success' : 'neutral'} size="xs" dot>{item.supported ? copy.supported : copy.unavailable}</Badge>
-                        {destinationId === item.destination.id && <CheckCircle2 className="h-4 w-4 text-brand" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* The account belongs here, not later: it decides which
-                    projects and tables exist at all, so choosing inputs before
-                    choosing it means choosing from the wrong list. */}
-                {destinationId && (
-                  <div className="mt-4">
-                    <h3 className="text-caption font-emphasis text-text-secondary">
-                      {copy.accountTitle}
-                    </h3>
-                    <p className="mb-2 mt-0.5 text-tiny text-text-tertiary">
-                      {copy.accountHelp}
-                    </p>
-                    <ConnectionPicker
-                      destinationId={destinationId} copy={copy.browse}
-                      connection={connection} onChange={setConnection} />
-                  </div>
-                )}
-              </section>
+              // One list, one click. A key row already says which warehouse it
+              // reaches, so asking for the warehouse separately would be asking
+              // the same question twice.
+              <ConnectionPicker
+                copy={copy.connect} value={warehouse} onChange={setWarehouse} />
             )}
 
             {step === 1 && (
@@ -284,7 +287,8 @@ export default function NewTransformPage() {
                 <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
                   <WarehouseBrowser
                     destinationId={destinationId} copy={copy.browse}
-                    connection={connection}
+                    connectionId={warehouse?.connection_id ?? null}
+                    chosen={assetIds}
                     adding={addBrowsed.isPending}
                     onAdd={(relations) => addBrowsed.mutate(relations)} />
                   <details className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
@@ -302,34 +306,54 @@ export default function NewTransformPage() {
                   </details>
                 </div>
 
-                <h3 className="mt-5 text-caption font-emphasis text-text-secondary">{copy.verifiedRelations}</h3>
-                {candidates.isLoading ? <Spinner /> : candidates.error ? (
-                  <div className="mt-2"><ErrorState title={copy.chooseInputs} message={(candidates.error as Error).message} onRetry={() => candidates.refetch()} /></div>
-                ) : (candidates.data?.assets.length ?? 0) === 0 ? (
-                  <div className="mt-2"><EmptyState title={copy.noAssets} compact /></div>
+                {/* A basket, not a second list to tick. The upper list is
+                    where you choose; this is what you chose. One checkbox with
+                    two meanings was the thing that made this screen confusing. */}
+                <div className="mt-5 flex items-center justify-between gap-3">
+                  <h3 className="text-caption font-emphasis text-text-secondary">
+                    {copy.chosenTables} ({assetIds.length})
+                  </h3>
+                  {assetIds.length > 0 && (
+                    <Button size="xs" variant="ghost" onClick={() => setAssetIds([])}>
+                      {copy.clearAll}
+                    </Button>
+                  )}
+                </div>
+                {assetIds.length === 0 ? (
+                  <div className="mt-2"><EmptyState title={copy.nothingChosen} compact /></div>
                 ) : (
                   <div className="mt-2 divide-y divide-[rgb(var(--border-line))] overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
-                    {candidates.data?.assets.map((asset) => (
-                      <div key={asset.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
-                        <Checkbox checked={assetIds.includes(asset.id)} onChange={(checked) => setAssetIds((current) => checked ? [...current, asset.id] : current.filter((id) => id !== asset.id))} aria-label={`${asset.schema_name}.${asset.relation_name}`} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-mono text-caption text-text-primary">
-                            {asset.catalog_name ? `${asset.catalog_name}.` : ''}{asset.schema_name}.{asset.relation_name}
+                    {assetIds.map((id) => {
+                      const asset = candidates.data?.assets.find((item) => item.id === id);
+                      if (!asset) return null;
+                      return (
+                        <div key={id} className="flex items-center gap-3 px-4 py-2.5">
+                          <Table2 className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-mono text-caption text-text-primary">
+                              {asset.schema_name}.{asset.relation_name}
+                            </span>
+                            <span className="block truncate text-tiny text-text-tertiary">
+                              {asset.pipeline_name
+                                ? `${copy.browse.fromPipeline} ${asset.pipeline_name}`
+                                : copy.warehouseRelation}
+                              {asset.columns.length
+                                ? ` · ${asset.columns.length} ${copy.columnsShort}` : ''}
+                            </span>
                           </span>
-                          <span className="block text-tiny text-text-tertiary">
-                            {asset.pipeline_name
-                              ? `${copy.browse.fromPipeline} ${asset.pipeline_name}`
-                              : copy.warehouseRelation} · {asset.columns.length} columns
-                          </span>
-                        </span>
-                        {/* A relation produced by another Transform is a valid
-                            input, but picking one by accident is not, so it says
-                            what it is. */}
-                        {asset.owner_type === 'TRANSFORM'
-                          ? <Badge variant="info" size="xs">{asset.asset_type === 'MART' ? 'MART' : 'MODEL'}</Badge>
-                          : <Badge variant="success" size="xs">READY</Badge>}
-                      </div>
-                    ))}
+                          {asset.owner_type === 'TRANSFORM' && (
+                            <Badge variant="info" size="xs">{copy.fromTransform}</Badge>
+                          )}
+                          <IconButton size="xs" variant="ghost"
+                            aria-label={copy.removeTable} title={copy.removeTable}
+                            onClick={() => setAssetIds(
+                              (current) => current.filter((item) => item !== id),
+                            )}>
+                            <X className="h-3.5 w-3.5" />
+                          </IconButton>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </section>
@@ -342,8 +366,9 @@ export default function NewTransformPage() {
                   <div><Label required>{copy.name}</Label><Input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Sales Analytics" /></div>
                   <div><Label required>{copy.output}</Label><Input value={outputSchema} onChange={(event) => setOutputSchema(event.target.value)} placeholder="analytics_sales" invalid={Boolean(outputSchema && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema))} /></div>
                   <div className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-4 py-3 text-caption text-text-secondary">
-                    <span className="font-emphasis text-text-primary">{destinations.data?.find((item) => item.destination.id === destinationId)?.destination.name}</span>
-                    <span className="mx-2 text-text-quaternary">·</span>{assetIds.length} relations
+                    <span className="font-emphasis text-text-primary">{warehouse?.name}</span>
+                    <span className="mx-2 text-text-quaternary">·</span>
+                    {assetIds.length} {copy.chosenTables.toLowerCase()}
                   </div>
                 </div>
               </section>

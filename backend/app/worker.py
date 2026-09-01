@@ -341,14 +341,6 @@ class Worker:
                     if purged:
                         log_event(logger, logging.INFO, "oauth.grants_purged",
                                   count=purged)
-                    # A warehouse credential entered in the Transform wizard is
-                    # stored when it is verified, before the Transform exists.
-                    # One that never became a Transform is a key attached to
-                    # nothing, and only this sweep removes it.
-                    loose = await transform_service.purge_orphan_connections(session)
-                    if loose:
-                        log_event(logger, logging.INFO, "transform.connections_purged",
-                                  count=loose)
                     await session.commit()
             except Exception as exc:  # noqa: BLE001
                 log_event(logger, logging.ERROR, "janitor.error", error=str(exc))

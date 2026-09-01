@@ -53,11 +53,12 @@ class Transform(Base, TimestampMixin):
     health_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     execution_trigger: Mapped[str] = mapped_column(String(40), default="MANUAL", nullable=False)
     trigger_config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
-    #: A credential this Transform runs as, instead of the Destination's.
-    #: Holds a partial connector configuration merged over the Destination's --
-    #: the warehouse is the same, only the account differs. Null means inherit.
-    #: dbt uses one profile for reading and writing, so this account must do both.
-    warehouse_secret_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: A saved key this Transform runs as, instead of the Destination's own.
+    #: Null means inherit. dbt uses one profile for reading and writing, so
+    #: whatever key is named here has to do both.
+    warehouse_connection_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("transform_connections.id"), nullable=True,
+    )
     #: Where this Transform's models are read from, when they come from Git:
     #: repo_url, ref, subdirectory, secret_ref, auto_pull, interval_minutes,
     #: auto_publish, last_commit, last_pulled_at, last_status, last_message,
@@ -208,6 +209,42 @@ class DataAsset(Base, TimestampMixin):
     schema_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     last_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TransformConnection(Base, TimestampMixin):
+    """A named warehouse key, kept so it can be chosen instead of re-entered.
+
+    The credential itself lives in the encrypted secret store; this row is what
+    makes it selectable -- a name a person recognises, the warehouse it reaches,
+    the account it turned out to be, and what it could see last time it was
+    checked. Several Transforms can share one.
+    """
+
+    __tablename__ = "transform_connections"
+    __table_args__ = (
+        Index(
+            "uq_transform_connection_name", "workspace_id", "name", unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index("ix_transform_connections_destination", "destination_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False,
+    )
+    destination_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("destinations.id", ondelete="CASCADE"), nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    secret_ref: Mapped[str] = mapped_column(String(255), nullable=False)
+    account: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    catalogs: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    last_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

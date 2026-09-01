@@ -439,12 +439,12 @@ export const transformApi = {
     get<TransformInputCandidates>(`/transforms/destinations/${destinationId}/inputs`),
   registerAsset: (destinationId: string, body: {
     catalog_name?: string; schema_name: string; relation_name: string;
-    pipeline_id?: string; pipeline_stream_id?: string; secret_ref?: string;
+    pipeline_id?: string; pipeline_stream_id?: string; connection_id?: string | null;
   }) => post<DataAsset>(`/transforms/destinations/${destinationId}/assets`, body),
   create: (body: {
     name: string; description?: string; destination_id: string;
     default_schema: string; input_asset_ids: string[];
-    warehouse_secret_ref?: string;
+    warehouse_connection_id?: string | null;
   }) => post<TransformDetail>('/transforms', body),
   update: (id: string, body: unknown) => patch<TransformDetail>(`/transforms/${id}`, body),
   remove: (id: string) => del<void>(`/transforms/${id}`),
@@ -454,14 +454,15 @@ export const transformApi = {
     patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
   removeModel: (id: string, modelId: string) =>
     del<void>(`/transforms/${id}/models/${modelId}`),
-  verifyConnection: (destinationId: string, body: {
+  connections: () => get<WarehouseConnection[]>('/transforms/connections'),
+  createConnection: (body: {
+    destination_id: string; name: string;
     credentials_json?: string; username?: string; password?: string;
-  }) => post<WarehouseConnection>(
-    `/transforms/destinations/${destinationId}/connection`, body,
-  ),
+  }) => post<WarehouseConnection>('/transforms/connections', body),
+  removeConnection: (id: string) => del<void>(`/transforms/connections/${id}`),
   browseWarehouse: (
     destinationId: string,
-    options: { catalog?: string; schema?: string; connection?: string } = {},
+    options: { catalog?: string; schema?: string; connection?: string | null } = {},
   ) => {
     const query = new URLSearchParams();
     if (options.catalog) query.set('catalog', options.catalog);
@@ -479,7 +480,7 @@ export const transformApi = {
     repo_url: string; ref?: string; subdirectory?: string; token?: string;
     name: string; destination_id: string; default_schema: string;
     auto_pull?: boolean; interval_minutes?: number;
-    warehouse_secret_ref?: string;
+    warehouse_connection_id?: string | null;
   }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
   configureGit: (id: string, body: {
     repo_url?: string; ref?: string | null; subdirectory?: string;

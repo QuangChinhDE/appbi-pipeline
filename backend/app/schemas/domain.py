@@ -517,9 +517,9 @@ class DataAssetRegister(BaseModel):
     relation_name: str = Field(min_length=1, max_length=300)
     pipeline_id: uuid.UUID | None = None
     pipeline_stream_id: uuid.UUID | None = None
-    #: Verify with this credential rather than the Destination's, for a relation
-    #: only the Transform's own account can see.
-    secret_ref: str | None = Field(default=None, max_length=255)
+    #: Verify with this saved key rather than the Destination's own, for a table
+    #: only that key can see.
+    connection_id: uuid.UUID | None = None
 
 
 class TransformCreate(BaseModel):
@@ -528,8 +528,8 @@ class TransformCreate(BaseModel):
     destination_id: uuid.UUID
     default_schema: str = Field(min_length=1, max_length=200)
     input_asset_ids: list[uuid.UUID] = Field(default_factory=list)
-    #: Run as this credential instead of the Destination's. Null means inherit.
-    warehouse_secret_ref: str | None = Field(default=None, max_length=255)
+    #: Run as this saved key instead of the Destination's own. Null means inherit.
+    warehouse_connection_id: uuid.UUID | None = None
 
 
 class TransformUpdate(BaseModel):
@@ -559,9 +559,9 @@ class RepositoryImportCreate(RepositoryImportRequest):
     #: Keep the connection and poll it, so the import is a start not a snapshot.
     auto_pull: bool = False
     interval_minutes: int = Field(default=30, ge=5, le=10080)
-    #: Run as this credential instead of the Destination's -- which is what a
+    #: Run as this saved key instead of the Destination's own -- which is what a
     #: repository reading another project needs. Null means inherit.
-    warehouse_secret_ref: str | None = Field(default=None, max_length=255)
+    warehouse_connection_id: uuid.UUID | None = None
 
 
 class ImportedModelView(BaseModel):
@@ -649,25 +649,35 @@ class RepositoryImportPreview(BaseModel):
     origin: dict[str, Any] = Field(default_factory=dict)
 
 
-class WarehouseConnectionRequest(BaseModel):
-    """Credentials a Transform should run as, instead of the Destination's.
+class WarehouseConnectionCreate(BaseModel):
+    """A key to keep, so it is chosen next time instead of pasted again.
 
-    A partial configuration: only the fields that differ. For BigQuery that is
-    the service account JSON; for Postgres, a username and password.
+    Only the fields that differ from the Destination's own configuration: for
+    BigQuery the service account JSON, for Postgres a username and password.
     """
 
+    destination_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=200)
     credentials_json: str | None = Field(default=None, max_length=20000)
     username: str | None = Field(default=None, max_length=200)
     password: str | None = Field(default=None, max_length=500)
 
 
 class WarehouseConnectionView(BaseModel):
-    #: Reference to the stored credential; pass it back when browsing or creating.
-    secret_ref: str
-    #: Who the credential turned out to be, so a wrong key is obvious.
+    """One row of the key list. Null id means the Destination's own key."""
+
+    id: uuid.UUID | None = None
+    destination_id: uuid.UUID
+    destination_name: str = ""
+    connector_key: str = ""
+    name: str
+    #: Who the key turned out to be, so a wrong one is obvious in a list.
     account: str | None = None
-    #: Projects or databases this account can read.
+    #: Projects or databases it could read when last checked.
     catalogs: list[str] = Field(default_factory=list)
+    #: True for the key a Destination already uses -- nothing to enter.
+    is_default: bool = False
+    last_verified_at: datetime | None = None
 
 
 class BrowsedRelationView(BaseModel):

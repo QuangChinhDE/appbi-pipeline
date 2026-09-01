@@ -354,7 +354,7 @@ async def create_from_repository(
     name: str,
     destination_id: uuid.UUID,
     default_schema: str,
-    warehouse_secret_ref: str | None = None,
+    warehouse_connection_id: uuid.UUID | None = None,
 ) -> tuple[Transform, list[str]]:
     """Create a Transform holding the repository's models, ready to run.
 
@@ -375,8 +375,11 @@ async def create_from_repository(
     # become an input, and a model referencing it will not compile. Registering
     # them before the Transform exists means a total failure leaves nothing
     # half-created.
+    secret_ref = await service.connection_secret(
+        session, ctx.workspace_id, warehouse_connection_id,
+    )
     registered, direct_assets = await _resolve_sources(
-        session, ctx, destination_id, plan, warnings, warehouse_secret_ref,
+        session, ctx, destination_id, plan, warnings, secret_ref,
     )
 
     transform = await service.create(session, ctx, TransformCreate(
@@ -385,7 +388,7 @@ async def create_from_repository(
         destination_id=destination_id,
         default_schema=default_schema,
         input_asset_ids=[asset.id for asset in registered.values()],
-        warehouse_secret_ref=warehouse_secret_ref,
+        warehouse_connection_id=warehouse_connection_id,
     ))
 
     # Read the aliases back rather than recomputing them: the generator assigns
@@ -587,7 +590,9 @@ async def _apply_plan(
 
     registered, direct_assets = await _resolve_sources(
         session, ctx, transform.destination_id, plan, warnings,
-        transform.warehouse_secret_ref,
+        await service.connection_secret(
+            session, transform.workspace_id, transform.warehouse_connection_id,
+        ),
     )
     merged = list(dict.fromkeys(
         [item.data_asset_id for item in transform.inputs]

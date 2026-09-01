@@ -5,9 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, Database, Table2 } from 'lucide-react';
 
 import { transformApi } from '@/lib/api';
-import type {
-  ChosenConnection, ConnectionPickerCopy,
-} from '@/components/transforms/ConnectionPicker';
 import { qk } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { useWorkspaceId } from '@/hooks/use-current-user';
@@ -16,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 
-export type WarehouseBrowserCopy = ConnectionPickerCopy & {
+export type WarehouseBrowserCopy = {
   hint: string;
   project: string;
   dataset: string;
@@ -47,12 +44,14 @@ export type WarehouseBrowserCopy = ConnectionPickerCopy & {
  * property of that table, not a different way of finding it.
  */
 export function WarehouseBrowser({
-  destinationId, copy, connection, onAdd, adding, disabled,
+  destinationId, copy, connectionId, chosen, onAdd, adding, disabled,
 }: {
   destinationId: string;
   copy: WarehouseBrowserCopy;
-  /** Credential chosen a step earlier, or null for the Destination's own. */
-  connection: ChosenConnection | null;
+  /** Saved key chosen a step earlier, or null for the Destination's own. */
+  connectionId: string | null;
+  /** Asset ids already in this Transform's basket. */
+  chosen: string[];
   /** Register and select the chosen relations. */
   onAdd: (relations: {
     catalog_name: string | null; schema_name: string; relation_name: string;
@@ -66,8 +65,8 @@ export function WarehouseBrowser({
   const [filter, setFilter] = React.useState('');
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
 
-  const ref = connection?.secret_ref;
-  const scope = ref ?? '';
+  const ref = connectionId ?? undefined;
+  const scope = connectionId ?? '';
 
   // A different account sees a different warehouse, so a project and dataset
   // chosen under the old one are not answers to the new one.
@@ -172,7 +171,10 @@ export function WarehouseBrowser({
               <ul className="max-h-72 divide-y divide-[rgb(var(--border-line))] overflow-y-auto">
                 {visible.map((item) => {
                   const key = `${item.schema_name}.${item.relation_name}`;
-                  const added = Boolean(item.asset_id);
+                  // Already in the basket -- not merely registered somewhere.
+                  // A table another Transform happens to read is still a table
+                  // this one may want, and marking it done locked it out.
+                  const added = Boolean(item.asset_id && chosen.includes(item.asset_id));
                   return (
                     <li key={key}
                       className={cn('flex items-center gap-2 px-3 py-2',
@@ -211,8 +213,9 @@ export function WarehouseBrowser({
                   disabled={picked.size === 0 || disabled}
                   onClick={() => {
                     onAdd(visible
-                      .filter((item) => !item.asset_id
-                        && picked.has(`${item.schema_name}.${item.relation_name}`))
+                      .filter((item) => picked.has(
+                        `${item.schema_name}.${item.relation_name}`,
+                      ))
                       .map((item) => ({
                         catalog_name: item.catalog_name ?? catalog ?? null,
                         schema_name: item.schema_name,

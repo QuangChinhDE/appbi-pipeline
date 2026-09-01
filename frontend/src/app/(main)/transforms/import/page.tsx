@@ -18,9 +18,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Feedback';
-import {
-  ConnectionPicker, type ChosenConnection,
-} from '@/components/transforms/ConnectionPicker';
+import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
 
 const KIND_LABEL: Record<string, string> = { DBT: 'dbt', DATAFORM: 'Dataform' };
 
@@ -44,9 +42,11 @@ export default function ImportTransformPage() {
   const [subdirectory, setSubdirectory] = React.useState('');
   const [token, setToken] = React.useState('');
   const [name, setName] = React.useState('');
-  const [destinationId, setDestinationId] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
-  const [connection, setConnection] = React.useState<ChosenConnection | null>(null);
+  const [warehouse, setWarehouse] = React.useState<
+    import('@/lib/types').ChosenWarehouse | null
+  >(null);
+  const destinationId = warehouse?.destination_id ?? '';
   const [autoPull, setAutoPull] = React.useState(true);
   const [intervalMinutes, setIntervalMinutes] = React.useState(30);
 
@@ -64,7 +64,6 @@ export default function ImportTransformPage() {
     }),
     onSuccess: (preview) => {
       if (!name) setName(preview.project_name || preview.origin.repo);
-      if (!destinationId && supported.length === 1) setDestinationId(supported[0].destination.id);
     },
     onError: (error) => toastError(error),
   });
@@ -78,7 +77,7 @@ export default function ImportTransformPage() {
       token: token.trim() || undefined,
       name: name.trim(), destination_id: destinationId, default_schema: outputSchema.trim(),
       auto_pull: autoPull, interval_minutes: intervalMinutes,
-      warehouse_secret_ref: connection?.secret_ref,
+      warehouse_connection_id: warehouse?.connection_id,
     }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -105,32 +104,12 @@ export default function ImportTransformPage() {
       />
       <DetailBody>
         <div className="mx-auto w-full max-w-3xl space-y-5">
-          {/* Same first step as creating a Transform by hand: which warehouse,
-              and which account reads it. Everything the repository refers to is
-              checked against this, so asking for it afterwards would mean
-              showing a preview nothing had been compared to. */}
+          {/* Same first step as creating a Transform by hand: which key. The
+              repository's source tables are checked against it, so asking
+              afterwards would mean showing a preview compared to nothing. */}
           <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
-            <h2 className="text-small font-strong text-text-primary">{copy.destination}</h2>
-            <p className="mt-1 text-caption text-text-tertiary">{copy.destinationHelp}</p>
-            <div className="mt-3 max-w-sm">
-              <Label required>{copy.warehouse}</Label>
-              <Select value={destinationId}
-                onChange={(event) => setDestinationId(event.target.value)}>
-                <option value="">{copy.chooseWarehouse}</option>
-                {supported.map((item) => (
-                  <option key={item.destination.id} value={item.destination.id}>
-                    {item.destination.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {destinationId && (
-              <div className="mt-3">
-                <ConnectionPicker
-                  destinationId={destinationId} copy={copy.connection}
-                  connection={connection} onChange={setConnection} />
-              </div>
-            )}
+            <ConnectionPicker
+              copy={copy.connect} value={warehouse} onChange={setWarehouse} />
           </section>
 
           <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
@@ -348,6 +327,24 @@ const vi = {
   tests: 'kiểm tra',
   noSources: 'Project này không khai báo bảng nguồn nào.',
   warnings: '{n} điểm cần biết trước khi import',
+  connect: {
+    title: 'Chọn key để kết nối kho dữ liệu',
+    help: 'Chọn trước khi đọc repository: các bảng nguồn trong project sẽ được đối chiếu với đúng key này.',
+    defaultKey: 'key mặc định',
+    noAccount: '(chưa đọc được tài khoản)',
+    projects: 'project',
+    addKey: 'Tạo key mới',
+    newKeyTitle: 'Key mới',
+    keyName: 'Tên key',
+    keyNamePlaceholder: 'VD: Key đọc kho Sale',
+    keyWarehouse: 'Kho dữ liệu',
+    credentials: 'Service account JSON',
+    credentialsHint: 'Nếu bảng nguồn nằm ở project khác, hãy dùng key đọc được project đó và ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai.',
+    save: 'Kiểm tra và lưu',
+    cancel: 'Hủy',
+    remove: 'Xoá key',
+    loadFailed: 'Không tải được danh sách key',
+  },
   destination: 'Kho dữ liệu & tài khoản',
   destinationHelp: 'Chọn trước khi đọc repository, để các bảng nguồn trong project được đối chiếu với đúng kho và tài khoản này.',
   createTitle: 'Tạo Transform',
@@ -396,6 +393,24 @@ const en: typeof vi = {
   tests: 'tests',
   noSources: 'This project declares no source tables.',
   warnings: '{n} things to know before importing',
+  connect: {
+    title: 'Choose a key to reach the warehouse',
+    help: 'Chosen before the repository is read, so its source tables are checked against this key.',
+    defaultKey: 'default key',
+    noAccount: '(account unavailable)',
+    projects: 'projects',
+    addKey: 'Add a key',
+    newKeyTitle: 'New key',
+    keyName: 'Key name',
+    keyNamePlaceholder: 'e.g. Sale warehouse reader',
+    keyWarehouse: 'Warehouse',
+    credentials: 'Service account JSON',
+    credentialsHint: 'If the source tables live in another project, use a key that can read it and write the output schema — dbt uses one connection for both.',
+    save: 'Check and save',
+    cancel: 'Cancel',
+    remove: 'Remove key',
+    loadFailed: 'Could not load the key list',
+  },
   destination: 'Warehouse & account',
   destinationHelp: 'Chosen before the repository is read, so its source tables are checked against this warehouse and this account.',
   createTitle: 'Create the Transform',

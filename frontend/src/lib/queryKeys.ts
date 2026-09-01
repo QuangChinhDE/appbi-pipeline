@@ -27,6 +27,7 @@ export const qk = {
   transformDestinations: (ws: string) => ['workspace', ws, 'transform-destinations'] as const,
   transformInputs: (ws: string, id: string) => ['workspace', ws, 'transform-inputs', id] as const,
   /** Prefix for every warehouse listing of one Destination, schema or not. */
+  transformConnections: (ws: string) => ['workspace', ws, 'transform-connections'] as const,
   transformWarehouseAll: (ws: string, id: string) =>
     ['workspace', ws, 'transform-warehouse', id] as const,
   transformWarehouse: (ws: string, id: string, schema?: string) =>

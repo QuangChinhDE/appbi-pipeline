@@ -31,6 +31,7 @@ from app.models.enums import (
 from app.models.integration import Destination, Pipeline, PipelineStream, Source
 from app.models.run import PipelineRun
 from app.models.transform import (
+    TransformConnection,
     DataAsset, Transform, TransformArtifact, TransformDependency, TransformInput,
     TransformModel, TransformRelease, TransformRun, TransformRunAttempt,
     TransformRunNode, TransformTest,
@@ -435,90 +436,167 @@ async def warehouse_configuration(
     return {**configuration, **{k: v for k, v in override.items() if v not in (None, "")}}
 
 
-#: Marks a credential created by the connect step, so an abandoned one can be
-#: found and removed rather than sitting in the store forever.
-CONNECTION_MARKER = "transform-conn"
+async def list_connections(
+    session: AsyncSession, ctx: RequestContext,
+) -> list[dict[str, Any]]:
+    """Every key a Transform could run as, ready to be picked.
 
-#: How long a loose credential is kept. Long enough that a wizard left open over
-#: lunch still works; short enough that an abandoned one does not outlive the day.
-CONNECTION_TTL_HOURS = 12
-
-
-async def purge_orphan_connections(session: AsyncSession) -> int:
-    """Delete connect-step credentials that never became a Transform.
-
-    The credential is stored when it is verified, before the Transform exists,
-    so that a service account key crosses the wire once instead of on every
-    browse. The cost of that choice is this sweep: without it, every abandoned
-    wizard leaves an encrypted key attached to nothing.
+    Two kinds in one list, because a person choosing does not care which is
+    which. Each supported Destination contributes the key it already uses, so
+    the common case -- the data is where the Pipeline put it -- is one click and
+    no credential to find. Saved keys follow, for data that lives somewhere the
+    Pipeline never touches.
     """
-    from app.models.secret import SecretRecord
-
-    cutoff = utcnow() - timedelta(hours=CONNECTION_TTL_HOURS)
-    loose = list((await session.scalars(
-        select(SecretRecord).where(
-            SecretRecord.ref.like(f"%/{CONNECTION_MARKER}/%"),
-            SecretRecord.created_at < cutoff,
-        )
-    )).all())
-    if not loose:
-        return 0
-    claimed = set((await session.scalars(
-        select(Transform.warehouse_secret_ref).where(
-            Transform.warehouse_secret_ref.in_([item.ref for item in loose]),
-        )
-    )).all())
-    removed = 0
-    for record in loose:
-        if record.ref in claimed:
+    ctx.require(Module.TRANSFORMS, Action.VIEW)
+    destinations = await destination_capabilities(session, ctx)
+    out: list[dict[str, Any]] = []
+    for item in destinations:
+        if not item.supported:
             continue
-        await session.delete(record)
-        removed += 1
-    return removed
+        record = await session.get(Destination, item.destination.id)
+        account = None
+        if record is not None:
+            try:
+                configuration = await actor_service.resolve_configuration(session, record)
+                account = _account_label(record.connector_key, configuration)
+            except Exception:  # noqa: BLE001 -- a listing must not fail on one row
+                account = None
+        out.append({
+            "id": None,
+            "destination_id": item.destination.id,
+            "destination_name": item.destination.name,
+            "connector_key": record.connector_key if record else "",
+            "name": item.destination.name,
+            "account": account,
+            "catalogs": [],
+            "is_default": True,
+            "last_verified_at": None,
+        })
+
+    saved = list((await session.scalars(select(TransformConnection).where(
+        TransformConnection.workspace_id == ctx.workspace_id,
+        TransformConnection.deleted_at.is_(None),
+    ).order_by(TransformConnection.name))).all())
+    for row in saved:
+        destination = await session.get(Destination, row.destination_id)
+        out.append({
+            "id": row.id,
+            "destination_id": row.destination_id,
+            "destination_name": destination.name if destination else "",
+            "connector_key": destination.connector_key if destination else "",
+            "name": row.name,
+            "account": row.account,
+            "catalogs": row.catalogs or [],
+            "is_default": False,
+            "last_verified_at": row.last_verified_at,
+        })
+    return out
 
 
-async def verify_connection(
+async def create_connection(
     session: AsyncSession,
     ctx: RequestContext,
+    *,
     destination_id: uuid.UUID,
-    override: dict[str, Any],
+    name: str,
+    credentials: dict[str, Any],
 ) -> dict[str, Any]:
-    """Check a credential, remember it, and report what it can see.
-
-    Stored on acceptance rather than carried through the wizard, so a service
-    account key crosses the wire once instead of on every browse. What comes
-    back is deliberately small: which account it turned out to be, and the
-    projects it can read. Enough to tell whether it was the right key before
-    building anything on it.
-    """
+    """Check a key, name it, and keep it so it never has to be pasted again."""
     ctx.require(Module.TRANSFORMS, Action.CREATE)
     destination = await _destination(session, ctx.workspace_id, destination_id)
-    base = await actor_service.resolve_configuration(session, destination)
-    cleaned = {key: value for key, value in override.items() if value not in (None, "")}
+    cleaned = {key: value for key, value in credentials.items() if value not in (None, "")}
     if not cleaned:
         raise ValidationError(
-            "Chưa nhập thông tin đăng nhập nào.",
-            code="TRANSFORM_CONNECTION_EMPTY",
+            "Chưa nhập thông tin đăng nhập nào.", code="TRANSFORM_CONNECTION_EMPTY",
         )
+    label = name.strip()
+    if not label:
+        raise ValidationError(
+            "Hãy đặt tên cho key này.", code="TRANSFORM_CONNECTION_NO_NAME",
+        )
+    clash = await session.scalar(select(TransformConnection).where(
+        TransformConnection.workspace_id == ctx.workspace_id,
+        TransformConnection.name == label,
+        TransformConnection.deleted_at.is_(None),
+    ))
+    if clash is not None:
+        raise ValidationError(
+            f"Đã có key tên `{label}`.", code="TRANSFORM_CONNECTION_NAME_TAKEN",
+        )
+
+    base = await actor_service.resolve_configuration(session, destination)
     configuration = {**base, **cleaned}
+    # Verified before it is kept: a key nobody can use is worse in a list than
+    # absent from one, because it looks like a working choice.
     catalogs = await browse_catalogs(destination.connector_key, configuration)
-    # Marked in the reference so the janitor can find one that never became a
-    # Transform. Somebody who abandons the wizard should not leave a credential
-    # behind, and nothing else in the store can tell that this one is loose.
-    ref = await secret_store.write(
-        session, ctx.workspace_id, cleaned,
-        ref=f"secret://{settings.app_env}/{CONNECTION_MARKER}/{uuid.uuid4().hex}",
+    ref = await secret_store.write(session, ctx.workspace_id, cleaned)
+    row = TransformConnection(
+        workspace_id=ctx.workspace_id, destination_id=destination.id, name=label,
+        secret_ref=ref, account=_account_label(destination.connector_key, configuration),
+        catalogs=catalogs, last_verified_at=utcnow(), created_by=ctx.user_id,
     )
+    session.add(row)
+    await session.flush()
     await audit.record(
-        session, ctx, "transform.connection.verified", resource_type="DESTINATION",
+        session, ctx, "transform.connection.created", resource_type="DESTINATION",
         resource_id=destination.id, resource_name=destination.name,
-        after={"catalogs": len(catalogs)},
+        after={"name": label, "catalogs": len(catalogs)},
     )
     return {
-        "secret_ref": ref,
-        "account": _account_label(destination.connector_key, configuration),
-        "catalogs": catalogs,
+        "id": row.id, "destination_id": destination.id,
+        "destination_name": destination.name, "connector_key": destination.connector_key,
+        "name": row.name, "account": row.account, "catalogs": row.catalogs,
+        "is_default": False, "last_verified_at": row.last_verified_at,
     }
+
+
+async def delete_connection(
+    session: AsyncSession, ctx: RequestContext, connection_id: uuid.UUID,
+) -> None:
+    """Retire a key, unless a Transform is still running as it."""
+    ctx.require(Module.TRANSFORMS, Action.DELETE)
+    row = await session.scalar(select(TransformConnection).where(
+        TransformConnection.id == connection_id,
+        TransformConnection.workspace_id == ctx.workspace_id,
+        TransformConnection.deleted_at.is_(None),
+    ))
+    if row is None:
+        raise NotFoundError("Không tìm thấy key này.")
+    users = list((await session.scalars(select(Transform.name).where(
+        Transform.warehouse_connection_id == row.id,
+        Transform.deleted_at.is_(None),
+    ))).all())
+    if users:
+        raise ValidationError(
+            "Key này đang được dùng bởi: " + ", ".join(users[:5])
+            + (" ..." if len(users) > 5 else "")
+            + ". Hãy đổi key của các Transform đó trước.",
+            code="TRANSFORM_CONNECTION_IN_USE",
+        )
+    row.deleted_at = utcnow()
+    await secret_store.delete(session, row.secret_ref)
+    await audit.record(
+        session, ctx, "transform.connection.deleted", resource_type="DESTINATION",
+        resource_id=row.destination_id, resource_name=row.name,
+    )
+
+
+async def connection_secret(
+    session: AsyncSession, workspace_id: uuid.UUID, connection_id: uuid.UUID | None,
+) -> str | None:
+    """The stored credential a saved key points at. None means inherit."""
+    if connection_id is None:
+        return None
+    row = await session.scalar(select(TransformConnection).where(
+        TransformConnection.id == connection_id,
+        TransformConnection.workspace_id == workspace_id,
+        TransformConnection.deleted_at.is_(None),
+    ))
+    if row is None:
+        raise ValidationError(
+            "Key đã chọn không còn tồn tại.", code="TRANSFORM_CONNECTION_MISSING",
+        )
+    return row.secret_ref
 
 
 def _account_label(connector_key: str, configuration: dict[str, Any]) -> str | None:
@@ -766,10 +844,18 @@ async def register_asset(
     asset.relation_name = verified.relation_name
     asset.relation_type = verified.relation_type
     asset.asset_type = "RAW"
-    asset.owner_type = "PIPELINE" if pipeline else "WAREHOUSE"
-    asset.owner_resource_id = pipeline.id if pipeline else destination.id
-    asset.pipeline_id = pipeline.id if pipeline else None
-    asset.pipeline_stream_id = stream.id if stream else None
+    # Only rewrite the Pipeline link when this call actually names one. Adding a
+    # table from the warehouse browser passes no pipeline, and clearing the link
+    # on re-registration silently deleted the lineage of every Pipeline-produced
+    # table somebody happened to pick that way.
+    if pipeline is not None:
+        asset.owner_type = "PIPELINE"
+        asset.owner_resource_id = pipeline.id
+        asset.pipeline_id = pipeline.id
+        asset.pipeline_stream_id = stream.id if stream else None
+    elif asset.pipeline_id is None:
+        asset.owner_type = "WAREHOUSE"
+        asset.owner_resource_id = destination.id
     asset.resolution_status = "READY"
     asset.schema_metadata = {"columns": verified.columns}
     asset.last_ready_at = utcnow()
@@ -851,7 +937,7 @@ async def create(
         workspace_id=ctx.workspace_id, destination_id=destination.id,
         name=payload.name.strip(), description=payload.description,
         default_schema=payload.default_schema,
-        warehouse_secret_ref=payload.warehouse_secret_ref,
+        warehouse_connection_id=payload.warehouse_connection_id,
         dbt_core_version=cap["dbt_core"], dbt_adapter_name=cap["package"],
         dbt_adapter_version=cap["version"], created_by=ctx.user_id, updated_by=ctx.user_id,
     )
@@ -1440,7 +1526,10 @@ async def _request_from_release(
 ) -> TransformationRequest:
     """Build a run from a published release rather than the live models."""
     configuration = await warehouse_configuration(
-        session, destination, secret_ref=transform.warehouse_secret_ref,
+        session, destination,
+        secret_ref=await connection_secret(
+            session, transform.workspace_id, transform.warehouse_connection_id,
+        ),
     )
     profile, secrets = build_profile(
         destination.connector_key, configuration, release.default_schema,
@@ -1659,7 +1748,10 @@ async def build_request(session: AsyncSession, run: TransformRun) -> Transformat
             )
     generated = generate_project(transform, models, inputs)
     configuration = await warehouse_configuration(
-        session, destination, secret_ref=transform.warehouse_secret_ref,
+        session, destination,
+        secret_ref=await connection_secret(
+            session, transform.workspace_id, transform.warehouse_connection_id,
+        ),
     )
     # A draft build writes to its own schema so trying something out cannot
     # overwrite the tables a dashboard is reading. Dataform does this with a

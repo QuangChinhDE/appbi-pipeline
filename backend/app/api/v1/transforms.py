@@ -16,7 +16,7 @@ from app.schemas.domain import (
     TransformModelCreate, TransformModelUpdate, TransformModelView,
     TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
     TransformRunRequest, WarehouseBrowseView,
-    WarehouseConnectionRequest, WarehouseConnectionView,
+    WarehouseConnectionCreate, WarehouseConnectionView,
     RepositoryImportCreate, RepositoryImportPreview, RepositoryImportRequest,
     RepositoryImportResult, GitSourceUpdate, GitSourceView, GitPullResult,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
@@ -53,7 +53,7 @@ async def import_repository(
         repo_url=payload.repo_url, ref=payload.ref, subdirectory=payload.subdirectory,
         token=payload.token, name=payload.name,
         destination_id=payload.destination_id, default_schema=payload.default_schema,
-        warehouse_secret_ref=payload.warehouse_secret_ref,
+        warehouse_connection_id=payload.warehouse_connection_id,
     )
     # Remember the repository so the import is a starting point rather than a
     # snapshot -- the token included, since polling needs it after this request.
@@ -81,28 +81,47 @@ async def candidates(destination_id: uuid.UUID, session: SessionDep, ctx: CtxDep
     return await service.input_candidates(session, ctx, destination_id)
 
 
-@router.post(
-    "/destinations/{destination_id}/connection", response_model=WarehouseConnectionView,
-)
-async def verify_connection(
-    destination_id: uuid.UUID,
-    payload: WarehouseConnectionRequest,
-    session: SessionDep,
-    ctx: CtxDep,
-):
-    """Check a credential a Transform should run as, and say what it can see.
+@router.get("/connections", response_model=list[WarehouseConnectionView])
+async def list_connections(session: SessionDep, ctx: CtxDep):
+    """Keys a Transform can run as: each Destination's own, then the saved ones.
 
-    A Destination's account exists so a Pipeline can write. A Transform often
-    reads somewhere else, and widening the ingestion account to allow that is a
-    production change made for a report. Naming a different account here avoids
-    that. It is still one connection -- dbt reads and writes through a single
-    profile -- so this account must cover both.
+    A key was being stored anonymously per Transform, so there was never an
+    existing one to choose and every Transform meant pasting a service account
+    again. A key that is named and listed is a key that gets reused.
     """
-    result = await service.verify_connection(
-        session, ctx, destination_id, payload.model_dump(exclude_none=True),
+    return await service.list_connections(session, ctx)
+
+
+@router.post(
+    "/connections", response_model=WarehouseConnectionView,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_connection(
+    payload: WarehouseConnectionCreate, session: SessionDep, ctx: CtxDep,
+):
+    """Check a key against the warehouse, then keep it under a name.
+
+    Still one connection when it runs: dbt reads its sources and writes its
+    models through a single profile, so this key has to do both.
+    """
+    result = await service.create_connection(
+        session, ctx,
+        destination_id=payload.destination_id, name=payload.name,
+        credentials=payload.model_dump(
+            include={"credentials_json", "username", "password"}, exclude_none=True,
+        ),
     )
     await session.commit()
     return result
+
+
+@router.delete("/connections/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_connection(
+    connection_id: uuid.UUID, session: SessionDep, ctx: CtxDep,
+) -> Response:
+    await service.delete_connection(session, ctx, connection_id)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -114,7 +133,7 @@ async def browse_warehouse(
     ctx: CtxDep,
     catalog: Annotated[str | None, Query(max_length=200)] = None,
     schema: Annotated[str | None, Query(max_length=200)] = None,
-    connection: Annotated[str | None, Query(max_length=255)] = None,
+    connection: Annotated[uuid.UUID | None, Query()] = None,
 ):
     """What the warehouse holds: projects, then datasets, then tables.
 
@@ -125,8 +144,8 @@ async def browse_warehouse(
     that account can see but the Destination does not live in.
     """
     return await service.browse_warehouse(
-        session, ctx, destination_id, schema,
-        catalog_name=catalog, secret_ref=connection,
+        session, ctx, destination_id, schema, catalog_name=catalog,
+        secret_ref=await service.connection_secret(session, ctx.workspace_id, connection),
     )
 
 
@@ -141,7 +160,10 @@ async def register_asset(
     ctx: CtxDep,
 ):
     asset = await service.register_asset(
-        session, ctx, destination_id, payload, secret_ref=payload.secret_ref,
+        session, ctx, destination_id, payload,
+        secret_ref=await service.connection_secret(
+            session, ctx.workspace_id, payload.connection_id,
+        ),
     )
     await session.commit()
     return await service._asset_view(session, asset)

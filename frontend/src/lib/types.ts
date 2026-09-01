@@ -479,16 +479,33 @@ export interface WarehouseBrowse {
 }
 
 /**
- * A credential a Transform runs as, instead of the Destination's.
+ * A key a Transform can run as: one row of the list you pick from.
  *
- * One connection, not two: dbt reads its sources and writes its models through
- * a single profile, so this account has to cover both.
+ * `is_default` rows are the key a Destination already uses and have no id --
+ * nothing to enter, nothing to keep. Saved rows have both. Either way it is one
+ * connection when it runs: dbt reads its sources and writes its models through
+ * a single profile, so the key has to cover both.
  */
 export interface WarehouseConnection {
-  secret_ref: string;
-  /** Who the credential turned out to be, so a wrong key is obvious. */
+  id: string | null;
+  destination_id: string;
+  destination_name: string;
+  connector_key: string;
+  name: string;
+  /** Who the key turned out to be, so a wrong one is obvious in a list. */
   account: string | null;
   catalogs: string[];
+  is_default: boolean;
+  last_verified_at: string | null;
+}
+
+/** What the wizard carries once a key is chosen. */
+export interface ChosenWarehouse {
+  destination_id: string;
+  /** Null for the Destination's own key. */
+  connection_id: string | null;
+  name: string;
+  account: string | null;
 }
 
 /**
