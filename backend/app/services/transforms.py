@@ -48,7 +48,7 @@ from app.transformation.base import TransformationRequest, TransformationResult
 from app.transformation.compatibility import capability, lock
 from app.transformation.profiles import build_profile
 from app.transformation.project import generate_project, require_identifier
-from app.transformation.warehouse import verify_relation
+from app.transformation.warehouse import browse_relations, browse_schemas, verify_relation
 
 logger = logging.getLogger(__name__)
 
@@ -403,6 +403,73 @@ async def input_candidates(
     )
 
 
+async def browse_warehouse(
+    session: AsyncSession,
+    ctx: RequestContext,
+    destination_id: uuid.UUID,
+    schema_name: str | None,
+) -> dict[str, Any]:
+    """List what is physically in the warehouse, with what is already an asset.
+
+    Marking the relations that are already registered matters: without it the
+    same table gets added twice under two names and the lineage forks.
+    """
+    ctx.require(Module.TRANSFORMS, Action.VIEW)
+    destination = await _destination(session, ctx.workspace_id, destination_id)
+    configuration = await actor_service.resolve_configuration(session, destination)
+    catalog = configuration.get("project_id") or configuration.get("dataset_project_id")
+    if schema_name is None:
+        return {
+            "catalog_name": catalog,
+            "schemas": await browse_schemas(
+                destination.connector_key, configuration, catalog_name=catalog,
+            ),
+            "relations": [],
+        }
+    relations = await browse_relations(
+        destination.connector_key, configuration,
+        catalog_name=catalog, schema_name=schema_name,
+    )
+    known = {
+        (asset.schema_name, asset.relation_name): asset.id
+        for asset in (await session.scalars(select(DataAsset).where(
+            DataAsset.workspace_id == ctx.workspace_id,
+            DataAsset.destination_id == destination_id,
+            DataAsset.schema_name == schema_name,
+            DataAsset.deleted_at.is_(None),
+        ))).all()
+    }
+    return {
+        "catalog_name": catalog,
+        "schemas": [],
+        "relations": [
+            {
+                "schema_name": item.schema_name,
+                "relation_name": item.relation_name,
+                "relation_type": item.relation_type,
+                "asset_id": known.get((item.schema_name, item.relation_name)),
+            }
+            for item in relations
+        ],
+    }
+
+
+def _stream_matches(stream_name: str, relation_name: str) -> bool:
+    """Whether a destination relation plausibly came from this stream.
+
+    Not equality: a destination applies its own naming -- lowercasing, prefixes,
+    a namespace folded into the table name -- so the two rarely match character
+    for character. Containment after normalising is the test that accepts every
+    real naming convention while still catching a relation paired with an
+    unrelated stream.
+    """
+    left = re.sub(r"[^a-z0-9]", "", (stream_name or "").lower())
+    right = re.sub(r"[^a-z0-9]", "", (relation_name or "").lower())
+    if not left or not right:
+        return True
+    return left in right or right in left
+
+
 def _physical_identity(
     destination_id: uuid.UUID, catalog_name: str | None, schema_name: str, relation_name: str,
 ) -> str:
@@ -444,6 +511,17 @@ async def register_asset(
         ))
         if stream is None:
             raise ValidationError("The selected stream does not belong to this Pipeline.")
+        if not _stream_matches(stream.stream_name, payload.relation_name):
+            # Linking a relation to the wrong stream is not a cosmetic error: the
+            # asset's freshness, the AFTER_UPSTREAM trigger and the lineage graph
+            # all read the flow from this one field, so a mismatch makes the whole
+            # Source -> Pipeline -> Transform picture quietly wrong.
+            raise ValidationError(
+                f"Bảng `{payload.relation_name}` không khớp với stream "
+                f"`{stream.stream_name}`. Nếu bảng này thật sự không do Pipeline "
+                "nào sinh ra, hãy thêm nó như một bảng có sẵn trong kho dữ liệu.",
+                code="TRANSFORM_STREAM_RELATION_MISMATCH",
+            )
 
     configuration = await actor_service.resolve_configuration(session, destination)
     verified = await verify_relation(

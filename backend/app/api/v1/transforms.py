@@ -15,12 +15,48 @@ from app.schemas.domain import (
     TransformDetail, TransformExecutionView, TransformInputCandidates, TransformLineage,
     TransformModelCreate, TransformModelUpdate, TransformModelView,
     TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
-    TransformRunRequest,
+    TransformRunRequest, WarehouseBrowseView,
+    RepositoryImportCreate, RepositoryImportPreview, RepositoryImportRequest,
+    RepositoryImportResult,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
 )
-from app.services import transform_ai, transforms as service
+from app.services import transform_ai, transform_import, transforms as service
 
 router = APIRouter(prefix="/transforms", tags=["transforms"])
+
+
+@router.post("/imports/inspect", response_model=RepositoryImportPreview)
+async def inspect_repository(payload: RepositoryImportRequest, ctx: CtxDep):
+    """Read a dbt or Dataform repository and report what it would become.
+
+    Nothing is created. A conversion that silently dropped a macro or a JS block
+    would be worse than no conversion at all, so the warnings this returns are
+    the point of the step, not a footnote to it.
+    """
+    plan = await transform_import.inspect(
+        ctx, repo_url=payload.repo_url, ref=payload.ref,
+        subdirectory=payload.subdirectory, token=payload.token,
+    )
+    return plan
+
+
+@router.post(
+    "/imports", response_model=RepositoryImportResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_repository(
+    payload: RepositoryImportCreate, session: SessionDep, ctx: CtxDep,
+):
+    transform, warnings = await transform_import.create_from_repository(
+        session, ctx,
+        repo_url=payload.repo_url, ref=payload.ref, subdirectory=payload.subdirectory,
+        token=payload.token, name=payload.name,
+        destination_id=payload.destination_id, default_schema=payload.default_schema,
+    )
+    await session.commit()
+    session.expunge(transform)
+    fresh = await service.get(session, ctx, transform.id)
+    return {"transform": await service.detail(session, ctx, fresh), "warnings": warnings}
 
 
 @router.get("/destinations", response_model=list[TransformDestinationCapability])
@@ -33,6 +69,24 @@ async def destinations(session: SessionDep, ctx: CtxDep):
 )
 async def candidates(destination_id: uuid.UUID, session: SessionDep, ctx: CtxDep):
     return await service.input_candidates(session, ctx, destination_id)
+
+
+@router.get(
+    "/destinations/{destination_id}/warehouse", response_model=WarehouseBrowseView,
+)
+async def browse_warehouse(
+    destination_id: uuid.UUID,
+    session: SessionDep,
+    ctx: CtxDep,
+    schema: Annotated[str | None, Query(max_length=200)] = None,
+):
+    """Datasets in the warehouse, or the tables inside one of them.
+
+    Separate from `/inputs`, which answers "what has AppBI already loaded here".
+    This one answers "what is actually in there", which is the question a user
+    with a hand-built dataset is asking.
+    """
+    return await service.browse_warehouse(session, ctx, destination_id, schema)
 
 
 @router.post(

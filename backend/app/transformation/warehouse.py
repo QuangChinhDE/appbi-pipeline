@@ -42,6 +42,163 @@ async def verify_relation(
     )
 
 
+@dataclass(slots=True)
+class BrowsedRelation:
+    schema_name: str
+    relation_name: str
+    relation_type: str
+    #: None when the warehouse does not report it cheaply.
+    row_count: int | None = None
+
+
+async def browse_schemas(
+    connector_key: str,
+    configuration: dict[str, Any],
+    *,
+    catalog_name: str | None,
+) -> list[str]:
+    """Every schema in the warehouse this Destination points at.
+
+    Transform inputs do not have to come from a Pipeline -- a dataset someone
+    loaded by other means is just as valid a source. Until now the only way to
+    use one was to remember its exact name and type it, which is a way of
+    saying the feature existed without being usable.
+    """
+    if connector_key == "destination-bigquery":
+        return await asyncio.to_thread(_schemas_bigquery, configuration, catalog_name)
+    if connector_key == "destination-postgres":
+        return await asyncio.to_thread(_schemas_postgres, configuration)
+    raise ValidationError(
+        "This Destination cannot be browsed.",
+        code="TRANSFORM_DESTINATION_UNSUPPORTED",
+    )
+
+
+async def browse_relations(
+    connector_key: str,
+    configuration: dict[str, Any],
+    *,
+    catalog_name: str | None,
+    schema_name: str,
+) -> list[BrowsedRelation]:
+    """The tables and views inside one schema."""
+    if connector_key == "destination-bigquery":
+        return await asyncio.to_thread(
+            _relations_bigquery, configuration, catalog_name, schema_name,
+        )
+    if connector_key == "destination-postgres":
+        return await asyncio.to_thread(_relations_postgres, configuration, schema_name)
+    raise ValidationError(
+        "This Destination cannot be browsed.",
+        code="TRANSFORM_DESTINATION_UNSUPPORTED",
+    )
+
+
+def _bigquery_client(configuration: dict[str, Any], catalog_name: str | None):
+    from google.cloud import bigquery
+    from google.oauth2 import service_account
+
+    raw = configuration.get("credentials_json")
+    info = json.loads(raw) if isinstance(raw, str) else raw
+    credentials = service_account.Credentials.from_service_account_info(info)
+    project = catalog_name or configuration.get("project_id") or info.get("project_id")
+    return bigquery.Client(project=project, credentials=credentials), project
+
+
+def _schemas_bigquery(
+    configuration: dict[str, Any], catalog_name: str | None,
+) -> list[str]:
+    try:
+        client, _ = _bigquery_client(configuration, catalog_name)
+        return sorted(item.dataset_id for item in client.list_datasets())
+    except Exception as exc:
+        raise ValidationError(
+            "Không đọc được danh sách dataset của kho dữ liệu.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
+def _relations_bigquery(
+    configuration: dict[str, Any], catalog_name: str | None, schema_name: str,
+) -> list[BrowsedRelation]:
+    try:
+        client, project = _bigquery_client(configuration, catalog_name)
+        out = [
+            BrowsedRelation(
+                schema_name=schema_name,
+                relation_name=item.table_id,
+                relation_type="VIEW" if item.table_type == "VIEW" else "TABLE",
+            )
+            for item in client.list_tables(f"{project}.{schema_name}")
+        ]
+    except Exception as exc:
+        raise ValidationError(
+            f"Không đọc được danh sách bảng trong dataset {schema_name}.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
+    return sorted(out, key=lambda item: item.relation_name)
+
+
+def _postgres_connect(configuration: dict[str, Any]):
+    import psycopg
+
+    return psycopg.connect(
+        host=configuration.get("host"),
+        port=int(configuration.get("port") or 5432),
+        dbname=configuration.get("database"),
+        user=configuration.get("username"),
+        password=configuration.get("password"),
+        connect_timeout=15,
+    )
+
+
+def _schemas_postgres(configuration: dict[str, Any]) -> list[str]:
+    try:
+        with _postgres_connect(configuration) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "select schema_name from information_schema.schemata "
+                    "where schema_name not in ('information_schema', 'pg_catalog') "
+                    "and schema_name not like 'pg_toast%' "
+                    "and schema_name not like 'pg_temp%' order by 1"
+                )
+                return [row[0] for row in cursor.fetchall()]
+    except Exception as exc:
+        raise ValidationError(
+            "Không đọc được danh sách schema của kho dữ liệu.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
+def _relations_postgres(
+    configuration: dict[str, Any], schema_name: str,
+) -> list[BrowsedRelation]:
+    try:
+        with _postgres_connect(configuration) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "select table_name, table_type from information_schema.tables "
+                    "where table_schema = %s order by table_name",
+                    (schema_name,),
+                )
+                return [
+                    BrowsedRelation(
+                        schema_name=schema_name, relation_name=row[0],
+                        relation_type="VIEW" if row[1] == "VIEW" else "TABLE",
+                    )
+                    for row in cursor.fetchall()
+                ]
+    except Exception as exc:
+        raise ValidationError(
+            f"Không đọc được danh sách bảng trong schema {schema_name}.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
 async def profile_relation(
     connector_key: str,
     configuration: dict[str, Any],

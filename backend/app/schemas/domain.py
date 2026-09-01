@@ -538,6 +538,78 @@ class TransformUpdate(BaseModel):
     version: int | None = None
 
 
+class RepositoryImportRequest(BaseModel):
+    """Where the project lives. The token is used once and never stored."""
+
+    repo_url: str = Field(min_length=1, max_length=500)
+    ref: str | None = Field(default=None, max_length=200)
+    subdirectory: str | None = Field(default=None, max_length=300)
+    token: str | None = Field(default=None, max_length=500)
+
+
+class RepositoryImportCreate(RepositoryImportRequest):
+    name: str = Field(min_length=1, max_length=200)
+    destination_id: uuid.UUID
+    default_schema: str = Field(min_length=1, max_length=200)
+
+
+class ImportedModelView(BaseModel):
+    name: str
+    path: str
+    layer: str
+    materialization: str
+    sql: str
+    description: str | None = None
+
+
+class ImportedSourceView(BaseModel):
+    alias: str
+    table: str
+    catalog: str | None = None
+    schema_name: str
+    relation: str
+
+
+class ImportedTestView(BaseModel):
+    model: str
+    rule: str
+    column: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class RepositoryImportPreview(BaseModel):
+    """What the conversion would produce, before anything is created."""
+
+    kind: Literal["DBT", "DATAFORM"]
+    project_name: str | None = None
+    models: list[ImportedModelView] = Field(default_factory=list)
+    sources: list[ImportedSourceView] = Field(default_factory=list)
+    tests: list[ImportedTestView] = Field(default_factory=list)
+    #: Everything the conversion could not carry across, in the user's words.
+    warnings: list[str] = Field(default_factory=list)
+    origin: dict[str, Any] = Field(default_factory=dict)
+
+
+class BrowsedRelationView(BaseModel):
+    schema_name: str
+    relation_name: str
+    relation_type: str
+    #: Set when this relation is already a registered asset for the Destination.
+    asset_id: uuid.UUID | None = None
+
+
+class WarehouseBrowseView(BaseModel):
+    """What the Destination's warehouse physically holds.
+
+    Returned schema-at-a-time: listing every table in every dataset of a real
+    warehouse is a slow call nobody asked for.
+    """
+
+    catalog_name: str | None = None
+    schemas: list[str] = Field(default_factory=list)
+    relations: list[BrowsedRelationView] = Field(default_factory=list)
+
+
 class TransformTestCreate(BaseModel):
     column_name: str | None = Field(default=None, max_length=200)
     rule: Literal["NOT_NULL", "UNIQUE", "ACCEPTED_VALUES", "RELATIONSHIPS"]
@@ -658,6 +730,11 @@ class TransformDetail(TransformView):
     # run include what I just typed?"
     active_release: TransformReleaseView | None = None
     draft_has_changes: bool = False
+
+
+class RepositoryImportResult(BaseModel):
+    transform: TransformDetail
+    warnings: list[str] = Field(default_factory=list)
 
 
 class TransformRunRequest(BaseModel):

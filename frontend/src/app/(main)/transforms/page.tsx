@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Workflow } from 'lucide-react';
+import { Github, Plus, Workflow } from 'lucide-react';
 
 import { transformApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
@@ -28,7 +28,7 @@ export default function TransformsPage() {
   const [search, setSearch] = React.useState('');
   const copy = locale === 'vi' ? {
     title: 'Transform', description: 'Biến đổi dữ liệu trong warehouse thành dữ liệu sẵn sàng cho BI.',
-    create: 'Transform mới', empty: 'Chưa có Transform', emptyDescription: 'Tạo Transform đầu tiên từ một Destination warehouse đã có.',
+    create: 'Transform mới', importFromGit: 'Import từ GitHub', empty: 'Chưa có Transform', emptyDescription: 'Tạo Transform đầu tiên từ một Destination warehouse đã có.',
     name: 'Tên', warehouse: 'Warehouse', models: 'Model', tests: 'Test', health: 'Sức khỏe', lastRun: 'Lần chạy cuối', open: 'Mở',
     total: 'Tổng', healthy: 'Ổn định', attention: 'Cần chú ý', search: 'Tìm Transform', never: 'Chưa chạy', loadError: 'Không tải được Transform',
     healthLabel: {
@@ -36,7 +36,7 @@ export default function TransformsPage() {
     } as Record<string, string>,
   } : {
     title: 'Transform', description: 'Turn warehouse data into business-ready datasets.',
-    create: 'New transform', empty: 'No transforms yet', emptyDescription: 'Create the first Transform from an existing warehouse Destination.',
+    create: 'New transform', importFromGit: 'Import from GitHub', empty: 'No transforms yet', emptyDescription: 'Create the first Transform from an existing warehouse Destination.',
     name: 'Name', warehouse: 'Warehouse', models: 'Models', tests: 'Tests', health: 'Health', lastRun: 'Last run', open: 'Open',
     total: 'Total', healthy: 'Healthy', attention: 'Needs attention', search: 'Search transforms', never: 'Never run', loadError: 'Could not load transforms',
     healthLabel: {
@@ -59,11 +59,20 @@ export default function TransformsPage() {
       onSearchChange={setSearch}
       searchPlaceholder={copy.search}
       action={can('transforms', 'create') ? (
-        <Link href="/transforms/new">
-          <Button variant="primary" size="sm" leadingIcon={<Plus className="h-4 w-4" />}>
-            {copy.create}
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* Somebody arriving from Dataform has the work already written; the
+              import is their first step, not an advanced option. */}
+          <Link href="/transforms/import">
+            <Button variant="secondary" size="sm" leadingIcon={<Github className="h-4 w-4" />}>
+              {copy.importFromGit}
+            </Button>
+          </Link>
+          <Link href="/transforms/new">
+            <Button variant="primary" size="sm" leadingIcon={<Plus className="h-4 w-4" />}>
+              {copy.create}
+            </Button>
+          </Link>
+        </div>
       ) : null}
       overview={<ModuleOverview stats={[
         { label: copy.total, value: query.data?.page.total ?? 0 },

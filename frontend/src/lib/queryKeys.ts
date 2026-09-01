@@ -26,6 +26,11 @@ export const qk = {
     ['workspace', ws, 'transform', id, 'release', releaseId] as const,
   transformDestinations: (ws: string) => ['workspace', ws, 'transform-destinations'] as const,
   transformInputs: (ws: string, id: string) => ['workspace', ws, 'transform-inputs', id] as const,
+  /** Prefix for every warehouse listing of one Destination, schema or not. */
+  transformWarehouseAll: (ws: string, id: string) =>
+    ['workspace', ws, 'transform-warehouse', id] as const,
+  transformWarehouse: (ws: string, id: string, schema?: string) =>
+    ['workspace', ws, 'transform-warehouse', id, schema ?? ''] as const,
   transformRun: (ws: string, id: string) => ['workspace', ws, 'transform-run', id] as const,
   transformLineage: (ws: string, id: string) => ['workspace', ws, 'transform-lineage', id] as const,
   // Not workspace-scoped: it is fetched from the engine on demand and never

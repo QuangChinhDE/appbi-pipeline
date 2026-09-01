@@ -17,6 +17,8 @@ import type {
   TransformDiffEntry, TransformOperation, TransformRelease, TransformReleaseModel,
   TransformTest,
   ColumnProfile,
+  WarehouseBrowse,
+  RepositoryImportPreview,
   DraftedModel,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
@@ -448,6 +450,18 @@ export const transformApi = {
     patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
   removeModel: (id: string, modelId: string) =>
     del<void>(`/transforms/${id}/models/${modelId}`),
+  browseWarehouse: (destinationId: string, schema?: string) =>
+    get<WarehouseBrowse>(
+      `/transforms/destinations/${destinationId}/warehouse`
+      + (schema ? `?schema=${encodeURIComponent(schema)}` : ''),
+    ),
+  inspectRepository: (body: {
+    repo_url: string; ref?: string; subdirectory?: string; token?: string;
+  }) => post<RepositoryImportPreview>('/transforms/imports/inspect', body),
+  importRepository: (body: {
+    repo_url: string; ref?: string; subdirectory?: string; token?: string;
+    name: string; destination_id: string; default_schema: string;
+  }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
   profileInput: (id: string, assetId: string) =>
     post<{ columns: ColumnProfile[] }>(`/transforms/${id}/inputs/${assetId}/profile`, {}),
   draftModel: (id: string, body: { asset_id: string; intent: string }) =>

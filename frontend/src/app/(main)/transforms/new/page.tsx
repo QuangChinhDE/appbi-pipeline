@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 import { cn } from '@/lib/utils';
+import { WarehouseBrowser } from '@/components/transforms/WarehouseBrowser';
 
 export default function NewTransformPage() {
   const { locale } = useI18n();
@@ -25,7 +26,22 @@ export default function NewTransformPage() {
     title: 'Transform mới', back: 'Transform', warehouse: 'Warehouse', inputs: 'Dữ liệu đầu vào', create: 'Tạo',
     chooseWarehouse: 'Chọn Destination warehouse', supported: 'Hỗ trợ Transform', unavailable: 'Chưa hỗ trợ',
     chooseInputs: 'Chọn relation đầu vào', chooseInputsHelp: 'Chỉ các relation đã được AppBI xác minh mới có thể dùng.',
-    noAssets: 'Chưa có relation đã xác minh', register: 'Dùng relation có sẵn trong warehouse',
+    noAssets: 'Chưa có relation đã xác minh',
+    register: 'Chọn bảng từ kho dữ liệu',
+    manualEntry: 'Hoặc nhập tay tên bảng',
+    browse: {
+      dataset: 'Dataset / Schema',
+      chooseDataset: 'Chọn một dataset để xem các bảng bên trong',
+      filter: 'Lọc theo tên bảng',
+      noTables: 'Dataset này không có bảng nào',
+      noMatch: 'Không có bảng nào khớp',
+      loadFailed: 'Không đọc được danh sách bảng',
+      alreadyAdded: 'Đã thêm',
+      add: 'Thêm',
+      adding: 'Đang thêm',
+      selected: 'Đã chọn',
+      hint: 'Đây là những gì thực sự có trong kho dữ liệu — kể cả dataset bạn tự tạo, không đi qua Pipeline.',
+    },
     schema: 'Schema / Dataset', relation: 'Tên relation', catalog: 'Database / Project', pipeline: 'Pipeline nguồn', stream: 'Stream nguồn', verify: 'Xác minh relation',
     details: 'Thông tin Transform', name: 'Tên Transform', output: 'Output schema',
     continue: 'Tiếp tục', createAction: 'Tạo Transform', registered: 'Relation đã được xác minh',
@@ -37,7 +53,22 @@ export default function NewTransformPage() {
     title: 'New transform', back: 'Transform', warehouse: 'Warehouse', inputs: 'Input data', create: 'Create',
     chooseWarehouse: 'Choose a warehouse Destination', supported: 'Transform supported', unavailable: 'Unavailable',
     chooseInputs: 'Choose input relations', chooseInputsHelp: 'Only relations verified by AppBI can be selected.',
-    noAssets: 'No verified relations yet', register: 'Use an existing warehouse relation',
+    noAssets: 'No verified relations yet',
+    register: 'Pick a table from the warehouse',
+    manualEntry: 'Or type the table name',
+    browse: {
+      dataset: 'Dataset / Schema',
+      chooseDataset: 'Choose a dataset to see the tables inside it',
+      filter: 'Filter by table name',
+      noTables: 'This dataset has no tables',
+      noMatch: 'No table matches',
+      loadFailed: 'Could not list the tables',
+      alreadyAdded: 'Added',
+      add: 'Add',
+      adding: 'Adding',
+      selected: 'Selected',
+      hint: 'This is what the warehouse actually holds, including datasets you built yourself without a Pipeline.',
+    },
     schema: 'Schema / Dataset', relation: 'Relation name', catalog: 'Database / Project', pipeline: 'Upstream Pipeline', stream: 'Upstream stream', verify: 'Verify relation',
     details: 'Transform details', name: 'Transform name', output: 'Output schema',
     continue: 'Continue', createAction: 'Create transform', registered: 'Relation verified',
@@ -89,6 +120,31 @@ export default function NewTransformPage() {
     },
     onError: (error) => toastError(error),
   });
+  /** Register a relation the user picked out of the warehouse, then select it. */
+  const addBrowsed = useMutation({
+    mutationFn: (relation: {
+      schema_name: string; relation_name: string; catalog_name: string | null;
+    }) => transformApi.registerAsset(destinationId, {
+      catalog_name: relation.catalog_name || undefined,
+      schema_name: relation.schema_name,
+      relation_name: relation.relation_name,
+    }),
+    onSuccess: async (asset) => {
+      setAssetIds((current) => Array.from(new Set([...current, asset.id])));
+      await queryClient.invalidateQueries({
+        queryKey: qk.transformInputs(workspaceId, destinationId),
+      });
+      // Prefix, not the exact key: the listing for the open dataset carries the
+      // schema as a final segment, and it is the one that has to redraw so the
+      // row switches from Add to Added.
+      await queryClient.invalidateQueries({
+        queryKey: qk.transformWarehouseAll(workspaceId, destinationId),
+      });
+      toastSuccess(copy.registered);
+    },
+    onError: (error) => toastError(error),
+  });
+
   const create = useMutation({
     mutationFn: () => transformApi.create({
       name, destination_id: destinationId, default_schema: outputSchema,
@@ -153,11 +209,24 @@ export default function NewTransformPage() {
               <section>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div><h2 className="text-small font-strong text-text-primary">{copy.chooseInputs}</h2><p className="mt-1 text-caption text-text-tertiary">{copy.chooseInputsHelp}</p></div>
-                  <Button size="sm" variant="secondary" leadingIcon={<Plus className="h-4 w-4" />} onClick={() => setShowRegister((value) => !value)}>{copy.register}</Button>
+                  <Button size="sm" variant="secondary" leadingIcon={<Warehouse className="h-4 w-4" />} onClick={() => setShowRegister((value) => !value)}>{copy.register}</Button>
                 </div>
                 {showRegister && (
                   <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    {/* Browsing first: nobody remembers a dataset name, and the
+                        form below only helps the rare case of a relation the
+                        listing does not show. */}
+                    <WarehouseBrowser
+                      destinationId={destinationId} copy={copy.browse}
+                      adding={addBrowsed.isPending
+                        ? `${addBrowsed.variables?.schema_name}.${addBrowsed.variables?.relation_name}`
+                        : null}
+                      onAdd={(relation) => addBrowsed.mutate(relation)} />
+                    <details className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
+                      <summary className="cursor-pointer text-caption text-text-secondary">
+                        {copy.manualEntry}
+                      </summary>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div><Label>{copy.catalog}</Label><Input value={assetForm.catalog_name} onChange={(event) => setAssetForm({ ...assetForm, catalog_name: event.target.value })} /></div>
                       <div><Label required>{copy.schema}</Label><Input value={assetForm.schema_name} onChange={(event) => setAssetForm({ ...assetForm, schema_name: event.target.value })} /></div>
                       <div><Label required>{copy.relation}</Label><Input value={assetForm.relation_name} onChange={(event) => setAssetForm({ ...assetForm, relation_name: event.target.value })} /></div>
@@ -165,6 +234,7 @@ export default function NewTransformPage() {
                       {selectedPipeline && <div><Label>{copy.stream}</Label><Select value={assetForm.pipeline_stream_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_stream_id: event.target.value })}><option value="">Select stream</option>{selectedPipeline.streams.map((stream) => <option key={stream.id} value={stream.id}>{stream.namespace ? `${stream.namespace}.` : ''}{stream.name}</option>)}</Select></div>}
                     </div>
                     <div className="mt-3 flex justify-end"><Button variant="primary" size="sm" loading={register.isPending} disabled={!assetForm.schema_name || !assetForm.relation_name || Boolean(assetForm.pipeline_id && !assetForm.pipeline_stream_id)} onClick={() => register.mutate()} leadingIcon={<Link2 className="h-4 w-4" />}>{copy.verify}</Button></div>
+                    </details>
                   </div>
                 )}
                 {/* AppBI already knows which Pipelines load this warehouse, so

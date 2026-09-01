@@ -457,6 +457,39 @@ export interface TransformInputCandidates {
   assets: DataAsset[];
 }
 
+/** A relation the warehouse physically holds, whether or not AppBI loaded it. */
+export interface BrowsedRelation {
+  schema_name: string;
+  relation_name: string;
+  relation_type: string;
+  /** Set when this relation is already registered as an asset. */
+  asset_id: string | null;
+}
+
+export interface WarehouseBrowse {
+  catalog_name: string | null;
+  schemas: string[];
+  relations: BrowsedRelation[];
+}
+
+/** What a dbt or Dataform repository would become here, before anything is made. */
+export interface RepositoryImportPreview {
+  kind: 'DBT' | 'DATAFORM';
+  project_name: string | null;
+  models: {
+    name: string; path: string; layer: string; materialization: string;
+    sql: string; description: string | null;
+  }[];
+  sources: {
+    alias: string; table: string; catalog: string | null;
+    schema_name: string; relation: string;
+  }[];
+  tests: { model: string; rule: string; column: string | null }[];
+  /** Everything the conversion could not carry across. Read before importing. */
+  warnings: string[];
+  origin: { owner: string; repo: string; ref: string | null; subdirectory: string };
+}
+
 /** One column as the warehouse actually holds it, not as its type claims. */
 export interface ColumnProfile {
   name: string;
