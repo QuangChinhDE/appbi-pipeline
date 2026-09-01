@@ -51,6 +51,44 @@ class BrowsedRelation:
     row_count: int | None = None
 
 
+async def browse_catalogs(
+    connector_key: str, configuration: dict[str, Any],
+) -> list[str]:
+    """Every project or database this account can see, home one first.
+
+    A service account is often granted read on projects other than the one it
+    lives in, and those are exactly the projects a Transform wants to read.
+    Postgres has no equivalent -- one connection is one database -- so it
+    answers with the single database it is pointed at.
+    """
+    if connector_key == "destination-bigquery":
+        return await asyncio.to_thread(_catalogs_bigquery, configuration)
+    if connector_key == "destination-postgres":
+        name = configuration.get("database")
+        return [str(name)] if name else []
+    raise ValidationError(
+        "This Destination cannot be browsed.",
+        code="TRANSFORM_DESTINATION_UNSUPPORTED",
+    )
+
+
+def _catalogs_bigquery(configuration: dict[str, Any]) -> list[str]:
+    try:
+        client, home = _bigquery_client(configuration, None)
+        seen = [item.project_id for item in client.list_projects()]
+    except Exception as exc:
+        raise ValidationError(
+            "Không đọc được danh sách project của tài khoản này.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
+    # The home project first: it is the one the Destination writes to, and the
+    # one somebody scanning the list is most likely looking for.
+    ordered = [home] if home else []
+    ordered += sorted(item for item in seen if item != home)
+    return ordered
+
+
 async def browse_schemas(
     connector_key: str,
     configuration: dict[str, Any],

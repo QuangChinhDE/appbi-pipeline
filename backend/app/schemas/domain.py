@@ -517,6 +517,9 @@ class DataAssetRegister(BaseModel):
     relation_name: str = Field(min_length=1, max_length=300)
     pipeline_id: uuid.UUID | None = None
     pipeline_stream_id: uuid.UUID | None = None
+    #: Verify with this credential rather than the Destination's, for a relation
+    #: only the Transform's own account can see.
+    secret_ref: str | None = Field(default=None, max_length=255)
 
 
 class TransformCreate(BaseModel):
@@ -525,6 +528,8 @@ class TransformCreate(BaseModel):
     destination_id: uuid.UUID
     default_schema: str = Field(min_length=1, max_length=200)
     input_asset_ids: list[uuid.UUID] = Field(default_factory=list)
+    #: Run as this credential instead of the Destination's. Null means inherit.
+    warehouse_secret_ref: str | None = Field(default=None, max_length=255)
 
 
 class TransformUpdate(BaseModel):
@@ -554,6 +559,9 @@ class RepositoryImportCreate(RepositoryImportRequest):
     #: Keep the connection and poll it, so the import is a start not a snapshot.
     auto_pull: bool = False
     interval_minutes: int = Field(default=30, ge=5, le=10080)
+    #: Run as this credential instead of the Destination's -- which is what a
+    #: repository reading another project needs. Null means inherit.
+    warehouse_secret_ref: str | None = Field(default=None, max_length=255)
 
 
 class ImportedModelView(BaseModel):
@@ -641,12 +649,38 @@ class RepositoryImportPreview(BaseModel):
     origin: dict[str, Any] = Field(default_factory=dict)
 
 
+class WarehouseConnectionRequest(BaseModel):
+    """Credentials a Transform should run as, instead of the Destination's.
+
+    A partial configuration: only the fields that differ. For BigQuery that is
+    the service account JSON; for Postgres, a username and password.
+    """
+
+    credentials_json: str | None = Field(default=None, max_length=20000)
+    username: str | None = Field(default=None, max_length=200)
+    password: str | None = Field(default=None, max_length=500)
+
+
+class WarehouseConnectionView(BaseModel):
+    #: Reference to the stored credential; pass it back when browsing or creating.
+    secret_ref: str
+    #: Who the credential turned out to be, so a wrong key is obvious.
+    account: str | None = None
+    #: Projects or databases this account can read.
+    catalogs: list[str] = Field(default_factory=list)
+
+
 class BrowsedRelationView(BaseModel):
+    catalog_name: str | None = None
     schema_name: str
     relation_name: str
     relation_type: str
     #: Set when this relation is already a registered asset for the Destination.
     asset_id: uuid.UUID | None = None
+    #: Set when a Pipeline writes this relation, so a source AppBI keeps fresh
+    #: is distinguishable from one that merely exists.
+    pipeline_id: uuid.UUID | None = None
+    pipeline_name: str | None = None
 
 
 class WarehouseBrowseView(BaseModel):
@@ -657,6 +691,8 @@ class WarehouseBrowseView(BaseModel):
     """
 
     catalog_name: str | None = None
+    #: Projects or databases visible to the connection, when none was asked for.
+    catalogs: list[str] = Field(default_factory=list)
     schemas: list[str] = Field(default_factory=list)
     relations: list[BrowsedRelationView] = Field(default_factory=list)
 

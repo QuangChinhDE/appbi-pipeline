@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import uuid
@@ -21,6 +22,7 @@ from app.core.errors import (
 )
 from app.core.params import as_enum
 from app.core.permissions import Action, Module
+from app.core.secrets import secret_store
 from app.models.engine import ConnectorDefinition
 from app.models.enums import (
     ACTIVE_RUN_STATUSES, HealthLevel, ResourceStatus, RunStatus, ScheduleType,
@@ -48,7 +50,9 @@ from app.transformation.base import TransformationRequest, TransformationResult
 from app.transformation.compatibility import capability, lock
 from app.transformation.profiles import build_profile
 from app.transformation.project import generate_project, require_identifier
-from app.transformation.warehouse import browse_relations, browse_schemas, verify_relation
+from app.transformation.warehouse import (
+    browse_catalogs, browse_relations, browse_schemas, verify_relation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -406,35 +410,184 @@ async def input_candidates(
     )
 
 
+async def warehouse_configuration(
+    session: AsyncSession,
+    destination: Destination,
+    *,
+    secret_ref: str | None,
+) -> dict[str, Any]:
+    """The connector configuration a Transform actually runs as.
+
+    A Destination's credential exists so a Pipeline can write. A Transform often
+    has to read somewhere the Pipeline never touches -- another BigQuery project
+    -- and widening the ingestion account to allow it is a production change
+    made for a report. So a Transform may carry its own, stored as a partial
+    configuration and merged over the Destination's: same warehouse, different
+    account. No override means inherit, which is what most Transforms want.
+
+    One connection either way. dbt reads sources and writes models through a
+    single profile, so an account named here has to do both.
+    """
+    configuration = await actor_service.resolve_configuration(session, destination)
+    if not secret_ref:
+        return configuration
+    override = await secret_store.read(session, secret_ref)
+    return {**configuration, **{k: v for k, v in override.items() if v not in (None, "")}}
+
+
+#: Marks a credential created by the connect step, so an abandoned one can be
+#: found and removed rather than sitting in the store forever.
+CONNECTION_MARKER = "transform-conn"
+
+#: How long a loose credential is kept. Long enough that a wizard left open over
+#: lunch still works; short enough that an abandoned one does not outlive the day.
+CONNECTION_TTL_HOURS = 12
+
+
+async def purge_orphan_connections(session: AsyncSession) -> int:
+    """Delete connect-step credentials that never became a Transform.
+
+    The credential is stored when it is verified, before the Transform exists,
+    so that a service account key crosses the wire once instead of on every
+    browse. The cost of that choice is this sweep: without it, every abandoned
+    wizard leaves an encrypted key attached to nothing.
+    """
+    from app.models.secret import SecretRecord
+
+    cutoff = utcnow() - timedelta(hours=CONNECTION_TTL_HOURS)
+    loose = list((await session.scalars(
+        select(SecretRecord).where(
+            SecretRecord.ref.like(f"%/{CONNECTION_MARKER}/%"),
+            SecretRecord.created_at < cutoff,
+        )
+    )).all())
+    if not loose:
+        return 0
+    claimed = set((await session.scalars(
+        select(Transform.warehouse_secret_ref).where(
+            Transform.warehouse_secret_ref.in_([item.ref for item in loose]),
+        )
+    )).all())
+    removed = 0
+    for record in loose:
+        if record.ref in claimed:
+            continue
+        await session.delete(record)
+        removed += 1
+    return removed
+
+
+async def verify_connection(
+    session: AsyncSession,
+    ctx: RequestContext,
+    destination_id: uuid.UUID,
+    override: dict[str, Any],
+) -> dict[str, Any]:
+    """Check a credential, remember it, and report what it can see.
+
+    Stored on acceptance rather than carried through the wizard, so a service
+    account key crosses the wire once instead of on every browse. What comes
+    back is deliberately small: which account it turned out to be, and the
+    projects it can read. Enough to tell whether it was the right key before
+    building anything on it.
+    """
+    ctx.require(Module.TRANSFORMS, Action.CREATE)
+    destination = await _destination(session, ctx.workspace_id, destination_id)
+    base = await actor_service.resolve_configuration(session, destination)
+    cleaned = {key: value for key, value in override.items() if value not in (None, "")}
+    if not cleaned:
+        raise ValidationError(
+            "Chưa nhập thông tin đăng nhập nào.",
+            code="TRANSFORM_CONNECTION_EMPTY",
+        )
+    configuration = {**base, **cleaned}
+    catalogs = await browse_catalogs(destination.connector_key, configuration)
+    # Marked in the reference so the janitor can find one that never became a
+    # Transform. Somebody who abandons the wizard should not leave a credential
+    # behind, and nothing else in the store can tell that this one is loose.
+    ref = await secret_store.write(
+        session, ctx.workspace_id, cleaned,
+        ref=f"secret://{settings.app_env}/{CONNECTION_MARKER}/{uuid.uuid4().hex}",
+    )
+    await audit.record(
+        session, ctx, "transform.connection.verified", resource_type="DESTINATION",
+        resource_id=destination.id, resource_name=destination.name,
+        after={"catalogs": len(catalogs)},
+    )
+    return {
+        "secret_ref": ref,
+        "account": _account_label(destination.connector_key, configuration),
+        "catalogs": catalogs,
+    }
+
+
+def _account_label(connector_key: str, configuration: dict[str, Any]) -> str | None:
+    """Who the credential turned out to be, so a wrong key is obvious."""
+    if connector_key == "destination-bigquery":
+        raw = configuration.get("credentials_json")
+        try:
+            info = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except (TypeError, ValueError):
+            return None
+        return info.get("client_email")
+    return configuration.get("username")
+
+
 async def browse_warehouse(
     session: AsyncSession,
     ctx: RequestContext,
     destination_id: uuid.UUID,
     schema_name: str | None,
+    *,
+    catalog_name: str | None = None,
+    secret_ref: str | None = None,
 ) -> dict[str, Any]:
-    """List what is physically in the warehouse, with what is already an asset.
+    """What the warehouse physically holds, one level at a time.
 
-    Marking the relations that are already registered matters: without it the
-    same table gets added twice under two names and the lineage forks.
+    Three levels because BigQuery has three and a real account can see several
+    projects: no arguments lists the projects, a catalog lists its datasets, a
+    catalog and schema list the tables. Asking for everything at once would be a
+    slow call nobody wanted.
+
+    Two things are attached to each relation, and both exist to stop a mistake.
+    A relation already registered is marked, because adding the same table twice
+    gives it two identities and forks the lineage. And a relation that a Pipeline
+    produces says so, because that is the difference between a table AppBI keeps
+    fresh and one that simply sits there.
     """
     ctx.require(Module.TRANSFORMS, Action.VIEW)
     destination = await _destination(session, ctx.workspace_id, destination_id)
-    configuration = await actor_service.resolve_configuration(session, destination)
-    catalog = configuration.get("project_id") or configuration.get("dataset_project_id")
+    configuration = await warehouse_configuration(
+        session, destination, secret_ref=secret_ref,
+    )
+    home = configuration.get("project_id") or configuration.get("dataset_project_id")
+    catalog = catalog_name or home
+
+    if catalog_name is None and schema_name is None:
+        catalogs = await browse_catalogs(destination.connector_key, configuration)
+        return {
+            "catalog_name": home,
+            "catalogs": catalogs or ([home] if home else []),
+            "schemas": [],
+            "relations": [],
+        }
+
     if schema_name is None:
         return {
             "catalog_name": catalog,
+            "catalogs": [],
             "schemas": await browse_schemas(
                 destination.connector_key, configuration, catalog_name=catalog,
             ),
             "relations": [],
         }
+
     relations = await browse_relations(
         destination.connector_key, configuration,
         catalog_name=catalog, schema_name=schema_name,
     )
     known = {
-        (asset.schema_name, asset.relation_name): asset.id
+        (asset.catalog_name, asset.schema_name, asset.relation_name): asset
         for asset in (await session.scalars(select(DataAsset).where(
             DataAsset.workspace_id == ctx.workspace_id,
             DataAsset.destination_id == destination_id,
@@ -442,19 +595,76 @@ async def browse_warehouse(
             DataAsset.deleted_at.is_(None),
         ))).all()
     }
-    return {
-        "catalog_name": catalog,
-        "schemas": [],
-        "relations": [
-            {
-                "schema_name": item.schema_name,
-                "relation_name": item.relation_name,
-                "relation_type": item.relation_type,
-                "asset_id": known.get((item.schema_name, item.relation_name)),
-            }
-            for item in relations
-        ],
-    }
+    exact, loose = await _pipeline_outputs(session, ctx.workspace_id, destination_id)
+
+    out: list[dict[str, Any]] = []
+    for item in relations:
+        asset = known.get((catalog, schema_name, item.relation_name))
+        pipeline = _producer_of(schema_name, item.relation_name, exact, loose)
+        out.append({
+            "catalog_name": catalog,
+            "schema_name": item.schema_name,
+            "relation_name": item.relation_name,
+            "relation_type": item.relation_type,
+            "asset_id": asset.id if asset else None,
+            "pipeline_id": pipeline[0] if pipeline else None,
+            "pipeline_name": pipeline[1] if pipeline else None,
+        })
+    return {"catalog_name": catalog, "catalogs": [], "schemas": [], "relations": out}
+
+
+async def _pipeline_outputs(
+    session: AsyncSession, workspace_id: uuid.UUID, destination_id: uuid.UUID,
+) -> tuple[dict[tuple[str, str], tuple[uuid.UUID, str]], list[tuple[str, uuid.UUID, str]]]:
+    """Relations in this warehouse that a Pipeline writes.
+
+    Two layers, because two kinds of evidence exist and one is much better than
+    the other. A registered asset was verified against this warehouse and names
+    its Pipeline exactly. A selected stream only tells us a table by that name is
+    being written somewhere, so it is matched loosely and only where nothing
+    exact already applies -- which is what puts a Pipeline label on a table the
+    first time somebody looks at it, before anyone has registered anything.
+    """
+    pipelines = list((await session.scalars(select(Pipeline).where(
+        Pipeline.workspace_id == workspace_id,
+        Pipeline.destination_id == destination_id,
+        Pipeline.deleted_at.is_(None),
+    ))).all())
+    if not pipelines:
+        return {}, []
+    by_pipeline = {item.id: item.name for item in pipelines}
+    exact: dict[tuple[str, str], tuple[uuid.UUID, str]] = {}
+    for asset in (await session.scalars(select(DataAsset).where(
+        DataAsset.workspace_id == workspace_id,
+        DataAsset.destination_id == destination_id,
+        DataAsset.pipeline_id.is_not(None),
+        DataAsset.deleted_at.is_(None),
+    ))).all():
+        name = by_pipeline.get(asset.pipeline_id)
+        if name:
+            exact[(asset.schema_name, asset.relation_name)] = (asset.pipeline_id, name)
+    loose: list[tuple[str, uuid.UUID, str]] = [
+        (stream.stream_name, pipeline.id, pipeline.name)
+        for pipeline in pipelines
+        for stream in pipeline.streams
+        if stream.selected
+    ]
+    return exact, loose
+
+
+def _producer_of(
+    schema_name: str,
+    relation_name: str,
+    exact: dict[tuple[str, str], tuple[uuid.UUID, str]],
+    loose: list[tuple[str, uuid.UUID, str]],
+) -> tuple[uuid.UUID, str] | None:
+    found = exact.get((schema_name, relation_name))
+    if found is not None:
+        return found
+    for stream_name, pipeline_id, pipeline_name in loose:
+        if _stream_matches(stream_name, relation_name):
+            return pipeline_id, pipeline_name
+    return None
 
 
 def _stream_matches(stream_name: str, relation_name: str) -> bool:
@@ -485,6 +695,8 @@ async def register_asset(
     ctx: RequestContext,
     destination_id: uuid.UUID,
     payload: DataAssetRegister,
+    *,
+    secret_ref: str | None = None,
 ) -> DataAsset:
     ctx.require(Module.TRANSFORMS, Action.CREATE)
     destination = await _destination(session, ctx.workspace_id, destination_id)
@@ -526,7 +738,9 @@ async def register_asset(
                 code="TRANSFORM_STREAM_RELATION_MISMATCH",
             )
 
-    configuration = await actor_service.resolve_configuration(session, destination)
+    configuration = await warehouse_configuration(
+        session, destination, secret_ref=secret_ref,
+    )
     verified = await verify_relation(
         destination.connector_key, configuration,
         catalog_name=payload.catalog_name,
@@ -637,6 +851,7 @@ async def create(
         workspace_id=ctx.workspace_id, destination_id=destination.id,
         name=payload.name.strip(), description=payload.description,
         default_schema=payload.default_schema,
+        warehouse_secret_ref=payload.warehouse_secret_ref,
         dbt_core_version=cap["dbt_core"], dbt_adapter_name=cap["package"],
         dbt_adapter_version=cap["version"], created_by=ctx.user_id, updated_by=ctx.user_id,
     )
@@ -1224,7 +1439,9 @@ async def _request_from_release(
     destination: Destination, release: TransformRelease,
 ) -> TransformationRequest:
     """Build a run from a published release rather than the live models."""
-    configuration = await actor_service.resolve_configuration(session, destination)
+    configuration = await warehouse_configuration(
+        session, destination, secret_ref=transform.warehouse_secret_ref,
+    )
     profile, secrets = build_profile(
         destination.connector_key, configuration, release.default_schema,
     )
@@ -1441,7 +1658,9 @@ async def build_request(session: AsyncSession, run: TransformRun) -> Transformat
                 code="TRANSFORM_INPUT_NOT_READY",
             )
     generated = generate_project(transform, models, inputs)
-    configuration = await actor_service.resolve_configuration(session, destination)
+    configuration = await warehouse_configuration(
+        session, destination, secret_ref=transform.warehouse_secret_ref,
+    )
     # A draft build writes to its own schema so trying something out cannot
     # overwrite the tables a dashboard is reading. Dataform does this with a
     # schema suffix, dbt with a per-developer target; the effect is the same.

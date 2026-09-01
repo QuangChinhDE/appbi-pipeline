@@ -30,17 +30,26 @@ export default function NewTransformPage() {
     register: 'Chọn bảng từ kho dữ liệu',
     manualEntry: 'Hoặc nhập tay tên bảng',
     browse: {
-      dataset: 'Dataset / Schema',
+      hint: 'Đây là những gì thực sự có trong kho dữ liệu — kể cả dataset bạn tự tạo, không đi qua Pipeline.',
+      account: 'Tài khoản:',
+      accountDefault: 'dùng tài khoản của Destination',
+      useAnother: 'Dùng tài khoản khác',
+      useDefault: 'Quay lại tài khoản Destination',
+      credentials: 'Service account JSON',
+      credentialsHint: 'Tài khoản này phải vừa đọc được các bảng nguồn, vừa ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai.',
+      connect: 'Kết nối',
+      project: 'Project',
+      dataset: 'Dataset',
       chooseDataset: 'Chọn một dataset để xem các bảng bên trong',
       filter: 'Lọc theo tên bảng',
       noTables: 'Dataset này không có bảng nào',
       noMatch: 'Không có bảng nào khớp',
       loadFailed: 'Không đọc được danh sách bảng',
       alreadyAdded: 'Đã thêm',
-      add: 'Thêm',
-      adding: 'Đang thêm',
-      selected: 'Đã chọn',
-      hint: 'Đây là những gì thực sự có trong kho dữ liệu — kể cả dataset bạn tự tạo, không đi qua Pipeline.',
+      fromPipeline: 'từ',
+      addSelected: 'Thêm bảng đã chọn',
+      selectedCount: 'Đã chọn {n} bảng',
+      nothingSelected: 'Tích vào bảng bạn cần dùng',
     },
     schema: 'Schema / Dataset', relation: 'Tên relation', catalog: 'Database / Project', pipeline: 'Pipeline nguồn', stream: 'Stream nguồn', verify: 'Xác minh relation',
     details: 'Thông tin Transform', name: 'Tên Transform', output: 'Output schema',
@@ -57,17 +66,26 @@ export default function NewTransformPage() {
     register: 'Pick a table from the warehouse',
     manualEntry: 'Or type the table name',
     browse: {
-      dataset: 'Dataset / Schema',
+      hint: 'This is what the warehouse actually holds, including datasets you built yourself without a Pipeline.',
+      account: 'Account:',
+      accountDefault: "using the Destination's own account",
+      useAnother: 'Use another account',
+      useDefault: "Back to the Destination's account",
+      credentials: 'Service account JSON',
+      credentialsHint: 'This account must both read the source tables and write the output schema — dbt uses one connection for both.',
+      connect: 'Connect',
+      project: 'Project',
+      dataset: 'Dataset',
       chooseDataset: 'Choose a dataset to see the tables inside it',
       filter: 'Filter by table name',
       noTables: 'This dataset has no tables',
       noMatch: 'No table matches',
       loadFailed: 'Could not list the tables',
       alreadyAdded: 'Added',
-      add: 'Add',
-      adding: 'Adding',
-      selected: 'Selected',
-      hint: 'This is what the warehouse actually holds, including datasets you built yourself without a Pipeline.',
+      fromPipeline: 'from',
+      addSelected: 'Add selected',
+      selectedCount: '{n} selected',
+      nothingSelected: 'Tick the tables you need',
     },
     schema: 'Schema / Dataset', relation: 'Relation name', catalog: 'Database / Project', pipeline: 'Upstream Pipeline', stream: 'Upstream stream', verify: 'Verify relation',
     details: 'Transform details', name: 'Transform name', output: 'Output schema',
@@ -86,7 +104,9 @@ export default function NewTransformPage() {
   const [assetIds, setAssetIds] = React.useState<string[]>([]);
   const [name, setName] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
-  const [showRegister, setShowRegister] = React.useState(false);
+  const [connection, setConnection] = React.useState<
+    import('@/components/transforms/ConnectionPicker').ChosenConnection | null
+  >(null);
   const [assetForm, setAssetForm] = React.useState({
     catalog_name: '', schema_name: '', relation_name: '',
     pipeline_id: searchParams.get('pipeline_id') ?? '', pipeline_stream_id: '',
@@ -110,27 +130,45 @@ export default function NewTransformPage() {
       relation_name: assetForm.relation_name,
       pipeline_id: assetForm.pipeline_id || undefined,
       pipeline_stream_id: assetForm.pipeline_stream_id || undefined,
+      secret_ref: connection?.secret_ref,
     }),
     onSuccess: async (asset) => {
       setAssetIds((current) => Array.from(new Set([...current, asset.id])));
       await queryClient.invalidateQueries({ queryKey: qk.transformInputs(workspaceId, destinationId) });
-      setShowRegister(false);
+      await queryClient.invalidateQueries({
+        queryKey: qk.transformWarehouseAll(workspaceId, destinationId),
+      });
       setAssetForm((current) => ({ ...current, schema_name: '', relation_name: '', pipeline_stream_id: '' }));
       toastSuccess(copy.registered);
     },
     onError: (error) => toastError(error),
   });
-  /** Register a relation the user picked out of the warehouse, then select it. */
+  /**
+   * Register the relations picked out of the warehouse, then select them.
+   *
+   * One at a time rather than in parallel: each is verified against the
+   * warehouse, and a burst of concurrent metadata calls is how browsing a large
+   * dataset turns into a rate limit.
+   */
   const addBrowsed = useMutation({
-    mutationFn: (relation: {
+    mutationFn: async (relations: {
       schema_name: string; relation_name: string; catalog_name: string | null;
-    }) => transformApi.registerAsset(destinationId, {
-      catalog_name: relation.catalog_name || undefined,
-      schema_name: relation.schema_name,
-      relation_name: relation.relation_name,
-    }),
-    onSuccess: async (asset) => {
-      setAssetIds((current) => Array.from(new Set([...current, asset.id])));
+    }[]) => {
+      const added = [];
+      for (const relation of relations) {
+        added.push(await transformApi.registerAsset(destinationId, {
+          catalog_name: relation.catalog_name || undefined,
+          schema_name: relation.schema_name,
+          relation_name: relation.relation_name,
+          secret_ref: connection?.secret_ref,
+        }));
+      }
+      return added;
+    },
+    onSuccess: async (assets) => {
+      setAssetIds((current) => Array.from(
+        new Set([...current, ...assets.map((item) => item.id)]),
+      ));
       await queryClient.invalidateQueries({
         queryKey: qk.transformInputs(workspaceId, destinationId),
       });
@@ -149,6 +187,7 @@ export default function NewTransformPage() {
     mutationFn: () => transformApi.create({
       name, destination_id: destinationId, default_schema: outputSchema,
       input_asset_ids: assetIds,
+      warehouse_secret_ref: connection?.secret_ref,
     }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -207,91 +246,35 @@ export default function NewTransformPage() {
 
             {step === 1 && (
               <section>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><h2 className="text-small font-strong text-text-primary">{copy.chooseInputs}</h2><p className="mt-1 text-caption text-text-tertiary">{copy.chooseInputsHelp}</p></div>
-                  <Button size="sm" variant="secondary" leadingIcon={<Warehouse className="h-4 w-4" />} onClick={() => setShowRegister((value) => !value)}>{copy.register}</Button>
+                <div>
+                  <h2 className="text-small font-strong text-text-primary">{copy.chooseInputs}</h2>
+                  <p className="mt-1 text-caption text-text-tertiary">{copy.chooseInputsHelp}</p>
                 </div>
-                {showRegister && (
-                  <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
-                    {/* Browsing first: nobody remembers a dataset name, and the
-                        form below only helps the rare case of a relation the
-                        listing does not show. */}
-                    <WarehouseBrowser
-                      destinationId={destinationId} copy={copy.browse}
-                      adding={addBrowsed.isPending
-                        ? `${addBrowsed.variables?.schema_name}.${addBrowsed.variables?.relation_name}`
-                        : null}
-                      onAdd={(relation) => addBrowsed.mutate(relation)} />
-                    <details className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
-                      <summary className="cursor-pointer text-caption text-text-secondary">
-                        {copy.manualEntry}
-                      </summary>
+
+                {/* Browsing is the way in, not an alternative to a list of
+                    Pipeline streams. A table either exists in the warehouse or
+                    it does not; whether a Pipeline keeps it fresh is a label on
+                    that table, not a second place to look for it. */}
+                <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
+                  <WarehouseBrowser
+                    destinationId={destinationId} copy={copy.browse}
+                    connection={connection} onConnection={setConnection}
+                    adding={addBrowsed.isPending}
+                    onAdd={(relations) => addBrowsed.mutate(relations)} />
+                  <details className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
+                    <summary className="cursor-pointer text-caption text-text-secondary">
+                      {copy.manualEntry}
+                    </summary>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div><Label>{copy.catalog}</Label><Input value={assetForm.catalog_name} onChange={(event) => setAssetForm({ ...assetForm, catalog_name: event.target.value })} /></div>
                       <div><Label required>{copy.schema}</Label><Input value={assetForm.schema_name} onChange={(event) => setAssetForm({ ...assetForm, schema_name: event.target.value })} /></div>
                       <div><Label required>{copy.relation}</Label><Input value={assetForm.relation_name} onChange={(event) => setAssetForm({ ...assetForm, relation_name: event.target.value })} /></div>
-                      <div><Label>{copy.pipeline}</Label><Select value={assetForm.pipeline_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_id: event.target.value, pipeline_stream_id: '' })}><option value="">Warehouse relation</option>{candidates.data?.pipelines.map((item) => <option key={item.pipeline.id} value={item.pipeline.id}>{item.pipeline.name}</option>)}</Select></div>
+                      <div><Label>{copy.pipeline}</Label><Select value={assetForm.pipeline_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_id: event.target.value, pipeline_stream_id: '' })}><option value="">{copy.warehouseRelation}</option>{candidates.data?.pipelines.map((item) => <option key={item.pipeline.id} value={item.pipeline.id}>{item.pipeline.name}</option>)}</Select></div>
                       {selectedPipeline && <div><Label>{copy.stream}</Label><Select value={assetForm.pipeline_stream_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_stream_id: event.target.value })}><option value="">Select stream</option>{selectedPipeline.streams.map((stream) => <option key={stream.id} value={stream.id}>{stream.namespace ? `${stream.namespace}.` : ''}{stream.name}</option>)}</Select></div>}
                     </div>
                     <div className="mt-3 flex justify-end"><Button variant="primary" size="sm" loading={register.isPending} disabled={!assetForm.schema_name || !assetForm.relation_name || Boolean(assetForm.pipeline_id && !assetForm.pipeline_stream_id)} onClick={() => register.mutate()} leadingIcon={<Link2 className="h-4 w-4" />}>{copy.verify}</Button></div>
-                    </details>
-                  </div>
-                )}
-                {/* AppBI already knows which Pipelines load this warehouse, so
-                    offer their tables directly instead of making the user recall
-                    the dataset name and type it into the manual form. */}
-                {(candidates.data?.pipelines.length ?? 0) > 0 && (
-                  <div className="mt-4">
-                    <h3 className="text-caption font-emphasis text-text-secondary">{copy.fromPipelines}</h3>
-                    <div className="mt-2 space-y-3">
-                      {candidates.data?.pipelines.map((item) => (
-                        <div key={item.pipeline.id} className="overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
-                          <div className="flex items-center gap-2 border-b border-[rgb(var(--border-line))] px-4 py-2.5">
-                            <GitBranch className="h-4 w-4 shrink-0 text-text-tertiary" />
-                            <span className="min-w-0 flex-1 truncate text-caption font-emphasis text-text-primary">{item.pipeline.name}</span>
-                            <span className="text-tiny text-text-quaternary">
-                              {item.last_success_at ? formatRelative(item.last_success_at, locale) : copy.neverRun}
-                            </span>
-                          </div>
-                          {item.streams.map((stream) => {
-                            const asset = stream.asset_id
-                              ? candidates.data?.assets.find((a) => a.id === stream.asset_id)
-                              : undefined;
-                            return (
-                              <div key={stream.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-2">
-                                <Checkbox
-                                  disabled={!asset}
-                                  checked={Boolean(asset && assetIds.includes(asset.id))}
-                                  aria-label={stream.name}
-                                  onChange={(checked) => asset && setAssetIds((current) => checked
-                                    ? [...current, asset.id]
-                                    : current.filter((id) => id !== asset.id))}
-                                />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate font-mono text-caption text-text-primary">{stream.name}</span>
-                                  <span className="block truncate text-tiny text-text-tertiary">
-                                    {asset ? `${asset.schema_name}.${asset.relation_name} · ${asset.columns.length} columns` : copy.notResolved}
-                                  </span>
-                                </span>
-                                {asset
-                                  ? <Badge variant="success" size="xs">READY</Badge>
-                                  : <Button size="xs" variant="ghost" loading={register.isPending && assetForm.pipeline_stream_id === stream.id}
-                                      leadingIcon={<Link2 className="h-3.5 w-3.5" />}
-                                      onClick={() => {
-                                        setAssetForm({
-                                          catalog_name: '', schema_name: '', relation_name: stream.name,
-                                          pipeline_id: item.pipeline.id, pipeline_stream_id: stream.id,
-                                        });
-                                        setShowRegister(true);
-                                      }}>{copy.resolve}</Button>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  </details>
+                </div>
 
                 <h3 className="mt-5 text-caption font-emphasis text-text-secondary">{copy.verifiedRelations}</h3>
                 {candidates.isLoading ? <Spinner /> : candidates.error ? (
@@ -303,7 +286,16 @@ export default function NewTransformPage() {
                     {candidates.data?.assets.map((asset) => (
                       <div key={asset.id} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
                         <Checkbox checked={assetIds.includes(asset.id)} onChange={(checked) => setAssetIds((current) => checked ? [...current, asset.id] : current.filter((id) => id !== asset.id))} aria-label={`${asset.schema_name}.${asset.relation_name}`} />
-                        <span className="min-w-0 flex-1"><span className="block font-mono text-caption text-text-primary">{asset.schema_name}.{asset.relation_name}</span><span className="block text-tiny text-text-tertiary">{asset.pipeline_name ?? copy.warehouseRelation} · {asset.columns.length} columns</span></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-mono text-caption text-text-primary">
+                            {asset.catalog_name ? `${asset.catalog_name}.` : ''}{asset.schema_name}.{asset.relation_name}
+                          </span>
+                          <span className="block text-tiny text-text-tertiary">
+                            {asset.pipeline_name
+                              ? `${copy.browse.fromPipeline} ${asset.pipeline_name}`
+                              : copy.warehouseRelation} · {asset.columns.length} columns
+                          </span>
+                        </span>
                         {/* A relation produced by another Transform is a valid
                             input, but picking one by accident is not, so it says
                             what it is. */}

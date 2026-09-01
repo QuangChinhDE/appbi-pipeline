@@ -16,6 +16,7 @@ from app.schemas.domain import (
     TransformModelCreate, TransformModelUpdate, TransformModelView,
     TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
     TransformRunRequest, WarehouseBrowseView,
+    WarehouseConnectionRequest, WarehouseConnectionView,
     RepositoryImportCreate, RepositoryImportPreview, RepositoryImportRequest,
     RepositoryImportResult, GitSourceUpdate, GitSourceView, GitPullResult,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
@@ -52,6 +53,7 @@ async def import_repository(
         repo_url=payload.repo_url, ref=payload.ref, subdirectory=payload.subdirectory,
         token=payload.token, name=payload.name,
         destination_id=payload.destination_id, default_schema=payload.default_schema,
+        warehouse_secret_ref=payload.warehouse_secret_ref,
     )
     # Remember the repository so the import is a starting point rather than a
     # snapshot -- the token included, since polling needs it after this request.
@@ -79,6 +81,30 @@ async def candidates(destination_id: uuid.UUID, session: SessionDep, ctx: CtxDep
     return await service.input_candidates(session, ctx, destination_id)
 
 
+@router.post(
+    "/destinations/{destination_id}/connection", response_model=WarehouseConnectionView,
+)
+async def verify_connection(
+    destination_id: uuid.UUID,
+    payload: WarehouseConnectionRequest,
+    session: SessionDep,
+    ctx: CtxDep,
+):
+    """Check a credential a Transform should run as, and say what it can see.
+
+    A Destination's account exists so a Pipeline can write. A Transform often
+    reads somewhere else, and widening the ingestion account to allow that is a
+    production change made for a report. Naming a different account here avoids
+    that. It is still one connection -- dbt reads and writes through a single
+    profile -- so this account must cover both.
+    """
+    result = await service.verify_connection(
+        session, ctx, destination_id, payload.model_dump(exclude_none=True),
+    )
+    await session.commit()
+    return result
+
+
 @router.get(
     "/destinations/{destination_id}/warehouse", response_model=WarehouseBrowseView,
 )
@@ -86,15 +112,22 @@ async def browse_warehouse(
     destination_id: uuid.UUID,
     session: SessionDep,
     ctx: CtxDep,
+    catalog: Annotated[str | None, Query(max_length=200)] = None,
     schema: Annotated[str | None, Query(max_length=200)] = None,
+    connection: Annotated[str | None, Query(max_length=255)] = None,
 ):
-    """Datasets in the warehouse, or the tables inside one of them.
+    """What the warehouse holds: projects, then datasets, then tables.
 
     Separate from `/inputs`, which answers "what has AppBI already loaded here".
     This one answers "what is actually in there", which is the question a user
-    with a hand-built dataset is asking.
+    with a hand-built dataset is asking. Pass `connection` to look through a
+    credential other than the Destination's, and `catalog` to read a project
+    that account can see but the Destination does not live in.
     """
-    return await service.browse_warehouse(session, ctx, destination_id, schema)
+    return await service.browse_warehouse(
+        session, ctx, destination_id, schema,
+        catalog_name=catalog, secret_ref=connection,
+    )
 
 
 @router.post(
@@ -107,7 +140,9 @@ async def register_asset(
     session: SessionDep,
     ctx: CtxDep,
 ):
-    asset = await service.register_asset(session, ctx, destination_id, payload)
+    asset = await service.register_asset(
+        session, ctx, destination_id, payload, secret_ref=payload.secret_ref,
+    )
     await session.commit()
     return await service._asset_view(session, asset)
 

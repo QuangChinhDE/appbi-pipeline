@@ -18,6 +18,7 @@ import type {
   TransformTest,
   ColumnProfile,
   WarehouseBrowse,
+  WarehouseConnection,
   RepositoryImportPreview,
   GitSourceState,
   GitPullResult,
@@ -438,11 +439,12 @@ export const transformApi = {
     get<TransformInputCandidates>(`/transforms/destinations/${destinationId}/inputs`),
   registerAsset: (destinationId: string, body: {
     catalog_name?: string; schema_name: string; relation_name: string;
-    pipeline_id?: string; pipeline_stream_id?: string;
+    pipeline_id?: string; pipeline_stream_id?: string; secret_ref?: string;
   }) => post<DataAsset>(`/transforms/destinations/${destinationId}/assets`, body),
   create: (body: {
     name: string; description?: string; destination_id: string;
     default_schema: string; input_asset_ids: string[];
+    warehouse_secret_ref?: string;
   }) => post<TransformDetail>('/transforms', body),
   update: (id: string, body: unknown) => patch<TransformDetail>(`/transforms/${id}`, body),
   remove: (id: string) => del<void>(`/transforms/${id}`),
@@ -452,11 +454,24 @@ export const transformApi = {
     patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
   removeModel: (id: string, modelId: string) =>
     del<void>(`/transforms/${id}/models/${modelId}`),
-  browseWarehouse: (destinationId: string, schema?: string) =>
-    get<WarehouseBrowse>(
-      `/transforms/destinations/${destinationId}/warehouse`
-      + (schema ? `?schema=${encodeURIComponent(schema)}` : ''),
-    ),
+  verifyConnection: (destinationId: string, body: {
+    credentials_json?: string; username?: string; password?: string;
+  }) => post<WarehouseConnection>(
+    `/transforms/destinations/${destinationId}/connection`, body,
+  ),
+  browseWarehouse: (
+    destinationId: string,
+    options: { catalog?: string; schema?: string; connection?: string } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (options.catalog) query.set('catalog', options.catalog);
+    if (options.schema) query.set('schema', options.schema);
+    if (options.connection) query.set('connection', options.connection);
+    const suffix = query.toString();
+    return get<WarehouseBrowse>(
+      `/transforms/destinations/${destinationId}/warehouse${suffix ? `?${suffix}` : ''}`,
+    );
+  },
   inspectRepository: (body: {
     repo_url: string; ref?: string; subdirectory?: string; token?: string;
   }) => post<RepositoryImportPreview>('/transforms/imports/inspect', body),
@@ -464,6 +479,7 @@ export const transformApi = {
     repo_url: string; ref?: string; subdirectory?: string; token?: string;
     name: string; destination_id: string; default_schema: string;
     auto_pull?: boolean; interval_minutes?: number;
+    warehouse_secret_ref?: string;
   }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
   configureGit: (id: string, body: {
     repo_url?: string; ref?: string | null; subdirectory?: string;

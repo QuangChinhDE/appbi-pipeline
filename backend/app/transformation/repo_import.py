@@ -730,8 +730,9 @@ def build_plan(files: dict[str, str]) -> ImportPlan:
     if direct:
         plan.warnings.append(
             f"{len(direct)} bảng được viết thẳng tên trong SQL thay vì khai báo nguồn. "
-            "Hệ thống sẽ đăng ký chúng làm nguồn và thay bằng tham chiếu, để Transform "
-            "có đủ sơ đồ phụ thuộc; bảng nào không đọc được sẽ được giữ nguyên và báo lại."
+            "Khi bạn chọn kho dữ liệu ở bước dưới, hệ thống mới đối chiếu được chúng "
+            "có đọc được hay không — bảng nào đọc được sẽ thành nguồn có sơ đồ phụ "
+            "thuộc, bảng nào không sẽ giữ nguyên và báo lại."
         )
     return plan
 

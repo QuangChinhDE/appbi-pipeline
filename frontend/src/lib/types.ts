@@ -459,17 +459,36 @@ export interface TransformInputCandidates {
 
 /** A relation the warehouse physically holds, whether or not AppBI loaded it. */
 export interface BrowsedRelation {
+  catalog_name: string | null;
   schema_name: string;
   relation_name: string;
   relation_type: string;
   /** Set when this relation is already registered as an asset. */
   asset_id: string | null;
+  /** Set when a Pipeline writes this relation — a source AppBI keeps fresh. */
+  pipeline_id: string | null;
+  pipeline_name: string | null;
 }
 
 export interface WarehouseBrowse {
   catalog_name: string | null;
+  /** Projects or databases the connection can read. */
+  catalogs: string[];
   schemas: string[];
   relations: BrowsedRelation[];
+}
+
+/**
+ * A credential a Transform runs as, instead of the Destination's.
+ *
+ * One connection, not two: dbt reads its sources and writes its models through
+ * a single profile, so this account has to cover both.
+ */
+export interface WarehouseConnection {
+  secret_ref: string;
+  /** Who the credential turned out to be, so a wrong key is obvious. */
+  account: string | null;
+  catalogs: string[];
 }
 
 /**

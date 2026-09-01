@@ -18,6 +18,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Feedback';
+import {
+  ConnectionPicker, type ChosenConnection,
+} from '@/components/transforms/ConnectionPicker';
 
 const KIND_LABEL: Record<string, string> = { DBT: 'dbt', DATAFORM: 'Dataform' };
 
@@ -43,6 +46,7 @@ export default function ImportTransformPage() {
   const [name, setName] = React.useState('');
   const [destinationId, setDestinationId] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
+  const [connection, setConnection] = React.useState<ChosenConnection | null>(null);
   const [autoPull, setAutoPull] = React.useState(true);
   const [intervalMinutes, setIntervalMinutes] = React.useState(30);
 
@@ -74,6 +78,7 @@ export default function ImportTransformPage() {
       token: token.trim() || undefined,
       name: name.trim(), destination_id: destinationId, default_schema: outputSchema.trim(),
       auto_pull: autoPull, interval_minutes: intervalMinutes,
+      warehouse_secret_ref: connection?.secret_ref,
     }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -210,6 +215,13 @@ export default function ImportTransformPage() {
                           <li key={`${item.alias}.${item.table}`}
                             className="truncate font-mono text-caption text-text-secondary"
                             title={`${item.catalog ?? ''}.${item.schema_name}.${item.relation}`}>
+                            {/* The project is the whole point: a source in a
+                                different project from the Destination is why an
+                                import ends up with no inputs, and hiding it
+                                hides the reason. */}
+                            {item.catalog ? (
+                              <span className="text-text-quaternary">{item.catalog}.</span>
+                            ) : null}
                             {item.schema_name}.{item.relation}
                           </li>
                         ))}
@@ -249,6 +261,14 @@ export default function ImportTransformPage() {
                     from Git almost always wants it to keep following Git, and
                     finding the switch later means the first divergence is a
                     surprise. */}
+                {destinationId && (
+                  <div className="mt-3">
+                    <ConnectionPicker
+                      destinationId={destinationId} copy={copy.connection}
+                      connection={connection} onChange={setConnection} />
+                  </div>
+                )}
+
                 <div className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
                   <Checkbox checked={autoPull} onChange={setAutoPull}
                     label={copy.keepPulling} />
@@ -325,6 +345,15 @@ const vi = {
   warehouse: 'Kho dữ liệu',
   chooseWarehouse: 'Chọn kho dữ liệu',
   output: 'Schema đích',
+  connection: {
+    account: 'Tài khoản:',
+    accountDefault: 'dùng tài khoản của Destination',
+    useAnother: 'Dùng tài khoản khác',
+    useDefault: 'Quay lại tài khoản Destination',
+    credentials: 'Service account JSON',
+    credentialsHint: 'Nếu các bảng nguồn ở trên nằm ở project khác, hãy dùng tài khoản đọc được project đó và ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai.',
+    connect: 'Kết nối',
+  },
   keepPulling: 'Tự động lấy code mới khi repository có commit mới',
   keepPullingHint: 'Một chiều — chỉ đọc về, không bao giờ ghi ngược lên GitHub. Có thể tắt sau trong Cài đặt.',
   checkEvery: 'Kiểm tra mỗi (phút)',
@@ -362,6 +391,15 @@ const en: typeof vi = {
   warehouse: 'Warehouse',
   chooseWarehouse: 'Choose a warehouse',
   output: 'Output schema',
+  connection: {
+    account: 'Account:',
+    accountDefault: "using the Destination's own account",
+    useAnother: 'Use another account',
+    useDefault: "Back to the Destination's account",
+    credentials: 'Service account JSON',
+    credentialsHint: 'If the source tables above live in another project, use an account that can read it and write the output schema — dbt uses one connection for both.',
+    connect: 'Connect',
+  },
   keepPulling: 'Pull new commits from this repository automatically',
   keepPullingHint: 'One direction — read only, never written back to GitHub. Can be turned off later in the settings.',
   checkEvery: 'Check every (minutes)',

@@ -1,18 +1,24 @@
 'use client';
 
 import * as React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Check, Database, Table2 } from 'lucide-react';
 
 import { transformApi } from '@/lib/api';
+import {
+  ConnectionPicker, type ChosenConnection, type ConnectionPickerCopy,
+} from '@/components/transforms/ConnectionPicker';
 import { qk } from '@/lib/queryKeys';
-import { useQuery } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input, Label, Select } from '@/components/ui/Input';
+import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 
-export type WarehouseBrowserCopy = {
+export type WarehouseBrowserCopy = ConnectionPickerCopy & {
+  hint: string;
+  project: string;
   dataset: string;
   chooseDataset: string;
   filter: string;
@@ -20,71 +26,128 @@ export type WarehouseBrowserCopy = {
   noMatch: string;
   loadFailed: string;
   alreadyAdded: string;
-  add: string;
-  adding: string;
-  selected: string;
-  hint: string;
+  fromPipeline: string;
+  addSelected: string;
+  selectedCount: string;
+  nothingSelected: string;
 };
 
 /**
- * Pick input tables by looking at the warehouse, not by remembering its layout.
+ * Choose input tables by looking at the warehouse, an account at a time.
  *
- * A Transform input does not have to come from a Pipeline -- a dataset loaded
- * by any other means is an equally valid source, and the API has always
- * accepted one. What was missing was any way to find it: the only path was a
- * form asking for a dataset and table name typed from memory, which is a
- * feature that exists without being usable.
+ * Three levels because BigQuery has three, and a real service account can see
+ * several projects: the account decides what is visible, not the Destination.
+ * That matters because a Destination's credential exists so a Pipeline can
+ * write, while a Transform often has to read a project the Pipeline never
+ * touches -- and widening the ingestion account to allow that is a change to
+ * production ingestion made for the sake of a report.
+ *
+ * Pipelines appear as a label rather than a separate list. A table either
+ * exists in the warehouse or it does not; whether AppBI keeps it fresh is a
+ * property of that table, not a different way of finding it.
  */
 export function WarehouseBrowser({
-  destinationId, copy, onAdd, adding, disabled,
+  destinationId, copy, connection, onConnection, onAdd, adding, disabled,
 }: {
   destinationId: string;
   copy: WarehouseBrowserCopy;
-  /** Called with the chosen relation; the caller registers and attaches it. */
-  onAdd: (relation: { schema_name: string; relation_name: string; catalog_name: string | null }) => void;
-  adding?: string | null;
+  /** Credential in use, or null for the Destination's own. */
+  connection: ChosenConnection | null;
+  onConnection: (value: ChosenConnection | null) => void;
+  /** Register and select the chosen relations. */
+  onAdd: (relations: {
+    catalog_name: string | null; schema_name: string; relation_name: string;
+  }[]) => void;
+  adding?: boolean;
   disabled?: boolean;
 }) {
   const workspaceId = useWorkspaceId();
+  const [catalog, setCatalog] = React.useState('');
   const [schema, setSchema] = React.useState('');
   const [filter, setFilter] = React.useState('');
+  const [picked, setPicked] = React.useState<Set<string>>(new Set());
 
-  const datasets = useQuery({
-    queryKey: qk.transformWarehouse(workspaceId, destinationId),
-    queryFn: () => transformApi.browseWarehouse(destinationId),
+  const ref = connection?.secret_ref;
+  const scope = ref ?? '';
+
+  const catalogs = useQuery({
+    queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|catalogs`),
+    queryFn: () => transformApi.browseWarehouse(destinationId, { connection: ref }),
     enabled: Boolean(destinationId),
   });
 
-  const tables = useQuery({
-    queryKey: qk.transformWarehouse(workspaceId, destinationId, schema),
-    queryFn: () => transformApi.browseWarehouse(destinationId, schema),
-    enabled: Boolean(destinationId && schema),
+  // The account's home project is the sensible default; choosing it saves a
+  // click that has only one right answer.
+  React.useEffect(() => {
+    const list = catalogs.data?.catalogs ?? [];
+    if (!catalog && list.length) setCatalog(catalogs.data?.catalog_name ?? list[0]);
+  }, [catalog, catalogs.data]);
+
+  const schemas = useQuery({
+    queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|${catalog}`),
+    queryFn: () => transformApi.browseWarehouse(destinationId, { catalog, connection: ref }),
+    enabled: Boolean(destinationId && catalog),
   });
 
-  const catalog = datasets.data?.catalog_name ?? null;
+  const tables = useQuery({
+    queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|${catalog}|${schema}`),
+    queryFn: () => transformApi.browseWarehouse(
+      destinationId, { catalog, schema, connection: ref },
+    ),
+    enabled: Boolean(destinationId && catalog && schema),
+  });
+
   const needle = filter.trim().toLowerCase();
   const visible = (tables.data?.relations ?? []).filter(
     (item) => !needle || item.relation_name.toLowerCase().includes(needle),
   );
 
+  const toggle = (key: string) => setPicked((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
   return (
     <div className="space-y-3">
       <p className="text-caption text-text-tertiary">{copy.hint}</p>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+
+      {/* The account leads, because it decides everything below it. */}
+      <ConnectionPicker
+        destinationId={destinationId} copy={copy} disabled={disabled}
+        connection={connection}
+        onChange={(value) => {
+          onConnection(value);
+          setCatalog(''); setSchema(''); setPicked(new Set());
+        }} />
+
+      <div className="grid gap-3 sm:grid-cols-3">
         <div>
-          <Label required>{copy.dataset}</Label>
-          {datasets.isLoading ? (
+          <Label>{copy.project}</Label>
+          {catalogs.isLoading ? (
             <div className="flex h-9 items-center"><Spinner /></div>
-          ) : datasets.error ? (
-            <p className="text-caption text-danger">{(datasets.error as Error).message}</p>
+          ) : catalogs.error ? (
+            <p className="text-caption text-danger">{(catalogs.error as Error).message}</p>
           ) : (
-            <Select value={schema} onChange={(event) => { setSchema(event.target.value); setFilter(''); }}>
-              <option value="">{copy.chooseDataset}</option>
-              {(datasets.data?.schemas ?? []).map((item) => (
+            <Select value={catalog}
+              onChange={(event) => {
+                setCatalog(event.target.value); setSchema(''); setPicked(new Set());
+              }}>
+              {(catalogs.data?.catalogs ?? []).map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </Select>
           )}
+        </div>
+        <div>
+          <Label required>{copy.dataset}</Label>
+          <Select value={schema} disabled={!catalog || schemas.isLoading}
+            onChange={(event) => { setSchema(event.target.value); setPicked(new Set()); }}>
+            <option value="">{schemas.isLoading ? '…' : copy.chooseDataset}</option>
+            {(schemas.data?.schemas ?? []).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </Select>
         </div>
         <div>
           <Label>{copy.filter}</Label>
@@ -93,7 +156,7 @@ export function WarehouseBrowser({
         </div>
       </div>
 
-      {schema && (
+      {schema ? (
         <div className="overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
           {tables.isLoading ? (
             <div className="flex items-center justify-center py-8"><Spinner /></div>
@@ -108,44 +171,68 @@ export function WarehouseBrowser({
               <EmptyState icon={Table2} title={needle ? copy.noMatch : copy.noTables} />
             </div>
           ) : (
-            // Bounded height on purpose: a production dataset can hold hundreds
-            // of tables, and a list that pushes the wizard's own buttons off
-            // screen is worse than no list.
-            <ul className="max-h-72 divide-y divide-[rgb(var(--border-line))] overflow-y-auto">
-              {visible.map((item) => {
-                const key = `${item.schema_name}.${item.relation_name}`;
-                return (
-                  <li key={key} className="flex items-center gap-2 px-3 py-2 hover:bg-surface-2">
-                    <Table2 className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
-                    <span className="min-w-0 flex-1 truncate font-mono text-caption text-text-secondary">
-                      {item.relation_name}
-                    </span>
-                    {item.relation_type === 'VIEW' && (
-                      <Badge variant="neutral" size="xs">view</Badge>
-                    )}
-                    {item.asset_id ? (
-                      <span className="flex shrink-0 items-center gap-1 text-tiny text-success">
-                        <Check className="h-3.5 w-3.5" />{copy.alreadyAdded}
+            <>
+              {/* Bounded height: a production dataset holds hundreds of tables,
+                  and a list that pushes the wizard's own buttons off screen is
+                  worse than no list. */}
+              <ul className="max-h-72 divide-y divide-[rgb(var(--border-line))] overflow-y-auto">
+                {visible.map((item) => {
+                  const key = `${item.schema_name}.${item.relation_name}`;
+                  const added = Boolean(item.asset_id);
+                  return (
+                    <li key={key}
+                      className={cn('flex items-center gap-2 px-3 py-2',
+                        added ? 'opacity-70' : 'hover:bg-surface-2')}>
+                      <Checkbox checked={added || picked.has(key)} disabled={added || disabled}
+                        aria-label={item.relation_name}
+                        onChange={() => toggle(key)} />
+                      <span className="min-w-0 flex-1 truncate font-mono text-caption text-text-secondary">
+                        {item.relation_name}
                       </span>
-                    ) : (
-                      <Button size="xs" variant="secondary" disabled={disabled}
-                        loading={adding === key}
-                        onClick={() => onAdd({
-                          schema_name: item.schema_name,
-                          relation_name: item.relation_name,
-                          catalog_name: catalog,
-                        })}>
-                        {copy.add}
-                      </Button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                      {item.pipeline_name && (
+                        <span className="shrink-0 truncate text-tiny text-text-tertiary"
+                          title={item.pipeline_name}>
+                          {copy.fromPipeline} {item.pipeline_name}
+                        </span>
+                      )}
+                      {item.relation_type === 'VIEW' && (
+                        <Badge variant="neutral" size="xs">view</Badge>
+                      )}
+                      {added && (
+                        <span className="flex shrink-0 items-center gap-1 text-tiny text-success">
+                          <Check className="h-3.5 w-3.5" />{copy.alreadyAdded}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex items-center justify-between gap-2 border-t border-[rgb(var(--border-line))] px-3 py-2">
+                <span className="text-tiny text-text-tertiary">
+                  {picked.size
+                    ? copy.selectedCount.replace('{n}', String(picked.size))
+                    : copy.nothingSelected}
+                </span>
+                <Button size="xs" variant="primary" loading={adding}
+                  disabled={picked.size === 0 || disabled}
+                  onClick={() => {
+                    onAdd(visible
+                      .filter((item) => !item.asset_id
+                        && picked.has(`${item.schema_name}.${item.relation_name}`))
+                      .map((item) => ({
+                        catalog_name: item.catalog_name ?? catalog ?? null,
+                        schema_name: item.schema_name,
+                        relation_name: item.relation_name,
+                      })));
+                    setPicked(new Set());
+                  }}>
+                  {copy.addSelected}
+                </Button>
+              </div>
+            </>
           )}
         </div>
-      )}
-      {!schema && !datasets.isLoading && (
+      ) : (
         <div className="rounded-lg border border-dashed border-[rgb(var(--border-line))] px-4 py-6 text-center">
           <Database className="mx-auto h-5 w-5 text-text-quaternary" />
           <p className="mt-1.5 text-caption text-text-tertiary">{copy.chooseDataset}</p>
