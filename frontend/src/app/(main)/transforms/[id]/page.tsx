@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, Braces, Check, ChevronRight, Clock, Code2, Download, Eye, GitFork,
+  AlertTriangle, Braces, Check, ChevronDown, ChevronRight, Clock, Code2, Download, Eye, GitFork,
   Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Play, Plus, Save, Settings,
   ShieldCheck, Table2, TestTube2,
   Trash2, Workflow,
-  Wrench,
+  Pencil, Wrench, X,
 } from 'lucide-react';
 
 import { ApiError, transformApi } from '@/lib/api';
@@ -31,6 +31,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { LogViewer } from '@/components/integrations/LogViewer';
 import { SqlEditor, type SqlEditorHandle } from '@/components/transforms/SqlEditor';
 import { Pane, usePaneState } from '@/components/transforms/Collapsible';
+import { LineageView } from '@/components/transforms/LineageView';
 import { Resizer, usePaneSize } from '@/components/transforms/Resizer';
 import { PublishBar, ReleaseHistoryModal } from '@/components/transforms/PublishBar';
 
@@ -160,7 +161,6 @@ export default function TransformWorkbenchPage() {
   const [dirty, setDirty] = React.useState(false);
   const [pendingModelId, setPendingModelId] = React.useState<string | null>(null);
   const [newModelOpen, setNewModelOpen] = React.useState(false);
-  const [lineageOpen, setLineageOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [generatedOpen, setGeneratedOpen] = React.useState(false);
   const [rightTab, setRightTab] = React.useState('config');
@@ -172,6 +172,9 @@ export default function TransformWorkbenchPage() {
   const editorRef = React.useRef<SqlEditorHandle | null>(null);
   const [conflict, setConflict] = React.useState<{ server: TransformModel } | null>(null);
   const [modelFilter, setModelFilter] = React.useState('');
+  const [railTab, setRailTab] = React.useState('models');
+  const [renaming, setRenaming] = React.useState(false);
+  const [renameValue, setRenameValue] = React.useState('');
   const [pendingDelete, setPendingDelete] = React.useState<TransformModel | null>(null);
 
   React.useEffect(() => {
@@ -460,7 +463,7 @@ export default function TransformWorkbenchPage() {
   // away once rather than on every visit.
   const [inputsOpen, toggleInputs] = usePaneState('inputs', true);
   const [sideOpen, toggleSide] = usePaneState('config', true);
-  const [railWidth, setRailWidth] = usePaneSize('rail', 200, 160, 420);
+  const [railWidth, setRailWidth] = usePaneSize('rail', 224, 176, 420);
   const [sideWidth, setSideWidth] = usePaneSize('side', 260, 200, 520);
   const [editorRatio, setEditorRatio] = usePaneSize('editorRatio', 60, 25, 85);
   const splitRef = React.useRef<HTMLElement | null>(null);
@@ -476,6 +479,18 @@ export default function TransformWorkbenchPage() {
     queryKey: qk.transformReleases(workspaceId, transformId),
     queryFn: () => transformApi.releases(transformId),
     enabled: historyOpen,
+  });
+
+  const rename = useMutation({
+    mutationFn: (name: string) => transformApi.update(transformId, {
+      name: name.trim(), version: query.data?.version,
+    }),
+    onSuccess: async () => {
+      setRenaming(false);
+      await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transformId) });
+      queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
+    },
+    onError: (error) => { setRenaming(false); toastError(error); },
   });
 
   const publish = useMutation({
@@ -506,6 +521,22 @@ export default function TransformWorkbenchPage() {
     const models = query.data?.models ?? [];
     return needle ? models.filter((model) => model.name.toLowerCase().includes(needle)) : models;
   }, [query.data, modelFilter]);
+
+  const visibleInputs = React.useMemo(() => {
+    const needle = modelFilter.trim().toLowerCase();
+    const inputs = query.data?.inputs ?? [];
+    const matched = needle
+      ? inputs.filter((item) => `${item.schema_name}.${item.relation_name}`
+        .toLowerCase().includes(needle)
+        || (item.pipeline_name ?? '').toLowerCase().includes(needle))
+      : inputs;
+    const grouped = new Map<string, typeof matched>();
+    for (const item of matched) {
+      const key = item.pipeline_name ?? copy.warehouseRelation;
+      grouped.set(key, [...(grouped.get(key) ?? []), item]);
+    }
+    return [...grouped.entries()];
+  }, [query.data, modelFilter, copy.warehouseRelation]);
 
   // Last run's per-node outcome, keyed by model name, so the rail can show
   // where the project actually stands rather than only what is selected.
@@ -560,7 +591,7 @@ export default function TransformWorkbenchPage() {
 
   const lineage = useQuery({
     queryKey: qk.transformLineage(workspaceId, transformId),
-    queryFn: () => transformApi.lineage(transformId), enabled: lineageOpen,
+    queryFn: () => transformApi.lineage(transformId),
   });
   const generatedProject = useQuery({
     queryKey: ['workspace', workspaceId, 'transform', transformId, 'project'],
@@ -621,7 +652,31 @@ export default function TransformWorkbenchPage() {
           version are settings, not identity, and putting them in the title
           block hands every visitor two pieces of jargon on arrival. */}
       <DetailHeader
-        backHref="/transforms" backLabel="Transform" title={transform.name}
+        backHref="/transforms" backLabel="Transform"
+        title={<span className="flex items-center gap-1.5">
+          {renaming ? (
+            <Input
+              autoFocus size="sm" className="w-64" value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onBlur={() => rename.mutate(renameValue)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') rename.mutate(renameValue);
+                if (event.key === 'Escape') setRenaming(false);
+              }}
+            />
+          ) : (
+            <>
+              {transform.name}
+              {canEdit && (
+                <IconButton size="xs" variant="ghost"
+                  aria-label={copy.rename} title={copy.rename}
+                  onClick={() => { setRenameValue(transform.name); setRenaming(true); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </IconButton>
+              )}
+            </>
+          )}
+        </span>}
         icon={<Workflow className="h-5 w-5 text-brand" />}
         subtitle={<span className="text-caption text-text-tertiary" title={`${transform.default_schema} · dbt Core ${transform.dbt_core_version}`}>{transform.destination.name}</span>}
         badges={<>
@@ -638,7 +693,6 @@ export default function TransformWorkbenchPage() {
               somebody reaches for occasionally. Ranked beside Run they compete
               with it for attention and make the header read as a wall. */}
           <Menu label={copy.tools} items={[
-            { id: 'lineage', label: copy.lineage, onSelect: () => setLineageOpen(true) },
             { id: 'validate', label: copy.validate,
               onSelect: () => run.mutate({ operation: 'VALIDATE' }) },
             { id: 'project', label: locale === 'vi' ? 'Project được sinh' : 'Generated project',
@@ -684,7 +738,7 @@ export default function TransformWorkbenchPage() {
           rather than a class. Below md the panes stack and the seams are
           hidden, because dragging a 1px target on a phone is not a feature. */}
       <div
-        className="grid min-h-0 flex-1 grid-cols-1 border-t border-[rgb(var(--border-line))] bg-surface-1 md:grid-cols-[var(--rail)_4px_minmax(0,1fr)] lg:grid-cols-[var(--rail)_4px_minmax(0,1fr)_var(--seam)_var(--side)]"
+        className="relative grid min-h-0 flex-1 grid-cols-1 border-t border-[rgb(var(--border-line))] bg-surface-1 md:grid-cols-[var(--rail)_4px_minmax(0,1fr)] lg:grid-cols-[var(--rail)_4px_minmax(0,1fr)_var(--seam)_var(--side)]"
         style={{
           '--rail': `${railWidth}px`,
           '--side': sideOpen ? `${sideWidth}px` : '0px',
@@ -694,75 +748,21 @@ export default function TransformWorkbenchPage() {
         {/* Its own stacking context, above the editor: the SQL textarea is
             absolutely positioned with z-auto and comes later in the DOM, so a
             row menu opening over it would otherwise be painted underneath. */}
-        <aside className="relative z-20 min-h-0 border-r border-[rgb(var(--border-line))] bg-surface-1 lg:overflow-y-auto">
-          <Pane
-            title={copy.inputs} count={transform.inputs.length}
-            summary={transform.inputs.map((item) => item.relation_name).join(', ')}
-            open={inputsOpen} onToggle={toggleInputs}
-          >
-            {transform.inputs.map((asset) => (
-              <div key={asset.id} className="group relative">
-              <button
-                type="button"
-                disabled={!canEdit || !asset.source_name}
-                title={asset.source_name
-                  ? `{{ source('${asset.source_name}', '${asset.relation_name}') }}`
-                  : undefined}
-                onClick={() => asset.source_name && insertSnippet(
-                  `{{ source('${asset.source_name}', '${asset.relation_name}') }}`,
-                )}
-                className="block w-full px-2 py-1.5 text-left enabled:hover:bg-surface-2 disabled:cursor-default"
-              >
-                <p className="flex items-center gap-1 truncate font-mono text-tiny text-text-secondary">
-                  <span className="min-w-0 flex-1 truncate">
-                    {asset.schema_name}.{asset.relation_name}
-                  </span>
-                  {/* "Stale" only means something when the Transform is waiting
-                      on upstream data. After a manual build every input is
-                      older than the build, which is normal, not a warning. */}
-                  {asset.freshness_state === 'STALE'
-                    && transform.execution_trigger === 'AFTER_UPSTREAM' && (
-                    <Clock className="h-3 w-3 shrink-0 text-warning" aria-label={copy.stale} />
-                  )}
-                  {asset.freshness_state === 'UNRESOLVED' && (
-                    <AlertTriangle className="h-3 w-3 shrink-0 text-danger" aria-label={copy.unresolved} />
-                  )}
-                </p>
-                <p className="truncate text-[10px] text-text-quaternary">
-                  {/* The pipeline name means something to a reader; the internal
-                      route label and a raw column count do not. */}
-                  {asset.pipeline_name ?? copy.warehouseRelation}
-                  {' · '}
-                  {asset.columns.length} {copy.columnsShort}
-                </p>
-                </button>
-                {canEdit && asset.source_name && (
-                  <IconButton
-                    size="xs" variant="ghost"
-                    className="absolute right-1 top-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                    aria-label={copy.exploreInput} title={copy.exploreInput}
-                    loading={exploreInput.isPending}
-                    onClick={() => exploreInput.mutate(asset)}
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </IconButton>
-                )}
-              </div>
-            ))}
-          </Pane>
-          <Pane
-            title={copy.models} count={transform.models.length}
-            summary={draft?.name}
-            open={modelsOpen} onToggle={toggleModels}
-            action={canEdit ? <IconButton size="xs" variant="ghost" aria-label={copy.newModel} title={copy.newModel} onClick={() => setNewModelOpen(true)}><Plus className="h-3.5 w-3.5" /></IconButton> : undefined}
-          >
-            {transform.models.length > 6 && (
-              <div className="mb-1.5 px-1">
-                <Input size="sm" value={modelFilter} aria-label={copy.filterModels}
-                  placeholder={copy.filterModels}
-                  onChange={(event) => setModelFilter(event.target.value)} />
-              </div>
-            )}
+        <aside className="relative z-20 flex min-h-0 flex-col border-r border-[rgb(var(--border-line))] bg-surface-1">
+          {/* Two tabs rather than two stacked sections: sources and models
+              answer different questions and are never read together, so
+              stacking them spends twice the height for no gain. */}
+          <div className="shrink-0 p-2 pb-1">
+            <Input size="sm" value={modelFilter} aria-label={copy.filterAll}
+              placeholder={copy.filterAll}
+              onChange={(event) => setModelFilter(event.target.value)} />
+          </div>
+          <Tabs className="shrink-0" value={railTab} onChange={setRailTab} items={[
+            { id: 'models', label: copy.models },
+            { id: 'sources', label: copy.inputs },
+          ]} />
+          <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
+          {railTab === 'models' && (<>
             {(['STAGING', 'CORE', 'MART'] as const).map((layer) => {
               const models = visibleModels.filter((model) => model.layer === layer);
               if (!models.length) return null;
@@ -817,7 +817,61 @@ export default function TransformWorkbenchPage() {
             {visibleModels.length === 0 && (
               <p className="px-2 py-3 text-tiny text-text-quaternary">{copy.noModelMatch}</p>
             )}
-          </Pane>
+          </>)}
+          {railTab === 'sources' && (<>
+            {visibleInputs.map(([pipeline, assets]) => (
+              <div key={pipeline} className="mb-2">
+                <p className="px-2 py-1 text-[10px] font-emphasis uppercase text-text-quaternary">
+                  {pipeline}
+                </p>
+                {assets.map((asset) => (
+                  <div key={asset.id} className="group relative flex items-center pr-1 hover:bg-surface-2">
+                    <div className="min-w-0 flex-1 px-2 py-1.5">
+                      <p className="flex items-center gap-1 truncate font-mono text-tiny text-text-secondary">
+                        <span className="min-w-0 flex-1 truncate">{asset.relation_name}</span>
+                        {/* "Stale" only means something when the Transform is
+                            waiting on upstream data; after a manual build every
+                            input is older than the build, which is normal. */}
+                        {asset.freshness_state === 'STALE'
+                          && transform.execution_trigger === 'AFTER_UPSTREAM' && (
+                          <Clock className="h-3 w-3 shrink-0 text-warning" aria-label={copy.stale} />
+                        )}
+                        {asset.freshness_state === 'UNRESOLVED' && (
+                          <AlertTriangle className="h-3 w-3 shrink-0 text-danger" aria-label={copy.unresolved} />
+                        )}
+                      </p>
+                      <p className="truncate text-[10px] text-text-quaternary">
+                        {asset.columns.length} {copy.columnsShort}
+                      </p>
+                    </div>
+                    {canEdit && asset.source_name && (
+                      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        <IconButton size="xs" variant="ghost"
+                          aria-label={copy.exploreInput} title={copy.exploreInput}
+                          loading={exploreInput.isPending}
+                          onClick={() => exploreInput.mutate(asset)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </IconButton>
+                        {/* Inserting the reference is a different intent from
+                            previewing the table, so it gets its own control. */}
+                        <IconButton size="xs" variant="ghost"
+                          aria-label={copy.insertReference} title={copy.insertReference}
+                          onClick={() => insertSnippet(
+                            `{{ source('${asset.source_name}', '${asset.relation_name}') }}`,
+                          )}>
+                          <Plus className="h-3.5 w-3.5" />
+                        </IconButton>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+            {visibleInputs.length === 0 && (
+              <p className="px-2 py-3 text-tiny text-text-quaternary">{copy.noModelMatch}</p>
+            )}
+          </>)}
+          </div>
         </aside>
 
         {/* Seam between the rail and the editor. */}
@@ -863,7 +917,11 @@ export default function TransformWorkbenchPage() {
                   writing the table -- are steps you take once you already
                   believe the SQL, so they sit one click away instead of
                   competing for the same glance. */}
-              <Button size="xs" variant="primary" leadingIcon={<Eye className="h-3.5 w-3.5" />}
+              {/* One control, not two: the caret reads as "this action and its
+                  variants" where a separate overflow reads as a mystery menu. */}
+              <span className="flex shrink-0 items-center">
+              <Button size="xs" variant="primary" className="rounded-r-none"
+                leadingIcon={<Eye className="h-3.5 w-3.5" />}
                 disabled={!canRun || running}
                 loading={run.isPending && run.variables?.operation === 'PREVIEW'}
                 title={copy.previewHelp}
@@ -880,8 +938,9 @@ export default function TransformWorkbenchPage() {
                 { id: 'refresh', label: copy.fullRefreshModel, description: copy.fullRefreshHelp,
                   onSelect: () => run.mutate({ operation: 'RUN_MODEL', modelId: draft.id, fullRefresh: true }) },
               ]} trigger={<span title={copy.moreActions} aria-label={copy.moreActions}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[rgb(var(--border-strong))] bg-surface-1 text-text-secondary hover:border-brand hover:text-brand">
-                <MoreHorizontal className="h-3.5 w-3.5" /></span>} />
+                className="flex h-7 w-6 shrink-0 items-center justify-center rounded-r-md border border-l-0 border-brand bg-brand text-white hover:bg-brand-hover">
+                <ChevronDown className="h-3.5 w-3.5" /></span>} />
+              </span>
               {/* Model settings are a once-per-model errand; reserving a column
                   for them costs the editor width on every screen. */}
               <IconButton size="xs" variant="ghost"
@@ -922,6 +981,9 @@ export default function TransformWorkbenchPage() {
               onCancel={() => cancel.mutate()} cancelling={cancel.isPending}
               onJump={jumpToLine}
               canEdit={canEdit}
+              lineage={lineage.data} lineageLoading={lineage.isLoading}
+              lineageExpanded={editorRatio <= 26}
+              onExpandLineage={() => setEditorRatio(editorRatio <= 26 ? 60 : 25)}
               knownModels={(query.data?.models ?? []).map((item) => item.name)}
               onFixRef={fixRef}
             />
@@ -936,12 +998,32 @@ export default function TransformWorkbenchPage() {
         )}
         {sideOpen && (
         <aside className="flex min-h-[320px] flex-col border-t border-[rgb(var(--border-line))] bg-surface-1 md:col-span-2 lg:col-span-1 lg:min-h-0 lg:border-l lg:border-t-0">
+          {/* Its own title and close control: the panel arrives on request, so
+              it has to say what it is and how to dismiss it. */}
+          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[rgb(var(--border-line))] px-3">
+            <span className="text-caption font-emphasis text-text-primary">{copy.modelSettings}</span>
+            <IconButton size="xs" variant="ghost" className="ml-auto"
+              aria-label={copy.hidePanel} title={copy.hidePanel} onClick={toggleSide}>
+              <X className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
           <Tabs value={rightTab} onChange={setRightTab} items={[{ id: 'config', label: copy.config }, { id: 'tests', label: copy.tests, count: draft?.tests.length ?? 0 }]} />
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {draft && rightTab === 'config' && <ConfigPanel draft={draft} patchDraft={patchDraft} copy={copy} canEdit={canEdit} onDelete={() => setPendingDelete(draft)} deleting={removeModel.isPending} adapter={transform.dbt_adapter_name} />}
             {draft && rightTab === 'tests' && <TestsPanel draft={draft} form={testForm} setForm={setTestForm} add={() => addTest.mutate()} adding={addTest.isPending} remove={(id) => removeTest.mutate(id)} canEdit={canEdit} copy={copy} />}
           </div>
         </aside>
+        )}
+
+        {!sideOpen && draft && (
+          <Button
+            size="sm" variant="primary"
+            className="absolute bottom-4 right-4 z-20 shadow-lg"
+            leadingIcon={<Settings className="h-4 w-4" />}
+            onClick={toggleSide}
+          >
+            {copy.config}
+          </Button>
         )}
       </div>
 
@@ -1065,7 +1147,7 @@ export default function TransformWorkbenchPage() {
         onRestore={(id) => restore.mutate(id)}
       />
 
-      <LineageModal open={lineageOpen} onClose={() => setLineageOpen(false)} data={lineage.data} loading={lineage.isLoading} copy={copy} />
+
       <GeneratedProjectModal open={generatedOpen} onClose={() => setGeneratedOpen(false)} files={generatedProject.data} loading={generatedProject.isLoading} title={locale === 'vi' ? 'Project dbt được sinh' : 'Generated dbt project'} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} transform={transform} copy={copy} canEdit={canEdit} />
     </div>
@@ -1076,7 +1158,9 @@ function RailSection({ title, action, children }: { title: string; action?: Reac
   return <section className="border-b border-[rgb(var(--border-line))] p-2"><div className="mb-1 flex h-7 items-center justify-between px-1"><h2 className="text-[10px] font-emphasis uppercase text-text-quaternary">{title}</h2>{action}</div>{children}</section>;
 }
 
-function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName, copy, onCancel, cancelling, onJump, knownModels, onFixRef, canEdit }: { ratio: number; tab: string; setTab: (tab: string) => void; execution?: import('@/lib/types').TransformExecution; loading: boolean; runId: string | null; modelName: string; copy: typeof en; onCancel?: () => void; cancelling?: boolean; onJump?: (line: number) => void; knownModels?: string[]; onFixRef?: (from: string, to: string) => void; canEdit?: boolean }) {
+function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName, copy, onCancel, cancelling, onJump, knownModels, onFixRef, canEdit, lineage, lineageLoading, lineageExpanded, onExpandLineage }: { ratio: number; tab: string; setTab: (tab: string) => void; execution?: import('@/lib/types').TransformExecution; loading: boolean; runId: string | null; modelName: string; copy: typeof en; onCancel?: () => void; cancelling?: boolean; onJump?: (line: number) => void; knownModels?: string[]; onFixRef?: (from: string, to: string) => void; canEdit?: boolean;
+  lineage?: import('@/lib/types').TransformLineage; lineageLoading?: boolean;
+  lineageExpanded?: boolean; onExpandLineage?: () => void }) {
   const compiled = execution ? Object.entries(execution.compiled_sql).find(([key]) => key.endsWith(`.${modelName}`))?.[1] : undefined;
   const nodes = execution?.nodes ?? [];
   const models = nodes.filter((node) => node.resource_type === 'MODEL');
@@ -1087,6 +1171,7 @@ function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName,
       <Tabs className="border-0" value={tab} onChange={setTab} items={[
         { id: 'preview', label: copy.preview },
         { id: 'nodes', label: copy.results, count: nodes.length || undefined },
+        { id: 'lineage', label: copy.lineage },
         { id: 'compiled', label: copy.compiledSql },
         ...(canEdit ? [{ id: 'logs', label: copy.logs }] : []),
       ]} />
@@ -1100,8 +1185,16 @@ function OutputPanel({ ratio, tab, setTab, execution, loading, runId, modelName,
     </div>
     <div className="min-h-0 flex-1 overflow-auto p-3">
       {execution?.error && <RunErrorCallout error={execution.error} copy={copy} onJump={onJump} knownModels={knownModels} onFixRef={onFixRef} />}
-      {tab === 'preview' && <PreviewTable preview={execution?.preview} empty={copy.noPreview} />}
+      {tab === 'preview' && <PreviewTable preview={execution?.preview} empty={copy.noPreview} copy={copy} />}
       {tab === 'nodes' && <NodeResults nodes={nodes} models={models} copy={copy} />}
+      {tab === 'lineage' && (
+        <LineageView
+          data={lineage} loading={Boolean(lineageLoading)} copy={copy}
+          selectedName={modelName}
+          expanded={Boolean(lineageExpanded)}
+          onToggleExpand={onExpandLineage ?? (() => {})}
+        />
+      )}
       {tab === 'compiled' && <pre className="whitespace-pre-wrap font-mono text-tiny leading-5 text-text-secondary">{compiled ?? copy.noCompiled}</pre>}
       {tab === 'logs' && (runId ? <LogViewer runId={runId} live={active} /> : <p className="text-caption text-text-quaternary">{copy.noLogs}</p>)}
     </div>
@@ -1227,13 +1320,52 @@ function RunErrorCallout({ error, copy, onJump, knownModels, onFixRef }: { error
   );
 }
 
-function PreviewTable({ preview, empty }: { preview?: Record<string, unknown> | null; empty: string }) {
+function PreviewTable({ preview, empty, copy }: { preview?: Record<string, unknown> | null; empty: string; copy: typeof en }) {
   if (!preview) return <p className="text-caption text-text-quaternary">{empty}</p>;
   const candidate = (preview.data ?? preview.rows ?? preview.show) as unknown;
   const rows = Array.isArray(candidate) ? candidate : [];
   if (!rows.length || typeof rows[0] !== 'object') return <pre className="font-mono text-tiny text-text-secondary">{JSON.stringify(preview, null, 2)}</pre>;
   const columns = Object.keys(rows[0] as Record<string, unknown>);
-  return <div className="overflow-x-auto"><table className="min-w-full text-left text-tiny"><thead><tr className="border-b border-[rgb(var(--border-line))]">{columns.map((column) => <th key={column} className="px-2 py-1 font-emphasis text-text-tertiary">{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index} className="border-b border-[rgb(var(--border-line))]">{columns.map((column) => <td key={column} className="whitespace-nowrap px-2 py-1 font-mono text-text-secondary">{String((row as Record<string, unknown>)[column] ?? '')}</td>)}</tr>)}</tbody></table></div>;
+
+  // Anything a person can read on screen they will eventually want in a
+  // spreadsheet; the rows are already here, so the download costs one function.
+  const download = () => {
+    const escape = (value: unknown) => {
+      const text = String(value ?? '');
+      const risky = text.includes(",") || text.includes(String.fromCharCode(34))
+        || text.includes(String.fromCharCode(10));
+      return risky
+        ? String.fromCharCode(34)
+          + text.replaceAll(String.fromCharCode(34), String.fromCharCode(34, 34))
+          + String.fromCharCode(34)
+        : text;
+    };
+    const csv = [
+      columns.join(','),
+      ...rows.map((row) => columns
+        .map((column) => escape((row as Record<string, unknown>)[column])).join(',')),
+    ].join(String.fromCharCode(10));
+    const url = URL.createObjectURL(new Blob([`${String.fromCharCode(65279)}${csv}`],
+      { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'preview.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return <div>
+    <div className="mb-1.5 flex items-center gap-2">
+      <span className="text-tiny text-text-tertiary">
+        {rows.length} {copy.rowsCounted}
+      </span>
+      <Button size="xs" variant="ghost" className="ml-auto"
+        leadingIcon={<Download className="h-3.5 w-3.5" />} onClick={download}>
+        {copy.exportCsv}
+      </Button>
+    </div>
+    <div className="overflow-x-auto"><table className="min-w-full text-left text-tiny"><thead><tr className="border-b border-[rgb(var(--border-line))]">{columns.map((column) => <th key={column} className="px-2 py-1 font-emphasis text-text-tertiary">{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index} className="border-b border-[rgb(var(--border-line))]">{columns.map((column) => <td key={column} className="whitespace-nowrap px-2 py-1 font-mono text-text-secondary">{String((row as Record<string, unknown>)[column] ?? '')}</td>)}</tr>)}</tbody></table></div>
+  </div>;
 }
 
 /** Each dbt adapter implements its own incremental strategies; offering one the
@@ -1308,10 +1440,14 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
       </details>
 
       {canEdit && (
-        <Button className="mt-2" size="xs" variant="ghost" loading={deleting}
-          leadingIcon={<Trash2 className="h-3.5 w-3.5" />} onClick={onDelete}>
+        // Full width and outlined in red at the foot of the panel: deleting a
+        // model destroys its SQL and every test on it, so it should not look
+        // like the ghost buttons around it.
+        <button type="button" onClick={onDelete} disabled={deleting}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-danger/40 px-3 py-1.5 text-caption text-danger transition-colors hover:bg-danger/[0.06] disabled:opacity-50">
+          <Trash2 className="h-3.5 w-3.5" />
           {copy.deleteModel}
-        </Button>
+        </button>
       )}
     </div>
   );
@@ -1336,12 +1472,24 @@ function TestsPanel({ draft, form, setForm, add, adding, remove, canEdit, copy }
         <div className="flex items-start gap-2">
           <TestTube2 className="mt-0.5 h-3.5 w-3.5 text-text-tertiary" />
           <div className="min-w-0 flex-1">
+            {/* Column on top, rule beneath, outcome as a badge -- the shape a
+                reader scans, rather than three values joined by slashes. */}
             <p className="truncate text-caption font-emphasis text-text-primary">
-              {test.column_name ?? copy.model} / {test.rule.replaceAll('_', ' ')}
+              {test.column_name ?? copy.model}
             </p>
-            <p className="mt-0.5 text-tiny text-text-quaternary">
-              {test.severity} / {test.last_status}
+            <p className="mt-0.5 text-tiny uppercase tracking-wide text-text-quaternary">
+              {test.rule.replaceAll('_', ' ')}
             </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Badge size="xs"
+                variant={test.last_status === 'PASSED' ? 'success'
+                  : test.last_status === 'FAILED' ? 'danger' : 'neutral'}>
+                {test.last_status ?? copy.notRunYet}
+              </Badge>
+              {test.severity !== 'ERROR' && (
+                <span className="text-tiny text-text-quaternary">{test.severity}</span>
+              )}
+            </div>
           </div>
           {canEdit && <IconButton size="xs" variant="ghost" aria-label={copy.removeTest}
             onClick={() => remove(test.id)}><Trash2 className="h-3 w-3" /></IconButton>}
@@ -1392,107 +1540,6 @@ function TestsPanel({ draft, form, setForm, add, adding, remove, canEdit, copy }
  * models a list of "a -> b" lines is something a person has to assemble in
  * their head before it means anything.
  */
-function LineageModal({ open, onClose, data, loading, copy }: { open: boolean; onClose: () => void; data?: import('@/lib/types').TransformLineage; loading: boolean; copy: typeof en }) {
-  const [focused, setFocused] = React.useState<string | null>(null);
-
-  const graph = React.useMemo(() => {
-    if (!data?.nodes.length) return null;
-    const incoming = new Map<string, string[]>();
-    const outgoing = new Map<string, string[]>();
-    for (const edge of data.edges) {
-      incoming.set(edge.to, [...(incoming.get(edge.to) ?? []), edge.from]);
-      outgoing.set(edge.from, [...(outgoing.get(edge.from) ?? []), edge.to]);
-    }
-    // Longest-path layering: a node sits one column right of its deepest parent.
-    const depth = new Map<string, number>();
-    const resolve = (id: string, seen: Set<string>): number => {
-      if (depth.has(id)) return depth.get(id)!;
-      if (seen.has(id)) return 0;
-      seen.add(id);
-      const parents = incoming.get(id) ?? [];
-      const value = parents.length
-        ? Math.max(...parents.map((parent) => resolve(parent, seen) + 1)) : 0;
-      depth.set(id, value);
-      return value;
-    };
-    for (const node of data.nodes) resolve(node.id, new Set());
-
-    const columns: typeof data.nodes[] = [];
-    for (const node of data.nodes) {
-      const level = depth.get(node.id) ?? 0;
-      (columns[level] ??= []).push(node);
-    }
-    const COL = 210, ROW = 62, PAD = 16;
-    const position = new Map<string, { x: number; y: number }>();
-    columns.forEach((column, columnIndex) => column.forEach((node, rowIndex) => {
-      position.set(node.id, { x: PAD + columnIndex * COL, y: PAD + rowIndex * ROW });
-    }));
-    return {
-      columns, position,
-      width: PAD * 2 + Math.max(columns.length, 1) * COL,
-      height: PAD * 2 + Math.max(...columns.map((column) => column.length), 1) * ROW,
-      related: (id: string) => new Set([
-        id, ...(incoming.get(id) ?? []), ...(outgoing.get(id) ?? []),
-      ]),
-    };
-  }, [data]);
-
-  const highlighted = focused && graph ? graph.related(focused) : null;
-  const tone: Record<string, string> = {
-    SOURCE: 'border-l-info', PIPELINE: 'border-l-info',
-    DATA_ASSET: 'border-l-success', MODEL: 'border-l-brand',
-  };
-
-  // The graph body is capped at 70vh so a full staging->core->mart chain fits
-  // without panning; a graph you have to drag around defeats drawing it.
-  return <Modal open={open} onClose={onClose} title={copy.lineage} description={copy.lineageDescription} size="xl">
-    {loading ? <Spinner /> : !graph ? <EmptyState title={copy.noLineage} compact /> : (
-      <div className="max-h-[70vh] overflow-auto rounded-lg border border-[rgb(var(--border-line))] bg-surface-2">
-        <div className="relative" style={{ width: graph.width, height: graph.height }}>
-          <svg className="absolute inset-0 h-full w-full" aria-hidden>
-            {data!.edges.map((edge, index) => {
-              const from = graph.position.get(edge.from);
-              const to = graph.position.get(edge.to);
-              if (!from || !to) return null;
-              const x1 = from.x + 186, y1 = from.y + 22;
-              const x2 = to.x, y2 = to.y + 22;
-              const mid = (x1 + x2) / 2;
-              const lit = !highlighted || (highlighted.has(edge.from) && highlighted.has(edge.to));
-              return <path key={`${edge.from}-${edge.to}-${index}`}
-                d={`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
-                fill="none" strokeWidth={1.5}
-                className={lit ? 'stroke-[rgb(var(--border-strong))]' : 'stroke-[rgb(var(--border-line))]'}
-                opacity={lit ? 1 : 0.35} />;
-            })}
-          </svg>
-          {data!.nodes.map((node) => {
-            const at = graph.position.get(node.id)!;
-            const lit = !highlighted || highlighted.has(node.id);
-            return (
-              <button key={node.id} type="button"
-                onMouseEnter={() => setFocused(node.id)}
-                onMouseLeave={() => setFocused(null)}
-                onFocus={() => setFocused(node.id)}
-                onBlur={() => setFocused(null)}
-                style={{ left: at.x, top: at.y, width: 186 }}
-                className={cn(
-                  'absolute rounded-md border border-l-2 bg-surface-1 px-2.5 py-1.5 text-left transition-opacity',
-                  'border-[rgb(var(--border-line))]', tone[node.type] ?? 'border-l-neutral',
-                  lit ? 'opacity-100' : 'opacity-40',
-                )}>
-                <span className="block truncate text-caption font-emphasis text-text-primary">{node.label}</span>
-                <span className="block truncate text-[10px] text-text-quaternary">
-                  {node.layer ? `${node.layer} · ${node.materialization}` : node.type.replace('_', ' ')}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    )}
-  </Modal>;
-}
-
 function GeneratedProjectModal({ open, onClose, files, loading, title }: { open: boolean; onClose: () => void; files?: Record<string, string>; loading: boolean; title: string }) {
   const paths = React.useMemo(() => Object.keys(files ?? {}).sort(), [files]);
   const [selected, setSelected] = React.useState('dbt_project.yml');
@@ -1813,9 +1860,12 @@ const vi = {
   scheduleRuns: 'Lịch chạy dùng', columnsShort: 'cột', tools: 'Công cụ',
   moreActions: 'Thao tác khác', syntaxOk: 'SQL hợp lệ', syntaxError: 'SQL có lỗi',
   exploreInput: 'Xem thử bảng này', exploreComment: 'Đọc dữ liệu từ bảng nguồn.',
-  hidePanel: 'Ẩn bảng cấu hình', showPanel: 'Hiện bảng cấu hình',
+  hidePanel: 'Đóng', showPanel: 'Cấu hình', modelSettings: 'Thiết lập bảng', rename: 'Đổi tên', notRunYet: 'Chưa chạy', exportCsv: 'Tải CSV', rowsCounted: 'dòng',
   resizeRail: 'Kéo để đổi độ rộng danh sách', resizeSide: 'Kéo để đổi độ rộng bảng cấu hình',
   resizeEditor: 'Kéo để đổi chiều cao vùng soạn thảo',
+  zoomIn: 'Phóng to', zoomOut: 'Thu nhỏ', zoomFit: 'Vừa khung',
+  expand: 'Mở rộng sơ đồ', collapse: 'Thu lại',
+  legendSource: 'Nguồn dữ liệu', legendSelected: 'Đang mở', legendHealthy: 'Bảng đã dựng',
   previewHelp: 'Xem thử 20 dòng kết quả. Không ghi gì vào warehouse.',
   compileHelp: 'Kiểm tra cú pháp, không chạm dữ liệu.',
   testHelp: 'Chạy các test đã đặt cho model này.',
@@ -1856,7 +1906,7 @@ const vi = {
     aggregate: 'Mỗi ngày một dòng — dạng dashboard hay dùng.',
     incremental: 'Lần sau chỉ chạy trên dòng mới. Cần đặt Unique key.',
   } as Record<string, string>,
-  filterModels: 'Tìm bảng', modelActions: 'Thao tác', duplicateModel: 'Nhân bản',
+  filterModels: 'Tìm bảng', filterAll: 'Tìm bảng hoặc nguồn...', modelActions: 'Thao tác', duplicateModel: 'Nhân bản',
   noModelMatch: 'Không tìm thấy bảng nào.',
   layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Data Mart' } as Record<string, string>,
   deleteModelTitle: 'Xóa bảng này?',
@@ -1901,9 +1951,12 @@ const en = {
   scheduleRuns: 'Schedule runs', columnsShort: 'columns', tools: 'Tools',
   moreActions: 'More actions', syntaxOk: 'SQL is valid', syntaxError: 'SQL has an error',
   exploreInput: 'Preview this table', exploreComment: 'Reads from the source table.',
-  hidePanel: 'Hide settings panel', showPanel: 'Show settings panel',
+  hidePanel: 'Close', showPanel: 'Settings', modelSettings: 'Model settings', rename: 'Rename', notRunYet: 'Not run', exportCsv: 'Export CSV', rowsCounted: 'rows',
   resizeRail: 'Drag to resize the list', resizeSide: 'Drag to resize the settings panel',
   resizeEditor: 'Drag to resize the editor',
+  zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomFit: 'Fit',
+  expand: 'Expand graph', collapse: 'Collapse',
+  legendSource: 'Source', legendSelected: 'Open now', legendHealthy: 'Built table',
   previewHelp: 'Shows 20 rows of the result. Writes nothing to the warehouse.',
   compileHelp: 'Checks the SQL. Touches no data.',
   testHelp: 'Runs the tests defined on this model.',
@@ -1944,7 +1997,7 @@ const en = {
     aggregate: 'One row per day -- the shape a dashboard wants.',
     incremental: 'Later runs touch only new rows. Needs a Unique key.',
   } as Record<string, string>,
-  filterModels: 'Filter models', modelActions: 'Actions', duplicateModel: 'Duplicate',
+  filterModels: 'Filter models', filterAll: 'Find a table or source...', modelActions: 'Actions', duplicateModel: 'Duplicate',
   noModelMatch: 'No model matches.',
   layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Data Mart' } as Record<string, string>,
   deleteModelTitle: 'Delete model?',

@@ -100,7 +100,9 @@ export function DetailHeader({
   backHref: string;
   backLabel: string;
   icon?: React.ReactNode;
-  title: string;
+  /** Usually the record name; accepts an element so a page can put an
+   *  inline control -- a rename pencil -- beside it. */
+  title: React.ReactNode;
   subtitle?: React.ReactNode;
   badges?: React.ReactNode;
   /** Keep status beside the title on dense operational screens. */

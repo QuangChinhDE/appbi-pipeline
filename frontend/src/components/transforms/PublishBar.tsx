@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CircleCheck, GitBranch, History, Upload } from 'lucide-react';
+import { CircleCheck, GitBranch, History, Table2, Upload } from 'lucide-react';
 
 import type { TransformDetail, TransformDiffEntry, TransformRelease } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -149,6 +149,7 @@ export function PublishBar({
                         : entry.change === 'REMOVED' ? copy.changeRemoved
                           : copy.changeModified}
                     </span>
+                    <Table2 className="h-3 w-3 shrink-0 text-text-quaternary" />
                     <span className="min-w-0 truncate font-mono text-text-secondary">
                       {entry.name}
                     </span>
