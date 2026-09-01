@@ -43,7 +43,7 @@ export default function ImportTransformPage() {
   const [name, setName] = React.useState('');
   const [destinationId, setDestinationId] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
-  const [syncEnabled, setSyncEnabled] = React.useState(true);
+  const [autoPull, setAutoPull] = React.useState(true);
   const [intervalMinutes, setIntervalMinutes] = React.useState(30);
 
   const destinations = useQuery({
@@ -73,7 +73,7 @@ export default function ImportTransformPage() {
       subdirectory: subdirectory.trim() || undefined,
       token: token.trim() || undefined,
       name: name.trim(), destination_id: destinationId, default_schema: outputSchema.trim(),
-      sync_enabled: syncEnabled, interval_minutes: intervalMinutes,
+      auto_pull: autoPull, interval_minutes: intervalMinutes,
     }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -250,10 +250,10 @@ export default function ImportTransformPage() {
                     finding the switch later means the first divergence is a
                     surprise. */}
                 <div className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
-                  <Checkbox checked={syncEnabled} onChange={setSyncEnabled}
-                    label={copy.keepInSync} />
-                  <p className="ml-6 text-tiny text-text-tertiary">{copy.keepInSyncHint}</p>
-                  {syncEnabled && (
+                  <Checkbox checked={autoPull} onChange={setAutoPull}
+                    label={copy.keepPulling} />
+                  <p className="ml-6 text-tiny text-text-tertiary">{copy.keepPullingHint}</p>
+                  {autoPull && (
                     <div className="ml-6 mt-2 max-w-[220px]">
                       <Label>{copy.checkEvery}</Label>
                       <Select value={String(intervalMinutes)}
@@ -300,9 +300,9 @@ function Tally({ icon: Icon, value, label }: {
 const vi = {
   back: 'Transform',
   title: 'Import từ GitHub',
-  subtitle: 'Chuyển một project dbt hoặc Dataform có sẵn thành Transform',
+  subtitle: 'Lấy một project dbt hoặc Dataform có sẵn về làm Transform',
   repository: 'Repository',
-  repositoryHelp: 'Dán địa chỉ repository trên GitHub. Hệ thống tự nhận biết đây là project dbt hay Dataform.',
+  repositoryHelp: 'Dán địa chỉ repository trên GitHub. Hệ thống tự nhận biết đây là project dbt hay Dataform, và chỉ đọc — không ghi gì lên repository của bạn.',
   repoUrl: 'Địa chỉ repository',
   branch: 'Nhánh hoặc tag',
   branchPlaceholder: 'Để trống dùng nhánh mặc định',
@@ -310,7 +310,7 @@ const vi = {
   subdirectoryPlaceholder: 'Nếu project nằm trong thư mục con',
   token: 'GitHub access token',
   tokenPlaceholder: 'Chỉ cần với repository riêng tư',
-  tokenHint: 'Token chỉ dùng cho lần đọc này và không được lưu lại.',
+  tokenHint: 'Chỉ cần quyền đọc (Contents: Read).',
   inspect: 'Đọc thử',
   reading: 'Đang tải và chuyển đổi repository…',
   found: 'Kết quả chuyển đổi',
@@ -325,8 +325,8 @@ const vi = {
   warehouse: 'Kho dữ liệu',
   chooseWarehouse: 'Chọn kho dữ liệu',
   output: 'Schema đích',
-  keepInSync: 'Tự động cập nhật khi repository có commit mới',
-  keepInSyncHint: 'Có thể đổi hoặc tắt sau trong Cài đặt của Transform.',
+  keepPulling: 'Tự động lấy code mới khi repository có commit mới',
+  keepPullingHint: 'Một chiều — chỉ đọc về, không bao giờ ghi ngược lên GitHub. Có thể tắt sau trong Cài đặt.',
   checkEvery: 'Kiểm tra mỗi (phút)',
   startOver: 'Đọc repository khác',
   createAction: 'Import',
@@ -339,7 +339,7 @@ const en: typeof vi = {
   title: 'Import from GitHub',
   subtitle: 'Turn an existing dbt or Dataform project into a Transform',
   repository: 'Repository',
-  repositoryHelp: 'Paste a GitHub repository address. Whether it is dbt or Dataform is worked out for you.',
+  repositoryHelp: 'Paste a GitHub repository address. Whether it is dbt or Dataform is worked out for you, and the repository is only ever read from.',
   repoUrl: 'Repository address',
   branch: 'Branch or tag',
   branchPlaceholder: 'Leave blank for the default branch',
@@ -347,7 +347,7 @@ const en: typeof vi = {
   subdirectoryPlaceholder: 'If the project lives in a subfolder',
   token: 'GitHub access token',
   tokenPlaceholder: 'Only needed for a private repository',
-  tokenHint: 'The token is used for this one read and never stored.',
+  tokenHint: 'Read access is enough (Contents: Read).',
   inspect: 'Read it',
   reading: 'Downloading and converting the repository…',
   found: 'What the conversion produced',
@@ -362,8 +362,8 @@ const en: typeof vi = {
   warehouse: 'Warehouse',
   chooseWarehouse: 'Choose a warehouse',
   output: 'Output schema',
-  keepInSync: 'Keep following this repository as it changes',
-  keepInSyncHint: 'Can be changed or turned off later in the Transform settings.',
+  keepPulling: 'Pull new commits from this repository automatically',
+  keepPullingHint: 'One direction — read only, never written back to GitHub. Can be turned off later in the settings.',
   checkEvery: 'Check every (minutes)',
   startOver: 'Read a different repository',
   createAction: 'Import',

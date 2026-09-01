@@ -35,7 +35,7 @@ import { LineageView } from '@/components/transforms/LineageView';
 import { Resizer, usePaneSize } from '@/components/transforms/Resizer';
 import { PublishBar, ReleaseHistoryModal } from '@/components/transforms/PublishBar';
 import { AiDraftDialog } from '@/components/transforms/AiDraftDialog';
-import { GitSyncPanel } from '@/components/transforms/GitSyncPanel';
+import { GitSourcePanel } from '@/components/transforms/GitSourcePanel';
 
 const ACTIVE = ['QUEUED', 'STARTING', 'RUNNING', 'CANCEL_REQUESTED'];
 const healthTone: Record<string, BadgeVariant> = {
@@ -1744,8 +1744,8 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
     },
     onError: (error) => toastError(error),
   });
-  const syncGit = useMutation({
-    mutationFn: (force: boolean) => transformApi.syncGit(transform.id, force),
+  const pullGit = useMutation({
+    mutationFn: (force: boolean) => transformApi.pullGit(transform.id, force),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transform.id) });
       if (result.status === 'FAILED') toastError(new Error(result.message));
@@ -1914,11 +1914,11 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
       <div className="border-t border-[rgb(var(--border-line))] pt-4">
         <h3 className="text-caption font-emphasis text-text-primary">{copy.git.title}</h3>
         <p className="mb-2 mt-0.5 text-tiny text-text-tertiary">{copy.git.description}</p>
-        <GitSyncPanel
+        <GitSourcePanel
           git={transform.git ?? { connected: false }} copy={copy.git} canEdit={canEdit}
-          saving={saveGit.isPending} syncing={syncGit.isPending}
+          saving={saveGit.isPending} pulling={pullGit.isPending}
           onSave={(body) => saveGit.mutate(body)}
-          onSync={(force) => syncGit.mutate(force)} />
+          onPull={(force) => pullGit.mutate(force)} />
       </div>
 
       <div className="border-t border-[rgb(var(--border-line))] pt-4">
@@ -1956,34 +1956,35 @@ const REMEDIATION_EN = {
 
 const vi = {
   git: {
-    title: 'Đồng bộ với GitHub',
-    description: 'Khi repository có commit mới, các bảng ở đây được cập nhật theo.',
-    saved: 'Đã lưu thiết lập đồng bộ',
-    notConnected: 'Transform này chưa nối với repository nào',
+    title: 'Nguồn code từ GitHub',
+    description: 'Các bảng dưới đây được lấy về từ một repository.',
+    oneWay: 'Một chiều: chỉ đọc từ GitHub về đây. Mọi thay đổi bạn sửa trong app không bao giờ được ghi ngược lên repository.',
+    saved: 'Đã lưu thiết lập',
+    notConnected: 'Transform này không lấy code từ repository nào',
     notConnectedHint: 'Chỉ những Transform được tạo bằng Import từ GitHub mới có mục này.',
     repository: 'Repository', branch: 'Nhánh', branchDefault: 'nhánh mặc định',
-    lastSync: 'Lần đồng bộ gần nhất', never: 'Chưa đồng bộ lần nào',
-    commit: 'commit', nextSync: 'Lần kiểm tra tới',
-    syncNow: 'Đồng bộ ngay',
+    lastPull: 'Lần lấy code gần nhất', never: 'Chưa lấy lần nào',
+    commit: 'commit', nextPull: 'Lần kiểm tra tới',
+    pullNow: 'Lấy code mới',
     reapply: 'Áp lại commit hiện tại',
     reapplyHint: 'Dùng khi bạn vừa cấp thêm quyền đọc bảng nguồn mà repository chưa có commit mới.',
-    enable: 'Tự động theo dõi repository',
-    enableHint: 'Hệ thống hỏi GitHub xem nhánh đã có commit mới chưa, chỉ tải về khi có.',
+    autoPull: 'Tự động lấy code mới',
+    autoPullHint: 'Hệ thống hỏi GitHub xem nhánh đã có commit mới chưa, chỉ tải về khi có.',
     every: 'Kiểm tra mỗi',
-    autoPublish: 'Tự động xuất bản sau khi đồng bộ',
-    autoPublishHint: 'Bật thì lịch chạy sẽ dùng ngay code mới. Tắt thì bạn xem lại rồi tự bấm Xuất bản.',
+    autoPublish: 'Tự động xuất bản sau khi lấy code',
+    autoPublishHint: 'Bật thì lịch chạy dùng ngay code mới. Tắt thì bạn xem lại rồi tự bấm Xuất bản.',
     token: 'GitHub access token',
     tokenStored: 'Chưa lưu token nào',
     tokenReplace: 'Đã lưu — nhập để thay token khác',
-    tokenHint: 'Token được mã hoá khi lưu và không bao giờ hiển thị lại.',
+    tokenHint: 'Chỉ cần quyền đọc (Contents: Read). Token được mã hoá khi lưu và không bao giờ hiển thị lại.',
     save: 'Lưu',
     disconnect: 'Ngắt kết nối',
-    managed: 'Bảng do repository quản lý',
-    managedHint: 'Chỉ những bảng này bị ghi đè hoặc gỡ khi đồng bộ. Bảng bạn tự viết luôn được giữ.',
+    managed: 'Bảng lấy từ repository',
+    managedHint: 'Chỉ những bảng này bị ghi đè hoặc gỡ khi lấy code mới. Bảng bạn tự viết trong app luôn được giữ.',
     statusLabel: {
-      APPLIED: 'Đã áp dụng thay đổi từ Git',
-      UNCHANGED: 'Đang khớp với Git',
-      FAILED: 'Đồng bộ thất bại',
+      APPLIED: 'Đã lấy code mới về',
+      UNCHANGED: 'Đang khớp với repository',
+      FAILED: 'Lấy code thất bại',
     } as Record<string, string>,
     intervals: [
       { value: 5, label: '5 phút' }, { value: 15, label: '15 phút' },
@@ -2128,34 +2129,35 @@ const vi = {
 };
 const en = {
   git: {
-    title: 'GitHub sync',
-    description: 'When the repository gets a new commit, the models here follow it.',
-    saved: 'Sync settings saved',
-    notConnected: 'This Transform does not follow a repository',
+    title: 'GitHub source',
+    description: 'The models below are read from a repository.',
+    oneWay: 'One direction: read from GitHub into here. Nothing you edit in the app is ever written back to the repository.',
+    saved: 'Settings saved',
+    notConnected: 'This Transform does not read from a repository',
     notConnectedHint: 'Only Transforms created through Import from GitHub have one.',
     repository: 'Repository', branch: 'Branch', branchDefault: 'default branch',
-    lastSync: 'Last sync', never: 'Never synced',
-    commit: 'commit', nextSync: 'Next check',
-    syncNow: 'Sync now',
+    lastPull: 'Last pulled', never: 'Never pulled',
+    commit: 'commit', nextPull: 'Next check',
+    pullNow: 'Pull latest',
     reapply: 'Re-apply current commit',
     reapplyHint: 'For when you have just granted access to a source table and the repository has not moved.',
-    enable: 'Follow the repository automatically',
-    enableHint: 'Asks GitHub whether the branch has moved, and only downloads when it has.',
+    autoPull: 'Pull new commits automatically',
+    autoPullHint: 'Asks GitHub whether the branch has moved, and only downloads when it has.',
     every: 'Check every',
-    autoPublish: 'Publish automatically after a sync',
+    autoPublish: 'Publish automatically after a pull',
     autoPublishHint: 'On, and the schedule runs the new code straight away. Off, and you review it first.',
     token: 'GitHub access token',
     tokenStored: 'No token stored',
     tokenReplace: 'Stored — type to replace it',
-    tokenHint: 'The token is encrypted at rest and never shown again.',
+    tokenHint: 'Read access is enough (Contents: Read). Encrypted at rest and never shown again.',
     save: 'Save',
     disconnect: 'Disconnect',
-    managed: 'Models the repository owns',
-    managedHint: 'Only these are overwritten or removed by a sync. Anything you wrote here is kept.',
+    managed: 'Models read from the repository',
+    managedHint: 'Only these are replaced or removed by a pull. Anything you wrote in the app is kept.',
     statusLabel: {
-      APPLIED: 'Applied changes from Git',
-      UNCHANGED: 'In step with Git',
-      FAILED: 'Sync failed',
+      APPLIED: 'Pulled new code',
+      UNCHANGED: 'In step with the repository',
+      FAILED: 'Pull failed',
     } as Record<string, string>,
     intervals: [
       { value: 5, label: '5 minutes' }, { value: 15, label: '15 minutes' },

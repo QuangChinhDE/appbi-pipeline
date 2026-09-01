@@ -53,13 +53,16 @@ class Transform(Base, TimestampMixin):
     health_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     execution_trigger: Mapped[str] = mapped_column(String(40), default="MANUAL", nullable=False)
     trigger_config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
-    #: Where this Transform's models come from, when they come from Git:
-    #: repo_url, ref, subdirectory, secret_ref, enabled, interval_minutes,
-    #: auto_publish, last_commit, last_synced_at, last_status, last_message,
+    #: Where this Transform's models are read from, when they come from Git:
+    #: repo_url, ref, subdirectory, secret_ref, auto_pull, interval_minutes,
+    #: auto_publish, last_commit, last_pulled_at, last_status, last_message,
     #: and `managed` -- the model names the repository owns, so a model a person
-    #: wrote here is never deleted by a sync.
-    git_sync: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
-    git_next_sync_at: Mapped[datetime | None] = mapped_column(
+    #: wrote here is never removed by a pull.
+    #:
+    #: Read only, in one direction. Nothing in this product writes to a
+    #: repository, and no field here is a staging area for doing so.
+    git_source: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    git_next_pull_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
     dbt_core_version: Mapped[str] = mapped_column(String(32), nullable=False)

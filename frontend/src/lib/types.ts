@@ -472,27 +472,33 @@ export interface WarehouseBrowse {
   relations: BrowsedRelation[];
 }
 
-/** The repository a Transform follows, if it follows one. Never the token. */
-export interface GitSyncState {
+/**
+ * The repository a Transform reads from, if it reads from one. Never the token.
+ *
+ * One direction: the product reads commits and never writes them. Editing a
+ * model here cannot reach the repository.
+ */
+export interface GitSourceState {
   connected: boolean;
   repo_url?: string | null;
   ref?: string | null;
   subdirectory?: string;
-  enabled?: boolean;
+  /** Check for new commits on a timer rather than only when asked. */
+  auto_pull?: boolean;
   interval_minutes?: number;
   auto_publish?: boolean;
   has_token?: boolean;
   last_commit?: string | null;
-  last_synced_at?: string | null;
+  last_pulled_at?: string | null;
   /** APPLIED, UNCHANGED or FAILED. */
   last_status?: string | null;
   last_message?: string | null;
-  /** Model names the repository owns; a sync never removes anything else. */
+  /** Model names the repository owns; a pull never removes anything else. */
   managed?: string[];
-  next_sync_at?: string | null;
+  next_pull_at?: string | null;
 }
 
-export interface GitSyncResult {
+export interface GitPullResult {
   status: string;
   message: string;
   last_commit?: string | null;
@@ -621,7 +627,7 @@ export interface TransformDetail extends Transform {
   active_release?: TransformRelease | null;
   /** True when the editor holds edits made after that snapshot was taken. */
   draft_has_changes?: boolean;
-  git?: GitSyncState;
+  git?: GitSourceState;
 }
 
 /** Mirrors TransformRunRequest.operation on the API. */

@@ -19,8 +19,8 @@ import type {
   ColumnProfile,
   WarehouseBrowse,
   RepositoryImportPreview,
-  GitSyncState,
-  GitSyncResult,
+  GitSourceState,
+  GitPullResult,
   DraftedModel,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
@@ -463,15 +463,16 @@ export const transformApi = {
   importRepository: (body: {
     repo_url: string; ref?: string; subdirectory?: string; token?: string;
     name: string; destination_id: string; default_schema: string;
-    sync_enabled?: boolean; interval_minutes?: number;
+    auto_pull?: boolean; interval_minutes?: number;
   }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
   configureGit: (id: string, body: {
     repo_url?: string; ref?: string | null; subdirectory?: string;
-    token?: string; enabled?: boolean; interval_minutes?: number;
+    token?: string; auto_pull?: boolean; interval_minutes?: number;
     auto_publish?: boolean;
-  }) => put<GitSyncState>(`/transforms/${id}/git`, body),
-  syncGit: (id: string, force = false) =>
-    post<GitSyncResult>(`/transforms/${id}/git/sync${force ? '?force=true' : ''}`, {}),
+  }) => put<GitSourceState>(`/transforms/${id}/git`, body),
+  /** Reads the repository into this Transform. There is no write counterpart. */
+  pullGit: (id: string, force = false) =>
+    post<GitPullResult>(`/transforms/${id}/git/pull${force ? '?force=true' : ''}`, {}),
   profileInput: (id: string, assetId: string) =>
     post<{ columns: ColumnProfile[] }>(`/transforms/${id}/inputs/${assetId}/profile`, {}),
   draftModel: (id: string, body: { asset_id: string; intent: string }) =>

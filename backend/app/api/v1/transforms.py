@@ -17,7 +17,7 @@ from app.schemas.domain import (
     TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
     TransformRunRequest, WarehouseBrowseView,
     RepositoryImportCreate, RepositoryImportPreview, RepositoryImportRequest,
-    RepositoryImportResult, GitSyncUpdate, GitSyncView, GitSyncResult,
+    RepositoryImportResult, GitSourceUpdate, GitSourceView, GitPullResult,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
 )
 from app.services import transform_ai, transform_import, transforms as service
@@ -59,7 +59,7 @@ async def import_repository(
         session, ctx, transform,
         repo_url=payload.repo_url, ref=payload.ref,
         subdirectory=payload.subdirectory, token=payload.token,
-        enabled=payload.sync_enabled, interval_minutes=payload.interval_minutes,
+        auto_pull=payload.auto_pull, interval_minutes=payload.interval_minutes,
     )
     await session.commit()
     session.expunge(transform)
@@ -402,11 +402,15 @@ async def draft_model(
     return draft.model_dump()
 
 
-@router.put("/{transform_id}/git", response_model=GitSyncView)
+@router.put("/{transform_id}/git", response_model=GitSourceView)
 async def configure_git(
-    transform_id: uuid.UUID, payload: GitSyncUpdate, session: SessionDep, ctx: CtxDep,
+    transform_id: uuid.UUID, payload: GitSourceUpdate, session: SessionDep, ctx: CtxDep,
 ):
-    """Point this Transform at a repository, or change how it follows one."""
+    """Point this Transform at a repository to read from.
+
+    Read only. There is no endpoint that writes to a repository, because there
+    is no code anywhere in the product that could.
+    """
     transform = await service.get(session, ctx, transform_id)
     state = await transform_import.configure_git(
         session, ctx, transform,
@@ -416,20 +420,20 @@ async def configure_git(
     return state
 
 
-@router.post("/{transform_id}/git/sync", response_model=GitSyncResult)
-async def sync_git(
+@router.post("/{transform_id}/git/pull", response_model=GitPullResult)
+async def pull_git(
     transform_id: uuid.UUID,
     session: SessionDep,
     ctx: CtxDep,
     force: Annotated[bool, Query()] = False,
 ):
-    """Pull the repository now.
+    """Read the repository now and apply it here.
 
     `force` re-applies the recorded commit rather than reporting it unchanged,
     which is what somebody who has just fixed warehouse permissions wants.
     """
     transform = await service.get(session, ctx, transform_id)
-    result = await transform_import.sync_now(session, ctx, transform, force=force)
+    result = await transform_import.pull_now(session, ctx, transform, force=force)
     await session.commit()
     return result
 

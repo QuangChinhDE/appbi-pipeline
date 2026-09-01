@@ -552,7 +552,7 @@ class RepositoryImportCreate(RepositoryImportRequest):
     destination_id: uuid.UUID
     default_schema: str = Field(min_length=1, max_length=200)
     #: Keep the connection and poll it, so the import is a start not a snapshot.
-    sync_enabled: bool = False
+    auto_pull: bool = False
     interval_minutes: int = Field(default=30, ge=5, le=10080)
 
 
@@ -582,37 +582,43 @@ class ImportedTestView(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
-class GitSyncUpdate(BaseModel):
-    """Attach, adjust or detach the repository. Omitted fields stay as they are."""
+class GitSourceUpdate(BaseModel):
+    """Attach, adjust or detach the repository. Omitted fields stay as they are.
+
+    There is no counterpart that writes to the repository: this configures a
+    read, and the product has no way to push.
+    """
 
     repo_url: str | None = Field(default=None, max_length=500)
     ref: str | None = Field(default=None, max_length=200)
     subdirectory: str | None = Field(default=None, max_length=300)
     #: Written to the secret store. Omit to keep the stored one, "" to remove it.
     token: str | None = Field(default=None, max_length=500)
-    enabled: bool | None = None
+    #: Check for new commits on a timer instead of only when asked.
+    auto_pull: bool | None = None
     interval_minutes: int | None = Field(default=None, ge=5, le=10080)
     auto_publish: bool | None = None
 
 
-class GitSyncView(BaseModel):
+class GitSourceView(BaseModel):
     connected: bool = False
     repo_url: str | None = None
     ref: str | None = None
     subdirectory: str = ""
-    enabled: bool = False
+    auto_pull: bool = False
     interval_minutes: int = 30
     auto_publish: bool = False
     has_token: bool = False
     last_commit: str | None = None
-    last_synced_at: str | None = None
+    last_pulled_at: str | None = None
     last_status: str | None = None
     last_message: str | None = None
+    #: Models the repository produced. Only these are replaced or removed.
     managed: list[str] = Field(default_factory=list)
-    next_sync_at: datetime | None = None
+    next_pull_at: datetime | None = None
 
 
-class GitSyncResult(BaseModel):
+class GitPullResult(BaseModel):
     #: APPLIED, UNCHANGED or FAILED.
     status: str
     message: str
@@ -776,7 +782,7 @@ class TransformDetail(TransformView):
     active_release: TransformReleaseView | None = None
     draft_has_changes: bool = False
     #: The repository behind these models, when there is one.
-    git: GitSyncView = Field(default_factory=GitSyncView)
+    git: GitSourceView = Field(default_factory=GitSourceView)
 
 
 class RepositoryImportResult(BaseModel):

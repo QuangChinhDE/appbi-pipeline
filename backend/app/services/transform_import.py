@@ -1,4 +1,10 @@
-"""Bring an existing dbt or Dataform repository into AppBI as a Transform.
+"""Read an existing dbt or Dataform repository into AppBI as a Transform.
+
+One direction only. Every call this module makes to GitHub is a GET -- the
+branch head, and the tarball -- and nothing anywhere in the product writes to a
+repository. Editing a model here can never reach Git, which is what makes it
+safe to edit one.
+
 
 A team moving off Dataform is not starting from nothing -- they have a Git
 repository with the modelling already in it. The cost of switching is retyping
@@ -94,7 +100,7 @@ async def head_commit(
 
     Polling by downloading the tarball would cost megabytes per Transform per
     interval to learn nothing most of the time. This costs a few hundred bytes,
-    so the sync loop can run often without being expensive.
+    so the polling loop can run often without being expensive.
     """
     suffix = ref or "HEAD"
     url = f"https://api.github.com/repos/{owner}/{repo}/commits/{suffix}"
@@ -417,11 +423,11 @@ async def create_from_repository(
         ))
     await session.flush()
 
-    # Record which models the repository owns. Without it a later sync cannot
+    # Record which models the repository owns. Without it a later pull cannot
     # tell a file that was deleted upstream from a model somebody wrote here,
     # and the safe reading of that ambiguity is to delete nothing.
-    transform.git_sync = {
-        **(transform.git_sync or {}),
+    transform.git_source = {
+        **(transform.git_source or {}),
         "managed": sorted(item.name for item in plan.models),
     }
     log_event(
@@ -437,13 +443,13 @@ async def create_from_repository(
 # --------------------------------------------------------------------------
 
 #: Below this, polling costs more requests than the change rate justifies.
-MIN_SYNC_MINUTES = 5
-DEFAULT_SYNC_MINUTES = 30
+MIN_PULL_MINUTES = 5
+DEFAULT_PULL_MINUTES = 30
 
 
 def git_state(transform: Transform) -> dict[str, Any]:
     """What the FE is allowed to know about the connection. Never the token."""
-    config = transform.git_sync or {}
+    config = transform.git_source or {}
     if not config.get("repo_url"):
         return {"connected": False}
     return {
@@ -451,32 +457,32 @@ def git_state(transform: Transform) -> dict[str, Any]:
         "repo_url": config.get("repo_url"),
         "ref": config.get("ref"),
         "subdirectory": config.get("subdirectory") or "",
-        "enabled": bool(config.get("enabled")),
-        "interval_minutes": config.get("interval_minutes") or DEFAULT_SYNC_MINUTES,
+        "auto_pull": bool(config.get("auto_pull")),
+        "interval_minutes": config.get("interval_minutes") or DEFAULT_PULL_MINUTES,
         "auto_publish": bool(config.get("auto_publish")),
         "has_token": bool(config.get("secret_ref")),
         "last_commit": config.get("last_commit"),
-        "last_synced_at": config.get("last_synced_at"),
+        "last_pulled_at": config.get("last_pulled_at"),
         "last_status": config.get("last_status"),
         "last_message": config.get("last_message"),
         "managed": config.get("managed") or [],
-        "next_sync_at": transform.git_next_sync_at,
+        "next_pull_at": transform.git_next_pull_at,
     }
 
 
 def _schedule_next(transform: Transform) -> None:
-    config = transform.git_sync or {}
-    if not config.get("enabled") or not config.get("repo_url"):
-        transform.git_next_sync_at = None
+    config = transform.git_source or {}
+    if not config.get("auto_pull") or not config.get("repo_url"):
+        transform.git_next_pull_at = None
         return
     minutes = max(
-        MIN_SYNC_MINUTES, int(config.get("interval_minutes") or DEFAULT_SYNC_MINUTES),
+        MIN_PULL_MINUTES, int(config.get("interval_minutes") or DEFAULT_PULL_MINUTES),
     )
-    transform.git_next_sync_at = utcnow() + timedelta(minutes=minutes)
+    transform.git_next_pull_at = utcnow() + timedelta(minutes=minutes)
 
 
 async def _token_for(session: AsyncSession, transform: Transform) -> str | None:
-    ref = (transform.git_sync or {}).get("secret_ref")
+    ref = (transform.git_source or {}).get("secret_ref")
     if not ref:
         return None
     payload = await secret_store.read(session, ref)
@@ -492,26 +498,26 @@ async def configure_git(
     ref: str | None = None,
     subdirectory: str | None = None,
     token: str | None = None,
-    enabled: bool | None = None,
+    auto_pull: bool | None = None,
     interval_minutes: int | None = None,
     auto_publish: bool | None = None,
 ) -> dict[str, Any]:
-    """Attach, adjust or detach the repository behind this Transform.
+    """Attach, adjust or detach the repository this Transform reads from.
 
     A token goes straight to the encrypted secret store and only its reference
     is kept here. Passing no token leaves the stored one alone, so changing the
     interval does not mean re-entering a credential.
     """
     ctx.require(Module.TRANSFORMS, Action.EDIT)
-    config = dict(transform.git_sync or {})
+    config = dict(transform.git_source or {})
 
     if repo_url is not None:
         if not repo_url.strip():
             # Detaching: drop the credential rather than leave it orphaned.
             if config.get("secret_ref"):
                 await secret_store.delete(session, config["secret_ref"])
-            transform.git_sync = {}
-            transform.git_next_sync_at = None
+            transform.git_source = {}
+            transform.git_next_pull_at = None
             await session.flush()
             return git_state(transform)
         owner, repo, url_ref, url_subdir = parse_repo_url(repo_url)
@@ -536,20 +542,20 @@ async def configure_git(
             await secret_store.delete(session, config["secret_ref"])
             config.pop("secret_ref", None)
 
-    if enabled is not None:
-        config["enabled"] = bool(enabled)
+    if auto_pull is not None:
+        config["auto_pull"] = bool(auto_pull)
     if interval_minutes is not None:
-        config["interval_minutes"] = max(MIN_SYNC_MINUTES, int(interval_minutes))
+        config["interval_minutes"] = max(MIN_PULL_MINUTES, int(interval_minutes))
     if auto_publish is not None:
         config["auto_publish"] = bool(auto_publish)
 
-    transform.git_sync = config
+    transform.git_source = config
     _schedule_next(transform)
     await session.flush()
     await audit.record(
         session, ctx, "transform.git.configured", resource_type="TRANSFORM",
         resource_id=transform.id, resource_name=transform.name,
-        after={"repo_url": config.get("repo_url"), "enabled": bool(config.get("enabled"))},
+        after={"repo_url": config.get("repo_url"), "auto_pull": bool(config.get("auto_pull"))},
     )
     return git_state(transform)
 
@@ -562,13 +568,17 @@ async def _apply_plan(
 ) -> tuple[list[str], list[str], list[str]]:
     """Bring the Transform's models in line with the repository.
 
-    Git owns the models it produced and nothing else. A model written here by
-    hand is left alone even when the repository has no such file: removing a
-    colleague's work because it is absent from a repo they never committed to
-    would be the worst possible reading of the word sync.
+    The repository owns the models it produced and nothing else. A model written
+    here by hand is left alone even when the repository has no such file:
+    removing a colleague's work because it is absent from a repo they never
+    committed to would be the worst possible reading of the word.
+
+    Nothing flows the other way. A model edited here diverges from the
+    repository until the next pull overwrites it, and the repository never
+    learns that it happened.
     """
     warnings = list(plan.warnings)
-    config = dict(transform.git_sync or {})
+    config = dict(transform.git_source or {})
     managed = set(config.get("managed") or [])
 
     registered, direct_assets = await _resolve_sources(
@@ -628,27 +638,27 @@ async def _apply_plan(
         removed.append(name)
 
     config["managed"] = sorted(incoming)
-    transform.git_sync = config
+    transform.git_source = config
     await session.flush()
     return changed, removed, warnings
 
 
-async def sync_now(
+async def pull_now(
     session: AsyncSession,
     ctx: RequestContext,
     transform: Transform,
     *,
     force: bool = False,
 ) -> dict[str, Any]:
-    """Fetch the repository and apply it, unless it has not moved.
+    """Read the repository and apply it here, unless it has not moved.
 
     The commit is checked before anything is downloaded. Most polls find nothing
     and that case should cost one small request, not a tarball. `force`
-    re-applies the commit already recorded, which is what somebody pressing Sync
+    re-applies the commit already recorded, which is what somebody pressing Pull
     after fixing warehouse permissions is actually asking for.
     """
     ctx.require(Module.TRANSFORMS, Action.EDIT)
-    config = dict(transform.git_sync or {})
+    config = dict(transform.git_source or {})
     if not config.get("repo_url"):
         raise ValidationError(
             "Transform này chưa nối với repository nào.",
@@ -659,18 +669,18 @@ async def sync_now(
     ref = config.get("ref")
 
     def finish(status: str, message: str, **extra: Any) -> dict[str, Any]:
-        current = dict(transform.git_sync or {})
+        current = dict(transform.git_source or {})
         current.update({
             "last_status": status,
             "last_message": message,
-            "last_synced_at": utcnow().isoformat(),
+            "last_pulled_at": utcnow().isoformat(),
         })
         current.update(extra)
-        transform.git_sync = current
+        transform.git_source = current
         _schedule_next(transform)
         # The commit is reported on every outcome, not only when it moved: a
         # caller asking "what is running right now" gets the same answer either
-        # way, and a null on an unchanged sync reads like the record was lost.
+        # way, and a null on an unchanged pull reads like the record was lost.
         return {
             "status": status, "message": message,
             "last_commit": current.get("last_commit"),
@@ -682,7 +692,7 @@ async def sync_now(
     except ValidationError as exc:
         result = finish("FAILED", exc.message)
         await session.flush()
-        log_event(logger, logging.WARNING, "transform.git.sync_failed",
+        log_event(logger, logging.WARNING, "transform.git.pull_failed",
                   transform_id=str(transform.id), error=exc.code)
         return result
 
@@ -698,7 +708,7 @@ async def sync_now(
     except ValidationError as exc:
         result = finish("FAILED", exc.message)
         await session.flush()
-        log_event(logger, logging.WARNING, "transform.git.sync_failed",
+        log_event(logger, logging.WARNING, "transform.git.pull_failed",
                   transform_id=str(transform.id), error=exc.code)
         return result
 
@@ -708,8 +718,10 @@ async def sync_now(
         if removed:
             message += f", gỡ {len(removed)} bảng không còn trong repository"
         message += "."
+    elif force:
+        message = "Đã đọc lại repository; các bảng vốn đã khớp."
     else:
-        message = "Repository có commit mới nhưng không đổi bảng nào."
+        message = "Repository có commit mới nhưng không đổi bảng nào ở đây."
     published = None
     if (changed or removed) and config.get("auto_publish"):
         # Only worth doing when something moved. Publishing an unchanged draft
@@ -731,24 +743,24 @@ async def sync_now(
         changed=changed, removed=removed, warnings=warnings,
     )
     await audit.record(
-        session, ctx, "transform.git.synced", resource_type="TRANSFORM",
+        session, ctx, "transform.git.pulled", resource_type="TRANSFORM",
         resource_id=transform.id, resource_name=transform.name,
         after={"commit": head, "changed": len(changed), "removed": len(removed)},
     )
-    log_event(logger, logging.INFO, "transform.git.synced",
+    log_event(logger, logging.INFO, "transform.git.pulled",
               transform_id=str(transform.id), commit=head,
               changed=len(changed), removed=len(removed))
     await session.flush()
     return result
 
 
-async def due_for_sync(session: AsyncSession, limit: int = 25) -> list[Transform]:
+async def due_for_pull(session: AsyncSession, limit: int = 25) -> list[Transform]:
     """Transforms whose polling interval has elapsed."""
     return list((await session.scalars(
         select(Transform).where(
             Transform.status == "ACTIVE",
             Transform.deleted_at.is_(None),
-            Transform.git_next_sync_at.is_not(None),
-            Transform.git_next_sync_at <= utcnow(),
+            Transform.git_next_pull_at.is_not(None),
+            Transform.git_next_pull_at <= utcnow(),
         ).limit(limit)
     )).all())

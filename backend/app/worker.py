@@ -8,7 +8,7 @@ radius:
   scheduler   fire pipelines whose next_run_at has passed
   catalog     refresh connector specs on a slow cadence
   janitor     retry pending deletes, expire stale runs, freshness alerts
-  git-sync    poll the repositories imported Transforms follow
+  git-pull    read new commits from repositories imported Transforms follow
 
 Long syncs never hold an HTTP request open: the API only ever writes a QUEUED
 row (section 8.2).
@@ -188,8 +188,8 @@ class Worker:
                 log_event(logger, logging.ERROR, "transform_scheduler.error", error=str(exc))
             await self._sleep(10)
 
-    async def git_sync_loop(self) -> None:
-        """Poll the repositories Transforms were imported from.
+    async def git_pull_loop(self) -> None:
+        """Read new commits from the repositories Transforms were imported from.
 
         Each tick asks GitHub for the branch head, which is a few hundred bytes,
         and only downloads when it has moved. A failure -- a revoked token, a
@@ -200,21 +200,21 @@ class Worker:
         while not self.stopping.is_set():
             try:
                 async with SessionLocal() as session:
-                    due = await transform_import.due_for_sync(session)
+                    due = await transform_import.due_for_pull(session)
                     for transform in due:
                         ctx = RequestContext.system(
                             transform.workspace_id, new_trace_id(), transform.timezone,
                         )
                         try:
-                            await transform_import.sync_now(session, ctx, transform)
+                            await transform_import.pull_now(session, ctx, transform)
                         except AppError as exc:
-                            log_event(logger, logging.INFO, "git_sync.rejected",
+                            log_event(logger, logging.INFO, "git_pull.rejected",
                                       transform_id=str(transform.id), error=str(exc))
-                            transform.git_next_sync_at = None
+                            transform.git_next_pull_at = None
                     if due:
                         await session.commit()
             except Exception as exc:  # noqa: BLE001
-                log_event(logger, logging.ERROR, "git_sync.error", error=str(exc))
+                log_event(logger, logging.ERROR, "git_pull.error", error=str(exc))
             await self._sleep(60)
 
     async def _fire_transform(self, session, transform: Transform) -> None:
@@ -441,7 +441,7 @@ class Worker:
             asyncio.create_task(self.reconciler_loop(), name="reconciler"),
             asyncio.create_task(self.scheduler_loop(), name="scheduler"),
             asyncio.create_task(self.transform_scheduler_loop(), name="transform-scheduler"),
-            asyncio.create_task(self.git_sync_loop(), name="git-sync"),
+            asyncio.create_task(self.git_pull_loop(), name="git-pull"),
             asyncio.create_task(self.catalog_loop(), name="catalog"),
             asyncio.create_task(self.janitor_loop(), name="janitor"),
             asyncio.create_task(self.outbox_loop(), name="outbox"),

@@ -2,32 +2,33 @@
 
 import * as React from 'react';
 import {
-  AlertTriangle, CheckCircle2, Github, RefreshCw,
+  AlertTriangle, ArrowDown, CheckCircle2, Github, RefreshCw,
 } from 'lucide-react';
 
-import type { GitSyncState } from '@/lib/types';
+import type { GitSourceState } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 
-export type GitSyncCopy = {
+export type GitSourceCopy = {
   title: string;
   description: string;
+  oneWay: string;
   notConnected: string;
   notConnectedHint: string;
   repository: string;
   branch: string;
   branchDefault: string;
-  lastSync: string;
+  lastPull: string;
   never: string;
   commit: string;
-  nextSync: string;
-  syncNow: string;
+  nextPull: string;
+  pullNow: string;
   reapply: string;
   reapplyHint: string;
-  enable: string;
-  enableHint: string;
+  autoPull: string;
+  autoPullHint: string;
   every: string;
   autoPublish: string;
   autoPublishHint: string;
@@ -44,36 +45,40 @@ export type GitSyncCopy = {
 };
 
 /**
- * The repository this Transform follows, and how closely.
+ * The repository this Transform reads from, and how often it looks.
  *
  * Written for the one question a reader actually has -- is what runs tonight
- * the same as what is in Git? -- so the last sync, the commit behind it and
+ * the same as what is in Git? -- so the last pull, the commit behind it and
  * the next check lead, and the settings that produce them come after.
+ *
+ * The direction is stated on screen rather than left to be inferred. Somebody
+ * who thinks a connection might be two-way will not edit a model here, and the
+ * word "sync" is enough to make them think it.
  */
-export function GitSyncPanel({
-  git, copy, canEdit, saving, syncing, onSave, onSync,
+export function GitSourcePanel({
+  git, copy, canEdit, saving, pulling, onSave, onPull,
 }: {
-  git: GitSyncState;
-  copy: GitSyncCopy;
+  git: GitSourceState;
+  copy: GitSourceCopy;
   canEdit: boolean;
   saving: boolean;
-  syncing: boolean;
+  pulling: boolean;
   onSave: (body: {
-    enabled?: boolean; interval_minutes?: number; auto_publish?: boolean;
+    auto_pull?: boolean; interval_minutes?: number; auto_publish?: boolean;
     token?: string; repo_url?: string;
   }) => void;
-  onSync: (force: boolean) => void;
+  onPull: (force: boolean) => void;
 }) {
-  const [enabled, setEnabled] = React.useState(Boolean(git.enabled));
+  const [autoPull, setAutoPull] = React.useState(Boolean(git.auto_pull));
   const [interval, setInterval] = React.useState(git.interval_minutes ?? 30);
   const [autoPublish, setAutoPublish] = React.useState(Boolean(git.auto_publish));
   const [token, setToken] = React.useState('');
 
   React.useEffect(() => {
-    setEnabled(Boolean(git.enabled));
+    setAutoPull(Boolean(git.auto_pull));
     setInterval(git.interval_minutes ?? 30);
     setAutoPublish(Boolean(git.auto_publish));
-  }, [git.enabled, git.interval_minutes, git.auto_publish]);
+  }, [git.auto_pull, git.interval_minutes, git.auto_publish]);
 
   if (!git.connected) {
     return (
@@ -88,13 +93,17 @@ export function GitSyncPanel({
   }
 
   const failed = git.last_status === 'FAILED';
-  const dirty = enabled !== Boolean(git.enabled)
+  const dirty = autoPull !== Boolean(git.auto_pull)
     || interval !== (git.interval_minutes ?? 30)
     || autoPublish !== Boolean(git.auto_publish)
     || token.trim().length > 0;
 
   return (
     <div className="space-y-3">
+      <p className="flex items-start gap-1.5 rounded-md bg-surface-2/60 px-2.5 py-1.5 text-tiny text-text-secondary">
+        <ArrowDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-quaternary" />
+        <span>{copy.oneWay}</span>
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <Github className="h-4 w-4 shrink-0 text-text-tertiary" />
         <a href={git.repo_url ?? '#'} target="_blank" rel="noreferrer"
@@ -126,12 +135,12 @@ export function GitSyncPanel({
             {git.last_message ? ` — ${git.last_message}` : ''}
           </p>
           <p className="mt-0.5 flex flex-wrap gap-x-3 text-tiny text-text-tertiary">
-            <span>{copy.lastSync}: {formatWhen(git.last_synced_at) || copy.never}</span>
+            <span>{copy.lastPull}: {formatWhen(git.last_pulled_at) || copy.never}</span>
             {git.last_commit && (
               <span className="font-mono">{copy.commit} {git.last_commit.slice(0, 7)}</span>
             )}
-            {enabled && git.next_sync_at && (
-              <span>{copy.nextSync}: {formatWhen(git.next_sync_at)}</span>
+            {autoPull && git.next_pull_at && (
+              <span>{copy.nextPull}: {formatWhen(git.next_pull_at)}</span>
             )}
           </p>
         </div>
@@ -139,22 +148,22 @@ export function GitSyncPanel({
 
       {canEdit && (
         <div className="flex flex-wrap gap-2">
-          <Button size="xs" variant="secondary" loading={syncing}
+          <Button size="xs" variant="secondary" loading={pulling}
             leadingIcon={<RefreshCw className="h-3.5 w-3.5" />}
-            onClick={() => onSync(false)}>{copy.syncNow}</Button>
-          <Button size="xs" variant="ghost" disabled={syncing}
+            onClick={() => onPull(false)}>{copy.pullNow}</Button>
+          <Button size="xs" variant="ghost" disabled={pulling}
             title={copy.reapplyHint}
-            onClick={() => onSync(true)}>{copy.reapply}</Button>
+            onClick={() => onPull(true)}>{copy.reapply}</Button>
         </div>
       )}
 
       {canEdit && (
         <div className="space-y-2.5 border-t border-[rgb(var(--border-line))] pt-3">
           <div>
-            <Checkbox checked={enabled} onChange={setEnabled} label={copy.enable} />
-            <p className="ml-6 text-tiny text-text-tertiary">{copy.enableHint}</p>
+            <Checkbox checked={autoPull} onChange={setAutoPull} label={copy.autoPull} />
+            <p className="ml-6 text-tiny text-text-tertiary">{copy.autoPullHint}</p>
           </div>
-          {enabled && (
+          {autoPull && (
             <>
               <div className="max-w-[220px]">
                 <Label>{copy.every}</Label>
@@ -183,7 +192,7 @@ export function GitSyncPanel({
             <Button size="xs" variant="primary" loading={saving} disabled={!dirty}
               onClick={() => {
                 onSave({
-                  enabled, interval_minutes: interval, auto_publish: autoPublish,
+                  auto_pull: autoPull, interval_minutes: interval, auto_publish: autoPublish,
                   ...(token.trim() ? { token: token.trim() } : {}),
                 });
                 setToken('');
