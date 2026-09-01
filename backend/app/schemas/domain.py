@@ -624,6 +624,11 @@ class TransformView(BaseModel):
     available_actions: list[str] = Field(default_factory=list)
 
 
+class TransformDraftRequest(BaseModel):
+    asset_id: uuid.UUID
+    intent: str = Field(min_length=3, max_length=2000)
+
+
 class TransformReleaseView(BaseModel):
     id: uuid.UUID
     release_number: int

@@ -14,10 +14,11 @@ from app.schemas.domain import (
     DataAssetRegister, DataAssetView, TransformCreate, TransformDestinationCapability,
     TransformDetail, TransformExecutionView, TransformInputCandidates, TransformLineage,
     TransformModelCreate, TransformModelUpdate, TransformModelView,
-    TransformReleaseCreate, TransformReleaseView, TransformRunRequest,
+    TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
+    TransformRunRequest,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
 )
-from app.services import transforms as service
+from app.services import transform_ai, transforms as service
 
 router = APIRouter(prefix="/transforms", tags=["transforms"])
 
@@ -311,6 +312,32 @@ async def activate_release(
 async def draft_diff(transform_id: uuid.UUID, session: SessionDep, ctx: CtxDep):
     transform = await service.get(session, ctx, transform_id)
     return {"changes": await service.draft_diff(session, transform)}
+
+
+@router.post("/{transform_id}/inputs/{asset_id}/profile")
+async def profile_input(
+    transform_id: uuid.UUID, asset_id: uuid.UUID, session: SessionDep, ctx: CtxDep,
+):
+    transform = await service.get(session, ctx, transform_id)
+    profile = await transform_ai.profile_input(session, ctx, transform, asset_id)
+    await session.commit()
+    return {"columns": profile}
+
+
+@router.post("/{transform_id}/ai/draft-model")
+async def draft_model(
+    transform_id: uuid.UUID,
+    payload: TransformDraftRequest,
+    session: SessionDep,
+    ctx: CtxDep,
+):
+    transform = await service.get(session, ctx, transform_id)
+    draft = await transform_ai.draft_model(
+        session, ctx, transform, asset_id=payload.asset_id, intent=payload.intent,
+    )
+    # The profile may have been measured and cached during the draft.
+    await session.commit()
+    return draft.model_dump()
 
 
 @router.get("/{transform_id}/lineage", response_model=TransformLineage)

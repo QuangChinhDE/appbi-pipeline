@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Braces, Check, ChevronDown, ChevronRight, Clock, Code2, Download, Eye, GitFork,
-  Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Play, Plus, Save, Settings,
+  Loader2, MoreHorizontal, PanelRightClose, PanelRightOpen, Play, Plus, Save, Settings, Sparkles,
   ShieldCheck, Table2, TestTube2,
   Trash2, Workflow,
   Pencil, Wrench, X,
@@ -34,6 +34,7 @@ import { Pane, usePaneState } from '@/components/transforms/Collapsible';
 import { LineageView } from '@/components/transforms/LineageView';
 import { Resizer, usePaneSize } from '@/components/transforms/Resizer';
 import { PublishBar, ReleaseHistoryModal } from '@/components/transforms/PublishBar';
+import { AiDraftDialog } from '@/components/transforms/AiDraftDialog';
 
 const ACTIVE = ['QUEUED', 'STARTING', 'RUNNING', 'CANCEL_REQUESTED'];
 const healthTone: Record<string, BadgeVariant> = {
@@ -161,6 +162,9 @@ export default function TransformWorkbenchPage() {
   const [dirty, setDirty] = React.useState(false);
   const [pendingModelId, setPendingModelId] = React.useState<string | null>(null);
   const [newModelOpen, setNewModelOpen] = React.useState(false);
+  const [aiOpen, setAiOpen] = React.useState(false);
+  const [aiDraft, setAiDraft] = React.useState<import('@/lib/types').DraftedModel | null>(null);
+  const [aiError, setAiError] = React.useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [generatedOpen, setGeneratedOpen] = React.useState(false);
   const [rightTab, setRightTab] = React.useState('config');
@@ -345,6 +349,55 @@ export default function TransformWorkbenchPage() {
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
   }, [canEdit, canRun, dirty, draft, run, save]);
+
+  const aiDrafting = useMutation({
+    mutationFn: ({ assetId, intent }: { assetId: string; intent: string }) =>
+      transformApi.draftModel(transformId, { asset_id: assetId, intent }),
+    onMutate: () => { setAiError(null); setAiDraft(null); },
+    onSuccess: (result) => setAiDraft(result),
+    onError: (error) => setAiError(
+      error instanceof ApiError ? error.message : String(error),
+    ),
+  });
+
+  /**
+   * Accept a draft: create the model, write its SQL, attach its tests.
+   *
+   * The tests come along because they were checked against the real output
+   * schema during drafting; leaving them for the user to retype is asking them
+   * to redo work that has already been verified.
+   */
+  const acceptDraft = useMutation({
+    mutationFn: async (drafted: import('@/lib/types').DraftedModel) => {
+      const taken = new Set((query.data?.models ?? []).map((item) => item.name));
+      let name = drafted.name;
+      for (let suffix = 2; taken.has(name); suffix += 1) name = `${drafted.name}_${suffix}`;
+      const created = await transformApi.createModel(transformId, {
+        name, layer: drafted.layer, materialization: drafted.materialization,
+      });
+      const saved = await transformApi.updateModel(transformId, created.id, {
+        sql: drafted.sql, version: created.version,
+        description: drafted.summary || undefined,
+      });
+      for (const test of drafted.tests) {
+        try {
+          await transformApi.addTest(transformId, created.id, {
+            column_name: test.column_name, rule: test.rule, severity: 'ERROR',
+          });
+        } catch {
+          // A rejected test must not cost the user the model they just accepted.
+        }
+      }
+      return saved;
+    },
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transformId) });
+      setSelectedId(created.id); setDraft(structuredClone(created)); setDirty(false);
+      setAiOpen(false); setAiDraft(null);
+      toastSuccess(copy.aiAccepted);
+    },
+    onError: (error) => toastError(error),
+  });
 
   const createModel = useMutation({
     mutationFn: async () => {
@@ -772,7 +825,22 @@ export default function TransformWorkbenchPage() {
           {/* Two tabs rather than two stacked sections: sources and models
               answer different questions and are never read together, so
               stacking them spends twice the height for no gain. */}
-          <div className="shrink-0 p-2 pb-1">
+          <div className="shrink-0 space-y-1.5 p-2 pb-1">
+            {/* Creating a model used to be reachable only from the empty state,
+                so the second model was harder to make than the first. */}
+            {canEdit && (
+              <div className="flex gap-1.5">
+                <Button size="xs" variant="secondary" className="flex-1"
+                  leadingIcon={<Plus className="h-3.5 w-3.5" />}
+                  onClick={() => setNewModelOpen(true)}>{copy.newModel}</Button>
+                <Button size="xs" variant="secondary" className="flex-1"
+                  leadingIcon={<Sparkles className="h-3.5 w-3.5" />}
+                  title={copy.ai.description}
+                  onClick={() => { setAiDraft(null); setAiError(null); setAiOpen(true); }}>
+                  {copy.aiButton}
+                </Button>
+              </div>
+            )}
             <Input size="sm" value={modelFilter} aria-label={copy.filterAll}
               placeholder={copy.filterAll}
               onChange={(event) => setModelFilter(event.target.value)} />
@@ -1046,6 +1114,15 @@ export default function TransformWorkbenchPage() {
           </Button>
         )}
       </div>
+
+      <AiDraftDialog
+        open={aiOpen} onClose={() => { setAiOpen(false); setAiDraft(null); }}
+        inputs={query.data?.inputs ?? []} copy={copy.ai}
+        drafting={aiDrafting.isPending} draft={aiDraft} error={aiError}
+        onDraft={(assetId, intent) => aiDrafting.mutate({ assetId, intent })}
+        onAccept={(drafted) => acceptDraft.mutate(drafted)}
+        accepting={acceptDraft.isPending}
+      />
 
       <Modal open={newModelOpen} onClose={() => setNewModelOpen(false)} title={copy.newModel} size="sm" footer={<><Button size="sm" variant="ghost" onClick={() => setNewModelOpen(false)}>{copy.cancel}</Button><Button size="sm" variant="primary" loading={createModel.isPending} disabled={!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newModel.name)} onClick={() => createModel.mutate()}>{copy.create}</Button></>}>
                 <div className="space-y-3">
@@ -1848,6 +1925,47 @@ const REMEDIATION_EN = {
 };
 
 const vi = {
+  aiButton: 'Nhờ AI',
+  aiAccepted: 'Đã tạo bảng từ bản nháp của AI',
+  ai: {
+    title: 'Nhờ AI viết một bảng dữ liệu',
+    description: 'Chọn bảng nguồn và mô tả bằng tiếng Việt. AI đọc dữ liệu thật rồi viết SQL, và kho dữ liệu sẽ chạy thử trước khi bạn nhận.',
+    sourceTable: 'Bảng nguồn',
+    intent: 'Bạn muốn bảng này cho ra dữ liệu gì?',
+    intentPlaceholder: 'Ví dụ: làm sạch bảng đơn hàng, đổi tên cột cho dễ hiểu, bỏ dòng không có mã đơn.',
+    intentHint: 'Càng nói rõ mục đích dùng để làm gì, kết quả càng sát. Không cần biết SQL.',
+    examples: 'Gợi ý',
+    draft: 'Viết thử',
+    drafting: 'AI đang đọc dữ liệu và viết SQL',
+    draftingHint: 'Bước này gồm đọc mẫu dữ liệu thật và nhờ kho dữ liệu chạy thử câu lệnh, nên mất khoảng 15-40 giây.',
+    again: 'Viết lại',
+    use: 'Dùng bản này',
+    cancel: 'Hủy',
+    back: 'Quay lại',
+    summary: 'Tóm tắt',
+    assumptions: 'AI đã phải phỏng đoán',
+    assumptionsHint: 'Đây là những chỗ dữ liệu không tự nói rõ. Hãy đọc và xác nhận trước khi dùng.',
+    proposedTests: 'Kiểm tra đề xuất',
+    noTests: 'Không có kiểm tra nào phù hợp với dữ liệu này.',
+    sql: 'SQL',
+    validationOk: 'Kho dữ liệu đã chấp nhận câu lệnh này',
+    validationRepaired: 'Có lỗi ở bản đầu, AI đã sửa và kho dữ liệu chấp nhận',
+    validationFailed: 'Kho dữ liệu từ chối câu lệnh này',
+    validationSkipped: 'Chưa chạy thử được trên kho dữ liệu này',
+    validationOkHint: 'Đã chạy thử trên chính kho dữ liệu của bạn, không tốn chi phí và không ghi gì.',
+    validationRepairedHint: 'Bản dưới đây là bản đã sửa; bản lỗi đã bị bỏ.',
+    validationFailedHint: 'Bạn vẫn có thể nhận rồi tự sửa trong trình soạn thảo, hoặc bấm Viết lại.',
+    validationSkippedHint: 'Loại kho dữ liệu này chưa hỗ trợ chạy thử. Hãy dùng Xem thử sau khi nhận.',
+    confidence: { HIGH: 'Độ tin cậy cao', MEDIUM: 'Độ tin cậy vừa', LOW: 'Độ tin cậy thấp' },
+    layerLabel: { STAGING: 'Làm sạch', CORE: 'Tổng hợp', MART: 'Phục vụ báo cáo' },
+    ruleLabel: { NOT_NULL: 'Không được rỗng', UNIQUE: 'Không trùng', ACCEPTED_VALUES: 'Giá trị cho phép' },
+    exampleIntents: [
+      'Làm sạch bảng này: đổi tên cột cho dễ hiểu và sửa kiểu dữ liệu',
+      'Đổi các cột thời gian sang dạng ngày giờ đọc được',
+      'Bỏ các dòng thiếu mã định danh',
+      'Đếm số dòng theo từng ngày',
+    ],
+  },
   loading: 'Đang tải Transform', loadError: 'Không tải được Transform', lineage: 'Sơ đồ phụ thuộc', settings: 'Cài đặt', save: 'Lưu', saved: 'Đã lưu', runTransform: 'Chạy Transform', inputs: 'Nguồn dữ liệu', models: 'Bảng dữ liệu', newModel: 'Bảng mới', noModel: 'Chưa có bảng dữ liệu nào', unsaved: 'Chưa lưu', visualLater: 'Visual mode sẽ được bổ sung sau khi SQL round-trip ổn định', compile: 'Kiểm tra cú pháp', preview: 'Xem thử', runModel: 'Ghi bảng này', config: 'Cấu hình', tests: 'Kiểm tra', cancel: 'Hủy', create: 'Tạo', modelName: 'Tên bảng', layer: 'Nhóm', materialization: 'Cách tạo dữ liệu', unsavedTitle: 'Bảng chưa được lưu', discard: 'Bỏ thay đổi', unsavedMessage: 'Lưu, bỏ thay đổi, hoặc hủy để quay lại bảng đang sửa.', compiledSql: 'SQL đã dịch', logs: 'Nhật ký', viewRun: 'Xem lần chạy', noPreview: 'Bấm Xem thử để xem dữ liệu.', noCompiled: 'Lưu model để xem SQL đã dịch.', noLogs: 'Chưa có nhật ký.', outputSchema: 'Schema đích', defaultOutput: 'Mặc định của Transform', relationName: 'Tên bảng', description: 'Mô tả', uniqueKey: 'Khóa duy nhất', strategy: 'Cách thêm dữ liệu mới', deleteModel: 'Xóa bảng', model: 'Bảng', removeTest: 'Xóa', column: 'Cột', rule: 'Quy tắc', values: 'Giá trị, cách nhau bằng dấu phẩy', severity: 'Mức độ', addTest: 'Thêm kiểm tra', lineageDescription: 'Sơ đồ cho thấy dữ liệu chảy từ nguồn nào tới bảng nào.', noLineage: 'Chạy Transform một lần để dựng sơ đồ.', warehouse: 'Kho dữ liệu', executionTrigger: 'Điều kiện chạy', exportProject: 'Tải project dbt về',
   validate: 'Kiểm tra kết nối', insertReference: 'Chèn tham chiếu',
   stale: 'Dữ liệu nguồn cũ hơn lần chạy gần nhất', unresolved: 'Chưa xác minh được relation',
@@ -1943,6 +2061,47 @@ const vi = {
   deleteModelDependents: 'Các model đang tham chiếu tới nó sẽ không compile được:',
 };
 const en = {
+  aiButton: 'Ask AI',
+  aiAccepted: 'Model created from the AI draft',
+  ai: {
+    title: 'Ask AI to write a model',
+    description: 'Pick a source table and say what you want in plain language. The assistant reads the real data, and the warehouse plans the SQL before you accept it.',
+    sourceTable: 'Source table',
+    intent: 'What should this model return?',
+    intentPlaceholder: 'For example: clean up the orders table, rename columns to something readable, drop rows with no order id.',
+    intentHint: 'The clearer you are about what it is for, the closer the result. No SQL needed.',
+    examples: 'Try one of these',
+    draft: 'Draft it',
+    drafting: 'Reading your data and writing SQL',
+    draftingHint: 'This samples the real table and asks the warehouse to plan the query, so it takes 15-40 seconds.',
+    again: 'Draft again',
+    use: 'Use this draft',
+    cancel: 'Cancel',
+    back: 'Back',
+    summary: 'Summary',
+    assumptions: 'What the assistant had to guess',
+    assumptionsHint: 'These are the points the data did not settle on its own. Read them before accepting.',
+    proposedTests: 'Proposed tests',
+    noTests: 'No test fits this data.',
+    sql: 'SQL',
+    validationOk: 'The warehouse accepted this SQL',
+    validationRepaired: 'The first attempt failed; the assistant fixed it and the warehouse accepted the result',
+    validationFailed: 'The warehouse rejected this SQL',
+    validationSkipped: 'Could not be planned against this warehouse',
+    validationOkHint: 'Planned against your own warehouse at no cost, writing nothing.',
+    validationRepairedHint: 'What you see below is the corrected version; the failed one was discarded.',
+    validationFailedHint: 'You can still accept it and fix it in the editor, or draft again.',
+    validationSkippedHint: 'This warehouse type has no dry run yet. Use Preview after accepting.',
+    confidence: { HIGH: 'High confidence', MEDIUM: 'Medium confidence', LOW: 'Low confidence' },
+    layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Mart' },
+    ruleLabel: { NOT_NULL: 'Not null', UNIQUE: 'Unique', ACCEPTED_VALUES: 'Accepted values' },
+    exampleIntents: [
+      'Clean this table up: readable column names and correct types',
+      'Turn the timestamp columns into readable date-times',
+      'Drop rows with no identifier',
+      'Count rows per day',
+    ],
+  },
   loading: 'Loading transform', loadError: 'Could not load transform', lineage: 'Lineage', settings: 'Settings', save: 'Save', saved: 'Model saved', runTransform: 'Run Transform', inputs: 'Inputs', models: 'Models', newModel: 'New model', noModel: 'No models yet', unsaved: 'Unsaved', visualLater: 'Visual mode follows after reliable SQL round-tripping', compile: 'Compile', preview: 'Preview', runModel: 'Run model', config: 'Config', tests: 'Tests', cancel: 'Cancel', create: 'Create', modelName: 'Model name', layer: 'Layer', materialization: 'Materialization', unsavedTitle: 'Unsaved model', discard: 'Discard', unsavedMessage: 'Save, discard, or cancel before switching away from this model.', compiledSql: 'Compiled SQL', logs: 'Logs', viewRun: 'View run', noPreview: 'Run Preview to inspect rows.', noCompiled: 'Run Compile to inspect compiled SQL.', noLogs: 'No logs yet.', outputSchema: 'Output schema', defaultOutput: 'Transform default', relationName: 'Relation name', description: 'Description', uniqueKey: 'Unique key', strategy: 'Incremental strategy', deleteModel: 'Delete model', model: 'Model', removeTest: 'Remove test', column: 'Column', rule: 'Rule', values: 'Comma-separated values', severity: 'Severity', addTest: 'Add test', lineageDescription: 'Lineage uses AppBI asset identities and the dbt manifest.', noLineage: 'Compile or run this Transform to generate lineage.', warehouse: 'Warehouse', executionTrigger: 'Execution trigger', exportProject: 'Export dbt project',
   validate: 'Check connection', insertReference: 'Insert reference',
   stale: 'Source data is older than the last build', unresolved: 'Relation is not verified',

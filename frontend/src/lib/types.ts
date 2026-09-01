@@ -457,6 +457,36 @@ export interface TransformInputCandidates {
   assets: DataAsset[];
 }
 
+/** One column as the warehouse actually holds it, not as its type claims. */
+export interface ColumnProfile {
+  name: string;
+  data_type: string;
+  distinct_count: number | null;
+  null_ratio: number | null;
+  samples: string[];
+  inferred_kind:
+    | 'EPOCH_SECONDS' | 'EPOCH_MILLIS' | 'ISO_DATETIME' | 'CODED' | 'UUID'
+    | 'JSON' | 'NUMERIC_TEXT' | 'HTML_ESCAPED' | 'FOREIGN_KEY' | 'FREE_TEXT' | 'UNKNOWN';
+  unique_candidate: boolean;
+  notes: string[];
+}
+
+/** A model the assistant drafted, plus the warehouse's verdict on it. */
+export interface DraftedModel {
+  name: string;
+  layer: 'STAGING' | 'CORE' | 'MART';
+  materialization: 'VIEW' | 'TABLE' | 'INCREMENTAL';
+  sql: string;
+  summary: string;
+  assumptions: string[];
+  tests: { column_name: string; rule: 'NOT_NULL' | 'UNIQUE' | 'ACCEPTED_VALUES'; reason: string }[];
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  /** OK / REPAIRED mean the warehouse planned this SQL without error. */
+  validation: 'OK' | 'REPAIRED' | 'FAILED' | 'SKIPPED';
+  validation_error: string | null;
+  output_columns: string[];
+}
+
 export interface TransformTest {
   id: string;
   column_name: string | null;

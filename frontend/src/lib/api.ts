@@ -16,6 +16,8 @@ import type {
   TransformExecution, TransformInputCandidates, TransformLineage, TransformModel,
   TransformDiffEntry, TransformOperation, TransformRelease, TransformReleaseModel,
   TransformTest,
+  ColumnProfile,
+  DraftedModel,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
 
@@ -446,6 +448,10 @@ export const transformApi = {
     patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
   removeModel: (id: string, modelId: string) =>
     del<void>(`/transforms/${id}/models/${modelId}`),
+  profileInput: (id: string, assetId: string) =>
+    post<{ columns: ColumnProfile[] }>(`/transforms/${id}/inputs/${assetId}/profile`, {}),
+  draftModel: (id: string, body: { asset_id: string; intent: string }) =>
+    post<DraftedModel>(`/transforms/${id}/ai/draft-model`, body),
   addTest: (id: string, modelId: string, body: unknown) =>
     post<TransformTest>(`/transforms/${id}/models/${modelId}/tests`, body),
   removeTest: (id: string, modelId: string, testId: string) =>
