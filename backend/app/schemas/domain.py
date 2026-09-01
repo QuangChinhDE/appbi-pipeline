@@ -551,6 +551,9 @@ class RepositoryImportCreate(RepositoryImportRequest):
     name: str = Field(min_length=1, max_length=200)
     destination_id: uuid.UUID
     default_schema: str = Field(min_length=1, max_length=200)
+    #: Keep the connection and poll it, so the import is a start not a snapshot.
+    sync_enabled: bool = False
+    interval_minutes: int = Field(default=30, ge=5, le=10080)
 
 
 class ImportedModelView(BaseModel):
@@ -568,6 +571,8 @@ class ImportedSourceView(BaseModel):
     catalog: str | None = None
     schema_name: str
     relation: str
+    #: True when the SQL names this table literally instead of declaring it.
+    direct: bool = False
 
 
 class ImportedTestView(BaseModel):
@@ -575,6 +580,46 @@ class ImportedTestView(BaseModel):
     rule: str
     column: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitSyncUpdate(BaseModel):
+    """Attach, adjust or detach the repository. Omitted fields stay as they are."""
+
+    repo_url: str | None = Field(default=None, max_length=500)
+    ref: str | None = Field(default=None, max_length=200)
+    subdirectory: str | None = Field(default=None, max_length=300)
+    #: Written to the secret store. Omit to keep the stored one, "" to remove it.
+    token: str | None = Field(default=None, max_length=500)
+    enabled: bool | None = None
+    interval_minutes: int | None = Field(default=None, ge=5, le=10080)
+    auto_publish: bool | None = None
+
+
+class GitSyncView(BaseModel):
+    connected: bool = False
+    repo_url: str | None = None
+    ref: str | None = None
+    subdirectory: str = ""
+    enabled: bool = False
+    interval_minutes: int = 30
+    auto_publish: bool = False
+    has_token: bool = False
+    last_commit: str | None = None
+    last_synced_at: str | None = None
+    last_status: str | None = None
+    last_message: str | None = None
+    managed: list[str] = Field(default_factory=list)
+    next_sync_at: datetime | None = None
+
+
+class GitSyncResult(BaseModel):
+    #: APPLIED, UNCHANGED or FAILED.
+    status: str
+    message: str
+    last_commit: str | None = None
+    changed: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RepositoryImportPreview(BaseModel):
@@ -730,6 +775,8 @@ class TransformDetail(TransformView):
     # run include what I just typed?"
     active_release: TransformReleaseView | None = None
     draft_has_changes: bool = False
+    #: The repository behind these models, when there is one.
+    git: GitSyncView = Field(default_factory=GitSyncView)
 
 
 class RepositoryImportResult(BaseModel):

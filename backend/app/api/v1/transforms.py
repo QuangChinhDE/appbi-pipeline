@@ -17,7 +17,7 @@ from app.schemas.domain import (
     TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
     TransformRunRequest, WarehouseBrowseView,
     RepositoryImportCreate, RepositoryImportPreview, RepositoryImportRequest,
-    RepositoryImportResult,
+    RepositoryImportResult, GitSyncUpdate, GitSyncView, GitSyncResult,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
 )
 from app.services import transform_ai, transform_import, transforms as service
@@ -52,6 +52,14 @@ async def import_repository(
         repo_url=payload.repo_url, ref=payload.ref, subdirectory=payload.subdirectory,
         token=payload.token, name=payload.name,
         destination_id=payload.destination_id, default_schema=payload.default_schema,
+    )
+    # Remember the repository so the import is a starting point rather than a
+    # snapshot -- the token included, since polling needs it after this request.
+    await transform_import.configure_git(
+        session, ctx, transform,
+        repo_url=payload.repo_url, ref=payload.ref,
+        subdirectory=payload.subdirectory, token=payload.token,
+        enabled=payload.sync_enabled, interval_minutes=payload.interval_minutes,
     )
     await session.commit()
     session.expunge(transform)
@@ -392,6 +400,38 @@ async def draft_model(
     # The profile may have been measured and cached during the draft.
     await session.commit()
     return draft.model_dump()
+
+
+@router.put("/{transform_id}/git", response_model=GitSyncView)
+async def configure_git(
+    transform_id: uuid.UUID, payload: GitSyncUpdate, session: SessionDep, ctx: CtxDep,
+):
+    """Point this Transform at a repository, or change how it follows one."""
+    transform = await service.get(session, ctx, transform_id)
+    state = await transform_import.configure_git(
+        session, ctx, transform,
+        **payload.model_dump(exclude_unset=True),
+    )
+    await session.commit()
+    return state
+
+
+@router.post("/{transform_id}/git/sync", response_model=GitSyncResult)
+async def sync_git(
+    transform_id: uuid.UUID,
+    session: SessionDep,
+    ctx: CtxDep,
+    force: Annotated[bool, Query()] = False,
+):
+    """Pull the repository now.
+
+    `force` re-applies the recorded commit rather than reporting it unchanged,
+    which is what somebody who has just fixed warehouse permissions wants.
+    """
+    transform = await service.get(session, ctx, transform_id)
+    result = await transform_import.sync_now(session, ctx, transform, force=force)
+    await session.commit()
+    return result
 
 
 @router.get("/{transform_id}/lineage", response_model=TransformLineage)

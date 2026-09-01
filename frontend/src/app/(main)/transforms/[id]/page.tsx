@@ -35,6 +35,7 @@ import { LineageView } from '@/components/transforms/LineageView';
 import { Resizer, usePaneSize } from '@/components/transforms/Resizer';
 import { PublishBar, ReleaseHistoryModal } from '@/components/transforms/PublishBar';
 import { AiDraftDialog } from '@/components/transforms/AiDraftDialog';
+import { GitSyncPanel } from '@/components/transforms/GitSyncPanel';
 
 const ACTIVE = ['QUEUED', 'STARTING', 'RUNNING', 'CANCEL_REQUESTED'];
 const healthTone: Record<string, BadgeVariant> = {
@@ -1734,6 +1735,25 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
     onError: (error) => toastError(error),
   });
 
+  const saveGit = useMutation({
+    mutationFn: (body: Parameters<typeof transformApi.configureGit>[1]) =>
+      transformApi.configureGit(transform.id, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transform.id) });
+      toastSuccess(copy.git.saved);
+    },
+    onError: (error) => toastError(error),
+  });
+  const syncGit = useMutation({
+    mutationFn: (force: boolean) => transformApi.syncGit(transform.id, force),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transform.id) });
+      if (result.status === 'FAILED') toastError(new Error(result.message));
+      else toastSuccess(result.message);
+    },
+    onError: (error) => toastError(error),
+  });
+
   // A plain <a download> would navigate the SPA to a JSON error envelope when
   // the export fails, taking any unsaved model edits with it.
   const exportProject = async () => {
@@ -1892,6 +1912,16 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
       </div>
 
       <div className="border-t border-[rgb(var(--border-line))] pt-4">
+        <h3 className="text-caption font-emphasis text-text-primary">{copy.git.title}</h3>
+        <p className="mb-2 mt-0.5 text-tiny text-text-tertiary">{copy.git.description}</p>
+        <GitSyncPanel
+          git={transform.git ?? { connected: false }} copy={copy.git} canEdit={canEdit}
+          saving={saveGit.isPending} syncing={syncGit.isPending}
+          onSave={(body) => saveGit.mutate(body)}
+          onSync={(force) => syncGit.mutate(force)} />
+      </div>
+
+      <div className="border-t border-[rgb(var(--border-line))] pt-4">
         <Button size="sm" variant="secondary" loading={exporting}
           leadingIcon={<Download className="h-4 w-4" />} onClick={exportProject}>
           {copy.exportProject}
@@ -1925,6 +1955,42 @@ const REMEDIATION_EN = {
 };
 
 const vi = {
+  git: {
+    title: 'Đồng bộ với GitHub',
+    description: 'Khi repository có commit mới, các bảng ở đây được cập nhật theo.',
+    saved: 'Đã lưu thiết lập đồng bộ',
+    notConnected: 'Transform này chưa nối với repository nào',
+    notConnectedHint: 'Chỉ những Transform được tạo bằng Import từ GitHub mới có mục này.',
+    repository: 'Repository', branch: 'Nhánh', branchDefault: 'nhánh mặc định',
+    lastSync: 'Lần đồng bộ gần nhất', never: 'Chưa đồng bộ lần nào',
+    commit: 'commit', nextSync: 'Lần kiểm tra tới',
+    syncNow: 'Đồng bộ ngay',
+    reapply: 'Áp lại commit hiện tại',
+    reapplyHint: 'Dùng khi bạn vừa cấp thêm quyền đọc bảng nguồn mà repository chưa có commit mới.',
+    enable: 'Tự động theo dõi repository',
+    enableHint: 'Hệ thống hỏi GitHub xem nhánh đã có commit mới chưa, chỉ tải về khi có.',
+    every: 'Kiểm tra mỗi',
+    autoPublish: 'Tự động xuất bản sau khi đồng bộ',
+    autoPublishHint: 'Bật thì lịch chạy sẽ dùng ngay code mới. Tắt thì bạn xem lại rồi tự bấm Xuất bản.',
+    token: 'GitHub access token',
+    tokenStored: 'Chưa lưu token nào',
+    tokenReplace: 'Đã lưu — nhập để thay token khác',
+    tokenHint: 'Token được mã hoá khi lưu và không bao giờ hiển thị lại.',
+    save: 'Lưu',
+    disconnect: 'Ngắt kết nối',
+    managed: 'Bảng do repository quản lý',
+    managedHint: 'Chỉ những bảng này bị ghi đè hoặc gỡ khi đồng bộ. Bảng bạn tự viết luôn được giữ.',
+    statusLabel: {
+      APPLIED: 'Đã áp dụng thay đổi từ Git',
+      UNCHANGED: 'Đang khớp với Git',
+      FAILED: 'Đồng bộ thất bại',
+    } as Record<string, string>,
+    intervals: [
+      { value: 5, label: '5 phút' }, { value: 15, label: '15 phút' },
+      { value: 30, label: '30 phút' }, { value: 60, label: '1 giờ' },
+      { value: 360, label: '6 giờ' }, { value: 1440, label: '1 ngày' },
+    ],
+  },
   aiButton: 'Nhờ AI',
   aiAccepted: 'Đã tạo bảng từ bản nháp của AI',
   ai: {
@@ -2061,6 +2127,42 @@ const vi = {
   deleteModelDependents: 'Các model đang tham chiếu tới nó sẽ không compile được:',
 };
 const en = {
+  git: {
+    title: 'GitHub sync',
+    description: 'When the repository gets a new commit, the models here follow it.',
+    saved: 'Sync settings saved',
+    notConnected: 'This Transform does not follow a repository',
+    notConnectedHint: 'Only Transforms created through Import from GitHub have one.',
+    repository: 'Repository', branch: 'Branch', branchDefault: 'default branch',
+    lastSync: 'Last sync', never: 'Never synced',
+    commit: 'commit', nextSync: 'Next check',
+    syncNow: 'Sync now',
+    reapply: 'Re-apply current commit',
+    reapplyHint: 'For when you have just granted access to a source table and the repository has not moved.',
+    enable: 'Follow the repository automatically',
+    enableHint: 'Asks GitHub whether the branch has moved, and only downloads when it has.',
+    every: 'Check every',
+    autoPublish: 'Publish automatically after a sync',
+    autoPublishHint: 'On, and the schedule runs the new code straight away. Off, and you review it first.',
+    token: 'GitHub access token',
+    tokenStored: 'No token stored',
+    tokenReplace: 'Stored — type to replace it',
+    tokenHint: 'The token is encrypted at rest and never shown again.',
+    save: 'Save',
+    disconnect: 'Disconnect',
+    managed: 'Models the repository owns',
+    managedHint: 'Only these are overwritten or removed by a sync. Anything you wrote here is kept.',
+    statusLabel: {
+      APPLIED: 'Applied changes from Git',
+      UNCHANGED: 'In step with Git',
+      FAILED: 'Sync failed',
+    } as Record<string, string>,
+    intervals: [
+      { value: 5, label: '5 minutes' }, { value: 15, label: '15 minutes' },
+      { value: 30, label: '30 minutes' }, { value: 60, label: '1 hour' },
+      { value: 360, label: '6 hours' }, { value: 1440, label: '1 day' },
+    ],
+  },
   aiButton: 'Ask AI',
   aiAccepted: 'Model created from the AI draft',
   ai: {

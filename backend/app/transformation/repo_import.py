@@ -72,6 +72,9 @@ class ImportedSource:
     catalog: str | None
     schema: str
     relation: str
+    #: True when the SQL names this table literally rather than through a
+    #: `ref()` or `source()` call, so rewriting has to match the name itself.
+    direct: bool = False
 
 
 @dataclass
@@ -117,6 +120,7 @@ class ImportPlan:
                 {
                     "alias": item.alias, "table": item.table, "catalog": item.catalog,
                     "schema_name": item.schema, "relation": item.relation,
+                    "direct": item.direct,
                 }
                 for item in self.sources
             ],
@@ -580,6 +584,106 @@ _SOURCE_CALL = re.compile(
 )
 
 
+_LINE_COMMENT = re.compile(r"--[^\n]*")
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+
+#: A table named in the SQL itself: `proj.dataset.table` in backticks, or a
+#: bare dotted name after FROM/JOIN. Requires at least one dot, which is what
+#: keeps a CTE -- always a single identifier -- from being mistaken for a table.
+_BACKTICKED = re.compile(r"`([A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)+)`")
+_BARE_TABLE = re.compile(
+    r"\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)",
+    re.I,
+)
+
+
+def strip_comments(sql: str) -> str:
+    """SQL with comments removed, so a commented-out table is not a dependency."""
+    return _LINE_COMMENT.sub("", _BLOCK_COMMENT.sub("", sql))
+
+
+def direct_tables(sql: str) -> list[tuple[str | None, str, str]]:
+    """Qualified tables the SQL names outright, as (catalog, schema, relation).
+
+    Dataform lets a project skip declarations entirely and write
+    `` `project.dataset.table` `` inline, and plenty of real projects do. Left
+    alone those import as SQL that may well run while the Transform shows no
+    inputs at all -- no lineage, no freshness, nothing to say where the data
+    came from. Finding them is what lets them become real sources.
+    """
+    body = strip_comments(sql)
+    found: list[tuple[str | None, str, str]] = []
+    seen: set[tuple[str | None, str, str]] = set()
+    for match in list(_BACKTICKED.finditer(body)) + list(_BARE_TABLE.finditer(body)):
+        parts = match.group(1).split(".")
+        if len(parts) == 2:
+            entry = (None, parts[0], parts[1])
+        elif len(parts) == 3:
+            entry = (parts[0], parts[1], parts[2])
+        else:
+            continue
+        if entry not in seen:
+            seen.add(entry)
+            found.append(entry)
+    return found
+
+
+def _collect_direct(plan: ImportPlan) -> None:
+    """Turn literal table names into sources the import can actually resolve."""
+    declared = {
+        (item.catalog, item.schema, item.relation) for item in plan.sources
+    }
+    produced = {item.name for item in plan.models}
+    for model in plan.models:
+        for catalog, schema, relation in direct_tables(model.sql):
+            # A model writing to its own output schema is not reading a source.
+            if _safe_name(relation) in produced:
+                continue
+            key = (catalog, schema, relation)
+            if key in declared:
+                continue
+            declared.add(key)
+            plan.sources.append(ImportedSource(
+                alias=schema, table=relation, catalog=catalog,
+                schema=schema, relation=relation, direct=True,
+            ))
+
+
+def rewrite_direct_tables(
+    sql: str, mapping: dict[tuple[str | None, str, str], tuple[str, str]],
+) -> str:
+    """Replace literal table names with `source()` calls, comments untouched.
+
+    Only names that resolved to a registered asset are replaced. One that did
+    not is left exactly as written, so the model still says what it always said
+    and the warning explains why it has no source behind it.
+    """
+    def qualified(match: re.Match[str]) -> str:
+        raw = match.group(1) if match.lastindex else match.group(0)
+        parts = raw.split(".")
+        key = (
+            (None, parts[0], parts[1]) if len(parts) == 2
+            else (parts[0], parts[1], parts[2]) if len(parts) == 3
+            else None
+        )
+        target = mapping.get(key) if key else None
+        if target is None:
+            return match.group(0)
+        return f"{{{{ source('{target[0]}', '{target[1]}') }}}}"
+
+    # Backticks first: the bare pattern would otherwise match inside them.
+    out = _BACKTICKED.sub(qualified, sql)
+
+    def bare(match: re.Match[str]) -> str:
+        replaced = qualified(match)
+        if replaced == match.group(0):
+            return match.group(0)
+        keyword = match.group(0)[:match.start(1) - match.start(0)]
+        return keyword + replaced
+
+    return _BARE_TABLE.sub(bare, out)
+
+
 def _check_references(plan: ImportPlan) -> None:
     """Name every reference that will not resolve once imported.
 
@@ -620,7 +724,15 @@ def build_plan(files: dict[str, str]) -> ImportPlan:
     plan = _plan_dbt(scoped) if kind == DBT else _plan_dataform(scoped)
     if not plan.models:
         plan.warnings.append("Không tìm thấy model nào để import.")
+    _collect_direct(plan)
     _check_references(plan)
+    direct = [item for item in plan.sources if item.direct]
+    if direct:
+        plan.warnings.append(
+            f"{len(direct)} bảng được viết thẳng tên trong SQL thay vì khai báo nguồn. "
+            "Hệ thống sẽ đăng ký chúng làm nguồn và thay bằng tham chiếu, để Transform "
+            "có đủ sơ đồ phụ thuộc; bảng nào không đọc được sẽ được giữ nguyên và báo lại."
+        )
     return plan
 
 

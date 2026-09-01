@@ -472,6 +472,35 @@ export interface WarehouseBrowse {
   relations: BrowsedRelation[];
 }
 
+/** The repository a Transform follows, if it follows one. Never the token. */
+export interface GitSyncState {
+  connected: boolean;
+  repo_url?: string | null;
+  ref?: string | null;
+  subdirectory?: string;
+  enabled?: boolean;
+  interval_minutes?: number;
+  auto_publish?: boolean;
+  has_token?: boolean;
+  last_commit?: string | null;
+  last_synced_at?: string | null;
+  /** APPLIED, UNCHANGED or FAILED. */
+  last_status?: string | null;
+  last_message?: string | null;
+  /** Model names the repository owns; a sync never removes anything else. */
+  managed?: string[];
+  next_sync_at?: string | null;
+}
+
+export interface GitSyncResult {
+  status: string;
+  message: string;
+  last_commit?: string | null;
+  changed?: string[];
+  removed?: string[];
+  warnings?: string[];
+}
+
 /** What a dbt or Dataform repository would become here, before anything is made. */
 export interface RepositoryImportPreview {
   kind: 'DBT' | 'DATAFORM';
@@ -592,6 +621,7 @@ export interface TransformDetail extends Transform {
   active_release?: TransformRelease | null;
   /** True when the editor holds edits made after that snapshot was taken. */
   draft_has_changes?: boolean;
+  git?: GitSyncState;
 }
 
 /** Mirrors TransformRunRequest.operation on the API. */

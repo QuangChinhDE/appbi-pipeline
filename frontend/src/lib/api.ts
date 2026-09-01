@@ -19,6 +19,8 @@ import type {
   ColumnProfile,
   WarehouseBrowse,
   RepositoryImportPreview,
+  GitSyncState,
+  GitSyncResult,
   DraftedModel,
   ScheduleConfig, WorkspaceSettings,
 } from './types';
@@ -461,7 +463,15 @@ export const transformApi = {
   importRepository: (body: {
     repo_url: string; ref?: string; subdirectory?: string; token?: string;
     name: string; destination_id: string; default_schema: string;
+    sync_enabled?: boolean; interval_minutes?: number;
   }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
+  configureGit: (id: string, body: {
+    repo_url?: string; ref?: string | null; subdirectory?: string;
+    token?: string; enabled?: boolean; interval_minutes?: number;
+    auto_publish?: boolean;
+  }) => put<GitSyncState>(`/transforms/${id}/git`, body),
+  syncGit: (id: string, force = false) =>
+    post<GitSyncResult>(`/transforms/${id}/git/sync${force ? '?force=true' : ''}`, {}),
   profileInput: (id: string, assetId: string) =>
     post<{ columns: ColumnProfile[] }>(`/transforms/${id}/inputs/${assetId}/profile`, {}),
   draftModel: (id: string, body: { asset_id: string; intent: string }) =>

@@ -290,8 +290,11 @@ async def detail(session: AsyncSession, ctx: RequestContext, transform: Transfor
         )
         for item in transform.inputs
     ]
+    from app.services import transform_import  # local: avoids an import cycle
+
     return TransformDetail(
         **base.model_dump(), inputs=assets,
+        git=transform_import.git_state(transform),
         models=[_model_view(model) for model in transform.models if model.deleted_at is None],
         execution_trigger=transform.execution_trigger,
         trigger_config=transform.trigger_config or {},

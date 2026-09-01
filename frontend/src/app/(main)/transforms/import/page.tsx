@@ -16,7 +16,7 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { DetailBody, DetailHeader } from '@/components/layout/PageLayout';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input, Label, Select } from '@/components/ui/Input';
+import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Feedback';
 
 const KIND_LABEL: Record<string, string> = { DBT: 'dbt', DATAFORM: 'Dataform' };
@@ -43,6 +43,8 @@ export default function ImportTransformPage() {
   const [name, setName] = React.useState('');
   const [destinationId, setDestinationId] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
+  const [syncEnabled, setSyncEnabled] = React.useState(true);
+  const [intervalMinutes, setIntervalMinutes] = React.useState(30);
 
   const destinations = useQuery({
     queryKey: qk.transformDestinations(workspaceId), queryFn: transformApi.destinations,
@@ -71,6 +73,7 @@ export default function ImportTransformPage() {
       subdirectory: subdirectory.trim() || undefined,
       token: token.trim() || undefined,
       name: name.trim(), destination_id: destinationId, default_schema: outputSchema.trim(),
+      sync_enabled: syncEnabled, interval_minutes: intervalMinutes,
     }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -242,6 +245,29 @@ export default function ImportTransformPage() {
                       onChange={(event) => setOutputSchema(event.target.value)} />
                   </div>
                 </div>
+                {/* Offered here rather than after the fact: somebody importing
+                    from Git almost always wants it to keep following Git, and
+                    finding the switch later means the first divergence is a
+                    surprise. */}
+                <div className="mt-4 border-t border-[rgb(var(--border-line))] pt-3">
+                  <Checkbox checked={syncEnabled} onChange={setSyncEnabled}
+                    label={copy.keepInSync} />
+                  <p className="ml-6 text-tiny text-text-tertiary">{copy.keepInSyncHint}</p>
+                  {syncEnabled && (
+                    <div className="ml-6 mt-2 max-w-[220px]">
+                      <Label>{copy.checkEvery}</Label>
+                      <Select value={String(intervalMinutes)}
+                        onChange={(event) => setIntervalMinutes(Number(event.target.value))}>
+                        <option value="15">15</option>
+                        <option value="30">30</option>
+                        <option value="60">60</option>
+                        <option value="360">360</option>
+                        <option value="1440">1440</option>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <Button size="sm" variant="ghost"
                     leadingIcon={<ArrowLeft className="h-4 w-4" />}
@@ -299,6 +325,9 @@ const vi = {
   warehouse: 'Kho dữ liệu',
   chooseWarehouse: 'Chọn kho dữ liệu',
   output: 'Schema đích',
+  keepInSync: 'Tự động cập nhật khi repository có commit mới',
+  keepInSyncHint: 'Có thể đổi hoặc tắt sau trong Cài đặt của Transform.',
+  checkEvery: 'Kiểm tra mỗi (phút)',
   startOver: 'Đọc repository khác',
   createAction: 'Import',
   created: 'Đã import {n} bảng dữ liệu',
@@ -333,6 +362,9 @@ const en: typeof vi = {
   warehouse: 'Warehouse',
   chooseWarehouse: 'Choose a warehouse',
   output: 'Output schema',
+  keepInSync: 'Keep following this repository as it changes',
+  keepInSyncHint: 'Can be changed or turned off later in the Transform settings.',
+  checkEvery: 'Check every (minutes)',
   startOver: 'Read a different repository',
   createAction: 'Import',
   created: 'Imported {n} models',
