@@ -72,7 +72,14 @@ async def providers(ctx: CtxDep) -> list[ProviderView]:
 
 @router.post("/oauth/{connector_key}/start", response_model=StartResponse)
 async def start(connector_key: str, ctx: CtxDep) -> StartResponse:
-    ctx.require(Module.SOURCES, Action.CREATE)
+    # A destination connector is authorised to build a Transform connection, a
+    # source connector to build a Source. Same flow, different permission --
+    # requiring the Source one for both would let a Transform author be refused
+    # for a module they are not using.
+    ctx.require(
+        Module.TRANSFORMS if connector_key.startswith("destination-") else Module.SOURCES,
+        Action.CREATE,
+    )
     provider = oauth_service.provider_for(connector_key)
     if provider is None:
         raise ValidationError(
@@ -128,32 +135,44 @@ async def callback(
     except ValidationError:
         return RedirectResponse(f"{base}/sources/new?oauth=failed", status_code=303)
 
+    # A warehouse grant is consumed by a dbt profile, a source grant by the
+    # connector engine, and the two want different shapes of the same tokens.
+    for_transform = connector_key.startswith("destination-")
+    credentials = (
+        oauth_service.dbt_credentials(provider, tokens) if for_transform
+        else oauth_service.connector_credentials(provider, tokens)
+    )
     grant = await oauth_service.store_grant(
         session,
         workspace_id=uuid.UUID(str(claims["ws"])),
         user_id=uuid.UUID(str(claims["sub"])),
         connector_key=connector_key,
         provider=provider,
-        credentials=oauth_service.connector_credentials(provider, tokens),
+        credentials=credentials,
         account_label=str(tokens.get("account") or ""),
     )
     await session.commit()
 
     # Only the handle travels back through the browser.
+    landing = "/transforms/new" if for_transform else "/sources/new"
     return RedirectResponse(
-        f"{base}/sources/new?connector={connector_key}&oauth_grant={grant.id}",
+        f"{base}{landing}?connector={connector_key}&oauth_grant={grant.id}",
         status_code=303)
 
 
 @router.get("/oauth/grant/{grant_id}", response_model=GrantView)
 async def grant(grant_id: uuid.UUID, session: SessionDep, ctx: CtxDep) -> GrantView:
     """What the wizard shows after the redirect: connected, and as whom."""
-    ctx.require(Module.SOURCES, Action.CREATE)
     from app.models.oauth import OAuthGrant
 
     row = await session.get(OAuthGrant, grant_id)
     if row is None or row.workspace_id != ctx.workspace_id:
         raise ValidationError("Phiên uỷ quyền không tồn tại hoặc đã hết hạn.")
+    ctx.require(
+        Module.TRANSFORMS if row.connector_key.startswith("destination-")
+        else Module.SOURCES,
+        Action.CREATE,
+    )
     return GrantView(
         id=row.id, connector_key=row.connector_key, provider=row.provider,
         account_label=row.account_label, consumed=row.consumed_at is not None)

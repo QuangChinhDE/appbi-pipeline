@@ -273,10 +273,9 @@ async def inspect(
 async def _resolve_sources(
     session: AsyncSession,
     ctx: RequestContext,
-    destination_id: uuid.UUID,
+    connection_id: uuid.UUID,
     plan: repo_import.ImportPlan,
     warnings: list[str],
-    secret_ref: str | None = None,
 ) -> tuple[dict[tuple[str, str], Any], dict[tuple[str | None, str, str], Any]]:
     """Register every source the project reads, keeping the ones that resolve.
 
@@ -290,13 +289,12 @@ async def _resolve_sources(
     for source in plan.sources:
         try:
             asset = await service.register_asset(
-                session, ctx, destination_id,
+                session, ctx, connection_id,
                 DataAssetRegister(
                     catalog_name=source.catalog or None,
                     schema_name=source.schema,
                     relation_name=source.relation,
                 ),
-                secret_ref=secret_ref,
             )
         except ValidationError as exc:
             where = ".".join(
@@ -352,9 +350,8 @@ async def create_from_repository(
     subdirectory: str | None,
     token: str | None,
     name: str,
-    destination_id: uuid.UUID,
+    warehouse_connection_id: uuid.UUID,
     default_schema: str,
-    warehouse_connection_id: uuid.UUID | None = None,
 ) -> tuple[Transform, list[str]]:
     """Create a Transform holding the repository's models, ready to run.
 
@@ -375,20 +372,16 @@ async def create_from_repository(
     # become an input, and a model referencing it will not compile. Registering
     # them before the Transform exists means a total failure leaves nothing
     # half-created.
-    secret_ref = await service.connection_secret(
-        session, ctx.workspace_id, warehouse_connection_id,
-    )
     registered, direct_assets = await _resolve_sources(
-        session, ctx, destination_id, plan, warnings, secret_ref,
+        session, ctx, warehouse_connection_id, plan, warnings,
     )
 
     transform = await service.create(session, ctx, TransformCreate(
         name=name.strip(),
         description=f"Import từ github.com/{origin['owner']}/{origin['repo']}",
-        destination_id=destination_id,
+        warehouse_connection_id=warehouse_connection_id,
         default_schema=default_schema,
         input_asset_ids=[asset.id for asset in registered.values()],
-        warehouse_connection_id=warehouse_connection_id,
     ))
 
     # Read the aliases back rather than recomputing them: the generator assigns
@@ -589,10 +582,7 @@ async def _apply_plan(
     managed = set(config.get("managed") or [])
 
     registered, direct_assets = await _resolve_sources(
-        session, ctx, transform.destination_id, plan, warnings,
-        await service.connection_secret(
-            session, transform.workspace_id, transform.warehouse_connection_id,
-        ),
+        session, ctx, transform.warehouse_connection_id, plan, warnings,
     )
     merged = list(dict.fromkeys(
         [item.data_asset_id for item in transform.inputs]

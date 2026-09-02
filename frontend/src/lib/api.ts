@@ -19,6 +19,7 @@ import type {
   ColumnProfile,
   WarehouseBrowse,
   WarehouseConnection,
+  TransformSystem,
   RepositoryImportPreview,
   GitSourceState,
   GitPullResult,
@@ -437,14 +438,13 @@ export const transformApi = {
   destinations: () => get<TransformDestinationCapability[]>('/transforms/destinations'),
   inputCandidates: (destinationId: string) =>
     get<TransformInputCandidates>(`/transforms/destinations/${destinationId}/inputs`),
-  registerAsset: (destinationId: string, body: {
+  registerAsset: (connectionId: string, body: {
     catalog_name?: string; schema_name: string; relation_name: string;
-    pipeline_id?: string; pipeline_stream_id?: string; connection_id?: string | null;
-  }) => post<DataAsset>(`/transforms/destinations/${destinationId}/assets`, body),
+    pipeline_id?: string; pipeline_stream_id?: string;
+  }) => post<DataAsset>(`/transforms/connections/${connectionId}/assets`, body),
   create: (body: {
-    name: string; description?: string; destination_id: string;
+    name: string; description?: string; warehouse_connection_id: string;
     default_schema: string; input_asset_ids: string[];
-    warehouse_connection_id?: string | null;
   }) => post<TransformDetail>('/transforms', body),
   update: (id: string, body: unknown) => patch<TransformDetail>(`/transforms/${id}`, body),
   remove: (id: string) => del<void>(`/transforms/${id}`),
@@ -454,23 +454,32 @@ export const transformApi = {
     patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
   removeModel: (id: string, modelId: string) =>
     del<void>(`/transforms/${id}/models/${modelId}`),
+  systems: () => get<TransformSystem[]>('/transforms/systems'),
   connections: () => get<WarehouseConnection[]>('/transforms/connections'),
   createConnection: (body: {
-    destination_id: string; name: string;
-    credentials_json?: string; username?: string; password?: string;
+    connector_key: string; name: string; auth_method: string;
+    project_id?: string; dataset_location?: string; credentials_json?: string;
+    host?: string; port?: number; database?: string;
+    username?: string; password?: string; ssl_mode?: string;
+    oauth_grant_id?: string;
   }) => post<WarehouseConnection>('/transforms/connections', body),
   removeConnection: (id: string) => del<void>(`/transforms/connections/${id}`),
+  startOauth: (connectorKey: string) =>
+    post<{ authorize_url: string; state: string }>(`/oauth/${connectorKey}/start`),
+  oauthGrant: (grantId: string) => get<{
+    id: string; connector_key: string; provider: string;
+    account_label: string; consumed: boolean;
+  }>(`/oauth/grant/${grantId}`),
   browseWarehouse: (
-    destinationId: string,
-    options: { catalog?: string; schema?: string; connection?: string | null } = {},
+    connectionId: string,
+    options: { catalog?: string; schema?: string } = {},
   ) => {
     const query = new URLSearchParams();
     if (options.catalog) query.set('catalog', options.catalog);
     if (options.schema) query.set('schema', options.schema);
-    if (options.connection) query.set('connection', options.connection);
     const suffix = query.toString();
     return get<WarehouseBrowse>(
-      `/transforms/destinations/${destinationId}/warehouse${suffix ? `?${suffix}` : ''}`,
+      `/transforms/connections/${connectionId}/warehouse${suffix ? `?${suffix}` : ''}`,
     );
   },
   inspectRepository: (body: {
@@ -478,9 +487,8 @@ export const transformApi = {
   }) => post<RepositoryImportPreview>('/transforms/imports/inspect', body),
   importRepository: (body: {
     repo_url: string; ref?: string; subdirectory?: string; token?: string;
-    name: string; destination_id: string; default_schema: string;
+    name: string; warehouse_connection_id: string; default_schema: string;
     auto_pull?: boolean; interval_minutes?: number;
-    warehouse_connection_id?: string | null;
   }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
   configureGit: (id: string, body: {
     repo_url?: string; ref?: string | null; subdirectory?: string;

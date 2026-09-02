@@ -49,6 +49,33 @@ def build_profile(
         return {"appbi_runtime": {"target": "production", "outputs": {"production": output}}}, [password]
 
     if connector_key == "destination-bigquery":
+        # Two ways to be BigQuery. A service account is a key the team holds; an
+        # OAuth grant is a person's own access, refreshed on each run. dbt takes
+        # either, and which one this is decides the whole output block -- so it
+        # branches here rather than trying to accept both shapes at once.
+        if configuration.get("auth_method") == "oauth":
+            project = _required(configuration, "project_id")
+            output = {
+                "type": "bigquery",
+                "method": "oauth-secrets",
+                "project": project,
+                "dataset": output_schema,
+                "refresh_token": _required(configuration, "refresh_token"),
+                "client_id": _required(configuration, "oauth_client_id"),
+                "client_secret": _required(configuration, "oauth_client_secret"),
+                "token_uri": configuration.get("token_uri")
+                or "https://oauth2.googleapis.com/token",
+                "threads": 4,
+                "timeout_seconds": 300,
+                "priority": "interactive",
+            }
+            if configuration.get("dataset_location"):
+                output["location"] = configuration["dataset_location"]
+            return (
+                {"appbi_runtime": {"target": "production", "outputs": {"production": output}}},
+                [str(output["refresh_token"]), str(output["client_secret"])],
+            )
+
         raw_credentials = _required(configuration, "credentials_json")
         try:
             credentials = (

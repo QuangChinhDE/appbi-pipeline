@@ -479,36 +479,6 @@ export interface WarehouseBrowse {
 }
 
 /**
- * A key a Transform can run as: one row of the list you pick from.
- *
- * `is_default` rows are the key a Destination already uses and have no id --
- * nothing to enter, nothing to keep. Saved rows have both. Either way it is one
- * connection when it runs: dbt reads its sources and writes its models through
- * a single profile, so the key has to cover both.
- */
-export interface WarehouseConnection {
-  id: string | null;
-  destination_id: string;
-  destination_name: string;
-  connector_key: string;
-  name: string;
-  /** Who the key turned out to be, so a wrong one is obvious in a list. */
-  account: string | null;
-  catalogs: string[];
-  is_default: boolean;
-  last_verified_at: string | null;
-}
-
-/** What the wizard carries once a key is chosen. */
-export interface ChosenWarehouse {
-  destination_id: string;
-  /** Null for the Destination's own key. */
-  connection_id: string | null;
-  name: string;
-  account: string | null;
-}
-
-/**
  * The repository a Transform reads from, if it reads from one. Never the token.
  *
  * One direction: the product reads commits and never writes them. Editing a
@@ -541,6 +511,38 @@ export interface GitPullResult {
   changed?: string[];
   removed?: string[];
   warnings?: string[];
+}
+
+/** A kind of warehouse a Transform can run on, and how it authenticates. */
+export interface TransformSystem {
+  connector_key: string;
+  label: string;
+  /** service_account | oauth | password — what the create form should offer. */
+  auth_methods: string[];
+  adapter: string | null;
+  adapter_version: string | null;
+}
+
+/**
+ * A connection a Transform runs on: the warehouse, and the credential for it.
+ *
+ * `is_default` rows are the connection a Destination already uses — nothing to
+ * enter. Either way it is one connection when it runs: dbt reads its sources
+ * and writes its models through a single profile, so it has to cover both.
+ */
+export interface WarehouseConnection {
+  id: string;
+  name: string;
+  connector_key: string;
+  auth_method: string;
+  /** Set when it came from a Destination, which is what keeps Pipeline lineage. */
+  destination_id: string | null;
+  destination_name: string | null;
+  /** Who the connection turned out to be, so a wrong one is obvious. */
+  account: string | null;
+  catalogs: string[];
+  is_default: boolean;
+  last_verified_at: string | null;
 }
 
 /** What a dbt or Dataform repository would become here, before anything is made. */

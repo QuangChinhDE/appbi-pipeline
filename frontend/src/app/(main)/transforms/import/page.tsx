@@ -43,10 +43,7 @@ export default function ImportTransformPage() {
   const [token, setToken] = React.useState('');
   const [name, setName] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
-  const [warehouse, setWarehouse] = React.useState<
-    import('@/lib/types').ChosenWarehouse | null
-  >(null);
-  const destinationId = warehouse?.destination_id ?? '';
+  const [connectionId, setConnectionId] = React.useState<string | null>(null);
   const [autoPull, setAutoPull] = React.useState(true);
   const [intervalMinutes, setIntervalMinutes] = React.useState(30);
 
@@ -75,9 +72,9 @@ export default function ImportTransformPage() {
       ref: ref.trim() || undefined,
       subdirectory: subdirectory.trim() || undefined,
       token: token.trim() || undefined,
-      name: name.trim(), destination_id: destinationId, default_schema: outputSchema.trim(),
+      name: name.trim(), default_schema: outputSchema.trim(),
       auto_pull: autoPull, interval_minutes: intervalMinutes,
-      warehouse_connection_id: warehouse?.connection_id,
+      warehouse_connection_id: connectionId ?? '',
     }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -87,10 +84,10 @@ export default function ImportTransformPage() {
     onError: (error) => toastError(error),
   });
 
-  const canInspect = Boolean(destinationId)
+  const canInspect = Boolean(connectionId)
     && /^(https?:\/\/(www\.)?github\.com\/|git@github\.com:)/.test(repoUrl.trim());
   const canCreate = Boolean(
-    preview && name.trim() && destinationId
+    preview && name.trim() && connectionId
     && /^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema.trim()),
   );
 
@@ -109,7 +106,7 @@ export default function ImportTransformPage() {
               afterwards would mean showing a preview compared to nothing. */}
           <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
             <ConnectionPicker
-              copy={copy.connect} value={warehouse} onChange={setWarehouse} />
+              copy={copy.connect} value={connectionId} onChange={setConnectionId} />
           </section>
 
           <section className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
@@ -328,22 +325,41 @@ const vi = {
   noSources: 'Project này không khai báo bảng nguồn nào.',
   warnings: '{n} điểm cần biết trước khi import',
   connect: {
-    title: 'Chọn key để kết nối kho dữ liệu',
-    help: 'Chọn trước khi đọc repository: các bảng nguồn trong project sẽ được đối chiếu với đúng key này.',
-    defaultKey: 'key mặc định',
+    systemTitle: 'Chọn hệ thống',
+    systemHelp: 'Repository sẽ được đối chiếu với hệ thống này.',
+    connectionTitle: 'Chọn kết nối',
+    connectionHelp: 'Chọn trước khi đọc repository, để các bảng nguồn trong project được đối chiếu với đúng kết nối này.',
+    defaultKey: 'sẵn có từ Đích dữ liệu',
     noAccount: '(chưa đọc được tài khoản)',
     projects: 'project',
-    addKey: 'Tạo key mới',
-    newKeyTitle: 'Key mới',
-    keyName: 'Tên key',
-    keyNamePlaceholder: 'VD: Key đọc kho Sale',
-    keyWarehouse: 'Kho dữ liệu',
+    none: 'Chưa có kết nối nào cho hệ thống này',
+    addKey: 'Tạo kết nối mới',
+    newKeyTitle: 'Kết nối mới',
+    keyName: 'Tên kết nối',
+    keyNamePlaceholder: 'VD: Kho Sale',
+    authMethod: 'Cách đăng nhập',
+    authLabel: {
+      service_account: 'Service account',
+      oauth: 'Đăng nhập Google',
+      password: 'Tài khoản / mật khẩu',
+      inherited: 'Dùng key của Đích dữ liệu',
+    } as Record<string, string>,
+    project: 'Project',
+    location: 'Vùng dữ liệu',
     credentials: 'Service account JSON',
-    credentialsHint: 'Nếu bảng nguồn nằm ở project khác, hãy dùng key đọc được project đó và ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai.',
+    credentialsHint: 'Nếu bảng nguồn nằm ở project khác, hãy dùng kết nối đọc được project đó và ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai.',
+    host: 'Host / IP',
+    port: 'Cổng',
+    database: 'Database',
+    username: 'Tài khoản',
+    password: 'Mật khẩu',
+    oauthHint: 'Đăng nhập bằng tài khoản Google có quyền trên project BigQuery.',
+    oauthStart: 'Đăng nhập với Google',
+    oauthDone: 'Đã đăng nhập:',
     save: 'Kiểm tra và lưu',
     cancel: 'Hủy',
-    remove: 'Xoá key',
-    loadFailed: 'Không tải được danh sách key',
+    remove: 'Xoá kết nối',
+    loadFailed: 'Không tải được danh sách kết nối',
   },
   destination: 'Kho dữ liệu & tài khoản',
   destinationHelp: 'Chọn trước khi đọc repository, để các bảng nguồn trong project được đối chiếu với đúng kho và tài khoản này.',
@@ -394,22 +410,41 @@ const en: typeof vi = {
   noSources: 'This project declares no source tables.',
   warnings: '{n} things to know before importing',
   connect: {
-    title: 'Choose a key to reach the warehouse',
-    help: 'Chosen before the repository is read, so its source tables are checked against this key.',
-    defaultKey: 'default key',
-    noAccount: '(account unavailable)',
-    projects: 'projects',
-    addKey: 'Add a key',
-    newKeyTitle: 'New key',
-    keyName: 'Key name',
-    keyNamePlaceholder: 'e.g. Sale warehouse reader',
-    keyWarehouse: 'Warehouse',
+    systemTitle: 'Choose a system',
+    systemHelp: 'The repository is checked against this system.',
+    connectionTitle: 'Choose a connection',
+    connectionHelp: 'Chosen before the repository is read, so its source tables are checked against this connection.',
+    defaultKey: 'sẵn có từ Đích dữ liệu',
+    noAccount: '(chưa đọc được tài khoản)',
+    projects: 'project',
+    none: 'Chưa có kết nối nào cho hệ thống này',
+    addKey: 'Tạo kết nối mới',
+    newKeyTitle: 'Kết nối mới',
+    keyName: 'Tên kết nối',
+    keyNamePlaceholder: 'VD: Kho Sale',
+    authMethod: 'Cách đăng nhập',
+    authLabel: {
+      service_account: 'Service account',
+      oauth: 'Đăng nhập Google',
+      password: 'Tài khoản / mật khẩu',
+      inherited: 'Dùng key của Đích dữ liệu',
+    } as Record<string, string>,
+    project: 'Project',
+    location: 'Vùng dữ liệu',
     credentials: 'Service account JSON',
-    credentialsHint: 'If the source tables live in another project, use a key that can read it and write the output schema — dbt uses one connection for both.',
-    save: 'Check and save',
-    cancel: 'Cancel',
-    remove: 'Remove key',
-    loadFailed: 'Could not load the key list',
+    credentialsHint: 'Nếu bảng nguồn nằm ở project khác, hãy dùng kết nối đọc được project đó và ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai.',
+    host: 'Host / IP',
+    port: 'Cổng',
+    database: 'Database',
+    username: 'Tài khoản',
+    password: 'Mật khẩu',
+    oauthHint: 'Đăng nhập bằng tài khoản Google có quyền trên project BigQuery.',
+    oauthStart: 'Đăng nhập với Google',
+    oauthDone: 'Đã đăng nhập:',
+    save: 'Kiểm tra và lưu',
+    cancel: 'Hủy',
+    remove: 'Xoá kết nối',
+    loadFailed: 'Không tải được danh sách kết nối',
   },
   destination: 'Warehouse & account',
   destinationHelp: 'Chosen before the repository is read, so its source tables are checked against this warehouse and this account.',

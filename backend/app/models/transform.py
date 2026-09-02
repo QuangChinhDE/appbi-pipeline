@@ -40,8 +40,10 @@ class Transform(Base, TimestampMixin):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False,
     )
-    destination_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("destinations.id"), nullable=False,
+    #: Kept as a back-link when the connection came from one, which is what
+    #: keeps `Source → Pipeline → table` resolvable. Null otherwise.
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("destinations.id"), nullable=True,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -171,10 +173,11 @@ class DataAsset(Base, TimestampMixin):
     __tablename__ = "data_assets"
     __table_args__ = (
         Index(
-            "uq_data_asset_physical_live", "destination_id", "physical_identity", unique=True,
+            "uq_data_asset_physical_live", "connection_id", "physical_identity", unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
         Index("ix_data_assets_ws_destination", "workspace_id", "destination_id"),
+        Index("ix_data_assets_connection", "connection_id"),
         Index("ix_data_assets_owner", "owner_type", "owner_resource_id"),
     )
 
@@ -182,8 +185,13 @@ class DataAsset(Base, TimestampMixin):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False,
     )
-    destination_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("destinations.id"), nullable=False,
+    #: The connection this table was read through -- the scope a physical
+    #: identity is unique within, now that a warehouse need not be a Destination.
+    connection_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("transform_connections.id"), nullable=True,
+    )
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("destinations.id"), nullable=True,
     )
     catalog_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     schema_name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -234,11 +242,27 @@ class TransformConnection(Base, TimestampMixin):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False,
     )
-    destination_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("destinations.id", ondelete="CASCADE"), nullable=False,
+    #: Set when this connection came from a Destination -- which is what keeps
+    #: `Source → Pipeline → table` resolvable in the lineage graph. Null for a
+    #: connection somebody made by pasting a key: no Pipeline, no upstream.
+    destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("destinations.id", ondelete="CASCADE"), nullable=True,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    secret_ref: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: The warehouse kind this connection reaches, independent of any
+    #: Destination -- a connection made by pasting a key belongs to no Pipeline.
+    connector_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: inherited | service_account | oauth | password
+    auth_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: The non-secret half of the connector configuration: project and location
+    #: for BigQuery, host/port/database for Postgres. Empty when inherited.
+    configuration_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, nullable=False,
+    )
+    #: True for the key a Destination already uses. Created by migration, one
+    #: per supported Destination, so nothing that runs today needs re-entering.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    secret_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     account: Mapped[str | None] = mapped_column(String(320), nullable=True)
     catalogs: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     last_verified_at: Mapped[datetime | None] = mapped_column(

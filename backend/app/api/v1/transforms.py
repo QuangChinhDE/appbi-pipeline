@@ -9,6 +9,8 @@ from fastapi import APIRouter, Header, Query, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import CtxDep, SessionDep
+from app.core.errors import ValidationError
+from app.core.permissions import Action, Module
 from app.schemas.common import PageInfo, Paginated
 from app.schemas.domain import (
     DataAssetRegister, DataAssetView, TransformCreate, TransformDestinationCapability,
@@ -16,12 +18,14 @@ from app.schemas.domain import (
     TransformModelCreate, TransformModelUpdate, TransformModelView,
     TransformDraftRequest, TransformReleaseCreate, TransformReleaseView,
     TransformRunRequest, WarehouseBrowseView,
-    WarehouseConnectionCreate, WarehouseConnectionView,
+    WarehouseConnectionCreate, WarehouseConnectionView, TransformSystemView,
     RepositoryImportCreate, RepositoryImportPreview, RepositoryImportRequest,
     RepositoryImportResult, GitSourceUpdate, GitSourceView, GitPullResult,
     TransformTestCreate, TransformTestView, TransformUpdate, TransformView,
 )
-from app.services import transform_ai, transform_import, transforms as service
+from app.services import (
+    oauth as oauth_service, transform_ai, transform_import, transforms as service,
+)
 
 router = APIRouter(prefix="/transforms", tags=["transforms"])
 
@@ -52,8 +56,8 @@ async def import_repository(
         session, ctx,
         repo_url=payload.repo_url, ref=payload.ref, subdirectory=payload.subdirectory,
         token=payload.token, name=payload.name,
-        destination_id=payload.destination_id, default_schema=payload.default_schema,
         warehouse_connection_id=payload.warehouse_connection_id,
+        default_schema=payload.default_schema,
     )
     # Remember the repository so the import is a starting point rather than a
     # snapshot -- the token included, since polling needs it after this request.
@@ -104,12 +108,31 @@ async def create_connection(
     Still one connection when it runs: dbt reads its sources and writes its
     models through a single profile, so this key has to do both.
     """
+    credentials = payload.model_dump(
+        include={"credentials_json", "username", "password"}, exclude_none=True,
+    )
+    if payload.auth_method == "oauth":
+        if payload.oauth_grant_id is None:
+            raise ValidationError(
+                "Chưa hoàn tất đăng nhập Google.", code="TRANSFORM_OAUTH_MISSING",
+            )
+        # The grant is redeemed here, once, and what comes back is already
+        # shaped for a dbt profile. Nothing about it passed through the browser
+        # except an opaque handle.
+        credentials = await oauth_service.consume_grant(
+            session, payload.oauth_grant_id,
+            workspace_id=ctx.workspace_id, connector_key=payload.connector_key,
+        )
     result = await service.create_connection(
         session, ctx,
-        destination_id=payload.destination_id, name=payload.name,
-        credentials=payload.model_dump(
-            include={"credentials_json", "username", "password"}, exclude_none=True,
+        connector_key=payload.connector_key, name=payload.name,
+        auth_method=payload.auth_method,
+        configuration=payload.model_dump(
+            include={"project_id", "dataset_location", "host", "port",
+                     "database", "ssl_mode"},
+            exclude_none=True,
         ),
+        credentials=credentials,
     )
     await session.commit()
     return result
@@ -124,47 +147,50 @@ async def delete_connection(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/systems", response_model=list[TransformSystemView])
+async def systems(ctx: CtxDep):
+    """The warehouse kinds a Transform can run on, and how each authenticates.
+
+    Read from the engine lock rather than from the Destinations that happen to
+    exist, because step one is choosing a *kind* of system -- there may be no
+    Destination for it yet, and that is the case this whole flow exists for.
+    """
+    ctx.require(Module.TRANSFORMS, Action.VIEW)
+    return service.supported_systems()
+
+
 @router.get(
-    "/destinations/{destination_id}/warehouse", response_model=WarehouseBrowseView,
+    "/connections/{connection_id}/warehouse", response_model=WarehouseBrowseView,
 )
 async def browse_warehouse(
-    destination_id: uuid.UUID,
+    connection_id: uuid.UUID,
     session: SessionDep,
     ctx: CtxDep,
     catalog: Annotated[str | None, Query(max_length=200)] = None,
     schema: Annotated[str | None, Query(max_length=200)] = None,
-    connection: Annotated[uuid.UUID | None, Query()] = None,
 ):
-    """What the warehouse holds: projects, then datasets, then tables.
+    """What this connection can see: projects, then datasets, then tables.
 
     Separate from `/inputs`, which answers "what has AppBI already loaded here".
-    This one answers "what is actually in there", which is the question a user
-    with a hand-built dataset is asking. Pass `connection` to look through a
-    credential other than the Destination's, and `catalog` to read a project
-    that account can see but the Destination does not live in.
+    This one answers "what is actually in there", which is the question somebody
+    with a hand-built dataset is asking.
     """
     return await service.browse_warehouse(
-        session, ctx, destination_id, schema, catalog_name=catalog,
-        secret_ref=await service.connection_secret(session, ctx.workspace_id, connection),
+        session, ctx, connection_id, schema, catalog_name=catalog,
     )
 
 
 @router.post(
-    "/destinations/{destination_id}/assets", response_model=DataAssetView,
+    "/connections/{connection_id}/assets", response_model=DataAssetView,
     status_code=status.HTTP_201_CREATED,
 )
 async def register_asset(
-    destination_id: uuid.UUID,
+    connection_id: uuid.UUID,
     payload: DataAssetRegister,
     session: SessionDep,
     ctx: CtxDep,
 ):
-    asset = await service.register_asset(
-        session, ctx, destination_id, payload,
-        secret_ref=await service.connection_secret(
-            session, ctx.workspace_id, payload.connection_id,
-        ),
-    )
+    asset = await service.register_asset(session, ctx, connection_id, payload)
     await session.commit()
     return await service._asset_view(session, asset)
 

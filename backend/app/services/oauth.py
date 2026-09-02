@@ -94,6 +94,15 @@ PROVIDERS: dict[str, Provider] = {
             # Read-only: this product copies data out, it never writes to the
             # user's spreadsheet, and a consent screen that asks for write
             # access to all your files is one people are right to refuse.
+            # Transform runs dbt against BigQuery as the person who consented.
+            # `bigquery` covers reading and writing datasets; the read-only
+            # cloud-platform scope is what lets the project list be shown, and
+            # asking for the writable one would be asking for far more than a
+            # warehouse connection needs.
+            "destination-bigquery": (
+                "https://www.googleapis.com/auth/bigquery",
+                "https://www.googleapis.com/auth/cloud-platform.read-only",
+            ),
             "source-google-sheets": (
                 "https://www.googleapis.com/auth/spreadsheets.readonly",
                 "https://www.googleapis.com/auth/drive.readonly",
@@ -228,6 +237,25 @@ def connector_credentials(provider: Provider, tokens: dict[str, Any],
         if value:
             credentials[name] = value
     return {"credentials": credentials}
+
+
+def dbt_credentials(provider: Provider, tokens: dict[str, Any]) -> dict[str, Any]:
+    """Shape the tokens the way a dbt profile expects, not the way Airbyte does.
+
+    Airbyte takes a nested `credentials` object with an `auth_type`; dbt takes
+    a flat refresh token beside the application's own client id and secret.
+    Same grant, two consumers, so the shaping happens per consumer rather than
+    being bent to serve both badly.
+    """
+    client_id, client_secret, _ = credentials_of(provider)
+    return {
+        "auth_method": "oauth",
+        "refresh_token": tokens["refresh_token"],
+        "oauth_client_id": client_id,
+        "oauth_client_secret": client_secret,
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "oauth_account": tokens.get("account") or "",
+    }
 
 
 async def store_grant(session: AsyncSession, *, workspace_id: uuid.UUID,

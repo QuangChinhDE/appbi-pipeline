@@ -44,12 +44,11 @@ export type WarehouseBrowserCopy = {
  * property of that table, not a different way of finding it.
  */
 export function WarehouseBrowser({
-  destinationId, copy, connectionId, chosen, onAdd, adding, disabled,
+  connectionId, copy, chosen, onAdd, adding, disabled,
 }: {
-  destinationId: string;
+  /** The connection chosen a step earlier; it decides what is visible here. */
+  connectionId: string;
   copy: WarehouseBrowserCopy;
-  /** Saved key chosen a step earlier, or null for the Destination's own. */
-  connectionId: string | null;
   /** Asset ids already in this Transform's basket. */
   chosen: string[];
   /** Register and select the chosen relations. */
@@ -65,17 +64,16 @@ export function WarehouseBrowser({
   const [filter, setFilter] = React.useState('');
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
 
-  const ref = connectionId ?? undefined;
-  const scope = connectionId ?? '';
+  const scope = connectionId;
 
   // A different account sees a different warehouse, so a project and dataset
   // chosen under the old one are not answers to the new one.
   React.useEffect(() => { setCatalog(''); setSchema(''); setPicked(new Set()); }, [scope]);
 
   const catalogs = useQuery({
-    queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|catalogs`),
-    queryFn: () => transformApi.browseWarehouse(destinationId, { connection: ref }),
-    enabled: Boolean(destinationId),
+    queryKey: qk.transformWarehouse(workspaceId, connectionId, 'catalogs'),
+    queryFn: () => transformApi.browseWarehouse(connectionId),
+    enabled: Boolean(connectionId),
   });
 
   // The account's home project is the sensible default; choosing it saves a
@@ -86,17 +84,15 @@ export function WarehouseBrowser({
   }, [catalog, catalogs.data]);
 
   const schemas = useQuery({
-    queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|${catalog}`),
-    queryFn: () => transformApi.browseWarehouse(destinationId, { catalog, connection: ref }),
-    enabled: Boolean(destinationId && catalog),
+    queryKey: qk.transformWarehouse(workspaceId, connectionId, catalog),
+    queryFn: () => transformApi.browseWarehouse(connectionId, { catalog }),
+    enabled: Boolean(connectionId && catalog),
   });
 
   const tables = useQuery({
-    queryKey: qk.transformWarehouse(workspaceId, destinationId, `${scope}|${catalog}|${schema}`),
-    queryFn: () => transformApi.browseWarehouse(
-      destinationId, { catalog, schema, connection: ref },
-    ),
-    enabled: Boolean(destinationId && catalog && schema),
+    queryKey: qk.transformWarehouse(workspaceId, connectionId, `${catalog}|${schema}`),
+    queryFn: () => transformApi.browseWarehouse(connectionId, { catalog, schema }),
+    enabled: Boolean(connectionId && catalog && schema),
   });
 
   const needle = filter.trim().toLowerCase();

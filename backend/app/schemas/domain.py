@@ -517,19 +517,17 @@ class DataAssetRegister(BaseModel):
     relation_name: str = Field(min_length=1, max_length=300)
     pipeline_id: uuid.UUID | None = None
     pipeline_stream_id: uuid.UUID | None = None
-    #: Verify with this saved key rather than the Destination's own, for a table
-    #: only that key can see.
-    connection_id: uuid.UUID | None = None
+
 
 
 class TransformCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
-    destination_id: uuid.UUID
+    #: The connection this Transform reads and writes through. It carries the
+    #: warehouse, so no Destination is asked for separately.
+    warehouse_connection_id: uuid.UUID
     default_schema: str = Field(min_length=1, max_length=200)
     input_asset_ids: list[uuid.UUID] = Field(default_factory=list)
-    #: Run as this saved key instead of the Destination's own. Null means inherit.
-    warehouse_connection_id: uuid.UUID | None = None
 
 
 class TransformUpdate(BaseModel):
@@ -559,9 +557,8 @@ class RepositoryImportCreate(RepositoryImportRequest):
     #: Keep the connection and poll it, so the import is a start not a snapshot.
     auto_pull: bool = False
     interval_minutes: int = Field(default=30, ge=5, le=10080)
-    #: Run as this saved key instead of the Destination's own -- which is what a
-    #: repository reading another project needs. Null means inherit.
-    warehouse_connection_id: uuid.UUID | None = None
+    #: The connection to read and run through.
+    warehouse_connection_id: uuid.UUID
 
 
 class ImportedModelView(BaseModel):
@@ -649,33 +646,59 @@ class RepositoryImportPreview(BaseModel):
     origin: dict[str, Any] = Field(default_factory=dict)
 
 
-class WarehouseConnectionCreate(BaseModel):
-    """A key to keep, so it is chosen next time instead of pasted again.
+class TransformSystemView(BaseModel):
+    """A kind of warehouse a Transform can run on, and how it authenticates."""
 
-    Only the fields that differ from the Destination's own configuration: for
-    BigQuery the service account JSON, for Postgres a username and password.
+    connector_key: str
+    label: str
+    #: service_account | oauth | password -- what the create form should offer.
+    auth_methods: list[str] = Field(default_factory=list)
+    adapter: str | None = None
+    adapter_version: str | None = None
+
+
+class WarehouseConnectionCreate(BaseModel):
+    """A connection to keep, so it is chosen next time instead of re-entered.
+
+    It carries the whole warehouse: which system, where it is, and how to
+    authenticate. BigQuery takes a service account JSON (or arrives through
+    OAuth); Postgres takes host, port, database, user and password.
     """
 
-    destination_id: uuid.UUID
+    connector_key: str = Field(min_length=1, max_length=120)
     name: str = Field(min_length=1, max_length=200)
+    auth_method: Literal["service_account", "oauth", "password"] = "service_account"
+    #: BigQuery
+    project_id: str | None = Field(default=None, max_length=200)
+    dataset_location: str | None = Field(default=None, max_length=64)
     credentials_json: str | None = Field(default=None, max_length=20000)
+    #: Postgres and other databases
+    host: str | None = Field(default=None, max_length=300)
+    port: int | None = Field(default=None, ge=1, le=65535)
+    database: str | None = Field(default=None, max_length=200)
     username: str | None = Field(default=None, max_length=200)
     password: str | None = Field(default=None, max_length=500)
+    ssl_mode: str | None = Field(default=None, max_length=32)
+    #: Set by the OAuth callback, never by a person.
+    oauth_grant_id: uuid.UUID | None = None
 
 
 class WarehouseConnectionView(BaseModel):
-    """One row of the key list. Null id means the Destination's own key."""
+    """One row of the connection list."""
 
-    id: uuid.UUID | None = None
-    destination_id: uuid.UUID
-    destination_name: str = ""
-    connector_key: str = ""
+    id: uuid.UUID
     name: str
-    #: Who the key turned out to be, so a wrong one is obvious in a list.
+    connector_key: str = ""
+    auth_method: str = "inherited"
+    #: Set when this connection came from a Destination, which is what keeps
+    #: Pipeline lineage resolvable through it.
+    destination_id: uuid.UUID | None = None
+    destination_name: str | None = None
+    #: Who the connection turned out to be, so a wrong one is obvious.
     account: str | None = None
     #: Projects or databases it could read when last checked.
     catalogs: list[str] = Field(default_factory=list)
-    #: True for the key a Destination already uses -- nothing to enter.
+    #: True for the connection a Destination already uses -- nothing to enter.
     is_default: bool = False
     last_verified_at: datetime | None = None
 

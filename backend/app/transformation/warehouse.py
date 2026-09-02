@@ -133,7 +133,29 @@ async def browse_relations(
 
 
 def _bigquery_client(configuration: dict[str, Any], catalog_name: str | None):
+    """A client for either kind of BigQuery credential.
+
+    A service account is a key the team holds; an OAuth grant is a person's own
+    access, and the refresh token is what survives long enough to be stored. The
+    two produce different credential objects, so the branch is here rather than
+    at every call site that needs a client.
+    """
     from google.cloud import bigquery
+
+    if configuration.get("auth_method") == "oauth":
+        from google.oauth2.credentials import Credentials
+
+        credentials = Credentials(
+            token=None,
+            refresh_token=configuration.get("refresh_token"),
+            client_id=configuration.get("oauth_client_id"),
+            client_secret=configuration.get("oauth_client_secret"),
+            token_uri=configuration.get("token_uri")
+            or "https://oauth2.googleapis.com/token",
+        )
+        project = catalog_name or configuration.get("project_id")
+        return bigquery.Client(project=project, credentials=credentials), project
+
     from google.oauth2 import service_account
 
     raw = configuration.get("credentials_json")
@@ -294,14 +316,9 @@ def _validate_bigquery(
     configuration: dict[str, Any], catalog_name: str | None, sql: str,
 ) -> tuple[str | None, list[str]]:
     from google.cloud import bigquery
-    from google.oauth2 import service_account
 
-    raw = configuration.get("credentials_json")
     try:
-        info = json.loads(raw) if isinstance(raw, str) else raw
-        credentials = service_account.Credentials.from_service_account_info(info)
-        project = catalog_name or configuration.get("project_id") or info.get("project_id")
-        client = bigquery.Client(project=project, credentials=credentials)
+        client, _project = _bigquery_client(configuration, catalog_name)
         job = client.query(sql, job_config=bigquery.QueryJobConfig(
             dry_run=True, use_query_cache=False,
         ))
@@ -473,18 +490,11 @@ def _profile_bigquery(
     relation_name: str,
     columns: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    from google.cloud import bigquery
-    from google.oauth2 import service_account
-
-    raw = configuration.get("credentials_json")
     totals: dict[str, Any] = {}
     samples: dict[str, list[str]] = {}
     keys: dict[str, list[str]] = {}
     try:
-        info = json.loads(raw) if isinstance(raw, str) else raw
-        credentials = service_account.Credentials.from_service_account_info(info)
-        project = catalog_name or configuration.get("project_id") or info.get("project_id")
-        client = bigquery.Client(project=project, credentials=credentials)
+        client, project = _bigquery_client(configuration, catalog_name)
         row = list(client.query(profiling.build_profile_sql(
             "bigquery", project, schema_name, relation_name, columns,
         )).result())[0]
@@ -590,15 +600,8 @@ def _verify_bigquery(
     schema_name: str,
     relation_name: str,
 ) -> VerifiedRelation:
-    from google.cloud import bigquery
-    from google.oauth2 import service_account
-
-    raw = configuration.get("credentials_json")
     try:
-        info = json.loads(raw) if isinstance(raw, str) else raw
-        credentials = service_account.Credentials.from_service_account_info(info)
-        project = catalog_name or configuration.get("project_id") or info.get("project_id")
-        client = bigquery.Client(project=project, credentials=credentials)
+        client, project = _bigquery_client(configuration, catalog_name)
         table = client.get_table(f"{project}.{schema_name}.{relation_name}")
     except Exception as exc:
         raise ValidationError(

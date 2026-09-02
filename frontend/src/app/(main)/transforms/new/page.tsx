@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Database, Link2, Table2, X } from 'lucide-react';
 
 import { transformApi } from '@/lib/api';
+import type { DataAsset } from '@/lib/types';
 import { qk } from '@/lib/queryKeys';
 import { formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
@@ -26,22 +27,41 @@ export default function NewTransformPage() {
   const copy = locale === 'vi' ? {
     title: 'Transform mới', back: 'Transform', warehouse: 'Kết nối', inputs: 'Chọn bảng', create: 'Tạo',
     connect: {
-      title: 'Chọn key để kết nối kho dữ liệu',
-      help: 'Key quyết định bạn đọc được project và bảng nào ở bước sau. Chọn key có sẵn, hoặc tạo key mới nếu dữ liệu nằm ở nơi key hiện tại không với tới.',
-      defaultKey: 'key mặc định',
+      systemTitle: 'Chọn hệ thống',
+      systemHelp: 'Transform sẽ chạy trên hệ thống này. Chỉ hiện những hệ thống đã có adapter dbt được chứng nhận.',
+      connectionTitle: 'Chọn kết nối',
+      connectionHelp: 'Dùng kết nối đã có, hoặc tạo kết nối mới. Kết nối quyết định bạn đọc được project và bảng nào ở bước sau.',
+      defaultKey: 'sẵn có từ Đích dữ liệu',
       noAccount: '(chưa đọc được tài khoản)',
       projects: 'project',
-      addKey: 'Tạo key mới',
-      newKeyTitle: 'Key mới',
-      keyName: 'Tên key',
-      keyNamePlaceholder: 'VD: Key đọc kho Sale',
-      keyWarehouse: 'Kho dữ liệu',
+      none: 'Chưa có kết nối nào cho hệ thống này',
+      addKey: 'Tạo kết nối mới',
+      newKeyTitle: 'Kết nối mới',
+      keyName: 'Tên kết nối',
+      keyNamePlaceholder: 'VD: Kho Sale',
+      authMethod: 'Cách đăng nhập',
+      authLabel: {
+        service_account: 'Service account',
+        oauth: 'Đăng nhập Google',
+        password: 'Tài khoản / mật khẩu',
+        inherited: 'Dùng key của Đích dữ liệu',
+      } as Record<string, string>,
+      project: 'Project',
+      location: 'Vùng dữ liệu',
       credentials: 'Service account JSON',
-      credentialsHint: 'Key này phải vừa đọc được bảng nguồn, vừa ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai. Được mã hoá khi lưu và không hiển thị lại.',
+      credentialsHint: 'Tài khoản này phải vừa đọc được bảng nguồn, vừa ghi được schema đích — dbt chỉ dùng một kết nối cho cả hai. Được mã hoá khi lưu và không hiển thị lại.',
+      host: 'Host / IP',
+      port: 'Cổng',
+      database: 'Database',
+      username: 'Tài khoản',
+      password: 'Mật khẩu',
+      oauthHint: 'Đăng nhập bằng tài khoản Google có quyền trên project BigQuery. AppBI chỉ giữ refresh token, không thấy mật khẩu của bạn.',
+      oauthStart: 'Đăng nhập với Google',
+      oauthDone: 'Đã đăng nhập:',
       save: 'Kiểm tra và lưu',
       cancel: 'Hủy',
-      remove: 'Xoá key',
-      loadFailed: 'Không tải được danh sách key',
+      remove: 'Xoá kết nối',
+      loadFailed: 'Không tải được danh sách kết nối',
     },
     chosenTables: 'Bảng đã chọn',
     nothingChosen: 'Chưa chọn bảng nào',
@@ -88,22 +108,41 @@ export default function NewTransformPage() {
   } : {
     title: 'New transform', back: 'Transform', warehouse: 'Connect', inputs: 'Pick tables', create: 'Create',
     connect: {
-      title: 'Choose a key to reach the warehouse',
-      help: 'The key decides which projects and tables you can read in the next step. Pick a saved one, or add a key if the data lives somewhere the current one cannot reach.',
-      defaultKey: 'default key',
+      systemTitle: 'Choose a system',
+      systemHelp: 'The Transform runs on this. Only systems with a certified dbt adapter are offered.',
+      connectionTitle: 'Choose a connection',
+      connectionHelp: 'Use one you already have, or make a new one. The connection decides which projects and tables you can read in the next step.',
+      defaultKey: 'from a Destination',
       noAccount: '(account unavailable)',
       projects: 'projects',
-      addKey: 'Add a key',
-      newKeyTitle: 'New key',
-      keyName: 'Key name',
-      keyNamePlaceholder: 'e.g. Sale warehouse reader',
-      keyWarehouse: 'Warehouse',
+      none: 'No connection for this system yet',
+      addKey: 'New connection',
+      newKeyTitle: 'New connection',
+      keyName: 'Connection name',
+      keyNamePlaceholder: 'e.g. Sale warehouse',
+      authMethod: 'Sign in with',
+      authLabel: {
+        service_account: 'Service account',
+        oauth: 'Google sign-in',
+        password: 'User and password',
+        inherited: "The Destination's own key",
+      } as Record<string, string>,
+      project: 'Project',
+      location: 'Data location',
       credentials: 'Service account JSON',
-      credentialsHint: 'This key must both read the source tables and write the output schema — dbt uses one connection for both. Encrypted at rest and never shown again.',
+      credentialsHint: 'This must both read the source tables and write the output schema — dbt uses one connection for both. Encrypted at rest and never shown again.',
+      host: 'Host / IP',
+      port: 'Port',
+      database: 'Database',
+      username: 'User',
+      password: 'Password',
+      oauthHint: 'Sign in with a Google account that has access to the BigQuery project. AppBI keeps only a refresh token and never sees your password.',
+      oauthStart: 'Sign in with Google',
+      oauthDone: 'Signed in as',
       save: 'Check and save',
       cancel: 'Cancel',
-      remove: 'Remove key',
-      loadFailed: 'Could not load the key list',
+      remove: 'Remove connection',
+      loadFailed: 'Could not load the connections',
     },
     chosenTables: 'Chosen tables',
     nothingChosen: 'No table chosen yet',
@@ -153,40 +192,39 @@ export default function NewTransformPage() {
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
   const [step, setStep] = React.useState(0);
-  const [assetIds, setAssetIds] = React.useState<string[]>([]);
   const [name, setName] = React.useState('');
   const [outputSchema, setOutputSchema] = React.useState('analytics');
-  const [warehouse, setWarehouse] = React.useState<
-    import('@/lib/types').ChosenWarehouse | null
-  >(null);
-  const destinationId = warehouse?.destination_id ?? '';
+  const [connectionId, setConnectionId] = React.useState<string | null>(null);
+  const connectionList = useQuery({
+    queryKey: qk.transformConnections(workspaceId), queryFn: transformApi.connections,
+  });
+  // The basket holds the assets it registered rather than looking them up
+  // again: registration already returned them, and a second source of truth is
+  // how the list and the count drift apart.
+  const [chosenAssets, setChosenAssets] = React.useState<DataAsset[]>([]);
+  const assetIds = React.useMemo(
+    () => chosenAssets.map((item) => item.id), [chosenAssets],
+  );
   const [assetForm, setAssetForm] = React.useState({
     catalog_name: '', schema_name: '', relation_name: '',
     pipeline_id: searchParams.get('pipeline_id') ?? '', pipeline_stream_id: '',
   });
 
-  const candidates = useQuery({
-    queryKey: qk.transformInputs(workspaceId, destinationId),
-    queryFn: () => transformApi.inputCandidates(destinationId), enabled: Boolean(destinationId),
-  });
-  const selectedPipeline = candidates.data?.pipelines.find(
-    (item) => item.pipeline.id === assetForm.pipeline_id,
-  );
 
   const register = useMutation({
-    mutationFn: () => transformApi.registerAsset(destinationId, {
+    mutationFn: () => transformApi.registerAsset(connectionId ?? '', {
       catalog_name: assetForm.catalog_name || undefined,
       schema_name: assetForm.schema_name,
       relation_name: assetForm.relation_name,
       pipeline_id: assetForm.pipeline_id || undefined,
       pipeline_stream_id: assetForm.pipeline_stream_id || undefined,
-      connection_id: warehouse?.connection_id,
     }),
     onSuccess: async (asset) => {
-      setAssetIds((current) => Array.from(new Set([...current, asset.id])));
-      await queryClient.invalidateQueries({ queryKey: qk.transformInputs(workspaceId, destinationId) });
+      setChosenAssets((current) => current.some((row) => row.id === asset.id)
+        ? current : [...current, asset]);
+      await queryClient.invalidateQueries({ queryKey: qk.transformInputs(workspaceId, connectionId ?? '') });
       await queryClient.invalidateQueries({
-        queryKey: qk.transformWarehouseAll(workspaceId, destinationId),
+        queryKey: qk.transformWarehouseAll(workspaceId, connectionId ?? ''),
       });
       setAssetForm((current) => ({ ...current, schema_name: '', relation_name: '', pipeline_stream_id: '' }));
       toastSuccess(copy.registered);
@@ -206,27 +244,27 @@ export default function NewTransformPage() {
     }[]) => {
       const added = [];
       for (const relation of relations) {
-        added.push(await transformApi.registerAsset(destinationId, {
+        added.push(await transformApi.registerAsset(connectionId ?? '', {
           catalog_name: relation.catalog_name || undefined,
           schema_name: relation.schema_name,
           relation_name: relation.relation_name,
-          connection_id: warehouse?.connection_id,
-        }));
+            }));
       }
       return added;
     },
     onSuccess: async (assets) => {
-      setAssetIds((current) => Array.from(
-        new Set([...current, ...assets.map((item) => item.id)]),
-      ));
+      setChosenAssets((current) => [
+        ...current,
+        ...assets.filter((item) => !current.some((row) => row.id === item.id)),
+      ]);
       await queryClient.invalidateQueries({
-        queryKey: qk.transformInputs(workspaceId, destinationId),
+        queryKey: qk.transformInputs(workspaceId, connectionId ?? ''),
       });
       // Prefix, not the exact key: the listing for the open dataset carries the
       // schema as a final segment, and it is the one that has to redraw so the
       // row switches from Add to Added.
       await queryClient.invalidateQueries({
-        queryKey: qk.transformWarehouseAll(workspaceId, destinationId),
+        queryKey: qk.transformWarehouseAll(workspaceId, connectionId ?? ''),
       });
       toastSuccess(copy.registered);
     },
@@ -235,9 +273,8 @@ export default function NewTransformPage() {
 
   const create = useMutation({
     mutationFn: () => transformApi.create({
-      name, destination_id: destinationId, default_schema: outputSchema,
-      input_asset_ids: assetIds,
-      warehouse_connection_id: warehouse?.connection_id,
+      name, warehouse_connection_id: connectionId ?? '',
+      default_schema: outputSchema, input_asset_ids: assetIds,
     }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
@@ -246,7 +283,11 @@ export default function NewTransformPage() {
     onError: (error) => toastError(error),
   });
 
-  const nextDisabled = step === 0 ? !destinationId : step === 1 ? assetIds.length === 0
+  const chosenConnectionName = connectionId
+    ? (connectionList.data ?? []).find((item) => item.id === connectionId)?.name ?? ''
+    : '';
+
+  const nextDisabled = step === 0 ? !connectionId : step === 1 ? assetIds.length === 0
     : !name.trim() || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema);
 
   return (
@@ -270,7 +311,7 @@ export default function NewTransformPage() {
               // reaches, so asking for the warehouse separately would be asking
               // the same question twice.
               <ConnectionPicker
-                copy={copy.connect} value={warehouse} onChange={setWarehouse} />
+                copy={copy.connect} value={connectionId} onChange={setConnectionId} />
             )}
 
             {step === 1 && (
@@ -286,8 +327,8 @@ export default function NewTransformPage() {
                     that table, not a second place to look for it. */}
                 <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
                   <WarehouseBrowser
-                    destinationId={destinationId} copy={copy.browse}
-                    connectionId={warehouse?.connection_id ?? null}
+                    copy={copy.browse}
+                    connectionId={connectionId ?? ''}
                     chosen={assetIds}
                     adding={addBrowsed.isPending}
                     onAdd={(relations) => addBrowsed.mutate(relations)} />
@@ -299,8 +340,7 @@ export default function NewTransformPage() {
                       <div><Label>{copy.catalog}</Label><Input value={assetForm.catalog_name} onChange={(event) => setAssetForm({ ...assetForm, catalog_name: event.target.value })} /></div>
                       <div><Label required>{copy.schema}</Label><Input value={assetForm.schema_name} onChange={(event) => setAssetForm({ ...assetForm, schema_name: event.target.value })} /></div>
                       <div><Label required>{copy.relation}</Label><Input value={assetForm.relation_name} onChange={(event) => setAssetForm({ ...assetForm, relation_name: event.target.value })} /></div>
-                      <div><Label>{copy.pipeline}</Label><Select value={assetForm.pipeline_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_id: event.target.value, pipeline_stream_id: '' })}><option value="">{copy.warehouseRelation}</option>{candidates.data?.pipelines.map((item) => <option key={item.pipeline.id} value={item.pipeline.id}>{item.pipeline.name}</option>)}</Select></div>
-                      {selectedPipeline && <div><Label>{copy.stream}</Label><Select value={assetForm.pipeline_stream_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_stream_id: event.target.value })}><option value="">Select stream</option>{selectedPipeline.streams.map((stream) => <option key={stream.id} value={stream.id}>{stream.namespace ? `${stream.namespace}.` : ''}{stream.name}</option>)}</Select></div>}
+                      <div><Label>{copy.pipeline}</Label><Select value={assetForm.pipeline_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_id: event.target.value, pipeline_stream_id: '' })}><option value="">{copy.warehouseRelation}</option></Select></div>
                     </div>
                     <div className="mt-3 flex justify-end"><Button variant="primary" size="sm" loading={register.isPending} disabled={!assetForm.schema_name || !assetForm.relation_name || Boolean(assetForm.pipeline_id && !assetForm.pipeline_stream_id)} onClick={() => register.mutate()} leadingIcon={<Link2 className="h-4 w-4" />}>{copy.verify}</Button></div>
                   </details>
@@ -314,7 +354,7 @@ export default function NewTransformPage() {
                     {copy.chosenTables} ({assetIds.length})
                   </h3>
                   {assetIds.length > 0 && (
-                    <Button size="xs" variant="ghost" onClick={() => setAssetIds([])}>
+                    <Button size="xs" variant="ghost" onClick={() => setChosenAssets([])}>
                       {copy.clearAll}
                     </Button>
                   )}
@@ -324,7 +364,7 @@ export default function NewTransformPage() {
                 ) : (
                   <div className="mt-2 divide-y divide-[rgb(var(--border-line))] overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
                     {assetIds.map((id) => {
-                      const asset = candidates.data?.assets.find((item) => item.id === id);
+                      const asset = chosenAssets.find((item) => item.id === id);
                       if (!asset) return null;
                       return (
                         <div key={id} className="flex items-center gap-3 px-4 py-2.5">
@@ -346,8 +386,8 @@ export default function NewTransformPage() {
                           )}
                           <IconButton size="xs" variant="ghost"
                             aria-label={copy.removeTable} title={copy.removeTable}
-                            onClick={() => setAssetIds(
-                              (current) => current.filter((item) => item !== id),
+                            onClick={() => setChosenAssets(
+                              (current) => current.filter((item) => item.id !== id),
                             )}>
                             <X className="h-3.5 w-3.5" />
                           </IconButton>
@@ -366,7 +406,7 @@ export default function NewTransformPage() {
                   <div><Label required>{copy.name}</Label><Input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Sales Analytics" /></div>
                   <div><Label required>{copy.output}</Label><Input value={outputSchema} onChange={(event) => setOutputSchema(event.target.value)} placeholder="analytics_sales" invalid={Boolean(outputSchema && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema))} /></div>
                   <div className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-4 py-3 text-caption text-text-secondary">
-                    <span className="font-emphasis text-text-primary">{warehouse?.name}</span>
+                    <span className="font-emphasis text-text-primary">{chosenConnectionName}</span>
                     <span className="mx-2 text-text-quaternary">·</span>
                     {assetIds.length} {copy.chosenTables.toLowerCase()}
                   </div>
