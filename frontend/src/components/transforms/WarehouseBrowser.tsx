@@ -14,7 +14,6 @@ import { Checkbox, Input, Label, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 
 export type WarehouseBrowserCopy = {
-  hint: string;
   project: string;
   dataset: string;
   chooseDataset: string;
@@ -108,8 +107,6 @@ export function WarehouseBrowser({
 
   return (
     <div className="space-y-3">
-      <p className="text-caption text-text-tertiary">{copy.hint}</p>
-
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
           <Label>{copy.project}</Label>
@@ -140,7 +137,7 @@ export function WarehouseBrowser({
         </div>
         <div>
           <Label>{copy.filter}</Label>
-          <Input size="sm" value={filter} placeholder={copy.filter} disabled={!schema}
+          <Input size="sm" value={filter} disabled={!schema}
             onChange={(event) => setFilter(event.target.value)} />
         </div>
       </div>

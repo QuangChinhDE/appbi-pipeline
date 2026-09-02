@@ -108,16 +108,13 @@ export function ConnectionPicker({
               <button key={item.connector_key} type="button" disabled={disabled}
                 onClick={() => { setSystem(item.connector_key); onChange(null); setAdding(false); }}
                 className={cn(
-                  'rounded-lg border px-4 py-2.5 text-left transition-colors',
+                  'rounded-lg border px-4 py-2 text-caption transition-colors',
                   system === item.connector_key
                     ? 'border-brand bg-brand/[0.06]'
                     : 'border-[rgb(var(--border-line))] hover:border-[rgb(var(--border-strong))]',
                 )}>
                 <span className="block text-caption font-emphasis text-text-primary">
                   {item.label}
-                </span>
-                <span className="block text-tiny text-text-tertiary">
-                  {item.adapter} {item.adapter_version}
                 </span>
               </button>
             ))}

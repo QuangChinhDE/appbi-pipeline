@@ -187,7 +187,9 @@ export function ActorListPage({ kind }: { kind: ActorKind }) {
                             {actor.name}
                           </span>
                           {actor.status !== 'ACTIVE' && (
-                            <span className="text-tiny text-text-quaternary">{actor.status}</span>
+                            <span className="text-tiny text-text-quaternary">
+                              {t('common.disabled')}
+                            </span>
                           )}
                         </span>
                       </Link>

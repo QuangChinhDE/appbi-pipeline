@@ -764,11 +764,15 @@ export default function TransformWorkbenchPage() {
           )}
         </span>}
         icon={<Workflow className="h-5 w-5 text-brand" />}
-        subtitle={<span className="text-caption text-text-tertiary" title={`${transform.default_schema} · dbt Core ${transform.dbt_core_version}`}>{transform.destination.name}</span>}
+        subtitle={<span className="text-caption text-text-tertiary">
+          {transform.warehouse.name}
+          <span className="mx-1.5 text-text-quaternary">·</span>
+          {transform.default_schema}
+        </span>}
         badges={<>
           <Badge variant={healthTone[transform.health_status] ?? 'neutral'} size="xs" dot
             title={transform.health_message ?? undefined}>
-            {transform.health_status}
+            {copy.healthLabel[transform.health_status] ?? transform.health_status}
           </Badge>
           {transform.execution_trigger === 'AFTER_UPSTREAM' && !transform.upstream_ready && (
             <Badge variant="warning" size="xs">{copy.waitingUpstream}</Badge>
@@ -1192,9 +1196,9 @@ export default function TransformWorkbenchPage() {
                 <Label>{copy.materialization}</Label>
                 <Select value={newModel.materialization}
                   onChange={(event) => setNewModel({ ...newModel, materialization: event.target.value })}>
-                  <option value="VIEW">View</option>
-                  <option value="TABLE">Table</option>
-                  <option value="INCREMENTAL">Incremental</option>
+                  <option value="VIEW">{copy.materializationLabel.VIEW}</option>
+                  <option value="TABLE">{copy.materializationLabel.TABLE}</option>
+                  <option value="INCREMENTAL">{copy.materializationLabel.INCREMENTAL}</option>
                 </Select>
               </div>
             </div>
@@ -1302,7 +1306,7 @@ function OutputPanel({ ratio, collapsed, tab, setTab, execution, loading, runId,
       ]} />
       <div className="ml-auto flex items-center gap-2">
         {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />}
-        {execution && <Badge size="xs" variant={execution.status === 'SUCCEEDED' ? 'success' : execution.status === 'FAILED' ? 'danger' : 'info'}>{execution.status}</Badge>}
+        {execution && <Badge size="xs" variant={execution.status === 'SUCCEEDED' ? 'success' : execution.status === 'FAILED' ? 'danger' : 'info'}>{copy.runStatus[execution.status] ?? execution.status}</Badge>}
         {/* Without this the only way to stop a long build is to leave the page. */}
         {active && onCancel && <Button size="xs" variant="ghost" loading={cancelling} onClick={onCancel}>{copy.cancelRun}</Button>}
         {runId && <Link className="text-tiny text-brand hover:underline" href={`/runs/${runId}`}>{copy.viewRun}</Link>}
@@ -1352,10 +1356,14 @@ function NodeResults({ nodes, models, copy }: {
         {nodes.map((node) => (
           <tr key={`${node.resource_type}-${node.name}`} className="border-b border-[rgb(var(--border-line))] last:border-0">
             <td className="py-1 pr-4 align-top">
-              <span className={cn('font-emphasis', tone(node.status))}>{node.status}</span>
+              <span className={cn('font-emphasis', tone(node.status))}>
+                {copy.nodeStatus[node.status] ?? node.status}
+              </span>
             </td>
             <td className="py-1 pr-4 align-top font-mono text-text-secondary">{node.name}</td>
-            <td className="py-1 pr-4 align-top text-text-quaternary">{node.resource_type}</td>
+            <td className="py-1 pr-4 align-top text-text-quaternary">
+              {copy.nodeKind[node.resource_type] ?? node.resource_type}
+            </td>
             <td className="py-1 pr-4 align-top text-right tabular-nums text-text-quaternary">
               {node.execution_time != null ? `${node.execution_time.toFixed(1)}s` : ''}
             </td>
@@ -1515,9 +1523,9 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
       <Field label={copy.materialization} hint={copy.materializationHint[draft.materialization]}>
         <Select disabled={!canEdit} value={draft.materialization}
           onChange={(event) => patchDraft({ materialization: event.target.value as Draft['materialization'] })}>
-          <option value="VIEW">View</option>
-          <option value="TABLE">Table</option>
-          <option value="INCREMENTAL">Incremental</option>
+          <option value="VIEW">{copy.materializationLabel.VIEW}</option>
+          <option value="TABLE">{copy.materializationLabel.TABLE}</option>
+          <option value="INCREMENTAL">{copy.materializationLabel.INCREMENTAL}</option>
         </Select>
       </Field>
 
@@ -1731,8 +1739,8 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
   }, [open, transform]);
 
   const candidates = useQuery({
-    queryKey: qk.transformInputs(workspaceId, transform.destination.id),
-    queryFn: () => transformApi.inputCandidates(transform.destination.id),
+    queryKey: qk.transformInputs(workspaceId, transform.warehouse.connection_id),
+    queryFn: () => transformApi.inputCandidates(transform.warehouse.connection_id),
     enabled: open,
   });
 
@@ -1818,15 +1826,9 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
     </> : undefined}
   >
     <div className="space-y-4">
-      <dl className="grid grid-cols-[150px_1fr] gap-x-4 gap-y-2 text-caption">
+      <dl className="grid grid-cols-[150px_1fr] gap-x-4 text-caption">
         <dt className="text-text-tertiary">{copy.warehouse}</dt>
-        <dd className="text-text-primary">{transform.destination.name}</dd>
-        <dt className="text-text-tertiary">Runtime</dt>
-        <dd className="text-text-primary">dbt Core {transform.dbt_core_version}
-          <span className="ml-2 text-tiny text-text-quaternary">
-            {transform.dbt_adapter_name} {transform.dbt_adapter_version}
-          </span>
-        </dd>
+        <dd className="text-text-primary">{transform.warehouse.name}</dd>
       </dl>
 
       <div>
@@ -1966,20 +1968,20 @@ function SettingsModal({ open, onClose, transform, copy, canEdit }: {
 
 const REMEDIATION_VI = {
   RETRY_RUN: 'Chạy lại lần chạy này.',
-  SPLIT_OR_RETRY: 'Lần chạy vượt quá thời gian cho phép. Thử tách nhỏ model hoặc chạy lại.',
-  REVIEW_TEST_FAILURES: 'Xem các test không đạt ở tab Tests để biết dòng dữ liệu nào sai.',
-  CHECK_DESTINATION_CREDENTIALS: 'Kiểm tra lại thông tin đăng nhập của Destination.',
-  CHECK_DESTINATION_CONNECTIVITY: 'Kiểm tra kết nối mạng tới warehouse.',
-  FIX_MODEL_SQL: 'Sửa SQL của model rồi Compile lại.',
-  VIEW_LOGS: 'Mở tab Logs để xem chi tiết.',
+  SPLIT_OR_RETRY: 'Lần chạy vượt quá thời gian cho phép. Thử tách nhỏ bảng hoặc chạy lại.',
+  REVIEW_TEST_FAILURES: 'Xem các kiểm tra không đạt ở tab Kiểm tra để biết dòng nào sai.',
+  CHECK_DESTINATION_CREDENTIALS: 'Kiểm tra lại thông tin đăng nhập của kết nối.',
+  CHECK_DESTINATION_CONNECTIVITY: 'Kiểm tra kết nối mạng tới kho dữ liệu.',
+  FIX_MODEL_SQL: 'Sửa SQL của bảng rồi kiểm tra cú pháp lại.',
+  VIEW_LOGS: 'Mở tab Nhật ký để xem chi tiết.',
 };
 const REMEDIATION_EN = {
   RETRY_RUN: 'Retry this run.',
   SPLIT_OR_RETRY: 'The run exceeded its time limit. Split the model or retry.',
   REVIEW_TEST_FAILURES: 'Open the Tests tab to see which rows failed.',
-  CHECK_DESTINATION_CREDENTIALS: 'Check this Destination’s credentials.',
+  CHECK_DESTINATION_CREDENTIALS: 'Check this connection’s credentials.',
   CHECK_DESTINATION_CONNECTIVITY: 'Check network access to the warehouse.',
-  FIX_MODEL_SQL: 'Fix the model SQL and compile again.',
+  FIX_MODEL_SQL: 'Fix the SQL and compile again.',
   VIEW_LOGS: 'Open the Logs tab for details.',
 };
 
@@ -2062,27 +2064,44 @@ const vi = {
       'Đếm số dòng theo từng ngày',
     ],
   },
-  loading: 'Đang tải Transform', loadError: 'Không tải được Transform', lineage: 'Sơ đồ phụ thuộc', settings: 'Cài đặt', save: 'Lưu', saved: 'Đã lưu', runTransform: 'Chạy Transform', inputs: 'Nguồn dữ liệu', models: 'Bảng dữ liệu', newModel: 'Bảng mới', noModel: 'Chưa có bảng dữ liệu nào', unsaved: 'Chưa lưu', visualLater: 'Visual mode sẽ được bổ sung sau khi SQL round-trip ổn định', compile: 'Kiểm tra cú pháp', preview: 'Xem thử', runModel: 'Ghi bảng này', config: 'Cấu hình', tests: 'Kiểm tra', cancel: 'Hủy', create: 'Tạo', modelName: 'Tên bảng', layer: 'Nhóm', materialization: 'Cách tạo dữ liệu', unsavedTitle: 'Bảng chưa được lưu', discard: 'Bỏ thay đổi', unsavedMessage: 'Lưu, bỏ thay đổi, hoặc hủy để quay lại bảng đang sửa.', compiledSql: 'SQL đã dịch', logs: 'Nhật ký', viewRun: 'Xem lần chạy', noPreview: 'Bấm Xem thử để xem dữ liệu.', noCompiled: 'Lưu model để xem SQL đã dịch.', noLogs: 'Chưa có nhật ký.', outputSchema: 'Schema đích', defaultOutput: 'Mặc định của Transform', relationName: 'Tên bảng', description: 'Mô tả', uniqueKey: 'Khóa duy nhất', strategy: 'Cách thêm dữ liệu mới', deleteModel: 'Xóa bảng', model: 'Bảng', removeTest: 'Xóa', column: 'Cột', rule: 'Quy tắc', values: 'Giá trị, cách nhau bằng dấu phẩy', severity: 'Mức độ', addTest: 'Thêm kiểm tra', lineageDescription: 'Sơ đồ cho thấy dữ liệu chảy từ nguồn nào tới bảng nào.', noLineage: 'Chạy Transform một lần để dựng sơ đồ.', warehouse: 'Kho dữ liệu', executionTrigger: 'Điều kiện chạy', exportProject: 'Tải project dbt về',
+  loading: 'Đang tải Transform', loadError: 'Không tải được Transform', lineage: 'Sơ đồ phụ thuộc', settings: 'Cài đặt', save: 'Lưu', saved: 'Đã lưu', runTransform: 'Chạy Transform', inputs: 'Nguồn dữ liệu', models: 'Bảng dữ liệu', newModel: 'Bảng mới', noModel: 'Chưa có bảng dữ liệu nào', unsaved: 'Chưa lưu', visualLater: 'Chế độ kéo-thả sẽ có sau', compile: 'Kiểm tra cú pháp', preview: 'Xem thử', runModel: 'Ghi bảng này', config: 'Cấu hình', tests: 'Kiểm tra', cancel: 'Hủy', create: 'Tạo', modelName: 'Tên bảng', layer: 'Nhóm', materialization: 'Cách tạo dữ liệu', unsavedTitle: 'Bảng chưa được lưu', discard: 'Bỏ thay đổi', unsavedMessage: 'Lưu, bỏ thay đổi, hoặc hủy để quay lại bảng đang sửa.', compiledSql: 'SQL đã dịch', logs: 'Nhật ký', viewRun: 'Xem lần chạy', noPreview: 'Bấm Xem thử để xem dữ liệu.', noCompiled: 'Lưu bảng để xem SQL đã dịch.', noLogs: 'Chưa có nhật ký.', outputSchema: 'Nơi chứa kết quả', defaultOutput: 'Mặc định của Transform', relationName: 'Tên bảng', description: 'Mô tả', uniqueKey: 'Khóa duy nhất', strategy: 'Cách thêm dữ liệu mới', deleteModel: 'Xóa bảng', model: 'Bảng', removeTest: 'Xóa', column: 'Cột', rule: 'Quy tắc', values: 'Giá trị, cách nhau bằng dấu phẩy', severity: 'Mức độ', addTest: 'Thêm kiểm tra', lineageDescription: 'Sơ đồ cho thấy dữ liệu chảy từ nguồn nào tới bảng nào.', noLineage: 'Chạy Transform một lần để dựng sơ đồ.', warehouse: 'Kho dữ liệu', executionTrigger: 'Điều kiện chạy', exportProject: 'Tải project dbt về',
   validate: 'Kiểm tra kết nối', insertReference: 'Chèn tham chiếu',
-  stale: 'Dữ liệu nguồn cũ hơn lần chạy gần nhất', unresolved: 'Chưa xác minh được relation',
-  warehouseRelation: 'Relation trong warehouse',
+  stale: 'Dữ liệu nguồn cũ hơn lần chạy gần nhất', unresolved: 'Chưa xác minh được bảng này',
+  warehouseRelation: 'Bảng có sẵn trong kho',
   line: 'dòng', showTechnical: 'Xem chi tiết kỹ thuật', hideTechnical: 'Ẩn chi tiết kỹ thuật',
   remediation: REMEDIATION_VI,
   settingsSaved: 'Đã lưu cài đặt Transform',
-  outputSchemaHelp: 'Schema mặc định nơi các model được tạo ra.',
+  outputSchemaHelp: 'Nơi mặc định Transform ghi các bảng kết quả.',
   triggerManual: 'Chạy thủ công', triggerUpstream: 'Chạy sau khi dữ liệu nguồn sẵn sàng',
   triggerManualHelp: 'Chỉ chạy khi bạn bấm Chạy Transform.',
   triggerUpstreamHelp: 'Chỉ chạy khi tất cả input bắt buộc đã được nạp mới.',
   needInput: 'Cần ít nhất một input.',
   waitingUpstream: 'Đang chờ dữ liệu nguồn',
+  // dbt's vocabulary, in the user's. A node is a table or a check; SUCCESS is
+  // not a word anybody reports a build with.
+  runStatus: {
+    QUEUED: 'Đang chờ', STARTING: 'Đang khởi động', RUNNING: 'Đang chạy',
+    SUCCEEDED: 'Thành công', FAILED: 'Thất bại', CANCELLED: 'Đã hủy',
+    TIMED_OUT: 'Quá thời gian',
+  } as Record<string, string>,
+  nodeStatus: {
+    SUCCESS: 'Xong', PASS: 'Đạt', WARN: 'Cảnh báo', FAIL: 'Không đạt',
+    ERROR: 'Lỗi', SKIPPED: 'Bỏ qua', RUNTIME_ERROR: 'Lỗi khi chạy',
+  } as Record<string, string>,
+  nodeKind: {
+    MODEL: 'Bảng', TEST: 'Kiểm tra', SEED: 'Dữ liệu nạp sẵn', SNAPSHOT: 'Bản chụp',
+  } as Record<string, string>,
+  healthLabel: {
+    HEALTHY: 'Ổn định', WARNING: 'Cảnh báo', ERROR: 'Lỗi', UNKNOWN: 'Chưa rõ',
+  } as Record<string, string>,
   testModel: 'Chạy kiểm tra', moreRunOptions: 'Tùy chọn chạy khác',
-  runUpstream: 'Chạy cả model nguồn phía trên', fullRefreshModel: 'Dựng lại model từ đầu',
+  runUpstream: 'Chạy cả các bảng phía trên', fullRefreshModel: 'Dựng lại bảng từ đầu',
   fullRefreshAll: 'Dựng lại toàn bộ từ đầu', cancelRun: 'Dừng',
-  results: 'Kết quả', noResults: 'Chạy Compile hoặc Chạy Transform để xem kết quả từng model.',
-  modelsRan: 'model', testsRan: 'test',
-  mergeNeedsKey: 'Chiến lược merge cần Unique key, nếu không dbt sẽ chỉ thêm dòng mới.',
-  conflictTitle: 'Model đã bị thay đổi ở nơi khác',
-  conflictMessage: 'Ai đó (hoặc một tab khác) đã lưu model này sau khi bạn mở. Chọn bản muốn giữ.',
+  results: 'Kết quả', noResults: 'Chạy kiểm tra cú pháp hoặc Chạy Transform để xem kết quả từng bảng.',
+  modelsRan: 'bảng', testsRan: 'kiểm tra',
+  mergeNeedsKey: 'Cách merge cần Khóa duy nhất, nếu không sẽ chỉ thêm dòng mới.',
+  conflictTitle: 'Bảng đã bị thay đổi ở nơi khác',
+  conflictMessage: 'Ai đó (hoặc một tab khác) đã lưu bảng này sau khi bạn mở. Chọn bản muốn giữ.',
   conflictMine: 'Bản của bạn', conflictTheirs: 'Bản trên máy chủ',
   conflictKeepMine: 'Giữ bản của tôi', conflictTakeServer: 'Lấy bản trên máy chủ',
   didYouMean: 'Ý bạn là:',
@@ -2105,13 +2124,13 @@ const vi = {
   zoomIn: 'Phóng to', zoomOut: 'Thu nhỏ', zoomFit: 'Vừa khung',
   expand: 'Mở rộng sơ đồ', collapse: 'Thu lại',
   legendSource: 'Nguồn dữ liệu', legendSelected: 'Đang mở', legendHealthy: 'Bảng đã dựng',
-  previewHelp: 'Xem thử 20 dòng kết quả. Không ghi gì vào warehouse.',
+  previewHelp: 'Xem thử 20 dòng kết quả. Không ghi gì vào kho dữ liệu.',
   compileHelp: 'Kiểm tra cú pháp, không chạm dữ liệu.',
-  testHelp: 'Chạy các test đã đặt cho model này.',
-  runModelHelp: 'Ghi model này vào schema thử nghiệm.',
-  runUpstreamHelp: 'Chạy cả các model mà nó phụ thuộc.',
+  testHelp: 'Chạy các kiểm tra đã đặt cho bảng này.',
+  runModelHelp: 'Ghi bảng này vào nơi chứa thử nghiệm.',
+  runUpstreamHelp: 'Chạy cả các bảng mà nó phụ thuộc.',
   fullRefreshHelp: 'Dựng lại từ đầu thay vì thêm dòng mới.',
-  runDraftHelp: 'Chạy code trong trình soạn thảo. Ghi vào schema thử nghiệm {schema}, không đụng bảng thật.',
+  runDraftHelp: 'Chạy code trong trình soạn thảo. Ghi vào {schema} để thử, không đụng bảng thật.',
   runLive: 'Chạy Phiên bản {n} (bản đang chạy)', modelsCounted: 'bảng',
   changes: 'Thay đổi sẽ được xuất bản', noChanges: 'Không có thay đổi nào.',
   changeAdded: 'Thêm', changeRemoved: 'Xóa', changeModified: 'Sửa',
@@ -2126,35 +2145,40 @@ const vi = {
   scheduleKind: 'Kiểu lịch', kindInterval: 'Theo chu kỳ', kindDaily: 'Hằng ngày',
   kindCron: 'Biểu thức cron', atTime: 'Vào lúc', cronExpression: 'Cron',
   startFrom: 'Bắt đầu từ', advanced: 'Tùy chọn nâng cao',
+  // The three words dbt uses for how a model lands. Two of them mean nothing
+  // outside dbt, and the dropdown is the first thing a new user touches.
+  materializationLabel: {
+    VIEW: 'Truy vấn sẵn (View)', TABLE: 'Bảng thật (Table)', INCREMENTAL: 'Thêm dần (Incremental)',
+  } as Record<string, string>,
   materializationHint: {
     VIEW: 'Không lưu dữ liệu, chạy lại mỗi lần đọc. Nhanh, luôn mới, hợp cho bước làm sạch.',
     TABLE: 'Ghi kết quả thành bảng thật. Đọc nhanh, dựng lại toàn bộ mỗi lần chạy.',
     INCREMENTAL: 'Lần đầu dựng toàn bộ, sau đó chỉ thêm dòng mới. Hợp bảng lớn.',
   } as Record<string, string>,
   uniqueKeyHint: 'Cột nhận diện một dòng. Thiếu nó, dữ liệu cũ sẽ bị nhân đôi.',
-  strategyHint: 'Cách dbt ghi dòng mới vào bảng đã có. Danh sách theo warehouse đang dùng.',
+  strategyHint: 'Cách ghi dòng mới vào bảng đã có. Tùy theo kho dữ liệu đang dùng.',
   layerHint: 'Chỉ để sắp xếp trong danh sách, không đổi cách chạy.',
-  descriptionHint: 'Hiện trong tài liệu dbt sinh ra.',
-  relationNameHint: 'Tên bảng trong warehouse. Để trống thì lấy tên model.',
+  descriptionHint: 'Hiện trong tài liệu được sinh ra.',
+  relationNameHint: 'Tên bảng trong kho dữ liệu. Để trống thì lấy tên ở trên.',
   outputSchemaHint: 'Schema đích. Để trống thì dùng mặc định của Transform.',
   templateName: {
     blank: 'Trống', staging: 'Làm sạch một bảng nguồn',
-    join: 'Ghép hai model', aggregate: 'Tổng hợp theo ngày',
+    join: 'Ghép hai bảng', aggregate: 'Tổng hợp theo ngày',
     incremental: 'Chỉ xử lý dữ liệu mới',
   } as Record<string, string>,
   templateHint: {
     blank: 'Tự viết từ đầu.',
     staging: 'Đổi tên cột, sửa kiểu dữ liệu. Thường là bước đầu tiên.',
-    join: 'Nối hai model đã có thành một bảng rộng hơn.',
+    join: 'Nối hai bảng đã có thành một bảng rộng hơn.',
     aggregate: 'Mỗi ngày một dòng — dạng dashboard hay dùng.',
     incremental: 'Lần sau chỉ chạy trên dòng mới. Cần đặt Unique key.',
   } as Record<string, string>,
   filterModels: 'Tìm bảng', filterAll: 'Tìm bảng hoặc nguồn...', modelActions: 'Thao tác', duplicateModel: 'Nhân bản',
   noModelMatch: 'Không tìm thấy bảng nào.',
-  layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Data Mart' } as Record<string, string>,
+  layerLabel: { STAGING: 'Làm sạch', CORE: 'Tổng hợp', MART: 'Phục vụ báo cáo' } as Record<string, string>,
   deleteModelTitle: 'Xóa bảng này?',
-  deleteModelMessage: 'Model "{name}" và toàn bộ test của nó sẽ bị xóa. Không hoàn tác được.',
-  deleteModelDependents: 'Các model đang tham chiếu tới nó sẽ không compile được:',
+  deleteModelMessage: 'Bảng "{name}" và toàn bộ kiểm tra của nó sẽ bị xóa. Không hoàn tác được.',
+  deleteModelDependents: 'Các bảng đang tham chiếu tới nó sẽ không chạy được nữa:',
 };
 const en = {
   git: {
@@ -2226,7 +2250,7 @@ const en = {
     validationFailedHint: 'You can still accept it and fix it in the editor, or draft again.',
     validationSkippedHint: 'This warehouse type has no dry run yet. Use Preview after accepting.',
     confidence: { HIGH: 'High confidence', MEDIUM: 'Medium confidence', LOW: 'Low confidence' },
-    layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Mart' },
+    layerLabel: { STAGING: 'Cleaned', CORE: 'Combined', MART: 'Reporting' },
     ruleLabel: { NOT_NULL: 'Not null', UNIQUE: 'Unique', ACCEPTED_VALUES: 'Accepted values' },
     exampleIntents: [
       'Clean this table up: readable column names and correct types',
@@ -2248,6 +2272,21 @@ const en = {
   triggerUpstreamHelp: 'Runs once every required input has been freshly loaded.',
   needInput: 'At least one input is required.',
   waitingUpstream: 'Waiting for upstream data',
+  runStatus: {
+    QUEUED: 'Queued', STARTING: 'Starting', RUNNING: 'Running',
+    SUCCEEDED: 'Succeeded', FAILED: 'Failed', CANCELLED: 'Cancelled',
+    TIMED_OUT: 'Timed out',
+  } as Record<string, string>,
+  nodeStatus: {
+    SUCCESS: 'Done', PASS: 'Passed', WARN: 'Warning', FAIL: 'Failed',
+    ERROR: 'Error', SKIPPED: 'Skipped', RUNTIME_ERROR: 'Runtime error',
+  } as Record<string, string>,
+  nodeKind: {
+    MODEL: 'Table', TEST: 'Check', SEED: 'Seed data', SNAPSHOT: 'Snapshot',
+  } as Record<string, string>,
+  healthLabel: {
+    HEALTHY: 'Healthy', WARNING: 'Warning', ERROR: 'Error', UNKNOWN: 'Unknown',
+  } as Record<string, string>,
   testModel: 'Test', moreRunOptions: 'More run options',
   runUpstream: 'Run with upstream models', fullRefreshModel: 'Full refresh this model',
   fullRefreshAll: 'Full refresh everything', cancelRun: 'Stop',
@@ -2299,6 +2338,9 @@ const en = {
   scheduleKind: 'Schedule type', kindInterval: 'Every N', kindDaily: 'Daily',
   kindCron: 'Cron expression', atTime: 'At', cronExpression: 'Cron',
   startFrom: 'Start from', advanced: 'Advanced options',
+  materializationLabel: {
+    VIEW: 'View', TABLE: 'Table', INCREMENTAL: 'Incremental',
+  } as Record<string, string>,
   materializationHint: {
     VIEW: 'Stores no data; re-runs on every read. Fast, always current, good for cleanup steps.',
     TABLE: 'Writes a real table. Fast to read, rebuilt in full on every run.',
@@ -2324,7 +2366,7 @@ const en = {
   } as Record<string, string>,
   filterModels: 'Filter models', filterAll: 'Find a table or source...', modelActions: 'Actions', duplicateModel: 'Duplicate',
   noModelMatch: 'No model matches.',
-  layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Data Mart' } as Record<string, string>,
+  layerLabel: { STAGING: 'Cleaned', CORE: 'Combined', MART: 'Reporting' } as Record<string, string>,
   deleteModelTitle: 'Delete model?',
   deleteModelMessage: 'Model "{name}" and all of its tests will be deleted. This cannot be undone.',
   deleteModelDependents: 'These models reference it and will stop compiling:',

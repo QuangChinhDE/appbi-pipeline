@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Copy, RotateCcw } from 'lucide-react';
 
 import { runApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { qk } from '@/lib/queryKeys';
 import { formatBytes, formatDateTime, formatDuration, formatNumber } from '@/lib/format';
 import type { RunDetail } from '@/lib/types';
@@ -207,7 +208,7 @@ function RunStats({ run }: { run: RunDetail }) {
 }
 
 function PipelineResults({ run, active }: { run: RunDetail; active: boolean }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return <Card title={t('runs.streamResults')} padded={false}>
     {run.stream_stats.length === 0 ? <EmptyState
       title={t(active ? 'runs.noStreamStatsRunning' : 'runs.noStreamStats')} compact
@@ -222,32 +223,46 @@ function PipelineResults({ run, active }: { run: RunDetail; active: boolean }) {
         <td className="px-4 py-2 text-caption text-text-primary">{stat.namespace ? `${stat.namespace}.` : ''}{stat.stream_name}</td>
         <td className="px-3 py-2 text-caption tabular-nums text-text-secondary">{formatNumber(stat.records_emitted)}</td>
         <td className="px-3 py-2 text-caption tabular-nums text-text-secondary">{formatBytes(stat.bytes_emitted)}</td>
-        <td className="px-3 py-2"><Badge variant={stat.status === 'COMPLETED' ? 'success' : 'info'} size="xs">{stat.status}</Badge></td>
+        <td className="px-3 py-2"><Badge variant={stat.status === 'COMPLETED' ? 'success' : 'info'} size="xs">{streamStatus(locale)[stat.status] ?? stat.status}</Badge></td>
       </tr>)}</tbody>
     </table></div>}
   </Card>;
 }
 
+/** Airbyte's own words for a stream's outcome, in the user's. */
+const streamStatus = (locale: string): Record<string, string> => locale === 'vi'
+  ? { COMPLETED: 'Xong', RUNNING: 'Đang chạy', INCOMPLETE: 'Chưa xong', PENDING: 'Đang chờ' }
+  : { COMPLETED: 'Done', RUNNING: 'Running', INCOMPLETE: 'Incomplete', PENDING: 'Pending' };
+
+/** dbt calls everything it runs a node. A user calls them tables and checks. */
+const nodeKind = (locale: string): Record<string, string> => locale === 'vi'
+  ? { MODEL: 'Bảng', TEST: 'Kiểm tra', SEED: 'Dữ liệu nạp sẵn', SNAPSHOT: 'Bản chụp' }
+  : { MODEL: 'Table', TEST: 'Check', SEED: 'Seed data', SNAPSHOT: 'Snapshot' };
+
 function TransformResults({ run, active }: { run: RunDetail; active: boolean }) {
   const { locale } = useI18n();
-  return <Card title={locale === 'vi' ? 'Kết quả theo node' : 'Node results'} padded={false}>
+  const kind = nodeKind(locale);
+  const head = locale === 'vi'
+    ? ['Bảng', 'Loại', 'Trạng thái', 'Bảng trong kho', 'Thời gian', 'Ghi chú']
+    : ['Table', 'Kind', 'Status', 'Warehouse table', 'Duration', 'Message'];
+  return <Card title={locale === 'vi' ? 'Kết quả từng bảng' : 'Results by table'} padded={false}>
     {run.transform_nodes.length === 0 ? <EmptyState
       title={active
-        ? (locale === 'vi' ? 'dbt đang chuẩn bị kết quả.' : 'dbt is preparing results.')
-        : (locale === 'vi' ? 'Lần chạy này không có kết quả node.' : 'This run has no node results.')}
+        ? (locale === 'vi' ? 'Đang chuẩn bị kết quả.' : 'Preparing results.')
+        : (locale === 'vi' ? 'Lần chạy này không có kết quả nào.' : 'This run produced no results.')}
       compact
     /> : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left">
       <thead><tr className="border-b border-[rgb(var(--border-line))] text-tiny uppercase tracking-[0.08em] text-text-quaternary">
-        <th scope="col" className="px-4 py-2 font-emphasis">Node</th>
-        <th scope="col" className="px-3 py-2 font-emphasis">Type</th>
-        <th scope="col" className="px-3 py-2 font-emphasis">Status</th>
-        <th scope="col" className="px-3 py-2 font-emphasis">Relation</th>
-        <th scope="col" className="px-3 py-2 font-emphasis">Duration</th>
-        <th scope="col" className="px-4 py-2 font-emphasis">Message</th>
+        {head.map((label, index) => (
+          <th key={label} scope="col"
+            className={cn('py-2 font-emphasis', index === 0 || index === head.length - 1 ? 'px-4' : 'px-3')}>
+            {label}
+          </th>
+        ))}
       </tr></thead>
       <tbody className="divide-y divide-[rgb(var(--border-line))]">{run.transform_nodes.map((node, index) => <tr key={`${node.resource_type}.${node.name}.${index}`}>
         <td className="px-4 py-2 font-mono text-caption text-text-primary">{node.name}</td>
-        <td className="px-3 py-2"><Badge variant="subtle" size="xs">{node.resource_type}</Badge></td>
+        <td className="px-3 py-2"><Badge variant="subtle" size="xs">{kind[node.resource_type] ?? node.resource_type}</Badge></td>
         <td className="px-3 py-2"><RunStatusBadge status={node.status} size="xs" /></td>
         <td className="max-w-[220px] truncate px-3 py-2 font-mono text-tiny text-text-secondary" title={node.relation_name ?? ''}>{node.relation_name ?? '-'}</td>
         <td className="px-3 py-2 text-caption tabular-nums text-text-secondary">{formatDuration(node.execution_time)}</td>

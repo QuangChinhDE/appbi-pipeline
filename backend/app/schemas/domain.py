@@ -478,7 +478,11 @@ class TransformDestinationCapability(BaseModel):
 
 class DataAssetView(BaseModel):
     id: uuid.UUID
-    destination_id: uuid.UUID
+    #: The connection this table was read through -- the scope its identity is
+    #: unique within. A Destination is only present when the connection came
+    #: from one, so it cannot be relied on to say where the table lives.
+    connection_id: uuid.UUID | None = None
+    destination_id: uuid.UUID | None = None
     catalog_name: str | None = None
     schema_name: str
     relation_name: str
@@ -506,7 +510,7 @@ class PipelineInputCandidate(BaseModel):
 
 
 class TransformInputCandidates(BaseModel):
-    destination_id: uuid.UUID
+    connection_id: uuid.UUID
     pipelines: list[PipelineInputCandidate] = Field(default_factory=list)
     assets: list[DataAssetView] = Field(default_factory=list)
 
@@ -794,11 +798,30 @@ class TransformRunRef(BaseModel):
     tests_failed: int = 0
 
 
+class TransformWarehouseRef(BaseModel):
+    """Where a Transform reads and writes: the connection, and its origin.
+
+    Not a Destination. A Transform often runs on a warehouse no Pipeline
+    writes to, and naming the field after the Destination made that case
+    unrepresentable -- and every screen show a word for something that was not
+    there.
+    """
+
+    connection_id: uuid.UUID
+    name: str
+    connector_key: str
+    connector_display_name: str | None = None
+    icon: str | None = None
+    #: Set only when the connection came from a Destination, which is what
+    #: still resolves `Source → Pipeline → table` upstream of this Transform.
+    destination_id: uuid.UUID | None = None
+
+
 class TransformView(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None = None
-    destination: ActorRef
+    warehouse: TransformWarehouseRef
     default_schema: str
     status: str
     health_status: str

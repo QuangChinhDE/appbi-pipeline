@@ -176,11 +176,15 @@ function ConnectorCard({
         <span className="mt-1 block line-clamp-2 text-tiny leading-relaxed text-text-tertiary">
           {subtitle}
         </span>
-        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-tiny text-text-quaternary">
-          <span className="font-mono">v{connector.version}</span>
-          {connector.supports_cdc && <span>· CDC</span>}
-          {blocked && <Ban className="h-3 w-3 text-danger" />}
-        </span>
+        {/* The pinned version used to sit here. Nobody picks a connector by
+            its version, and a line that is always present costs a row of
+            height on every tile in the grid. */}
+        {(connector.supports_cdc || blocked) && (
+          <span className="mt-1 flex flex-wrap items-center gap-1.5 text-tiny text-text-quaternary">
+            {connector.supports_cdc && <span>CDC</span>}
+            {blocked && <Ban className="h-3 w-3 text-danger" />}
+          </span>
+        )}
       </span>
     </button>
   );

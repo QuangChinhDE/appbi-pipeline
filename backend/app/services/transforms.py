@@ -44,7 +44,7 @@ from app.schemas.domain import (
     TransformInputCandidates, TransformLineage, TransformModelCreate, TransformModelUpdate,
     TransformModelView, TransformReleaseView, TransformRunNodeView, TransformRunRef,
     TransformTestCreate,
-    TransformTestView, TransformUpdate, TransformView,
+    TransformTestView, TransformUpdate, TransformView, TransformWarehouseRef,
 )
 from app.services import actors as actor_service, audit, scheduling
 from app.transformation.base import TransformationRequest, TransformationResult
@@ -93,6 +93,24 @@ async def _destination(
     if destination is None:
         raise NotFoundError("Destination was not found in this workspace.")
     return destination
+
+
+async def _warehouse_ref(
+    session: AsyncSession, connection: TransformConnection,
+) -> TransformWarehouseRef:
+    """Where a Transform runs, named after the connection rather than a
+    Destination -- which is often not there at all."""
+    definition = await session.scalar(select(ConnectorDefinition).where(
+        ConnectorDefinition.connector_key == (connection.connector_key or ""),
+    ))
+    return TransformWarehouseRef(
+        connection_id=connection.id,
+        name=connection.name,
+        connector_key=connection.connector_key or "",
+        connector_display_name=definition.display_name if definition else None,
+        icon=definition.icon if definition else None,
+        destination_id=connection.destination_id,
+    )
 
 
 async def _destination_ref(session: AsyncSession, destination: Destination) -> ActorRef:
@@ -166,7 +184,8 @@ async def _asset_view(
     pipeline = await session.get(Pipeline, asset.pipeline_id) if asset.pipeline_id else None
     return DataAssetView(
         source_name=source_name, freshness_state=freshness_state,
-        id=asset.id, destination_id=asset.destination_id, catalog_name=asset.catalog_name,
+        id=asset.id, connection_id=asset.connection_id,
+        destination_id=asset.destination_id, catalog_name=asset.catalog_name,
         schema_name=asset.schema_name, relation_name=asset.relation_name,
         relation_type=asset.relation_type, asset_type=asset.asset_type,
         owner_type=asset.owner_type, pipeline_id=asset.pipeline_id,
@@ -179,7 +198,7 @@ async def _asset_view(
 
 
 async def present(session: AsyncSession, ctx: RequestContext, transform: Transform) -> TransformView:
-    destination = await session.get(Destination, transform.destination_id)
+    connection = await transform_connection(session, transform)
     models = [model for model in transform.models if model.deleted_at is None]
     test_count = sum(len([test for test in model.tests if test.deleted_at is None]) for model in models)
     actions = ["view"]
@@ -188,7 +207,7 @@ async def present(session: AsyncSession, ctx: RequestContext, transform: Transfo
             actions.append(action.value)
     return TransformView(
         id=transform.id, name=transform.name, description=transform.description,
-        destination=await _destination_ref(session, destination),
+        warehouse=await _warehouse_ref(session, connection),
         default_schema=transform.default_schema, status=transform.status,
         health_status=transform.health_status.value, health_message=transform.health_message,
         model_count=len(models), test_count=test_count,
@@ -370,18 +389,25 @@ async def destination_capabilities(
 
 
 async def input_candidates(
-    session: AsyncSession, ctx: RequestContext, destination_id: uuid.UUID,
+    session: AsyncSession, ctx: RequestContext, connection_id: uuid.UUID,
 ) -> TransformInputCandidates:
+    """What has already been read through this connection.
+
+    Pipelines are listed only when the connection came from a Destination one
+    of them writes to; a connection somebody made by pasting a key has no
+    Pipeline above it, and offering an unrelated one would be a lie about where
+    the data comes from.
+    """
     ctx.require(Module.TRANSFORMS, Action.VIEW)
-    await _destination(session, ctx.workspace_id, destination_id)
+    connection = await get_connection(session, ctx.workspace_id, connection_id)
     pipelines = list((await session.scalars(select(Pipeline).where(
         Pipeline.workspace_id == ctx.workspace_id,
-        Pipeline.destination_id == destination_id,
+        Pipeline.destination_id == connection.destination_id,
         Pipeline.deleted_at.is_(None),
-    ).order_by(Pipeline.name))).all())
+    ).order_by(Pipeline.name))).all()) if connection.destination_id else []
     assets = list((await session.scalars(select(DataAsset).where(
         DataAsset.workspace_id == ctx.workspace_id,
-        DataAsset.destination_id == destination_id,
+        DataAsset.connection_id == connection.id,
         DataAsset.deleted_at.is_(None),
     ).order_by(DataAsset.schema_name, DataAsset.relation_name))).all())
     pipeline_items = []
@@ -406,7 +432,7 @@ async def input_candidates(
             } for stream in pipeline.streams if stream.selected],
         ))
     return TransformInputCandidates(
-        destination_id=destination_id, pipelines=pipeline_items,
+        connection_id=connection.id, pipelines=pipeline_items,
         assets=[await _asset_view(session, asset) for asset in assets],
     )
 
@@ -935,7 +961,8 @@ async def register_asset(
         session, ctx, "transform.asset.registered", resource_type="DATA_ASSET",
         resource_id=asset.id,
         resource_name=f"{asset.schema_name}.{asset.relation_name}",
-        after={"destination_id": str(destination.id), "pipeline_id": str(asset.pipeline_id or "")},
+        after={"connection_id": str(connection.id),
+               "pipeline_id": str(asset.pipeline_id or "")},
     )
     return asset
 
@@ -972,13 +999,13 @@ async def _replace_inputs(
     assets = list((await session.scalars(select(DataAsset).where(
         DataAsset.id.in_(asset_ids),
         DataAsset.workspace_id == transform.workspace_id,
-        DataAsset.destination_id == transform.destination_id,
+        DataAsset.connection_id == transform.warehouse_connection_id,
         DataAsset.resolution_status == "READY",
         DataAsset.deleted_at.is_(None),
     ))).all()) if asset_ids else []
     if len({asset.id for asset in assets}) != len(set(asset_ids)):
         raise ValidationError(
-            "Every Transform input must be a verified relation in the selected Destination.",
+            "Mỗi bảng đầu vào phải là bảng đã kiểm tra qua đúng kết nối của Transform này.",
             code="TRANSFORM_INPUT_INVALID",
         )
     await session.execute(sa_delete(TransformInput).where(TransformInput.transform_id == transform.id))
@@ -996,15 +1023,22 @@ async def create(
 ) -> Transform:
     ctx.require(Module.TRANSFORMS, Action.CREATE)
     require_identifier(payload.default_schema, "Output schema")
-    destination = await _destination(session, ctx.workspace_id, payload.destination_id)
-    cap = capability(destination.connector_key)
+    # The connection carries the warehouse, so it also decides the adapter. A
+    # Destination is copied across only when the connection has one -- it is
+    # what keeps the upstream half of the lineage resolvable, not what the
+    # Transform runs on.
+    connection = await get_connection(
+        session, ctx.workspace_id, payload.warehouse_connection_id,
+    )
+    connector_key = connection_connector(connection)
+    cap = capability(connector_key)
     if not cap or cap.get("certification") != "SUPPORTED":
         raise ValidationError(
-            "This Destination is not certified for Transform.",
-            code="TRANSFORM_DESTINATION_UNSUPPORTED",
+            "Hệ thống của kết nối này chưa được hỗ trợ.",
+            code="TRANSFORM_SYSTEM_UNSUPPORTED",
         )
     transform = Transform(
-        workspace_id=ctx.workspace_id, destination_id=destination.id,
+        workspace_id=ctx.workspace_id, destination_id=connection.destination_id,
         name=payload.name.strip(), description=payload.description,
         default_schema=payload.default_schema,
         warehouse_connection_id=payload.warehouse_connection_id,
@@ -1017,7 +1051,8 @@ async def create(
     await audit.record(
         session, ctx, "transform.created", resource_type="TRANSFORM",
         resource_id=transform.id, resource_name=transform.name,
-        after={"destination_id": str(destination.id), "input_count": len(payload.input_asset_ids)},
+        after={"connection_id": str(connection.id),
+               "input_count": len(payload.input_asset_ids)},
     )
     return transform
 
@@ -1788,11 +1823,22 @@ async def build_request(session: AsyncSession, run: TransformRun) -> Transformat
     transform = await session.get(Transform, run.transform_id)
     if transform is None or transform.deleted_at is not None:
         raise ValidationError("Transform no longer exists.", code="TRANSFORM_DELETED")
-    destination = await session.get(Destination, transform.destination_id)
-    if destination is None or destination.deleted_at is not None:
-        raise ValidationError("Destination no longer exists.", code="TRANSFORM_DESTINATION_MISSING")
-    if destination.status is not ResourceStatus.ACTIVE:
-        raise ValidationError("Destination is disabled.", code="TRANSFORM_DESTINATION_DISABLED")
+    # Only a connection that borrows a Destination's credential has a
+    # Destination to be disabled; one made from a pasted key stands on its own,
+    # and demanding a Destination here would make it unrunnable.
+    destination = await session.get(Destination, transform.destination_id) \
+        if transform.destination_id else None
+    if transform.destination_id is not None:
+        if destination is None or destination.deleted_at is not None:
+            raise ValidationError(
+                "Đích dữ liệu của Transform này không còn tồn tại.",
+                code="TRANSFORM_DESTINATION_MISSING",
+            )
+        if destination.status is not ResourceStatus.ACTIVE:
+            raise ValidationError(
+                "Đích dữ liệu của Transform này đang tắt.",
+                code="TRANSFORM_DESTINATION_DISABLED",
+            )
     # A released run executes the project frozen at publish time. Compiling the
     # live rows here is what lets an edit made after the run was queued end up
     # in the warehouse -- fine for a draft the author is watching, wrong for a
@@ -1807,9 +1853,10 @@ async def build_request(session: AsyncSession, run: TransformRun) -> Transformat
         TransformInput.transform_id == transform.id,
     ).order_by(TransformInput.source_name))).all())
     for item in inputs:
-        if item.asset.destination_id != transform.destination_id or item.asset.resolution_status != "READY":
+        if (item.asset.connection_id != transform.warehouse_connection_id
+                or item.asset.resolution_status != "READY"):
             raise ValidationError(
-                "A Transform input is no longer ready in this Destination.",
+                "Một bảng đầu vào của Transform này không còn đọc được qua kết nối đã chọn.",
                 code="TRANSFORM_INPUT_NOT_READY",
             )
     generated = generate_project(transform, models, inputs)
@@ -2098,15 +2145,22 @@ async def _upsert_model_asset(
     # were the real table.
     if _is_sandboxed(run):
         return
-    identity = _physical_identity(transform.destination_id, database, schema, relation)
+    # Scoped to the connection the run wrote through, exactly as a registered
+    # input is. Two anchors for one table is how a Transform's own output stops
+    # matching itself and gets catalogued twice.
+    identity = _physical_identity(
+        transform.warehouse_connection_id, database, schema, relation,
+    )
     asset = await session.scalar(select(DataAsset).where(
-        DataAsset.destination_id == transform.destination_id,
+        DataAsset.connection_id == transform.warehouse_connection_id,
         DataAsset.physical_identity == identity,
         DataAsset.deleted_at.is_(None),
     ))
     if asset is None:
         asset = DataAsset(
-            workspace_id=run.workspace_id, destination_id=transform.destination_id,
+            workspace_id=run.workspace_id,
+            connection_id=transform.warehouse_connection_id,
+            destination_id=transform.destination_id,
             physical_identity=identity,
         )
         session.add(asset)

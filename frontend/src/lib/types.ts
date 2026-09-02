@@ -425,7 +425,9 @@ export interface TransformDestinationCapability {
 
 export interface DataAsset {
   id: string;
-  destination_id: string;
+  /** The connection this table was read through -- the scope it is unique in. */
+  connection_id: string | null;
+  destination_id: string | null;
   catalog_name: string | null;
   schema_name: string;
   relation_name: string;
@@ -445,7 +447,7 @@ export interface DataAsset {
 }
 
 export interface TransformInputCandidates {
-  destination_id: string;
+  connection_id: string;
   pipelines: {
     pipeline: ActorRef;
     last_success_at: string | null;
@@ -631,11 +633,22 @@ export interface TransformRunRef {
   tests_failed: number;
 }
 
+/** Where a Transform reads and writes. A connection, which may or may not
+ *  have come from a Destination -- so it is never named after one. */
+export interface TransformWarehouse {
+  connection_id: string;
+  name: string;
+  connector_key: string;
+  connector_display_name: string | null;
+  icon: string | null;
+  destination_id: string | null;
+}
+
 export interface Transform {
   id: string;
   name: string;
   description: string | null;
-  destination: ActorRef;
+  warehouse: TransformWarehouse;
   default_schema: string;
   status: string;
   health_status: string;

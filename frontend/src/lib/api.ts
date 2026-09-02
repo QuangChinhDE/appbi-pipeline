@@ -436,8 +436,8 @@ export const transformApi = {
     get<Paginated<Transform>>('/transforms', query as Query),
   detail: (id: string) => get<TransformDetail>(`/transforms/${id}`),
   destinations: () => get<TransformDestinationCapability[]>('/transforms/destinations'),
-  inputCandidates: (destinationId: string) =>
-    get<TransformInputCandidates>(`/transforms/destinations/${destinationId}/inputs`),
+  inputCandidates: (connectionId: string) =>
+    get<TransformInputCandidates>(`/transforms/connections/${connectionId}/inputs`),
   registerAsset: (connectionId: string, body: {
     catalog_name?: string; schema_name: string; relation_name: string;
     pipeline_id?: string; pipeline_stream_id?: string;

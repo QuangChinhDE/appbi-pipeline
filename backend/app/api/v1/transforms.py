@@ -79,10 +79,11 @@ async def destinations(session: SessionDep, ctx: CtxDep):
 
 
 @router.get(
-    "/destinations/{destination_id}/inputs", response_model=TransformInputCandidates,
+    "/connections/{connection_id}/inputs", response_model=TransformInputCandidates,
 )
-async def candidates(destination_id: uuid.UUID, session: SessionDep, ctx: CtxDep):
-    return await service.input_candidates(session, ctx, destination_id)
+async def candidates(connection_id: uuid.UUID, session: SessionDep, ctx: CtxDep):
+    """What has already been read through this connection."""
+    return await service.input_candidates(session, ctx, connection_id)
 
 
 @router.get("/connections", response_model=list[WarehouseConnectionView])

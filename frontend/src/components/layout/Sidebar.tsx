@@ -90,7 +90,7 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { t, locale, setLocale } = useI18n();
+  const { t, tf, locale, setLocale } = useI18n();
   const { data: user } = useCurrentUser();
   const workspaceId = useWorkspaceId();
   const switchWorkspace = useWorkspaceSwitch();
@@ -227,7 +227,12 @@ export function Sidebar({
                 <p className="truncate text-caption font-emphasis text-text-primary">
                   {user.workspace?.name ?? '—'}
                 </p>
-                <p className="truncate text-tiny text-text-quaternary">{user.role}</p>
+                {/* The stored value is an enum. PLATFORM_ADMIN under a
+                    workspace name is a database row, not a description of who
+                    the reader is. */}
+                <p className="truncate text-tiny text-text-quaternary">
+                  {user.role ? tf([`role.${user.role}`], user.role) : '—'}
+                </p>
               </div>
               <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-text-quaternary" />
             </button>

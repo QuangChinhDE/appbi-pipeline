@@ -22,7 +22,7 @@ import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card, DetailBody, DetailHeader, ModuleOverview } from '@/components/layout/PageLayout';
-import { HealthBadge } from './Badges';
+import { HealthBadge, PipelineStatusBadge } from './Badges';
 import { ConnectorIcon } from './ConnectorIcon';
 import { ErrorRemediationCard, fromApiError, type RemediationInput } from './ErrorRemediationCard';
 import {
@@ -141,15 +141,14 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
         subtitle={
           <span className="text-caption text-text-tertiary">
             {actor.connector_display_name}
-            <span className="ml-1.5 font-mono text-tiny text-text-quaternary">
-              v{actor.connector_version}
-            </span>
           </span>
         }
         badges={
           <>
             <HealthBadge health={actor.health} />
-            {actor.status !== 'ACTIVE' && <Badge variant="neutral" size="sm">{actor.status}</Badge>}
+            {actor.status !== 'ACTIVE' && (
+              <Badge variant="neutral" size="sm">{t('common.disabled')}</Badge>
+            )}
           </>
         }
         actions={
@@ -354,7 +353,7 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
                         {pipeline.name}
                       </span>
                       <span className="flex items-center gap-2">
-                        <Badge variant="subtle" size="xs">{pipeline.status}</Badge>
+                        <PipelineStatusBadge status={pipeline.status} />
                         {pipeline.next_run_at && (
                           <span className="text-tiny text-text-quaternary">
                             {t('pipelines.nextRun')}: {formatRelative(pipeline.next_run_at, locale)}

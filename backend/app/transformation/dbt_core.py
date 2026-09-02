@@ -291,13 +291,23 @@ class DbtCoreAdapter:
         summary = "dbt could not complete this operation."
         missing = cls._MISSING_REF.search(tail)
         if missing:
+            # A missing ref gets the clearer message, but it should not cost
+            # the reader the line number: this branch returns before the
+            # location parsing below, so it has to read the line itself or the
+            # editor has nowhere to jump.
+            where: dict[str, Any] = {
+                "name": missing.group("model"), "resource_type": "model",
+                "missing_ref": missing.group("missing"),
+            }
+            line = cls._LINE.search(tail[missing.end():]) or cls._LINE.search(tail)
+            if line:
+                where["line"] = int(line.group("line"))
             return (
                 "Model '{0}' references '{1}', which does not exist in this "
                 "Transform.".format(missing.group("model"),
                                     missing.group("missing")),
                 tail[:4000],
-                {"name": missing.group("model"), "resource_type": "model",
-                 "missing_ref": missing.group("missing")},
+                where,
             )
         match = cls._LOCATION.search(tail)
         if match:
