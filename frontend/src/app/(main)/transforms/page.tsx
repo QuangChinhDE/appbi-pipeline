@@ -29,7 +29,7 @@ export default function TransformsPage() {
   const copy = locale === 'vi' ? {
     title: 'Transform', description: 'Biến đổi dữ liệu trong kho thành các bảng sẵn sàng cho báo cáo.',
     create: 'Transform mới', importFromGit: 'Import từ GitHub', empty: 'Chưa có Transform', emptyDescription: 'Tạo Transform đầu tiên từ một kết nối kho dữ liệu đã có.',
-    name: 'Tên', warehouse: 'Kết nối', models: 'Bảng', tests: 'Kiểm tra', health: 'Tình trạng', lastRun: 'Lần chạy cuối', open: 'Mở',
+    name: 'Tên', warehouse: 'Kết nối', models: 'Model', tests: 'Test', health: 'Tình trạng', lastRun: 'Lần chạy cuối', open: 'Mở',
     total: 'Tổng', healthy: 'Ổn định', attention: 'Cần chú ý', search: 'Tìm Transform', never: 'Chưa chạy', loadError: 'Không tải được Transform',
     healthLabel: {
       HEALTHY: 'Ổn định', WARNING: 'Cảnh báo', ERROR: 'Lỗi', UNKNOWN: 'Chưa rõ',
@@ -37,7 +37,7 @@ export default function TransformsPage() {
   } : {
     title: 'Transform', description: 'Turn warehouse data into business-ready datasets.',
     create: 'New transform', importFromGit: 'Import from GitHub', empty: 'No transforms yet', emptyDescription: 'Create the first Transform from a warehouse connection you already have.',
-    name: 'Name', warehouse: 'Connection', models: 'Tables', tests: 'Checks', health: 'Health', lastRun: 'Last run', open: 'Open',
+    name: 'Name', warehouse: 'Connection', models: 'Models', tests: 'Tests', health: 'Health', lastRun: 'Last run', open: 'Open',
     total: 'Total', healthy: 'Healthy', attention: 'Needs attention', search: 'Search transforms', never: 'Never run', loadError: 'Could not load transforms',
     healthLabel: {
       HEALTHY: 'Healthy', WARNING: 'Warning', ERROR: 'Error', UNKNOWN: 'Unknown',

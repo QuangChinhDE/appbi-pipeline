@@ -234,18 +234,18 @@ const streamStatus = (locale: string): Record<string, string> => locale === 'vi'
   ? { COMPLETED: 'Xong', RUNNING: 'Đang chạy', INCOMPLETE: 'Chưa xong', PENDING: 'Đang chờ' }
   : { COMPLETED: 'Done', RUNNING: 'Running', INCOMPLETE: 'Incomplete', PENDING: 'Pending' };
 
-/** dbt calls everything it runs a node. A user calls them tables and checks. */
-const nodeKind = (locale: string): Record<string, string> => locale === 'vi'
-  ? { MODEL: 'Bảng', TEST: 'Kiểm tra', SEED: 'Dữ liệu nạp sẵn', SNAPSHOT: 'Bản chụp' }
-  : { MODEL: 'Table', TEST: 'Check', SEED: 'Seed data', SNAPSHOT: 'Snapshot' };
+/** dbt's own words for what it ran. Kept as they are: these are the terms the
+ *  logs beside this table print and the ones the docs are written in. */
+const NODE_KIND: Record<string, string> = {
+  MODEL: 'Model', TEST: 'Test', SEED: 'Seed', SNAPSHOT: 'Snapshot',
+};
 
 function TransformResults({ run, active }: { run: RunDetail; active: boolean }) {
   const { locale } = useI18n();
-  const kind = nodeKind(locale);
   const head = locale === 'vi'
-    ? ['Bảng', 'Loại', 'Trạng thái', 'Bảng trong kho', 'Thời gian', 'Ghi chú']
-    : ['Table', 'Kind', 'Status', 'Warehouse table', 'Duration', 'Message'];
-  return <Card title={locale === 'vi' ? 'Kết quả từng bảng' : 'Results by table'} padded={false}>
+    ? ['Node', 'Loại', 'Trạng thái', 'Bảng trong kho', 'Thời gian', 'Ghi chú']
+    : ['Node', 'Kind', 'Status', 'Relation', 'Duration', 'Message'];
+  return <Card title={locale === 'vi' ? 'Kết quả từng node' : 'Node results'} padded={false}>
     {run.transform_nodes.length === 0 ? <EmptyState
       title={active
         ? (locale === 'vi' ? 'Đang chuẩn bị kết quả.' : 'Preparing results.')
@@ -262,7 +262,7 @@ function TransformResults({ run, active }: { run: RunDetail; active: boolean }) 
       </tr></thead>
       <tbody className="divide-y divide-[rgb(var(--border-line))]">{run.transform_nodes.map((node, index) => <tr key={`${node.resource_type}.${node.name}.${index}`}>
         <td className="px-4 py-2 font-mono text-caption text-text-primary">{node.name}</td>
-        <td className="px-3 py-2"><Badge variant="subtle" size="xs">{kind[node.resource_type] ?? node.resource_type}</Badge></td>
+        <td className="px-3 py-2"><Badge variant="subtle" size="xs">{NODE_KIND[node.resource_type] ?? node.resource_type}</Badge></td>
         <td className="px-3 py-2"><RunStatusBadge status={node.status} size="xs" /></td>
         <td className="max-w-[220px] truncate px-3 py-2 font-mono text-tiny text-text-secondary" title={node.relation_name ?? ''}>{node.relation_name ?? '-'}</td>
         <td className="px-3 py-2 text-caption tabular-nums text-text-secondary">{formatDuration(node.execution_time)}</td>

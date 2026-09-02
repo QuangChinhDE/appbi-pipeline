@@ -53,6 +53,7 @@ export function WarehouseBrowser({
   /** Register and select the chosen relations. */
   onAdd: (relations: {
     catalog_name: string | null; schema_name: string; relation_name: string;
+    pipeline_id: string | null; pipeline_stream_id: string | null;
   }[]) => void;
   adding?: boolean;
   disabled?: boolean;
@@ -209,10 +210,15 @@ export function WarehouseBrowser({
                       .filter((item) => picked.has(
                         `${item.schema_name}.${item.relation_name}`,
                       ))
+                      // The row says "từ <Pipeline>"; registering has to say
+                      // the same thing or the table arrives in the Transform
+                      // with its upstream half of the lineage cut off.
                       .map((item) => ({
                         catalog_name: item.catalog_name ?? catalog ?? null,
                         schema_name: item.schema_name,
                         relation_name: item.relation_name,
+                        pipeline_id: item.pipeline_id,
+                        pipeline_stream_id: item.pipeline_stream_id,
                       })));
                     setPicked(new Set());
                   }}>

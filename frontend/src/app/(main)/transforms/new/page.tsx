@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Database, Link2, Table2, X } from 'lucide-react';
 
@@ -68,7 +68,7 @@ export default function NewTransformPage() {
     },
     chooseInputs: 'Bảng đầu vào',
     chooseInputsHelp: 'Tích những bảng Transform này sẽ đọc — kể cả dataset bạn tự tạo, không đi qua Pipeline.',
-    chosenTables: 'Đã chọn',
+    chosenTables: 'Đã chọn', tableWord: 'bảng',
     nothingChosen: 'Chưa chọn bảng nào',
     clearAll: 'Bỏ hết',
     removeTable: 'Bỏ bảng này',
@@ -90,7 +90,7 @@ export default function NewTransformPage() {
       nothingSelected: 'Tích vào bảng bạn cần dùng',
     },
     schema: 'Dataset', relation: 'Tên bảng', catalog: 'Project',
-    pipeline: 'Pipeline nguồn', verify: 'Kiểm tra và thêm',
+    verify: 'Kiểm tra và thêm',
     details: 'Đặt tên cho Transform', name: 'Tên Transform',
     output: 'Nơi chứa kết quả',
     outputHelp: 'Tên dataset (hoặc schema) Transform sẽ ghi bảng kết quả vào.',
@@ -139,7 +139,7 @@ export default function NewTransformPage() {
     },
     chooseInputs: 'Input tables',
     chooseInputsHelp: 'Tick the tables this Transform reads — including datasets you built yourself, without a Pipeline.',
-    chosenTables: 'Chosen',
+    chosenTables: 'Chosen', tableWord: 'tables',
     nothingChosen: 'No table chosen yet',
     clearAll: 'Clear all',
     removeTable: 'Remove',
@@ -161,7 +161,7 @@ export default function NewTransformPage() {
       nothingSelected: 'Tick the tables you need',
     },
     schema: 'Dataset', relation: 'Table name', catalog: 'Project',
-    pipeline: 'Upstream Pipeline', verify: 'Check and add',
+    verify: 'Check and add',
     details: 'Name the Transform', name: 'Transform name',
     output: 'Where results go',
     outputHelp: 'The dataset (or schema) this Transform writes its result tables into.',
@@ -170,7 +170,6 @@ export default function NewTransformPage() {
     warehouseRelation: 'Table already in the warehouse',
   };
   const router = useRouter();
-  const searchParams = useSearchParams();
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
   const [step, setStep] = React.useState(0);
@@ -187,9 +186,12 @@ export default function NewTransformPage() {
   const assetIds = React.useMemo(
     () => chosenAssets.map((item) => item.id), [chosenAssets],
   );
+  // Manual entry is the escape hatch for a table the browser cannot list. It
+  // does not ask about Pipelines: the browser knows which Pipeline writes a
+  // relation and attaches it itself, and a field nobody can answer correctly
+  // is worse than no field.
   const [assetForm, setAssetForm] = React.useState({
     catalog_name: '', schema_name: '', relation_name: '',
-    pipeline_id: searchParams.get('pipeline_id') ?? '', pipeline_stream_id: '',
   });
 
 
@@ -198,8 +200,6 @@ export default function NewTransformPage() {
       catalog_name: assetForm.catalog_name || undefined,
       schema_name: assetForm.schema_name,
       relation_name: assetForm.relation_name,
-      pipeline_id: assetForm.pipeline_id || undefined,
-      pipeline_stream_id: assetForm.pipeline_stream_id || undefined,
     }),
     onSuccess: async (asset) => {
       setChosenAssets((current) => current.some((row) => row.id === asset.id)
@@ -208,7 +208,7 @@ export default function NewTransformPage() {
       await queryClient.invalidateQueries({
         queryKey: qk.transformWarehouseAll(workspaceId, connectionId ?? ''),
       });
-      setAssetForm((current) => ({ ...current, schema_name: '', relation_name: '', pipeline_stream_id: '' }));
+      setAssetForm((current) => ({ ...current, schema_name: '', relation_name: '' }));
       toastSuccess(copy.registered);
     },
     onError: (error) => toastError(error),
@@ -223,6 +223,7 @@ export default function NewTransformPage() {
   const addBrowsed = useMutation({
     mutationFn: async (relations: {
       schema_name: string; relation_name: string; catalog_name: string | null;
+      pipeline_id: string | null; pipeline_stream_id: string | null;
     }[]) => {
       const added = [];
       for (const relation of relations) {
@@ -230,7 +231,9 @@ export default function NewTransformPage() {
           catalog_name: relation.catalog_name || undefined,
           schema_name: relation.schema_name,
           relation_name: relation.relation_name,
-            }));
+          pipeline_id: relation.pipeline_id || undefined,
+          pipeline_stream_id: relation.pipeline_stream_id || undefined,
+        }));
       }
       return added;
     },
@@ -295,7 +298,15 @@ export default function NewTransformPage() {
               // reaches, so asking for the warehouse separately would be asking
               // the same question twice.
               <ConnectionPicker
-                copy={copy.connect} value={connectionId} onChange={setConnectionId} />
+                copy={copy.connect} value={connectionId}
+                // The basket holds assets registered through one connection,
+                // and an asset is only valid for the connection it was read
+                // through. Carrying it to another one meant filling in the
+                // whole wizard and being refused at the last click.
+                onChange={(next) => {
+                  if (next !== connectionId) setChosenAssets([]);
+                  setConnectionId(next);
+                }} />
             )}
 
             {step === 1 && (
@@ -326,9 +337,8 @@ export default function NewTransformPage() {
                       <div><Label>{copy.catalog}</Label><Input value={assetForm.catalog_name} onChange={(event) => setAssetForm({ ...assetForm, catalog_name: event.target.value })} /></div>
                       <div><Label required>{copy.schema}</Label><Input value={assetForm.schema_name} onChange={(event) => setAssetForm({ ...assetForm, schema_name: event.target.value })} /></div>
                       <div><Label required>{copy.relation}</Label><Input value={assetForm.relation_name} onChange={(event) => setAssetForm({ ...assetForm, relation_name: event.target.value })} /></div>
-                      <div><Label>{copy.pipeline}</Label><Select value={assetForm.pipeline_id} onChange={(event) => setAssetForm({ ...assetForm, pipeline_id: event.target.value, pipeline_stream_id: '' })}><option value="">{copy.warehouseRelation}</option></Select></div>
                     </div>
-                    <div className="mt-3 flex justify-end"><Button variant="primary" size="sm" loading={register.isPending} disabled={!assetForm.schema_name || !assetForm.relation_name || Boolean(assetForm.pipeline_id && !assetForm.pipeline_stream_id)} onClick={() => register.mutate()} leadingIcon={<Link2 className="h-4 w-4" />}>{copy.verify}</Button></div>
+                    <div className="mt-3 flex justify-end"><Button variant="primary" size="sm" loading={register.isPending} disabled={!assetForm.schema_name || !assetForm.relation_name} onClick={() => register.mutate()} leadingIcon={<Link2 className="h-4 w-4" />}>{copy.verify}</Button></div>
                   </details>
                 </div>
 
@@ -403,7 +413,7 @@ export default function NewTransformPage() {
                   <div className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-4 py-3 text-caption text-text-secondary">
                     <span className="font-emphasis text-text-primary">{chosenConnectionName}</span>
                     <span className="mx-2 text-text-quaternary">·</span>
-                    {assetIds.length} {copy.chosenTables.toLowerCase()}
+                    {assetIds.length} {copy.tableWord}
                   </div>
                 </div>
               </section>

@@ -775,13 +775,19 @@ async def browse_warehouse(
             "asset_id": asset.id if asset else None,
             "pipeline_id": pipeline[0] if pipeline else None,
             "pipeline_name": pipeline[1] if pipeline else None,
+            "pipeline_stream_id": pipeline[2] if pipeline else None,
         })
     return {"catalog_name": catalog, "catalogs": [], "schemas": [], "relations": out}
 
 
+#: (pipeline_id, pipeline_name, stream_id) -- who writes a relation, and through
+#: which stream when that is knowable.
+Producer = tuple[uuid.UUID, str, uuid.UUID | None]
+
+
 async def _pipeline_outputs(
     session: AsyncSession, workspace_id: uuid.UUID, destination_id: uuid.UUID | None,
-) -> tuple[dict[tuple[str, str], tuple[uuid.UUID, str]], list[tuple[str, uuid.UUID, str]]]:
+) -> tuple[dict[tuple[str, str], Producer], list[tuple[str, Producer]]]:
     """Relations in this warehouse that a Pipeline writes.
 
     Two layers, because two kinds of evidence exist and one is much better than
@@ -803,7 +809,7 @@ async def _pipeline_outputs(
     if not pipelines:
         return {}, []
     by_pipeline = {item.id: item.name for item in pipelines}
-    exact: dict[tuple[str, str], tuple[uuid.UUID, str]] = {}
+    exact: dict[tuple[str, str], Producer] = {}
     for asset in (await session.scalars(select(DataAsset).where(
         DataAsset.workspace_id == workspace_id,
         DataAsset.destination_id == destination_id,
@@ -812,9 +818,11 @@ async def _pipeline_outputs(
     ))).all():
         name = by_pipeline.get(asset.pipeline_id)
         if name:
-            exact[(asset.schema_name, asset.relation_name)] = (asset.pipeline_id, name)
-    loose: list[tuple[str, uuid.UUID, str]] = [
-        (stream.stream_name, pipeline.id, pipeline.name)
+            exact[(asset.schema_name, asset.relation_name)] = (
+                asset.pipeline_id, name, asset.pipeline_stream_id,
+            )
+    loose: list[tuple[str, Producer]] = [
+        (stream.stream_name, (pipeline.id, pipeline.name, stream.id))
         for pipeline in pipelines
         for stream in pipeline.streams
         if stream.selected
@@ -825,15 +833,15 @@ async def _pipeline_outputs(
 def _producer_of(
     schema_name: str,
     relation_name: str,
-    exact: dict[tuple[str, str], tuple[uuid.UUID, str]],
-    loose: list[tuple[str, uuid.UUID, str]],
-) -> tuple[uuid.UUID, str] | None:
+    exact: dict[tuple[str, str], Producer],
+    loose: list[tuple[str, Producer]],
+) -> Producer | None:
     found = exact.get((schema_name, relation_name))
     if found is not None:
         return found
-    for stream_name, pipeline_id, pipeline_name in loose:
+    for stream_name, producer in loose:
         if _stream_matches(stream_name, relation_name):
-            return pipeline_id, pipeline_name
+            return producer
     return None
 
 

@@ -438,5 +438,5 @@ const en: typeof vi = {
   startOver: 'Read a different repository',
   createAction: 'Import',
   created: 'Imported {n} models',
-  layerLabel: { STAGING: 'Cleaned', CORE: 'Combined', MART: 'Reporting' } as Record<string, string>,
+  layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Mart' } as Record<string, string>,
 };

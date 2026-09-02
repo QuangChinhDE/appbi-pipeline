@@ -470,6 +470,8 @@ export interface BrowsedRelation {
   /** Set when a Pipeline writes this relation — a source AppBI keeps fresh. */
   pipeline_id: string | null;
   pipeline_name: string | null;
+  /** The stream writing it, so registering keeps the upstream lineage. */
+  pipeline_stream_id: string | null;
 }
 
 export interface WarehouseBrowse {

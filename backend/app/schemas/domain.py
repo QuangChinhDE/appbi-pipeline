@@ -718,6 +718,9 @@ class BrowsedRelationView(BaseModel):
     #: is distinguishable from one that merely exists.
     pipeline_id: uuid.UUID | None = None
     pipeline_name: str | None = None
+    #: The stream that writes it, when one can be identified. Registering with
+    #: it is what keeps the Source -> Pipeline half of the lineage attached.
+    pipeline_stream_id: uuid.UUID | None = None
 
 
 class WarehouseBrowseView(BaseModel):

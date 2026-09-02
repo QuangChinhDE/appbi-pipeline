@@ -1196,9 +1196,9 @@ export default function TransformWorkbenchPage() {
                 <Label>{copy.materialization}</Label>
                 <Select value={newModel.materialization}
                   onChange={(event) => setNewModel({ ...newModel, materialization: event.target.value })}>
-                  <option value="VIEW">{copy.materializationLabel.VIEW}</option>
-                  <option value="TABLE">{copy.materializationLabel.TABLE}</option>
-                  <option value="INCREMENTAL">{copy.materializationLabel.INCREMENTAL}</option>
+                  <option value="VIEW">View</option>
+                  <option value="TABLE">Table</option>
+                  <option value="INCREMENTAL">Incremental</option>
                 </Select>
               </div>
             </div>
@@ -1523,9 +1523,9 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
       <Field label={copy.materialization} hint={copy.materializationHint[draft.materialization]}>
         <Select disabled={!canEdit} value={draft.materialization}
           onChange={(event) => patchDraft({ materialization: event.target.value as Draft['materialization'] })}>
-          <option value="VIEW">{copy.materializationLabel.VIEW}</option>
-          <option value="TABLE">{copy.materializationLabel.TABLE}</option>
-          <option value="INCREMENTAL">{copy.materializationLabel.INCREMENTAL}</option>
+          <option value="VIEW">View</option>
+          <option value="TABLE">Table</option>
+          <option value="INCREMENTAL">Incremental</option>
         </Select>
       </Field>
 
@@ -2089,7 +2089,7 @@ const vi = {
     ERROR: 'Lỗi', SKIPPED: 'Bỏ qua', RUNTIME_ERROR: 'Lỗi khi chạy',
   } as Record<string, string>,
   nodeKind: {
-    MODEL: 'Bảng', TEST: 'Kiểm tra', SEED: 'Dữ liệu nạp sẵn', SNAPSHOT: 'Bản chụp',
+    MODEL: 'Model', TEST: 'Test', SEED: 'Seed', SNAPSHOT: 'Snapshot',
   } as Record<string, string>,
   healthLabel: {
     HEALTHY: 'Ổn định', WARNING: 'Cảnh báo', ERROR: 'Lỗi', UNKNOWN: 'Chưa rõ',
@@ -2098,7 +2098,7 @@ const vi = {
   runUpstream: 'Chạy cả các bảng phía trên', fullRefreshModel: 'Dựng lại bảng từ đầu',
   fullRefreshAll: 'Dựng lại toàn bộ từ đầu', cancelRun: 'Dừng',
   results: 'Kết quả', noResults: 'Chạy kiểm tra cú pháp hoặc Chạy Transform để xem kết quả từng bảng.',
-  modelsRan: 'bảng', testsRan: 'kiểm tra',
+  modelsRan: 'model', testsRan: 'test',
   mergeNeedsKey: 'Cách merge cần Khóa duy nhất, nếu không sẽ chỉ thêm dòng mới.',
   conflictTitle: 'Bảng đã bị thay đổi ở nơi khác',
   conflictMessage: 'Ai đó (hoặc một tab khác) đã lưu bảng này sau khi bạn mở. Chọn bản muốn giữ.',
@@ -2145,11 +2145,6 @@ const vi = {
   scheduleKind: 'Kiểu lịch', kindInterval: 'Theo chu kỳ', kindDaily: 'Hằng ngày',
   kindCron: 'Biểu thức cron', atTime: 'Vào lúc', cronExpression: 'Cron',
   startFrom: 'Bắt đầu từ', advanced: 'Tùy chọn nâng cao',
-  // The three words dbt uses for how a model lands. Two of them mean nothing
-  // outside dbt, and the dropdown is the first thing a new user touches.
-  materializationLabel: {
-    VIEW: 'Truy vấn sẵn (View)', TABLE: 'Bảng thật (Table)', INCREMENTAL: 'Thêm dần (Incremental)',
-  } as Record<string, string>,
   materializationHint: {
     VIEW: 'Không lưu dữ liệu, chạy lại mỗi lần đọc. Nhanh, luôn mới, hợp cho bước làm sạch.',
     TABLE: 'Ghi kết quả thành bảng thật. Đọc nhanh, dựng lại toàn bộ mỗi lần chạy.',
@@ -2250,7 +2245,7 @@ const en = {
     validationFailedHint: 'You can still accept it and fix it in the editor, or draft again.',
     validationSkippedHint: 'This warehouse type has no dry run yet. Use Preview after accepting.',
     confidence: { HIGH: 'High confidence', MEDIUM: 'Medium confidence', LOW: 'Low confidence' },
-    layerLabel: { STAGING: 'Cleaned', CORE: 'Combined', MART: 'Reporting' },
+    layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Mart' },
     ruleLabel: { NOT_NULL: 'Not null', UNIQUE: 'Unique', ACCEPTED_VALUES: 'Accepted values' },
     exampleIntents: [
       'Clean this table up: readable column names and correct types',
@@ -2282,7 +2277,7 @@ const en = {
     ERROR: 'Error', SKIPPED: 'Skipped', RUNTIME_ERROR: 'Runtime error',
   } as Record<string, string>,
   nodeKind: {
-    MODEL: 'Table', TEST: 'Check', SEED: 'Seed data', SNAPSHOT: 'Snapshot',
+    MODEL: 'Model', TEST: 'Test', SEED: 'Seed', SNAPSHOT: 'Snapshot',
   } as Record<string, string>,
   healthLabel: {
     HEALTHY: 'Healthy', WARNING: 'Warning', ERROR: 'Error', UNKNOWN: 'Unknown',
@@ -2338,9 +2333,6 @@ const en = {
   scheduleKind: 'Schedule type', kindInterval: 'Every N', kindDaily: 'Daily',
   kindCron: 'Cron expression', atTime: 'At', cronExpression: 'Cron',
   startFrom: 'Start from', advanced: 'Advanced options',
-  materializationLabel: {
-    VIEW: 'View', TABLE: 'Table', INCREMENTAL: 'Incremental',
-  } as Record<string, string>,
   materializationHint: {
     VIEW: 'Stores no data; re-runs on every read. Fast, always current, good for cleanup steps.',
     TABLE: 'Writes a real table. Fast to read, rebuilt in full on every run.',
@@ -2366,7 +2358,7 @@ const en = {
   } as Record<string, string>,
   filterModels: 'Filter models', filterAll: 'Find a table or source...', modelActions: 'Actions', duplicateModel: 'Duplicate',
   noModelMatch: 'No model matches.',
-  layerLabel: { STAGING: 'Cleaned', CORE: 'Combined', MART: 'Reporting' } as Record<string, string>,
+  layerLabel: { STAGING: 'Staging', CORE: 'Core', MART: 'Data Mart' } as Record<string, string>,
   deleteModelTitle: 'Delete model?',
   deleteModelMessage: 'Model "{name}" and all of its tests will be deleted. This cannot be undone.',
   deleteModelDependents: 'These models reference it and will stop compiling:',
