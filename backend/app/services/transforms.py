@@ -10,7 +10,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import and_, delete as sa_delete, func, or_, select
+from sqlalchemy import and_, delete as sa_delete, func, or_, select, text as sa_text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -295,6 +295,9 @@ async def release_view(
         model_count=len(release.model_snapshot or []),
         created_at=release.created_at,
         is_active=transform.active_release_id == release.id,
+        status=release.status,
+        verify_error=release.verify_error,
+        verified_at=release.verified_at,
     )
 
 
@@ -1301,6 +1304,10 @@ async def enqueue(
     trigger_type: TriggerType = TriggerType.MANUAL,
     retry_of_run_id: uuid.UUID | None = None,
     enforce_permission: bool = True,
+    #: The exact release to execute. Publishing passes the snapshot it just
+    #: froze -- which is not yet the active one, and must not be, because
+    #: whether it becomes active is what this run decides.
+    release: TransformRelease | None = None,
 ) -> TransformRun:
     if enforce_permission:
         ctx.require(Module.TRANSFORMS, Action.OPERATE)
@@ -1343,8 +1350,11 @@ async def enqueue(
         operation=operation, selected_model_id=selected.id if selected else None,
         trigger_type=trigger_type, triggered_by=ctx.user_id,
         # A DRAFT run compiles whatever the editor holds now; a RELEASE run
-        # executes the published snapshot and ignores later edits.
-        release_id=transform.active_release_id if source == "RELEASE" else None,
+        # executes a published snapshot and ignores later edits.
+        release_id=(
+            release.id if release is not None
+            else transform.active_release_id if source == "RELEASE" else None
+        ),
         retry_of_run_id=retry_of_run_id,
         idempotency_key=idempotency_key,
         technical_metadata={"trace_id": ctx.trace_id, "full_refresh": full_refresh},
@@ -1466,6 +1476,20 @@ async def enqueue_after_upstream(
     )
     queued: list[TransformRun] = []
     for transform in transforms:
+        # Same rule the scheduler already follows: nothing unattended runs
+        # draft code. The fallback that used to be here queued a sandboxed
+        # BUILD of whatever the author had open -- warehouse cost they did not
+        # ask for, and a health verdict taken from a rehearsal.
+        if transform.active_release_id is None:
+            transform.health_message = (
+                "Chưa xuất bản bản nào, nên lần chạy tự động sau Pipeline bị bỏ qua."
+            )
+            logger.info(
+                "Transform has no published release; skipping the upstream trigger.",
+                extra={"transform_id": str(transform.id),
+                       "pipeline_run_id": str(pipeline_run.id)},
+            )
+            continue
         ready, report = await upstream_readiness(session, transform)
         if not ready:
             waiting = [item["relation"] for item in report
@@ -1496,7 +1520,7 @@ async def enqueue_after_upstream(
                 # Unattended, so it runs published code. Otherwise a user still
                 # mid-edit when the upstream sync lands ships a half-finished
                 # model into the warehouse.
-                source="RELEASE" if transform.active_release_id else "DRAFT",
+                source="RELEASE",
                 trigger_type=TriggerType.AFTER_UPSTREAM, enforce_permission=False,
             ))
         except ConflictError:
@@ -1607,11 +1631,32 @@ async def execution_view(session: AsyncSession, run: TransformRun) -> TransformE
     )
 
 
+#: Serialises the count-then-claim below across every worker process. An
+#: arbitrary constant; it only has to be the same number in all of them.
+_CLAIM_LOCK_KEY = 0x4150_5442  # "APTB"
+
+
 async def claim_next(session: AsyncSession, worker_id: str) -> TransformRun | None:
+    """Take one queued run, respecting the deployment-wide parallelism cap.
+
+    The cap is counted and then consumed, which is only safe if no other worker
+    can count between those two steps. `SKIP LOCKED` protects the row but not
+    the count -- two workers each reading "one running, cap is two" both claim,
+    and the deployment runs three. A transaction-scoped advisory lock closes
+    that window; it is held for the microseconds of claiming, not for the run,
+    so workers still execute in parallel. Without it a second replica silently
+    breaks the cap, which is why this had to be fixed before scaling out.
+    """
+    await session.execute(
+        sa_text("SELECT pg_advisory_xact_lock(:key)"), {"key": _CLAIM_LOCK_KEY},
+    )
     running = await session.scalar(select(func.count()).select_from(TransformRun).where(
         TransformRun.status.in_([RunStatus.STARTING, RunStatus.RUNNING]),
     )) or 0
     if running >= settings.transform_worker_max_parallel:
+        # Release the advisory lock rather than holding it until the caller's
+        # next statement; a rollback ends the transaction it is scoped to.
+        await session.rollback()
         return None
     run = await session.scalar(
         select(TransformRun).where(TransformRun.status == RunStatus.QUEUED)
@@ -1619,6 +1664,7 @@ async def claim_next(session: AsyncSession, worker_id: str) -> TransformRun | No
         .with_for_update(skip_locked=True).limit(1)
     )
     if run is None:
+        await session.rollback()
         return None
     run.status = RunStatus.STARTING
     run.claimed_by = worker_id
@@ -1676,8 +1722,10 @@ async def publish_release(
     inputs = list((await session.scalars(select(TransformInput).where(
         TransformInput.transform_id == transform.id,
     ).order_by(TransformInput.source_name))).all())
-    # Generating here means a release is known to compile, so publishing cannot
-    # hand the scheduler a project that fails on its first unattended run.
+    # Rendering the project is not evidence that it runs: `generate_project`
+    # writes files, dbt is never invoked. The proof comes from compiling these
+    # exact frozen files, queued below, and the release stays out of the
+    # scheduler's reach until that compile passes.
     generated = generate_project(transform, models, inputs)
     highest = await session.scalar(select(func.max(TransformRelease.release_number)).where(
         TransformRelease.transform_id == transform.id,
@@ -1701,20 +1749,60 @@ async def publish_release(
         source_version=transform.version,
         default_schema=transform.default_schema,
         notes=notes,
+        status="VERIFYING",
+        activate_on_success=activate,
         created_by=ctx.user_id,
     )
     session.add(release)
     await session.flush()
-    if activate:
-        transform.active_release_id = release.id
+    # Not activated here. `_settle_release` does that, and only after the
+    # compile of these files comes back clean -- which is also what stops a
+    # direct POST to /releases from bypassing whatever the editor was showing.
     transform.version += 1
+    verify = await enqueue(
+        session, ctx, transform, operation="COMPILE", model_id=None,
+        source="RELEASE", release=release, trigger_type=TriggerType.MANUAL,
+        enforce_permission=False,
+        idempotency_key=f"verify:{release.id}",
+    )
+    release.verify_run_id = verify.id
     await audit.record(
         session, ctx, "transform.released", resource_type="TRANSFORM",
         resource_id=transform.id, resource_name=transform.name,
-        after={"release_number": release.release_number, "activated": activate},
+        after={"release_number": release.release_number,
+               "activate_on_success": activate, "verify_run_id": str(verify.id)},
     )
     await session.flush()
     return release
+
+
+async def _settle_release(session: AsyncSession, run: TransformRun) -> None:
+    """Record what the verification compile decided about its release.
+
+    Called once the run finishes. A release that compiles becomes READY and, if
+    that is what publishing asked for, live. One that does not stays out of
+    reach: the scheduler and the after-upstream trigger both require an active
+    release, so a Transform whose newest publish failed keeps running the last
+    version that worked rather than nothing at all.
+    """
+    if run.release_id is None:
+        return
+    release = await session.get(TransformRelease, run.release_id)
+    if release is None or release.status != "VERIFYING":
+        return
+    if run.status is RunStatus.SUCCEEDED:
+        release.status = "READY"
+        release.verified_at = utcnow()
+        release.verify_error = None
+        if release.activate_on_success:
+            transform = await session.get(Transform, release.transform_id)
+            if transform is not None:
+                transform.active_release_id = release.id
+    else:
+        release.status = "FAILED"
+        release.verify_error = (
+            run.error_summary or "Bản phát hành này không biên dịch được."
+        )[:2000]
 
 
 async def activate_release(
@@ -1728,6 +1816,15 @@ async def activate_release(
     ))
     if release is None:
         raise NotFoundError("Release was not found for this Transform.")
+    # Rolling back to a version that never compiled is not a rollback. The gate
+    # lives here as well as in publish because this endpoint can be called on
+    # its own.
+    if release.status != "READY":
+        raise ValidationError(
+            "Bản phát hành này chưa biên dịch thành công nên chưa thể đưa vào chạy."
+            + (f" Lý do: {release.verify_error}" if release.verify_error else ""),
+            code="TRANSFORM_RELEASE_NOT_VERIFIED",
+        )
     transform.active_release_id = release.id
     transform.version += 1
     await audit.record(
@@ -1972,11 +2069,18 @@ async def complete(
         attempt.failure_summary = result.error_summary
         attempt.log_path = result.log_path
 
-    session.add(TransformArtifact(
-        run_id=run.id, manifest=result.manifest, run_results=result.run_results,
-        compiled_sql=result.compiled_sql, preview=result.preview,
-        log_text=result.log_text, generated_at=now,
-    ))
+    # A live run may already have written a partial log here, so this is an
+    # upsert rather than an insert.
+    artifact = await session.get(TransformArtifact, run.id)
+    if artifact is None:
+        artifact = TransformArtifact(run_id=run.id, generated_at=now)
+        session.add(artifact)
+    artifact.manifest = result.manifest
+    artifact.run_results = result.run_results
+    artifact.compiled_sql = result.compiled_sql
+    artifact.preview = result.preview
+    artifact.log_text = result.log_text
+    artifact.generated_at = now
     await _index_run_results(session, run, result)
     # Depends on the test counters that _index_run_results has just written.
     run.remediation_action = _remediation(run, result)
@@ -1985,6 +2089,8 @@ async def complete(
         transform.last_run_id = run.id
         if run.operation in PRODUCTION_OPERATIONS:
             _apply_health(transform, run, result)
+    # A publish is only finished once its own compile has reported back.
+    await _settle_release(session, run)
     await session.commit()
 
 
@@ -2273,6 +2379,28 @@ async def retry_run(
         trigger_type=TriggerType.RETRY, retry_of_run_id=run.id,
         full_refresh=bool((run.technical_metadata or {}).get("full_refresh")),
     )
+
+
+async def store_partial_log(
+    session: AsyncSession, run_id: uuid.UUID, text: str,
+) -> None:
+    """Keep the log of a running job somewhere every pod can read it.
+
+    The artifact row is created at completion, so while a run is in flight
+    there is nothing in the database and the only copy lives on the worker's
+    own disk. This writes the tail as it accumulates; `complete` overwrites it
+    with the final text a moment later.
+    """
+    artifact = await session.get(TransformArtifact, run_id)
+    tail = text[-2_000_000:]
+    if artifact is None:
+        session.add(TransformArtifact(
+            run_id=run_id, manifest=None, run_results=None, compiled_sql={},
+            preview=None, log_text=tail, generated_at=utcnow(),
+        ))
+    else:
+        artifact.log_text = tail
+    await session.commit()
 
 
 async def fetch_logs(

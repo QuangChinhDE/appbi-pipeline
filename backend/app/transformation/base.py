@@ -9,6 +9,9 @@ from typing import Any, Protocol
 
 
 CancelCheck = Callable[[], Awaitable[bool]]
+#: Called with the redacted log so far while the engine is still running, so a
+#: reader watching the Logs tab sees output before the process exits.
+LogSink = Callable[[str], Awaitable[None]]
 
 
 @dataclass(slots=True)
@@ -53,6 +56,7 @@ class TransformationResult:
 class TransformationEngineAdapter(Protocol):
     async def execute(
         self, request: TransformationRequest, *, cancel_check: CancelCheck,
+        log_sink: LogSink | None = None,
     ) -> TransformationResult: ...
 
     async def cancel(self, run_id: str) -> bool: ...

@@ -85,14 +85,17 @@ vendor/engine/*.tar
 # `backend/app/connectors/base_vn/schemas/` now, and the image never contained
 # `docs/` in the first place: the Dockerfile copies `backend/`.
 #
-# What this costs, stated rather than discovered later: a fresh clone has no
-# test suite, so `pytest` has nothing to run and CI has nothing to check. Copy
-# `qa/`, `pytest.ini` and `.github/` from a working machine to get them back.
-qa/
+# What used to be excluded here, and why it changed: the test suite, `pytest.ini`
+# and `.github/` were kept off the repository too. That made release evidence
+# unreproducible -- a reviewer holding this repository could not run the checks
+# a release claims to have passed, and had to take a commit message's word for
+# it. Tests are part of the product's contract, so they are tracked now.
+#
+# Still excluded, deliberately: `evidence/` is per-run output (screenshots,
+# exported artefacts) that is regenerated rather than reviewed, and `docs/`
+# lives beside the repository on the machines that maintain it.
 docs/
 evidence/
-pytest.ini
-.github/
 
 # Documentation stays with the local working copy, including top-level and
 # component-specific readmes that do not live under docs/.

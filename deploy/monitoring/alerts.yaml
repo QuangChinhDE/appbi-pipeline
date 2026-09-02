@@ -111,3 +111,68 @@ groups:
             The resource still holds customer credentials. Find it by the
             `[appbi:<product-resource-id>]` marker in its name on the engine.
           runbook_url: "docs/RUNBOOK-oncall.md#an-engine-operation-is-stuck"
+
+      # ── Transform ────────────────────────────────────────────────────────
+      #
+      # Everything above counts PipelineRun. The Transform queue is a separate
+      # worker with a separate deployment, so the whole set can be green while
+      # nothing transforms -- and the first report of that arrives from the
+      # customer whose tables did not refresh.
+
+      - alert: AppBITransformWorkerUnavailable
+        # Work is queued and nothing is moving it. Not "no runs", which is what
+        # a quiet night looks like -- a backlog nobody has claimed.
+        expr: appbi_transform_worker_alive == 0
+        for: 10m
+        labels: {severity: page, service: appbi}
+        annotations:
+          summary: "Transform work is queued but nothing is executing it"
+          description: >-
+            Pipelines keep loading; nothing downstream of them is rebuilt, so
+            dashboards go stale without anything failing. Check the
+            `appbi-transform-worker` deployment first -- it runs a single
+            replica with a Recreate strategy, so a failed rollout stops the
+            queue rather than degrading it.
+          runbook_url: "docs/RUNBOOK-oncall.md"
+
+      - alert: AppBITransformQueueBacklog
+        expr: appbi_transform_oldest_queued_seconds > 1800
+        for: 10m
+        labels: {severity: page, service: appbi}
+        annotations:
+          summary: "A Transform run has been waiting over 30 minutes"
+          description: >-
+            Either the worker is saturated (check
+            `appbi_transform_runs_active` against the configured parallelism)
+            or a long build is holding the queue.
+          runbook_url: "docs/RUNBOOK-oncall.md"
+
+      - alert: AppBITransformRunStuck
+        # A build that legitimately takes hours exists; one that has been
+        # running for four does not, and the timeout should have ended it.
+        expr: appbi_transform_oldest_active_run_seconds > 14400
+        for: 15m
+        labels: {severity: page, service: appbi}
+        annotations:
+          summary: "A Transform run has been executing for over 4 hours"
+          description: >-
+            Past the point the engine timeout should have terminated it, which
+            means the worker is not enforcing it -- typically a process that
+            stopped heartbeating without exiting. It also holds the Transform's
+            active-build slot, so nothing else for that Transform can run.
+          runbook_url: "docs/RUNBOOK-oncall.md"
+
+      - alert: AppBITransformFailureWave
+        # One failing Transform is the data owner's problem and reaches them
+        # through the product's own alerts. Several at once is ours: it is a
+        # warehouse, a credential or a release, not five unlucky models.
+        expr: appbi_transforms_total{health="ERROR"} >= 5
+        for: 15m
+        labels: {severity: ticket, service: appbi}
+        annotations:
+          summary: "Five or more Transforms are failing at once"
+          description: >-
+            Look for the shared cause before the individual models: warehouse
+            reachability, an expired credential on a shared connection, or a
+            release that was activated across several Transforms.
+          runbook_url: "docs/RUNBOOK-oncall.md"

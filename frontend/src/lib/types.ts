@@ -707,6 +707,11 @@ export interface TransformRelease {
   model_count: number;
   created_at: string;
   is_active: boolean;
+  /** VERIFYING while its own compile runs, READY once it passed, FAILED if not.
+   *  Only READY can be made live. */
+  status: 'VERIFYING' | 'READY' | 'FAILED';
+  verify_error: string | null;
+  verified_at: string | null;
 }
 
 /** One model's difference between the draft and the published version. */

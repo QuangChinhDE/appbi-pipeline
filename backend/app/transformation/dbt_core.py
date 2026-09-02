@@ -15,13 +15,16 @@ import re
 import shutil
 import signal
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from app.core.config import settings
-from app.transformation.base import CancelCheck, TransformationRequest, TransformationResult
+from app.transformation.base import (
+    CancelCheck, LogSink, TransformationRequest, TransformationResult,
+)
 
 
 class DbtCoreAdapter:
@@ -47,6 +50,7 @@ class DbtCoreAdapter:
 
     async def execute(
         self, request: TransformationRequest, *, cancel_check: CancelCheck,
+        log_sink: LogSink | None = None,
     ) -> TransformationResult:
         workdir = Path(tempfile.mkdtemp(prefix=f"appbi-{request.run_id[:8]}-", dir=self.workspace_root))
         log_path = self.log_file(request.run_id)
@@ -63,21 +67,43 @@ class DbtCoreAdapter:
                 start_new_session=True,
             )
             self._processes[request.run_id] = process
-            communicate = asyncio.create_task(process.communicate())
+            # Read as dbt writes rather than waiting for the process to end.
+            # `communicate()` buffered everything until exit, so the Logs tab
+            # had nothing to show for the entire run it was labelled live for.
+            chunks: list[bytes] = []
+            reader = asyncio.create_task(self._drain(process, chunks))
             cancelled = timed_out = False
             started = asyncio.get_running_loop().time()
-            while not communicate.done():
+            published = 0
+            next_publish = started
+            while not reader.done():
                 await asyncio.sleep(0.5)
+                now = asyncio.get_running_loop().time()
+                # Publishing on a timer, not per line: a build emits thousands
+                # of lines and one write per line would be one round trip per
+                # line for a reader who is polling every five seconds anyway.
+                if log_sink is not None and now >= next_publish and len(chunks) != published:
+                    published = len(chunks)
+                    next_publish = now + 2.0
+                    with contextlib.suppress(Exception):
+                        await log_sink(self._redact(
+                            b"".join(chunks).decode("utf-8", errors="replace"),
+                            request.secret_values,
+                        ))
                 if await cancel_check():
                     cancelled = True
                     await self._terminate(process)
                     break
-                if asyncio.get_running_loop().time() - started > settings.transform_timeout_seconds:
+                if now - started > settings.transform_timeout_seconds:
                     timed_out = True
                     await self._terminate(process)
                     break
-            stdout, _ = await communicate
-            sanitized = self._redact(stdout.decode("utf-8", errors="replace"), request.secret_values)
+            with contextlib.suppress(asyncio.CancelledError):
+                await reader
+            await process.wait()
+            sanitized = self._redact(
+                b"".join(chunks).decode("utf-8", errors="replace"), request.secret_values,
+            )
             log_path.write_text(sanitized, encoding="utf-8")
             manifest = self._read_json(workdir / "target" / "manifest.json")
             run_results = self._read_json(workdir / "target" / "run_results.json")
@@ -134,11 +160,18 @@ class DbtCoreAdapter:
         base = ["dbt", "--no-use-colors", "--log-format", "text"]
         selector = ["--select", request.selected_model] if request.selected_model else []
         if request.operation == "VALIDATE":
+            # Fresh names every run, and several of them, so the macro can take
+            # one that is free instead of clearing whatever holds the name it
+            # wanted. A checked connection must leave the warehouse as it was.
+            probe_names = [
+                f"__appbi_probe_{uuid.uuid4().hex[:16]}" for _ in range(3)
+            ]
             return base + [
                 "run-operation", "appbi_validate_write", "--args",
                 json.dumps({
                     "schema_names": request.validate_schemas or [request.output_schema],
                     "relations": request.validate_relations,
+                    "probe_names": probe_names,
                 }),
             ]
         if request.operation == "COMPILE":
@@ -160,6 +193,20 @@ class DbtCoreAdapter:
             selected = f"+{request.selected_model}" if request.selected_model else "*"
             return base + ["build", "--select", selected, *refresh]
         return base + ["build", *refresh]
+
+    @staticmethod
+    async def _drain(
+        process: asyncio.subprocess.Process, chunks: list[bytes],
+    ) -> None:
+        """Accumulate stdout as it arrives so a running log can be read."""
+        stream = process.stdout
+        if stream is None:
+            return
+        while True:
+            chunk = await stream.read(8192)
+            if not chunk:
+                return
+            chunks.append(chunk)
 
     async def _terminate(self, process: asyncio.subprocess.Process) -> None:
         if process.returncode is not None:

@@ -19,6 +19,7 @@ contract — the shape here may change with the deployment's needs.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from fastapi import APIRouter, Response
 from sqlalchemy import func, select
@@ -160,6 +161,129 @@ async def _collect() -> list[str]:
             [("", 0.0 if oldest is None
               else max(0.0, (_utcnow() - oldest).total_seconds()))],
         ))
+
+        blocks.extend(await _transform_metrics(session))
+
+    return blocks
+
+
+async def _transform_metrics(session) -> list[str]:
+    """The Transform queue, separately from the Pipeline one.
+
+    Every metric above counts `PipelineRun`. A Transform worker that is down
+    moves none of them, so the whole dashboard stays green while no Transform
+    executes -- and the incident arrives as a customer saying their tables did
+    not refresh. These are the numbers that would have paged instead.
+    """
+    from app.core.config import settings
+    from app.core.db import utcnow
+    from app.models.transform import Transform, TransformRun
+
+    blocks: list[str] = []
+    now = utcnow()
+
+    rows = (await session.execute(
+        select(TransformRun.status, func.count()).group_by(TransformRun.status)
+    )).all()
+    by_status = {status.value: float(count) for status, count in rows}
+    blocks.append(_render(
+        "appbi_transform_runs_total",
+        "Transform runs recorded, by terminal or current status", "gauge",
+        [(f'{{status="{name}"}}', by_status.get(name, 0.0))
+         for name in sorted(s.value for s in RunStatus)],
+    ))
+
+    active_statuses = [s for s in RunStatus if s.is_active]
+    active = (await session.execute(
+        select(func.count(), func.min(TransformRun.started_at))
+        .where(TransformRun.status.in_(active_statuses))
+    )).one()
+    blocks.append(_render(
+        "appbi_transform_runs_active",
+        "Transform runs currently starting or executing", "gauge",
+        [("", float(active[0] or 0))],
+    ))
+    blocks.append(_render(
+        "appbi_transform_oldest_active_run_seconds",
+        "Age of the longest-running active Transform run; 0 when none",
+        "gauge",
+        [("", 0.0 if active[1] is None
+          else max(0.0, (now - active[1]).total_seconds()))],
+    ))
+
+    # Queued is the one that separates "busy" from "nothing is picking work
+    # up". A backlog that never drains is a worker that is gone.
+    queued = (await session.execute(
+        select(func.count(), func.min(TransformRun.created_at))
+        .where(TransformRun.status == RunStatus.QUEUED)
+    )).one()
+    blocks.append(_render(
+        "appbi_transform_runs_queued", "Transform runs waiting for a worker",
+        "gauge", [("", float(queued[0] or 0))],
+    ))
+    blocks.append(_render(
+        "appbi_transform_oldest_queued_seconds",
+        "How long the oldest queued Transform run has been waiting; 0 when none",
+        "gauge",
+        [("", 0.0 if queued[1] is None
+          else max(0.0, (now - queued[1]).total_seconds()))],
+    ))
+
+    # Liveness without a separate registration table: a worker that is running
+    # heartbeats the run it holds, and one that has claimed nothing recently
+    # cannot be distinguished from one that is down -- so an idle deployment
+    # reports alive, and a deployment with work that nobody touches does not.
+    recent_heartbeat = (await session.execute(
+        select(func.count()).where(
+            TransformRun.status.in_(active_statuses),
+            TransformRun.heartbeat_at.is_not(None),
+            TransformRun.heartbeat_at
+            >= now - timedelta(seconds=settings.transform_stale_queue_seconds),
+        )
+    )).scalar() or 0
+    stuck_queue = bool(queued[0]) and queued[1] is not None and (
+        (now - queued[1]).total_seconds() > settings.transform_stale_queue_seconds
+    )
+    alive = 0.0 if stuck_queue else 1.0 if (recent_heartbeat or not active[0]) else 0.0
+    blocks.append(_render(
+        "appbi_transform_worker_alive",
+        "1 while Transform work is moving, 0 when the queue has stalled",
+        "gauge", [("", alive)],
+    ))
+
+    # Durations as a summary rather than a histogram: these are computed from a
+    # query at scrape time, and there is no in-process observation to bucket.
+    finished = (await session.execute(
+        select(
+            func.count(),
+            func.avg(func.extract("epoch", TransformRun.ended_at - TransformRun.started_at)),
+            func.max(func.extract("epoch", TransformRun.ended_at - TransformRun.started_at)),
+        ).where(
+            TransformRun.ended_at.is_not(None),
+            TransformRun.started_at.is_not(None),
+            TransformRun.ended_at >= now - timedelta(hours=24),
+        )
+    )).one()
+    blocks.append(_render(
+        "appbi_transform_run_duration_seconds",
+        "Transform run duration over the last 24 hours", "gauge",
+        [('{stat="count"}', float(finished[0] or 0)),
+         ('{stat="avg"}', float(finished[1] or 0.0)),
+         ('{stat="max"}', float(finished[2] or 0.0))],
+    ))
+
+    # A Transform whose health is ERROR is failing its own tests or its build.
+    # A wave of them at once is an upstream change, not five unlucky models.
+    health_rows = (await session.execute(
+        select(Transform.health_status, func.count())
+        .where(Transform.deleted_at.is_(None))
+        .group_by(Transform.health_status)
+    )).all()
+    blocks.append(_render(
+        "appbi_transforms_total", "Transforms by health", "gauge",
+        [(f'{{health="{status.value}"}}', float(count))
+         for status, count in sorted(health_rows, key=lambda r: r[0].value)],
+    ))
 
     return blocks
 

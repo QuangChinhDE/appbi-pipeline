@@ -155,7 +155,14 @@ def _tests_yaml(models: list[TransformModel]) -> dict[str, Any]:
 # Transform but not yet used in SQL must still be verified. Likewise every
 # distinct output schema is write-probed, not just the Transform default, or a
 # per-model schema override validates green and fails at build time.
-VALIDATION_MACRO = """{% macro appbi_validate_write(schema_names, relations) %}
+# Checking a connection must never destroy anything. The probe used to be a
+# fixed name that the macro dropped if it already existed, so a customer relation
+# that happened to be called `__appbi_transform_probe` was deleted by pressing
+# "Check connection" -- an internal-looking name is not a safety property. The
+# caller now supplies fresh candidate names per run; the macro takes the first
+# one that does not exist and drops only what it created. If every candidate is
+# somehow taken it stops rather than reaching for one of them.
+VALIDATION_MACRO = """{% macro appbi_validate_write(schema_names, relations, probe_names) %}
   {% for relation in relations %}
     {% set probe_relation = api.Relation.create(
         database=relation.get('database') or target.database,
@@ -167,14 +174,25 @@ VALIDATION_MACRO = """{% macro appbi_validate_write(schema_names, relations) %}
     {% endcall %}
   {% endfor %}
   {% for schema_name in schema_names %}
+    {% set outer = loop.index %}
     {% set schema_relation = api.Relation.create(database=target.database, schema=schema_name) %}
     {% do adapter.create_schema(schema_relation) %}
-    {% set existing_probe = adapter.get_relation(database=target.database, schema=schema_name, identifier='__appbi_transform_probe') %}
-    {% if existing_probe %}
-      {% do adapter.drop_relation(existing_probe) %}
+    {% set chosen = namespace(identifier=none) %}
+    {% for candidate in probe_names %}
+      {% if chosen.identifier is none %}
+        {% set taken = adapter.get_relation(database=target.database, schema=schema_name, identifier=candidate) %}
+        {% if not taken %}
+          {% set chosen.identifier = candidate %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {% if chosen.identifier is none %}
+      {% do exceptions.raise_compiler_error(
+          'Khong tim duoc ten bang tam de kiem tra quyen ghi trong schema ' ~ schema_name
+          ~ '. Hay thu lai.') %}
     {% endif %}
-    {% set probe = api.Relation.create(database=target.database, schema=schema_name, identifier='__appbi_transform_probe', type='table') %}
-    {% call statement('appbi_write_probe_' ~ loop.index, fetch_result=False) %}
+    {% set probe = api.Relation.create(database=target.database, schema=schema_name, identifier=chosen.identifier, type='table') %}
+    {% call statement('appbi_write_probe_' ~ outer, fetch_result=False) %}
       create table {{ probe }} as select 1 as appbi_probe
     {% endcall %}
     {% do adapter.drop_relation(probe) %}

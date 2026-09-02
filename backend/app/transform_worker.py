@@ -102,7 +102,17 @@ class TransformWorker:
                 async with SessionLocal() as heartbeat_session:
                     return await transform_service.heartbeat(heartbeat_session, run_id)
 
-            result = await self.adapter.execute(request, cancel_check=cancel_check)
+            # Into the database, not onto this pod's disk. The API serving the
+            # Logs tab is a different pod with a different emptyDir, so a path
+            # on the worker's filesystem is unreadable from there -- which is
+            # why a live log showed nothing until the run had finished.
+            async def log_sink(text: str) -> None:
+                async with SessionLocal() as log_session:
+                    await transform_service.store_partial_log(log_session, run_id, text)
+
+            result = await self.adapter.execute(
+                request, cancel_check=cancel_check, log_sink=log_sink,
+            )
             async with SessionLocal() as session:
                 await transform_service.complete(session, run_id, result)
             log_event(

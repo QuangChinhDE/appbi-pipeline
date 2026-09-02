@@ -32,11 +32,10 @@ from app.core.context import RequestContext
 from app.core.errors import NotFoundError, ValidationError
 from app.core.logging import log_event
 from app.core.permissions import Action, Module
-from app.models.integration import Destination
 from app.models.transform import (
     DataAsset, Transform, TransformInput, TransformModel, TransformRelease,
 )
-from app.services import actors as actor_service
+from app.services import transforms as transform_service
 from app.services.builder_ai.client import OpenAIBuilderClient
 from app.transformation import profiling
 from app.transformation.warehouse import profile_relation, validate_sql
@@ -152,10 +151,10 @@ async def profile_input(
     """
     ctx.require(Module.TRANSFORMS, Action.VIEW)
     _, asset = await _asset_for(session, transform, asset_id)
-    destination = await session.get(Destination, transform.destination_id)
-    if destination is None:
-        raise ValidationError("Destination no longer exists.", code="TRANSFORM_DESTINATION_MISSING")
-    configuration = await actor_service.resolve_configuration(session, destination)
+    # Through the connection, like every other runtime path. A Transform on a
+    # warehouse nobody made a Destination for reads and builds perfectly well;
+    # asking for a Destination here was the one place that refused it.
+    connector_key, configuration = await _warehouse(session, transform)
     columns = (asset.schema_metadata or {}).get("columns", [])
     if not columns:
         raise ValidationError(
@@ -163,13 +162,29 @@ async def profile_input(
             code="TRANSFORM_PROFILE_NO_COLUMNS",
         )
     profile = await profile_relation(
-        destination.connector_key, configuration,
+        connector_key, configuration,
         catalog_name=asset.catalog_name, schema_name=asset.schema_name,
         relation_name=asset.relation_name, columns=columns,
     )
     asset.schema_metadata = {**(asset.schema_metadata or {}), "profile": profile}
     await session.flush()
     return profile
+
+
+async def _warehouse(
+    session: AsyncSession, transform: Transform,
+) -> tuple[str, dict[str, Any]]:
+    """Which warehouse this Transform speaks to, and how to reach it.
+
+    The same resolution the run builder uses. Profiling and drafting have to
+    agree with what a build will actually execute against, and a Transform's
+    warehouse is its connection -- which may have no Destination behind it.
+    """
+    connection = await transform_service.transform_connection(session, transform)
+    return (
+        transform_service.connection_connector(connection),
+        await transform_service.connection_configuration(session, connection),
+    )
 
 
 async def _exemplars(
@@ -316,9 +331,7 @@ async def draft_model(
                               code="TRANSFORM_AI_NO_INTENT")
 
     link, asset = await _asset_for(session, transform, asset_id)
-    destination = await session.get(Destination, transform.destination_id)
-    if destination is None:
-        raise ValidationError("Destination no longer exists.", code="TRANSFORM_DESTINATION_MISSING")
+    connector_key, configuration = await _warehouse(session, transform)
 
     metadata = asset.schema_metadata or {}
     profile_rows = metadata.get("profile")
@@ -342,7 +355,7 @@ async def draft_model(
     models = [item for item in transform.models if item.deleted_at is None]
     examples, published = await _exemplars(session, transform)
     allowed_columns = ", ".join(item.name for item in profiles)
-    dialect = DIALECT_NAMES.get(destination.connector_key, destination.connector_key)
+    dialect = DIALECT_NAMES.get(connector_key, connector_key)
 
     prompt = "\n\n".join([
         f"# Kho dữ liệu\n{dialect}",
@@ -372,7 +385,6 @@ async def draft_model(
 
     # Ask the engine, not the model, whether this SQL is valid. A draft that
     # reads well and fails on execution is the failure users cannot see coming.
-    configuration = await actor_service.resolve_configuration(session, destination)
     sources = {
         (link.source_name, asset.relation_name): [
             part for part in (asset.catalog_name, asset.schema_name, asset.relation_name) if part
@@ -387,16 +399,16 @@ async def draft_model(
 
     async def check(candidate: str) -> tuple[str | None, list[str]]:
         return await validate_sql(
-            destination.connector_key, configuration,
+            connector_key, configuration,
             catalog_name=asset.catalog_name,
             sql=_render_for_validation(
-                candidate, connector_key=destination.connector_key, sources=sources,
+                candidate, connector_key=connector_key, sources=sources,
                 model_schema=transform.default_schema, catalog=asset.catalog_name,
             ),
         )
 
     verdict, error, output_columns = "SKIPPED", None, []
-    if destination.connector_key in ("destination-bigquery", "destination-postgres"):
+    if connector_key in ("destination-bigquery", "destination-postgres"):
         error, output_columns = await check(draft.sql)
         verdict = "OK" if error is None else "FAILED"
         # Two repair attempts, not one. Each is a fraction of the cost of a

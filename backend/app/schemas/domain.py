@@ -856,6 +856,11 @@ class TransformReleaseView(BaseModel):
     created_at: datetime
     created_by: UserRef | None = None
     is_active: bool = False
+    #: VERIFYING while its own compile is queued or running, READY once that
+    #: passed, FAILED if it did not. Only READY can be made live.
+    status: str = "READY"
+    verify_error: str | None = None
+    verified_at: datetime | None = None
 
 
 class TransformReleaseCreate(BaseModel):

@@ -1,0 +1,115 @@
+# What a reviewer can re-run to reproduce a release claim.
+#
+# Everything here is offline: no warehouse, no engine, no credentials. The
+# checks that need a live BigQuery or a running Airbyte are a separate,
+# manually-dispatched job precisely because they cannot gate a pull request
+# from a fork -- but the rules a release blocks on (a connection check that
+# deletes nothing, a publish that cannot make unverified code live, an
+# unattended trigger that never runs a draft) are all assertable without one,
+# and they run on every push.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install pyflakes
+
+      # Catches the class of defect that shipped twice in this module: a name
+      # that stopped existing after a refactor and was only found at runtime.
+      - name: Undefined names
+        working-directory: backend
+        run: python -m pyflakes app
+
+      - name: Migrations have one head
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          revs, downs = set(), set()
+          for path in pathlib.Path("migrations/versions").glob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              match = re.search(r'^revision(?::\s*\w+)?\s*=\s*"([^"]+)"', text, re.M)
+              if match:
+                  revs.add(match.group(1))
+              for down in re.findall(r'"([0-9a-f]{12})"', text.split("down_revision")[1][:200]
+                                     if "down_revision" in text else ""):
+                  downs.add(down)
+          heads = revs - downs
+          print("heads:", sorted(heads))
+          assert len(heads) == 1, f"expected one migration head, found {sorted(heads)}"
+          PY
+
+      - name: Tests
+        working-directory: backend
+        run: python -m pytest tests -q
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Types
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: frontend
+        run: npx next lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  alerts:
+    name: Alert rules parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install pyyaml
+      - name: Every rule has an expression and a for
+        run: |
+          python - <<'PY'
+          import yaml
+          spec = yaml.safe_load(open("deploy/monitoring/alerts.yaml", encoding="utf-8"))
+          for group in spec["groups"]:
+              for rule in group["rules"]:
+                  assert rule.get("expr"), rule
+                  # Without a `for`, a routine restart pages someone at 3am.
+                  assert rule.get("for"), f"{rule.get('alert')} has no for:"
+          print(sum(len(g["rules"]) for g in spec["groups"]), "rules checked")
+          PY

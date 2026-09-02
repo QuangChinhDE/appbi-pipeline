@@ -466,6 +466,23 @@ class TransformRelease(Base, TimestampMixin):
     source_version: Mapped[int] = mapped_column(Integer, nullable=False)
     default_schema: Mapped[str] = mapped_column(String(200), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # VERIFYING until this exact snapshot has compiled, READY once it has,
+    # FAILED if it did not. Only READY can be made live: publishing froze the
+    # code, it did not prove the code runs, and a schedule firing at 03:00 is
+    # the wrong place to discover the difference.
+    status: Mapped[str] = mapped_column(String(20), default="READY", nullable=False)
+    verify_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True,
+    )
+    verify_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Set once the compile that proved this snapshot finished.
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
+    #: Whether to make it live the moment verification passes.
+    activate_on_success: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False,
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True,
     )

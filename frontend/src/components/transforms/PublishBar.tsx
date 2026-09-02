@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CircleCheck, GitBranch, History, Table2, Upload } from 'lucide-react';
+import { CircleCheck, GitBranch, History, Table2, TriangleAlert, Upload } from 'lucide-react';
 
 import type {
   TransformDetail, TransformDiffEntry, TransformRelease, TransformReleaseModel,
@@ -47,6 +47,10 @@ export type PublishCopy = {
   restoreHint: string;
   backToList: string;
   noSqlChange: string;
+  verifying: string;
+  verifyingHint: string;
+  rejected: string;
+  statusLabel: Record<string, string>;
 };
 
 /**
@@ -59,7 +63,7 @@ export type PublishCopy = {
  */
 export function PublishBar({
   transform, copy, canEdit, publishing, onPublish, onOpenHistory,
-  diff, diffLoading, onRequestDiff,
+  diff, diffLoading, onRequestDiff, latestRelease,
 }: {
   transform: TransformDetail;
   copy: PublishCopy;
@@ -67,6 +71,9 @@ export function PublishBar({
   publishing: boolean;
   onPublish: (notes: string) => void;
   onOpenHistory: () => void;
+  /** The newest release, live or not -- a publish under verification is
+   *  neither active nor absent, and the strip has to say which. */
+  latestRelease?: TransformRelease;
   diff?: TransformDiffEntry[];
   diffLoading?: boolean;
   onRequestDiff: () => void;
@@ -75,16 +82,45 @@ export function PublishBar({
   const [notes, setNotes] = React.useState('');
   const release = transform.active_release;
   const diverged = transform.draft_has_changes;
+  // A snapshot still being compiled, and one whose compile said no. Neither is
+  // the live release, and neither is "nothing published" either.
+  const verifying = latestRelease?.status === 'VERIFYING' ? latestRelease : undefined;
+  const rejected = latestRelease?.status === 'FAILED' ? latestRelease : undefined;
 
   return (
     <>
       <div className={cn(
         'flex h-9 shrink-0 items-center gap-2 border-b px-3 text-caption',
-        diverged
-          ? 'border-warning/25 bg-warning/[0.06]'
-          : 'border-[rgb(var(--border-line))] bg-surface-1',
+        rejected
+          ? 'border-danger/25 bg-danger/[0.06]'
+          : verifying
+            ? 'border-info/25 bg-info/[0.06]'
+            : diverged
+              ? 'border-warning/25 bg-warning/[0.06]'
+              : 'border-[rgb(var(--border-line))] bg-surface-1',
       )}>
-        {release ? (
+        {verifying ? (
+          <>
+            <Spinner />
+            <span className="text-text-secondary">
+              {copy.verifying.replace('{n}', String(verifying.release_number))}
+            </span>
+            <span className="min-w-0 truncate text-text-tertiary">
+              · {copy.verifyingHint}
+            </span>
+          </>
+        ) : rejected ? (
+          <>
+            <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-danger" />
+            <span className="text-danger">
+              {copy.rejected.replace('{n}', String(rejected.release_number))}
+            </span>
+            <span className="min-w-0 truncate text-text-tertiary"
+              title={rejected.verify_error ?? undefined}>
+              · {rejected.verify_error}
+            </span>
+          </>
+        ) : release ? (
           <>
             <GitBranch className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
             <span className="text-text-secondary">
@@ -231,8 +267,15 @@ export function ReleaseHistoryModal({
             {copy.restoreToDraft}
           </Button>
         )}
+        {/* Copying the SQL back into the draft is always allowed -- that is how
+            you recover from a version that failed. Making it live is not: the
+            server refuses it, and offering the button anyway only produces an
+            error the user could not have predicted. */}
         {canEdit && !inspecting.is_active && (
           <Button size="sm" variant="primary" loading={restoring}
+            disabled={inspecting.status !== 'READY'}
+            title={inspecting.status !== 'READY'
+              ? (inspecting.verify_error ?? copy.statusLabel[inspecting.status]) : undefined}
             onClick={() => onRestore(inspecting.id)}>
             {copy.restore}
           </Button>
@@ -322,6 +365,15 @@ export function ReleaseHistoryModal({
                 </p>
               </div>
               {release.is_active && <Badge size="xs" variant="success">{copy.active}</Badge>}
+              {/* A version that never compiled is in this list because it was
+                  published, not because it can be gone back to. Saying which
+                  is the difference between a rollback target and a dead end. */}
+              {!release.is_active && release.status !== 'READY' && (
+                <Badge size="xs" variant={release.status === 'FAILED' ? 'danger' : 'info'}
+                  title={release.verify_error ?? undefined}>
+                  {copy.statusLabel[release.status] ?? release.status}
+                </Badge>
+              )}
               <Button size="xs" variant="ghost" onClick={() => onInspect(release.id)}>
                 {copy.inspect}
               </Button>

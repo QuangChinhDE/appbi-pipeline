@@ -547,11 +547,33 @@ export default function TransformWorkbenchPage() {
     queryFn: () => transformApi.diff(transformId),
     enabled: diffWanted,
   });
+  // Loaded whether or not the history drawer is open: publishing now waits on
+  // a compile of the frozen snapshot, and the bar has to be able to say so.
   const releases = useQuery({
     queryKey: qk.transformReleases(workspaceId, transformId),
     queryFn: () => transformApi.releases(transformId),
-    enabled: historyOpen,
+    refetchInterval: (query) => (
+      (query.state.data ?? []).some((item) => item.status === 'VERIFYING') ? 3_000 : false
+    ),
   });
+  const latestRelease = (releases.data ?? [])[0];
+  // Report the verdict once, when it lands, rather than leaving the strip as
+  // the only place a failed publish is mentioned.
+  const announced = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!latestRelease || latestRelease.status === 'VERIFYING') return;
+    if (announced.current === latestRelease.id) return;
+    announced.current = latestRelease.id;
+    if (latestRelease.status === 'READY') {
+      queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transformId) });
+      toastSuccess(copy.published.replace('{n}', String(latestRelease.release_number)));
+    } else {
+      toastError(new Error(
+        copy.publishRejected.replace('{n}', String(latestRelease.release_number))
+        + (latestRelease.verify_error ? ` ${latestRelease.verify_error}` : ''),
+      ));
+    }
+  }, [latestRelease, copy, queryClient, workspaceId, transformId]);
 
   const rename = useMutation({
     mutationFn: (name: string) => transformApi.update(transformId, {
@@ -572,7 +594,9 @@ export default function TransformWorkbenchPage() {
       await queryClient.invalidateQueries({ queryKey: qk.transform(workspaceId, transformId) });
       queryClient.invalidateQueries({ queryKey: qk.transformReleases(workspaceId, transformId) });
       queryClient.invalidateQueries({ queryKey: qk.transformDiff(workspaceId, transformId) });
-      toastSuccess(copy.published.replace('{n}', String(created.release_number)));
+      // Not "published" yet -- frozen, and queued for the compile that decides
+      // whether it may go live. Saying otherwise was the old contract.
+      toastSuccess(copy.publishQueued.replace('{n}', String(created.release_number)));
     },
     onError: (error) => toastError(error),
   });
@@ -816,6 +840,7 @@ export default function TransformWorkbenchPage() {
         transform={transform} copy={copy} canEdit={canEdit}
         publishing={publish.isPending}
         onPublish={(notes) => publish.mutate(notes)}
+        latestRelease={latestRelease}
         onOpenHistory={() => setHistoryOpen(true)}
         diff={diff.data?.changes} diffLoading={diff.isLoading}
         onRequestDiff={() => setDiffWanted(true)}
@@ -1576,6 +1601,84 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
             <Input disabled={!canEdit} value={draft.output_schema ?? ''} placeholder={copy.defaultOutput}
               onChange={(event) => patchDraft({ output_schema: event.target.value || null })} />
           </Field>
+
+          {/* BigQuery only, and only where it changes the bill. An
+              unpartitioned mart is not a slow query once -- it is a full scan
+              every time a dashboard refreshes, charged each time. The backend
+              has passed these through to dbt all along; there was simply no
+              way to set them without exporting the project. */}
+          {adapter === 'dbt-bigquery' && draft.materialization !== 'VIEW' && (
+            <div className="space-y-4 border-t border-[rgb(var(--border-line))] pt-4">
+              <p className="text-caption font-emphasis text-text-secondary">
+                {copy.physical}
+              </p>
+              <Field label={copy.partitionBy} hint={copy.partitionByHint}>
+                <Input disabled={!canEdit} placeholder="created_date"
+                  value={partitionField(draft.config.partition_by)}
+                  onChange={(event) => patchDraft({
+                    config: withPartition(draft.config, event.target.value),
+                  })} />
+              </Field>
+              {partitionField(draft.config.partition_by) !== '' && (
+                <>
+                  <Field label={copy.partitionType} hint={copy.partitionTypeHint}>
+                    <Select disabled={!canEdit}
+                      value={String((draft.config.partition_by as Record<string, unknown>
+                        | undefined)?.granularity ?? 'day')}
+                      onChange={(event) => patchDraft({
+                        config: {
+                          ...draft.config,
+                          partition_by: {
+                            ...(draft.config.partition_by as Record<string, unknown>),
+                            granularity: event.target.value,
+                          },
+                        },
+                      })}>
+                      <option value="hour">hour</option>
+                      <option value="day">day</option>
+                      <option value="month">month</option>
+                      <option value="year">year</option>
+                    </Select>
+                  </Field>
+                  <Checkbox disabled={!canEdit}
+                    checked={Boolean(draft.config.require_partition_filter)}
+                    label={copy.requireFilter}
+                    onChange={(next) => patchDraft({
+                      config: { ...draft.config, require_partition_filter: next || undefined },
+                    })} />
+                  <p className="-mt-2 pl-6 text-tiny leading-4 text-text-quaternary">
+                    {copy.requireFilterHint}
+                  </p>
+                  <Field label={copy.expiration} hint={copy.expirationHint}>
+                    <Input disabled={!canEdit} type="number" min={1} placeholder="—"
+                      value={String(draft.config.partition_expiration_days ?? '')}
+                      onChange={(event) => patchDraft({
+                        config: {
+                          ...draft.config,
+                          partition_expiration_days: event.target.value
+                            ? Number(event.target.value) : undefined,
+                        },
+                      })} />
+                  </Field>
+                </>
+              )}
+              <Field label={copy.clusterBy} hint={copy.clusterByHint}>
+                <Input disabled={!canEdit} placeholder="customer_id, region"
+                  value={(Array.isArray(draft.config.cluster_by)
+                    ? draft.config.cluster_by as string[] : []).join(', ')}
+                  onChange={(event) => {
+                    const columns = event.target.value.split(',')
+                      .map((item) => item.trim()).filter(Boolean);
+                    patchDraft({
+                      config: {
+                        ...draft.config,
+                        cluster_by: columns.length ? columns.slice(0, 4) : undefined,
+                      },
+                    });
+                  }} />
+              </Field>
+            </div>
+          )}
         </div>
       </details>
 
@@ -1591,6 +1694,39 @@ function ConfigPanel({ draft, patchDraft, copy, canEdit, onDelete, deleting, ada
       )}
     </div>
   );
+}
+
+/** dbt wants `partition_by` as an object; the form asks for one column name. */
+function partitionField(value: unknown): string {
+  if (value && typeof value === 'object' && 'field' in (value as object)) {
+    return String((value as { field?: unknown }).field ?? '');
+  }
+  return '';
+}
+
+function withPartition(
+  config: Record<string, unknown>, field: string,
+): Record<string, unknown> {
+  const trimmed = field.trim();
+  if (!trimmed) {
+    // Clearing the column clears everything that only makes sense with one --
+    // `require_partition_filter` on an unpartitioned table is an error at
+    // build time, not a setting that quietly does nothing.
+    const { partition_by: _p, require_partition_filter: _r,
+      partition_expiration_days: _e, ...rest } = config;
+    return rest;
+  }
+  const current = (config.partition_by ?? {}) as Record<string, unknown>;
+  return {
+    ...config,
+    partition_by: {
+      field: trimmed,
+      // A date or timestamp column is the overwhelmingly common case, and
+      // getting `data_type` wrong fails the build rather than degrading.
+      data_type: current.data_type ?? 'timestamp',
+      granularity: current.granularity ?? 'day',
+    },
+  };
 }
 
 /** A labelled control with the one line of explanation the label cannot carry. */
@@ -2114,7 +2250,13 @@ const vi = {
   notes: 'Ghi chú', notesPlaceholder: 'Thay đổi gì trong lần này?',
   history: 'Lịch sử', historyTitle: 'Các phiên bản đã xuất bản',
   noReleases: 'Chưa có phiên bản nào.', restore: 'Khôi phục', active: 'Đang chạy',
-  published: 'Đã xuất bản Phiên bản {n}', restored: 'Đã chuyển sang phiên bản này', restoredToDraft: 'Đã đưa vào bản nháp',
+  published: 'Phiên bản {n} đã lên chạy', restored: 'Đã chuyển sang phiên bản này', restoredToDraft: 'Đã đưa vào bản nháp',
+  publishQueued: 'Đã đóng gói Phiên bản {n}, đang kiểm tra biên dịch…',
+  publishRejected: 'Phiên bản {n} không biên dịch được nên chưa lên chạy.',
+  verifying: 'Đang kiểm tra Phiên bản {n}',
+  verifyingHint: 'Chỉ lên chạy sau khi biên dịch thành công.',
+  rejected: 'Phiên bản {n} không biên dịch được',
+  statusLabel: { VERIFYING: 'Đang kiểm tra', READY: 'Đã kiểm tra', FAILED: 'Không biên dịch được' } as Record<string, string>,
   scheduleRuns: 'Lịch chạy dùng', columnsShort: 'cột', tools: 'Công cụ',
   moreActions: 'Thao tác khác', syntaxOk: 'SQL hợp lệ', syntaxError: 'SQL có lỗi',
   exploreInput: 'Xem thử bảng này', exploreComment: 'Đọc dữ liệu từ bảng nguồn.',
@@ -2145,6 +2287,17 @@ const vi = {
   scheduleKind: 'Kiểu lịch', kindInterval: 'Theo chu kỳ', kindDaily: 'Hằng ngày',
   kindCron: 'Biểu thức cron', atTime: 'Vào lúc', cronExpression: 'Cron',
   startFrom: 'Bắt đầu từ', advanced: 'Tùy chọn nâng cao',
+  physical: 'Tối ưu lưu trữ (BigQuery)',
+  partitionBy: 'Chia theo cột thời gian',
+  partitionByHint: 'Cột ngày/giờ để chia bảng. Truy vấn lọc theo cột này chỉ quét phần liên quan — với bảng lớn đây là khác biệt lớn nhất về chi phí.',
+  partitionType: 'Mức chia',
+  partitionTypeHint: 'Chia theo ngày là mặc định hợp lý cho hầu hết bảng báo cáo.',
+  requireFilter: 'Bắt buộc lọc theo cột đã chia',
+  requireFilterHint: 'Truy vấn không lọc theo cột này sẽ bị từ chối, thay vì âm thầm quét toàn bộ bảng.',
+  expiration: 'Tự xoá phần cũ hơn (ngày)',
+  expirationHint: 'Để trống nếu giữ mãi. BigQuery tự xoá các phần cũ hơn số ngày này.',
+  clusterBy: 'Gom nhóm theo cột',
+  clusterByHint: 'Tối đa 4 cột, cách nhau bằng dấu phẩy. Dùng các cột hay lọc hoặc hay gộp nhóm.',
   materializationHint: {
     VIEW: 'Không lưu dữ liệu, chạy lại mỗi lần đọc. Nhanh, luôn mới, hợp cho bước làm sạch.',
     TABLE: 'Ghi kết quả thành bảng thật. Đọc nhanh, dựng lại toàn bộ mỗi lần chạy.',
@@ -2302,7 +2455,13 @@ const en = {
   notes: 'Notes', notesPlaceholder: 'What changed in this version?',
   history: 'History', historyTitle: 'Published versions',
   noReleases: 'No versions published yet.', restore: 'Restore', active: 'Live',
-  published: 'Published Version {n}', restored: 'Switched to this version', restoredToDraft: 'Copied into the draft',
+  published: 'Version {n} is live', restored: 'Switched to this version', restoredToDraft: 'Copied into the draft',
+  publishQueued: 'Version {n} frozen, compiling it now…',
+  publishRejected: 'Version {n} did not compile, so it is not live.',
+  verifying: 'Checking Version {n}',
+  verifyingHint: 'It goes live only once it compiles.',
+  rejected: 'Version {n} did not compile',
+  statusLabel: { VERIFYING: 'Checking', READY: 'Verified', FAILED: 'Did not compile' } as Record<string, string>,
   scheduleRuns: 'Schedule runs', columnsShort: 'columns', tools: 'Tools',
   moreActions: 'More actions', syntaxOk: 'SQL is valid', syntaxError: 'SQL has an error',
   exploreInput: 'Preview this table', exploreComment: 'Reads from the source table.',
@@ -2333,6 +2492,17 @@ const en = {
   scheduleKind: 'Schedule type', kindInterval: 'Every N', kindDaily: 'Daily',
   kindCron: 'Cron expression', atTime: 'At', cronExpression: 'Cron',
   startFrom: 'Start from', advanced: 'Advanced options',
+  physical: 'Storage layout (BigQuery)',
+  partitionBy: 'Partition by',
+  partitionByHint: 'A date or timestamp column to split the table on. Queries filtering on it scan only the parts they need — on a large table this is the single biggest lever on cost.',
+  partitionType: 'Granularity',
+  partitionTypeHint: 'Day suits most reporting tables.',
+  requireFilter: 'Require a filter on the partition column',
+  requireFilterHint: 'Queries without one are rejected rather than quietly scanning the whole table.',
+  expiration: 'Drop partitions older than (days)',
+  expirationHint: 'Leave empty to keep everything. BigQuery removes older partitions itself.',
+  clusterBy: 'Cluster by',
+  clusterByHint: 'Up to 4 columns, comma separated. Use the ones you filter or group by most.',
   materializationHint: {
     VIEW: 'Stores no data; re-runs on every read. Fast, always current, good for cleanup steps.',
     TABLE: 'Writes a real table. Fast to read, rebuilt in full on every run.',
