@@ -23,6 +23,9 @@ from app.core.db import Base
 # autogenerate would think the schema should be empty.
 import app.models  # noqa: F401
 
+# Transform's tables live in their own package; autogenerate needs them too.
+app.models.register_transform_tables()
+
 config = context.config
 # Only take over logging when nobody else has set it up.
 #

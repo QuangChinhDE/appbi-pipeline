@@ -177,7 +177,13 @@ async def _transform_metrics(session) -> list[str]:
     """
     from app.core.config import settings
     from app.core.db import utcnow
-    from app.models.transform import Transform, TransformRun
+    # Transform V2 names these `TransformInvocation` and `TransformProject`.
+    # The metric names below deliberately do not change: dashboards and alert
+    # rules are built on them, and renaming a metric to match an internal
+    # rename would silently blank every panel that reads it.
+    from app.transforms.models import (
+        TransformInvocation as TransformRun, TransformProject as Transform,
+    )
 
     blocks: list[str] = []
     now = utcnow()

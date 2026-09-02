@@ -413,347 +413,612 @@ export interface RunLogPage {
   total_lines: number | null;
 }
 
-export interface TransformDestinationCapability {
-  destination: ActorRef;
-  supported: boolean;
-  certification: string | null;
-  adapter: string | null;
-  dbt_core_version: string | null;
-  adapter_version: string | null;
-  reason: string | null;
-}
-
-export interface DataAsset {
-  id: string;
-  /** The connection this table was read through -- the scope it is unique in. */
-  connection_id: string | null;
-  destination_id: string | null;
-  catalog_name: string | null;
-  schema_name: string;
-  relation_name: string;
-  relation_type: string;
-  asset_type: string;
-  owner_type: string;
-  pipeline_id: string | null;
-  pipeline_name: string | null;
-  pipeline_stream_id: string | null;
-  resolution_status: string;
-  columns: { name: string; data_type?: string; nullable?: boolean }[];
-  last_ready_at: string | null;
-  fresh_at: string | null;
-  /** dbt alias this relation is reachable by: {{ source(source_name, relation_name) }}. */
-  source_name: string | null;
-  freshness_state: 'READY' | 'STALE' | 'UNRESOLVED' | null;
-}
-
-export interface TransformInputCandidates {
-  connection_id: string;
-  pipelines: {
-    pipeline: ActorRef;
-    last_success_at: string | null;
-    streams: {
-      id: string; name: string; namespace: string | null; selected: boolean;
-      asset_id: string | null;
-    }[];
-  }[];
-  assets: DataAsset[];
-}
-
-/** A relation the warehouse physically holds, whether or not AppBI loaded it. */
-export interface BrowsedRelation {
-  catalog_name: string | null;
-  schema_name: string;
-  relation_name: string;
-  relation_type: string;
-  /** Set when this relation is already registered as an asset. */
-  asset_id: string | null;
-  /** Set when a Pipeline writes this relation — a source AppBI keeps fresh. */
-  pipeline_id: string | null;
-  pipeline_name: string | null;
-  /** The stream writing it, so registering keeps the upstream lineage. */
-  pipeline_stream_id: string | null;
-}
-
-export interface WarehouseBrowse {
-  catalog_name: string | null;
-  /** Projects or databases the connection can read. */
-  catalogs: string[];
-  schemas: string[];
-  relations: BrowsedRelation[];
-}
-
-/**
- * The repository a Transform reads from, if it reads from one. Never the token.
+/* ── Transform V2 ─────────────────────────────────────────────────────────
  *
- * One direction: the product reads commits and never writes them. Editing a
- * model here cannot reach the repository.
+ * A Transform is a dbt project. These types describe what the backend reads
+ * out of dbt's own artifacts, so most of them carry dbt's vocabulary rather
+ * than a product translation of it: a dbt engineer should be able to look up
+ * `materialized`, `unique_id` or `resource_type` in dbt's docs and find the
+ * same meaning here.
+ *
+ * `resource_type` is a string, never a union. dbt adds resource types, and a
+ * closed union here would mean a code change before a new one could even be
+ * listed -- which is the pattern the rework exists to remove.
  */
-export interface GitSourceState {
-  connected: boolean;
-  repo_url?: string | null;
-  ref?: string | null;
-  subdirectory?: string;
-  /** Check for new commits on a timer rather than only when asked. */
-  auto_pull?: boolean;
-  interval_minutes?: number;
-  auto_publish?: boolean;
-  has_token?: boolean;
-  last_commit?: string | null;
-  last_pulled_at?: string | null;
-  /** APPLIED, UNCHANGED or FAILED. */
-  last_status?: string | null;
-  last_message?: string | null;
-  /** Model names the repository owns; a pull never removes anything else. */
-  managed?: string[];
-  next_pull_at?: string | null;
-}
 
-export interface GitPullResult {
-  status: string;
-  message: string;
-  last_commit?: string | null;
-  changed?: string[];
-  removed?: string[];
-  warnings?: string[];
-}
-
-/** A kind of warehouse a Transform can run on, and how it authenticates. */
+/** A kind of warehouse a project can run on, and how it authenticates. */
 export interface TransformSystem {
   connector_key: string;
   label: string;
-  /** service_account | oauth | password — what the create form should offer. */
   auth_methods: string[];
   adapter: string | null;
   adapter_version: string | null;
+  dbt_core: string | null;
 }
 
-/**
- * A connection a Transform runs on: the warehouse, and the credential for it.
- *
- * `is_default` rows are the connection a Destination already uses — nothing to
- * enter. Either way it is one connection when it runs: dbt reads its sources
- * and writes its models through a single profile, so it has to cover both.
- */
+/** A named warehouse key. The credential itself never reaches the browser. */
 export interface WarehouseConnection {
   id: string;
   name: string;
   connector_key: string;
   auth_method: string;
-  /** Set when it came from a Destination, which is what keeps Pipeline lineage. */
   destination_id: string | null;
   destination_name: string | null;
-  /** Who the connection turned out to be, so a wrong one is obvious. */
   account: string | null;
   catalogs: string[];
   is_default: boolean;
+  verification_status: 'UNVERIFIED' | 'OK' | 'FAILED';
+  verification_message: string | null;
   last_verified_at: string | null;
 }
 
-/** What a dbt or Dataform repository would become here, before anything is made. */
-export interface RepositoryImportPreview {
-  kind: 'DBT' | 'DATAFORM';
-  project_name: string | null;
-  models: {
-    name: string; path: string; layer: string; materialization: string;
-    sql: string; description: string | null;
-  }[];
-  sources: {
-    alias: string; table: string; catalog: string | null;
-    schema_name: string; relation: string;
-  }[];
-  tests: { model: string; rule: string; column: string | null }[];
-  /** Everything the conversion could not carry across. Read before importing. */
-  warnings: string[];
-  origin: { owner: string; repo: string; ref: string | null; subdirectory: string };
-}
-
-/** One column as the warehouse actually holds it, not as its type claims. */
-export interface ColumnProfile {
-  name: string;
-  data_type: string;
-  distinct_count: number | null;
-  null_ratio: number | null;
-  samples: string[];
-  inferred_kind:
-    | 'EPOCH_SECONDS' | 'EPOCH_MILLIS' | 'ISO_DATETIME' | 'CODED' | 'UUID'
-    | 'JSON' | 'NUMERIC_TEXT' | 'HTML_ESCAPED' | 'FOREIGN_KEY' | 'FREE_TEXT' | 'UNKNOWN';
-  unique_candidate: boolean;
-  notes: string[];
-}
-
-/** A model the assistant drafted, plus the warehouse's verdict on it. */
-export interface DraftedModel {
-  name: string;
-  layer: 'STAGING' | 'CORE' | 'MART';
-  materialization: 'VIEW' | 'TABLE' | 'INCREMENTAL';
-  sql: string;
-  summary: string;
-  assumptions: string[];
-  tests: { column_name: string; rule: 'NOT_NULL' | 'UNIQUE' | 'ACCEPTED_VALUES'; reason: string }[];
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-  /** OK / REPAIRED mean the warehouse planned this SQL without error. */
-  validation: 'OK' | 'REPAIRED' | 'FAILED' | 'SKIPPED';
-  validation_error: string | null;
-  output_columns: string[];
-}
-
-export interface TransformTest {
-  id: string;
-  column_name: string | null;
-  rule: string;
-  severity: string;
-  config: Record<string, unknown>;
-  last_status: string;
-  last_run_at: string | null;
-}
-
-export interface TransformModel {
+/** Where a project runs, and as whom. Development and production are real. */
+export interface TransformEnvironment {
   id: string;
   name: string;
-  layer: 'STAGING' | 'CORE' | 'MART';
-  materialization: 'VIEW' | 'TABLE' | 'INCREMENTAL';
-  sql: string;
-  output_schema: string | null;
-  relation_name: string | null;
-  description: string | null;
-  tags: string[];
-  config: Record<string, unknown>;
-  tests: TransformTest[];
-  version: number;
-  updated_at: string;
+  type: 'DEVELOPMENT' | 'PRODUCTION';
+  connection: {
+    connection_id: string;
+    name: string;
+    connector_key: string;
+    connector_display_name: string | null;
+    icon: string | null;
+    destination_id: string | null;
+  } | null;
+  target_name: string;
+  schema_strategy: 'STATIC' | 'PER_USER';
+  schema_name: string;
+  /** What this person's builds actually write to, after PER_USER is applied. */
+  effective_schema: string;
+  threads: number;
+  vars: Record<string, unknown>;
+  /** True for production: commands here need OPERATE, not EDIT. */
+  protected: boolean;
 }
 
-export interface TransformRunRef {
+export interface TransformReleaseRef {
   id: string;
-  operation: string;
+  release_number: number;
+  activated_at: string | null;
+}
+
+export interface TransformInvocationRef {
+  id: string;
+  command: string;
+  selector: string | null;
   status: string;
-  started_at: string | null;
   ended_at: string | null;
-  created_at: string;
-  models_built: number;
-  tests_passed: number;
-  tests_failed: number;
 }
 
-/** Where a Transform reads and writes. A connection, which may or may not
- *  have come from a Destination -- so it is never named after one. */
-export interface TransformWarehouse {
-  connection_id: string;
-  name: string;
-  connector_key: string;
-  connector_display_name: string | null;
-  icon: string | null;
-  destination_id: string | null;
+export interface TransformGitState {
+  branch: string;
+  repo_url: string;
+  head_commit_sha: string | null;
+  behind: boolean;
+  last_status: string | null;
 }
 
 export interface Transform {
   id: string;
   name: string;
   description: string | null;
-  warehouse: TransformWarehouse;
-  default_schema: string;
+  /** MANAGED: AppBI's revisions are canonical. GIT: the checkout is. */
+  mode: 'MANAGED' | 'GIT';
   status: string;
+  dbt_project_name: string | null;
+  warehouse: {
+    connection_id: string;
+    name: string;
+    connector_key: string;
+    connector_display_name: string | null;
+    icon: string | null;
+    destination_id: string | null;
+  } | null;
+  environment_name: string | null;
   health_status: string;
-  health_message: string | null;
-  model_count: number;
-  test_count: number;
-  last_run: TransformRunRef | null;
+  health_message: string | null
+  parse_status: 'UNKNOWN' | 'PENDING' | 'OK' | 'ERROR';
+  parse_error: string | null;
+  last_parsed_at: string | null;
+  revision_number: number | null;
+  file_count: number;
+  /** Compared by content hash, so a save with no edit does not set it. */
+  has_unpublished_changes: boolean;
+  active_release: TransformReleaseRef | null;
+  last_invocation: TransformInvocationRef | null;
   last_success_at: string | null;
-  dbt_core_version: string;
-  dbt_adapter_name: string;
-  dbt_adapter_version: string;
-  version: number;
+  git: TransformGitState | null;
+  schedule_type: string;
+  next_run_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TransformRevisionRef {
+  id: string;
+  revision_number: number;
+  content_hash: string;
+  file_count: number;
   created_at: string;
-  updated_at: string;
-  available_actions: string[];
 }
 
 export interface TransformDetail extends Transform {
-  inputs: DataAsset[];
-  models: TransformModel[];
-  execution_trigger: 'MANUAL' | 'AFTER_UPSTREAM' | 'SCHEDULE';
-  trigger_config: Record<string, unknown>;
-  upstream_ready: boolean;
-  schedule?: ScheduleConfig | null;
-  next_run_at?: string | null;
-  /** The published snapshot a schedule executes; null until first publish. */
-  active_release?: TransformRelease | null;
-  /** True when the editor holds edits made after that snapshot was taken. */
-  draft_has_changes?: boolean;
-  git?: GitSourceState;
+  environments: TransformEnvironment[];
+  default_environment_id: string | null;
+  production_environment_id: string | null;
+  working_revision: TransformRevisionRef | null;
+  dbt_profile_name: string | null;
+  project_file_valid: boolean;
+  project_file_error: string | null;
+  /** Counts by dbt resource type, straight from the manifest. */
+  resource_counts: Record<string, number>;
+  resource_bundle_id: string | null;
+  engine: {
+    dbt_core_version: string;
+    adapter: string;
+    adapter_version: string;
+  };
+  permissions: {
+    can_edit: boolean;
+    can_operate: boolean;
+    can_delete: boolean;
+  };
 }
 
-/** Mirrors TransformRunRequest.operation on the API. */
-export type TransformOperation =
-  | 'VALIDATE' | 'COMPILE' | 'PREVIEW' | 'TEST'
-  | 'RUN_MODEL' | 'RUN_UPSTREAM' | 'BUILD';
+/* ── files ─────────────────────────────────────────────────────────────── */
 
-/** One dbt node in a run: a model, a test, or a seed. */
-export interface TransformRunNode {
+export interface FileNode {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size: number | null;
+  is_text: boolean;
+  children: FileNode[] | null;
+}
+
+export interface FileTree {
+  revision_id: string;
+  revision_number: number;
+  content_hash: string;
+  tree: FileNode[];
+  file_count: number;
+}
+
+export interface FileContent {
+  path: string;
+  content: string;
+  size: number;
+  sha256: string;
+  is_text: boolean;
+  revision_id: string;
+  /** The resource this file defines, so Preview/Build know what to select. */
+  unique_id: string | null;
+  resource_type: string | null;
+}
+
+export interface SaveResult {
+  revision_id: string;
+  revision_number: number;
+  content_hash: string;
+  file_count: number;
+  saved_paths: string[];
+  parse_invocation_id: string | null;
+}
+
+export interface FileTemplate {
+  key: string;
+  label: string;
+  path: string;
+  content: string;
+}
+
+/* ── resources ─────────────────────────────────────────────────────────── */
+
+export interface ResourceSummary {
+  unique_id: string;
+  resource_type: string;
+  name: string;
+  package_name: string | null;
+  path: string | null;
+  patch_path: string | null;
+  materialized: string | null;
+  relation_name: string | null;
+  database: string | null;
+  schema: string | null;
+  alias: string | null;
+  description: string | null;
+  tags: string[];
+  group: string | null;
+  enabled: boolean;
+  /** Set when an AppBI Pipeline populates this source. Enrichment only. */
+  produced_by_pipeline_id: string | null;
+}
+
+export interface ResourceColumn {
+  name: string;
+  description: string | null;
+  data_type: string | null;
+  tags: string[];
+  constraints: unknown[];
+  /** The warehouse actually has it. */
+  in_warehouse: boolean;
+  /** The YAML documents it. Both false-positives are visible drift. */
+  documented: boolean;
+}
+
+export interface ResourceDetail extends ResourceSummary {
+  /**
+   * The node's whole parsed config, keys AppBI has no form for included.
+   * Shown as-is, so a `contract` or a package option is visible rather than
+   * appearing not to exist.
+   */
+  config: Record<string, unknown>;
+  checksum: string | null;
+  columns: ResourceColumn[];
+  parents: string[];
+  children: string[];
+  tests: ResourceSummary[];
+  last_result: {
+    status: string;
+    execution_time: number | null;
+    message: string | null;
+    rows_affected: number | null;
+    bytes_processed: number | null;
+    relation_name: string | null;
+  } | null;
+  freshness: {
+    status: string;
+    max_loaded_at: string | null;
+    snapshotted_at: string | null;
+    age_seconds: number | null;
+    warn_after: Record<string, unknown>;
+    error_after: Record<string, unknown>;
+    message: string | null;
+  } | null;
+  warehouse: {
+    database: string | null;
+    schema: string | null;
+    name: string | null;
+    type: string | null;
+    owner: string | null;
+    comment: string | null;
+    stats: Record<string, { label: string; value: unknown; description: string | null }>;
+  } | null;
+}
+
+export interface ResourcePage {
+  items: ResourceSummary[];
+  total: number;
+  counts: Record<string, number>;
+}
+
+export interface ResourceFacets {
+  resource_types: string[];
+  packages: string[];
+  materializations: string[];
+  groups: string[];
+  tags: string[];
+}
+
+/* ── lineage ───────────────────────────────────────────────────────────── */
+
+export interface LineageNode {
+  unique_id: string;
+  name: string;
+  resource_type: string;
+  materialized: string | null;
+  package: string | null;
+  path: string | null;
+  tags: string[];
+  relation_name: string | null;
+  enabled: boolean;
+  is_focus: boolean;
+  produced_by_pipeline_id: string | null;
+}
+
+export interface TransformLineage {
+  nodes: LineageNode[];
+  edges: { parent: string; child: string }[];
+  truncated: boolean;
+  total_nodes: number;
+  /** Two graphs, never merged: what is being edited vs what production runs. */
+  scope: 'DRAFT' | 'RELEASE';
+}
+
+/* ── invocations ───────────────────────────────────────────────────────── */
+
+/** Every dbt command the product runs. Not a product operation name. */
+export type DbtCommand =
+  | 'parse' | 'deps' | 'debug' | 'ls' | 'compile' | 'show'
+  | 'run' | 'build' | 'test' | 'seed' | 'snapshot'
+  | 'source-freshness' | 'docs-generate' | 'clone' | 'run-operation' | 'retry';
+
+export interface InvocationRequest {
+  command: DbtCommand;
+  selector?: string | null;
+  exclude?: string | null;
+  environment_id?: string | null;
+  full_refresh?: boolean;
+  limit?: number | null;
+  macro?: string | null;
+  macro_args?: Record<string, unknown> | null;
+  selector_name?: string | null;
+  vars?: Record<string, unknown> | null;
+  source?: 'DRAFT' | 'RELEASE';
+}
+
+export interface InvocationNode {
+  unique_id: string;
   name: string;
   resource_type: string;
   status: string;
   execution_time: number | null;
   relation_name: string | null;
   message: string | null;
+  rows_affected: number | null;
+  bytes_processed: number | null;
+  failures: number | null;
+  error_location: { path?: string; line?: number };
 }
 
-/** A published snapshot: what a schedule and unattended triggers execute. */
-export interface TransformRelease {
+export interface TransformInvocation {
   id: string;
-  release_number: number;
-  notes: string | null;
-  default_schema: string;
-  model_count: number;
-  created_at: string;
-  is_active: boolean;
-  /** VERIFYING while its own compile runs, READY once it passed, FAILED if not.
-   *  Only READY can be made live. */
-  status: 'VERIFYING' | 'READY' | 'FAILED';
-  verify_error: string | null;
-  verified_at: string | null;
-}
-
-/** One model's difference between the draft and the published version. */
-export interface TransformDiffEntry {
-  name: string;
-  change: 'ADDED' | 'REMOVED' | 'MODIFIED';
-  before: string | null;
-  after: string | null;
-}
-
-/** One model as a release froze it, beside the version it replaced. */
-export interface TransformReleaseModel {
-  name: string;
-  sql: string | null;
-  previous_sql: string | null;
-  change: 'ADDED' | 'MODIFIED' | 'REMOVED' | 'UNCHANGED';
-}
-
-export interface TransformExecution {
-  id: string;
-  transform_id: string;
-  operation: TransformOperation;
-  selected_model_id: string | null;
+  project_id: string;
+  project_name: string | null;
+  command: string;
+  selector: string | null;
+  exclude: string | null;
+  args: Record<string, unknown>;
   status: string;
+  environment_id: string;
+  environment_name: string | null;
+  revision_id: string;
+  revision_number: number | null;
+  release_id: string | null;
+  release_number: number | null;
   trigger_type: string;
-  created_at: string;
+  triggered_by: string | null;
+  queue_reason: string | null;
   started_at: string | null;
   ended_at: string | null;
-  models_built: number;
+  created_at: string | null;
+  duration_seconds: number | null;
+  nodes_total: number;
+  nodes_succeeded: number;
+  nodes_failed: number;
+  nodes_skipped: number;
   tests_passed: number;
   tests_failed: number;
   tests_warned: number;
   rows_affected: number | null;
-  error: RunError | null;
-  preview: Record<string, unknown> | null;
-  compiled_sql: Record<string, string>;
-  nodes: TransformRunNode[];
+  error_code: string | null;
+  error_summary: string | null;
+  error_location: { path?: string; line?: number; name?: string; unique_id?: string };
+  technical_message: string | null;
+  remediation_action: string | null;
+  exit_code: number | null;
+  dbt_invocation_id: string | null;
+  is_stale: boolean;
+  actions: { can_cancel?: boolean; can_retry?: boolean; can_view_logs?: boolean };
 }
 
-export interface TransformLineage {
-  nodes: { id: string; type: string; label: string; layer?: string; materialization?: string }[];
-  edges: { from: string; to: string; type: string }[];
+/** What `dbt show` returned. Column order is the query's own. */
+export interface PreviewResult {
+  show?: string;
+  data?: Record<string, unknown>[];
+  rows?: unknown[][];
+  [key: string]: unknown;
+}
+
+export interface TransformInvocationDetail extends TransformInvocation {
+  nodes: InvocationNode[];
+  preview: PreviewResult | null;
+}
+
+export interface TransformLogPage {
+  invocation_id: string;
+  lines: string[];
+  next_cursor: number;
+  has_more: boolean;
+  total_lines: number;
+}
+
+export interface CompiledCode {
+  unique_id: string;
+  compiled_code: string | null;
+  raw_code: string | null;
+}
+
+/** Parse errors, failed nodes and failed tests, in one shape. */
+export interface TransformProblem {
+  severity: 'error' | 'warning';
+  source: 'parse' | 'compile' | 'run' | 'test' | 'yaml';
+  message: string;
+  path: string | null;
+  line: number | null;
+  unique_id: string | null;
+  resource_name: string | null;
+}
+
+export interface TransformProblems {
+  problems: TransformProblem[];
+  parse_status: string;
+  checked_at: string | null;
+}
+
+/* ── releases ──────────────────────────────────────────────────────────── */
+
+export interface TransformRelease {
+  id: string;
+  release_number: number;
+  /** VERIFYING until proven runnable; only READY or ACTIVE can go live. */
+  status: 'VERIFYING' | 'READY' | 'FAILED' | 'ACTIVE' | 'RETIRED';
+  is_active: boolean;
+  revision_number: number | null;
+  project_hash: string;
+  file_count: number;
+  git_commit_sha: string | null;
+  environment_name: string | null;
+  dbt_version: string | null;
+  verification_invocation_id: string | null;
+  verification_error: string | null;
+  verified_at: string | null;
+  activated_at: string | null;
+  notes: string | null;
+  created_at: string | null;
+  created_by: string | null;
+}
+
+export interface FileChange {
+  path: string;
+  change: 'A' | 'M' | 'D';
+  size_before: number | null;
+  size_after: number | null;
+}
+
+export interface PublishPlan {
+  files: FileChange[];
+  /** Resources whose own file changed. */
+  affected_resources: {
+    unique_id: string; name: string; resource_type: string;
+    path: string | null; materialized: string | null;
+  }[];
+  /** Resources downstream of those, which rebuild even though their code did not change. */
+  downstream_resources: {
+    unique_id: string; name: string; resource_type: string;
+    path: string | null; materialized: string | null;
+  }[];
+  draft_hash: string;
+  live_hash: string | null;
+  matches_live: boolean;
+}
+
+export interface PublishResult {
+  release: TransformRelease;
+  verification_invocation_id: string;
+}
+
+/* ── git ───────────────────────────────────────────────────────────────── */
+
+export interface GitStatus {
+  branch: string;
+  repo_url: string;
+  subdirectory: string;
+  head_commit_sha: string | null;
+  remote_commit_sha: string | null;
+  behind: boolean;
+  /** Saved here but not committed. Save and Commit are different states. */
+  changes: FileChange[];
+  last_pulled_at: string | null;
+  last_status: string | null;
+  last_message: string | null;
+  auto_pull: boolean;
+  interval_minutes: number;
+}
+
+export interface GitDiff {
+  path: string;
+  committed: string | null;
+  working: string | null;
+}
+
+export interface GitBranch {
+  name: string;
+  commit_sha: string | null;
+  current: boolean;
+  protected: boolean;
+}
+
+export interface GitPullResult {
+  changed: boolean;
+  commit_sha: string | null;
+  files_changed: number;
+  changes?: { path: string; change: string }[];
+}
+
+export interface GitCommitResult {
+  commit_sha: string;
+  files_committed: number;
+  branch: string;
+  url: string;
+}
+
+/* ── repository inspection ─────────────────────────────────────────────── */
+
+export interface RepositoryInspectResult {
+  detected_root: string;
+  dbt_project_name: string | null;
+  dbt_version_requirement: unknown;
+  profile_name: string | null;
+  file_count: number;
+  model_count: number;
+  resource_directories: string[];
+  packages: string[];
+  branch: string | null;
+  commit_sha: string | null;
+  /** Notes, not losses -- nothing is dropped on import any more. */
+  warnings: string[];
+}
+
+/* ── autocomplete and docs ─────────────────────────────────────────────── */
+
+export interface CompletionItem {
+  label: string;
+  kind: string;
+  detail: string | null;
+  insert_text: string | null;
+}
+
+export interface Completions {
+  refs: CompletionItem[];
+  sources: CompletionItem[];
+  macros: CompletionItem[];
+  tests: CompletionItem[];
+  columns: Record<string, string[]>;
+}
+
+export interface DocEntry {
+  unique_id: string;
+  name: string;
+  resource_type: string;
+  description: string | null;
+  path: string | null;
+  relation_name: string | null;
+  columns: ResourceColumn[];
+  tags: string[];
+  group: string | null;
+  tests: string[];
+  parents: string[];
+  children: string[];
+}
+
+export interface SearchHit {
+  kind: 'file' | 'resource' | 'column';
+  label: string;
+  detail: string | null;
+  path: string | null;
+  unique_id: string | null;
+  line: number | null;
+  excerpt: string | null;
+}
+
+export interface TransformSearch {
+  hits: SearchHit[];
+  truncated: boolean;
+}
+
+/** A relation the warehouse physically holds, for writing a `source()`. */
+export interface BrowsedRelation {
+  name: string;
+  type: string;
+  schema: string;
+}
+
+export interface WarehouseBrowse {
+  catalogs?: string[];
+  schemas?: string[];
+  catalog?: string | null;
+  schema?: string | null;
+  relations?: BrowsedRelation[];
 }
 
 export interface OverviewKpis {

@@ -1,0 +1,7 @@
+version: 2
+
+seeds:
+  - name: country_codes
+    config:
+      column_types:
+        code: varchar(2)

@@ -211,6 +211,35 @@ class Settings(BaseSettings):
     transform_preview_limit: int = 200
     dbt_core_version: str = "1.12.3"
 
+    # --- Transform project storage ----------------------------------------
+    # Project revisions and dbt artifacts live here, not in Postgres.  A
+    # manifest for a mid-sized project is tens of megabytes and one is produced
+    # per parse; the product database holds the metadata and index rows that
+    # point at these objects.
+    #
+    # `local` is a directory and is the development default.  `s3` is any
+    # S3-compatible endpoint and is what production should run.  Nothing else
+    # in AppBI reads this store -- Pipeline and Airbyte are unaffected by it.
+    transform_storage_backend: str = "local"
+    transform_storage_local_dir: str = "/transform/objects"
+    transform_storage_s3_bucket: str | None = None
+    transform_storage_s3_region: str = "us-east-1"
+    transform_storage_s3_access_key: str | None = None
+    transform_storage_s3_secret_key: str | None = None
+    #: Set for MinIO, R2, or any non-AWS gateway.  Leave empty for AWS S3.
+    transform_storage_s3_endpoint_url: str | None = None
+    transform_storage_s3_prefix: str = "transform"
+    transform_storage_s3_force_path_style: bool = False
+
+    # How many parse artifact bundles to keep per project.  Every save parses,
+    # so this is the number that stops a busy editor from filling the store.
+    transform_parse_artifact_retention: int = 5
+    #: Editing a file bumps the working revision; only these many are kept.
+    transform_revision_retention: int = 200
+    #: A dbt subprocess reads its project from a private temp dir under here.
+    transform_max_file_bytes: int = 2_000_000
+    transform_max_project_files: int = 5_000
+
     # Airbyte application credentials. An auth-enabled Airbyte 1.x rejects HTTP
     # Basic on the Config API -- including the instance admin's own email and
     # password -- and expects a bearer token obtained from these. Basic is kept

@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: One row, enough to parse and compile.
+    columns:
+      - name: order_id
+        description: Primary key.
+  - name: fct_orders
+    description: Depends on stg_orders, so parent_map has an edge to assert.

@@ -1,387 +1,328 @@
 'use client';
 
-import * as React from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, Trash2 } from 'lucide-react';
+/**
+ * Choose a warehouse key, or enter a new one.
+ *
+ * Two steps, in this order: a kind of system, then a connection to it. The
+ * order matters -- somebody creating their first project may have no Destination
+ * yet, and a picker that starts from "which Destination" has nothing to show
+ * them.
+ *
+ * A key that is named and listed is a key that gets reused, which is why an
+ * existing connection is the first thing offered rather than an empty form.
+ */
 
-import { transformApi } from '@/lib/api';
-import { qk } from '@/lib/queryKeys';
-import { cn } from '@/lib/utils';
-import { useWorkspaceId } from '@/hooks/use-current-user';
-import type { WarehouseConnection } from '@/lib/types';
+import * as React from 'react';
+import { Check, CircleAlert, KeyRound, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input, Label, Select, Textarea } from '@/components/ui/Input';
-import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
+import { Input } from '@/components/ui/Input';
+import { ApiError, transformApi } from '@/lib/api';
+import type { TransformSystem, WarehouseConnection } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
-export type ConnectionPickerCopy = {
-  systemTitle: string;
-  systemHelp: string;
-  connectionTitle: string;
-  connectionHelp: string;
-  defaultKey: string;
-  noAccount: string;
-  projects: string;
-  none: string;
-  addKey: string;
-  newKeyTitle: string;
-  keyName: string;
-  keyNamePlaceholder: string;
-  authMethod: string;
-  authLabel: Record<string, string>;
-  project: string;
-  location: string;
-  credentials: string;
-  credentialsHint: string;
-  host: string;
-  port: string;
-  database: string;
-  username: string;
-  password: string;
-  oauthHint: string;
-  oauthStart: string;
-  oauthDone: string;
-  save: string;
-  cancel: string;
-  remove: string;
-  loadFailed: string;
-};
-
-/**
- * Which system, then which connection to it.
- *
- * Two questions in the order a person asks them. The system comes from the
- * engine lock -- a warehouse nobody has certified an adapter for cannot be
- * offered -- and it decides everything below: which connections are relevant,
- * and what a new one needs. BigQuery takes a service account or a Google
- * sign-in; a database takes a host and a password.
- */
-export function ConnectionPicker({
-  copy, value, onChange, disabled,
-}: {
-  copy: ConnectionPickerCopy;
+interface ConnectionPickerProps {
+  systems: TransformSystem[];
+  connections: WarehouseConnection[];
   value: string | null;
-  onChange: (connectionId: string | null) => void;
+  onChange: (connectionId: string) => void;
+  onCreated: () => void;
   disabled?: boolean;
-}) {
-  const workspaceId = useWorkspaceId();
-  const queryClient = useQueryClient();
-  const [system, setSystem] = React.useState('');
-  const [adding, setAdding] = React.useState(false);
+}
 
-  const systems = useQuery({
-    queryKey: qk.transformSystems(workspaceId), queryFn: transformApi.systems,
-  });
-  const connections = useQuery({
-    queryKey: qk.transformConnections(workspaceId), queryFn: transformApi.connections,
-  });
+export function ConnectionPicker({
+  systems, connections, value, onChange, onCreated, disabled,
+}: ConnectionPickerProps) {
+  const [system, setSystem] = React.useState<string | null>(
+    systems.length === 1 ? systems[0].connector_key : null,
+  );
+  const [creating, setCreating] = React.useState(false);
 
-  // One certified system is not a choice worth making somebody click through.
-  React.useEffect(() => {
-    const list = systems.data ?? [];
-    if (!system && list.length) setSystem(list[0].connector_key);
-  }, [system, systems.data]);
-
-  const chosenSystem = (systems.data ?? []).find((item) => item.connector_key === system);
-  const rows = (connections.data ?? []).filter((item) => item.connector_key === system);
-
-  const remove = useMutation({
-    mutationFn: (id: string) => transformApi.removeConnection(id),
-    onSuccess: async (_result, id) => {
-      if (value === id) onChange(null);
-      await queryClient.invalidateQueries({
-        queryKey: qk.transformConnections(workspaceId),
-      });
-    },
-  });
+  const available = React.useMemo(
+    () => connections.filter((item) => !system || item.connector_key === system),
+    [connections, system],
+  );
 
   return (
-    <div className="space-y-5">
-      <section>
-        <h2 className="text-small font-strong text-text-primary">{copy.systemTitle}</h2>
-        <p className="mt-1 text-caption text-text-tertiary">{copy.systemHelp}</p>
-        {systems.isLoading ? (
-          <div className="mt-3 flex justify-center py-4"><Spinner /></div>
-        ) : (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(systems.data ?? []).map((item) => (
-              <button key={item.connector_key} type="button" disabled={disabled}
-                onClick={() => { setSystem(item.connector_key); onChange(null); setAdding(false); }}
-                className={cn(
-                  'rounded-lg border px-4 py-2 text-caption transition-colors',
-                  system === item.connector_key
-                    ? 'border-brand bg-brand/[0.06]'
-                    : 'border-[rgb(var(--border-line))] hover:border-[rgb(var(--border-strong))]',
-                )}>
-                <span className="block text-caption font-emphasis text-text-primary">
-                  {item.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+    <div className="space-y-3">
+      <div>
+        <p className="mb-1.5 text-caption font-emphasis text-text-primary">
+          Kho dữ liệu
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {systems.map((item) => (
+            <button
+              key={item.connector_key}
+              type="button"
+              disabled={disabled}
+              onClick={() => { setSystem(item.connector_key); setCreating(false); }}
+              className={cn(
+                'rounded-md border px-3 py-1.5 text-caption transition-colors',
+                system === item.connector_key
+                  ? 'border-brand bg-brand/10 text-text-primary font-emphasis'
+                  : 'border-[rgb(var(--border-line))] text-text-secondary hover:bg-surface-2',
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <section>
-        <h2 className="text-small font-strong text-text-primary">{copy.connectionTitle}</h2>
-        <p className="mt-1 text-caption text-text-tertiary">{copy.connectionHelp}</p>
-
-        {connections.isLoading ? (
-          <div className="mt-3 flex justify-center py-6"><Spinner /></div>
-        ) : connections.error ? (
-          <div className="mt-3">
-            <ErrorState title={copy.loadFailed} message={(connections.error as Error).message}
-              onRetry={() => connections.refetch()} />
+      {system && !creating && (
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-caption font-emphasis text-text-primary">Kết nối</p>
+            <Button
+              variant="ghost" size="xs" disabled={disabled}
+              onClick={() => setCreating(true)}
+              leadingIcon={<Plus className="h-3 w-3" />}
+            >
+              Kết nối mới
+            </Button>
           </div>
-        ) : rows.length === 0 ? (
-          <div className="mt-3"><EmptyState title={copy.none} compact /></div>
-        ) : (
-          <div className="mt-3 divide-y divide-[rgb(var(--border-line))] overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
-            {rows.map((row) => (
-              <div key={row.id}
-                className={cn('flex items-center gap-3 px-4 py-3 transition-colors',
-                  value === row.id ? 'bg-brand/[0.06]' : 'hover:bg-surface-2')}>
-                <button type="button" disabled={disabled} onClick={() => onChange(row.id)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                  <span className={cn(
-                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                    value === row.id ? 'border-brand' : 'border-[rgb(var(--border-strong))]',
-                  )}>
-                    {value === row.id && <span className="h-2 w-2 rounded-full bg-brand" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-caption font-emphasis text-text-primary">
-                        {row.name}
-                      </span>
-                      {row.is_default && (
-                        <Badge variant="subtle" size="xs">{copy.defaultKey}</Badge>
+
+          {available.length === 0 ? (
+            <p className="rounded-md bg-surface-2 px-3 py-3 text-caption text-text-tertiary">
+              Chưa có kết nối nào tới hệ thống này. Hãy tạo một kết nối mới.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {available.map((connection) => (
+                <li key={connection.id}>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onChange(connection.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left',
+                      value === connection.id
+                        ? 'border-brand bg-brand/5'
+                        : 'border-[rgb(var(--border-line))] hover:bg-surface-2',
+                    )}
+                  >
+                    <KeyRound className="h-4 w-4 shrink-0 text-text-tertiary" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-caption font-emphasis text-text-primary">
+                        {connection.name}
+                      </p>
+                      {connection.account && (
+                        <p className="truncate text-tiny text-text-tertiary">
+                          {connection.account}
+                        </p>
                       )}
-                      {!row.is_default && (
-                        <Badge variant="neutral" size="xs">
-                          {copy.authLabel[row.auth_method] ?? row.auth_method}
-                        </Badge>
-                      )}
-                    </span>
-                    <span className="mt-0.5 block truncate font-mono text-tiny text-text-tertiary">
-                      {row.account ?? copy.noAccount}
-                      {row.catalogs.length > 1
-                        ? ` · ${row.catalogs.length} ${copy.projects}` : ''}
-                    </span>
-                  </span>
-                </button>
-                {!row.is_default && !disabled && (
-                  <Button size="xs" variant="ghost"
-                    loading={remove.isPending && remove.variables === row.id}
-                    aria-label={copy.remove} title={copy.remove}
-                    onClick={() => remove.mutate(row.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+                    </div>
+                    {connection.is_default && (
+                      <Badge variant="subtle" size="xs">có sẵn</Badge>
+                    )}
+                    {connection.verification_status === 'FAILED' && (
+                      <CircleAlert
+                        className="h-3.5 w-3.5 shrink-0 text-danger"
+                        aria-label="Kết nối không dùng được"
+                      />
+                    )}
+                    {value === connection.id && (
+                      <Check className="h-4 w-4 shrink-0 text-brand" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
-        {remove.error ? (
-          <p className="mt-2 text-caption text-danger">{(remove.error as Error).message}</p>
-        ) : null}
-
-        {!adding ? (
-          <Button size="sm" variant="secondary" className="mt-3"
-            disabled={disabled || !chosenSystem}
-            leadingIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setAdding(true)}>{copy.addKey}</Button>
-        ) : chosenSystem ? (
-          <NewConnectionForm
-            copy={copy} system={chosenSystem}
-            onCancel={() => setAdding(false)}
-            onCreated={(row) => { setAdding(false); onChange(row.id); }} />
-        ) : null}
-      </section>
+      {system && creating && (
+        <NewConnectionForm
+          system={systems.find((item) => item.connector_key === system)!}
+          onCancel={() => setCreating(false)}
+          onCreated={(connection) => {
+            setCreating(false);
+            onCreated();
+            onChange(connection.id);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 function NewConnectionForm({
-  copy, system, onCancel, onCreated,
+  system, onCancel, onCreated,
 }: {
-  copy: ConnectionPickerCopy;
-  system: import('@/lib/types').TransformSystem;
+  system: TransformSystem;
   onCancel: () => void;
-  onCreated: (row: WarehouseConnection) => void;
+  onCreated: (connection: WarehouseConnection) => void;
 }) {
-  const workspaceId = useWorkspaceId();
-  const queryClient = useQueryClient();
-  const [method, setMethod] = React.useState(system.auth_methods[0] ?? 'service_account');
-  const [name, setName] = React.useState('');
-  const [form, setForm] = React.useState({
-    project_id: '', dataset_location: '', credentials_json: '',
-    host: '', port: '5432', database: '', username: '', password: '',
-  });
-  const [grant, setGrant] = React.useState<{ id: string; account: string } | null>(null);
+  const [method, setMethod] = React.useState(system.auth_methods[0]);
+  const [saving, setSaving] = React.useState(false);
+  const [fields, setFields] = React.useState<Record<string, string>>({});
 
-  const set = (key: keyof typeof form) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const set = (key: string) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setFields((current) => ({ ...current, [key]: event.target.value }));
 
-  // The consent window writes the grant handle back onto this page's URL, which
-  // is the only thing about the sign-in that ever touches the browser.
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('oauth_grant');
-    if (!id) return;
-    transformApi.oauthGrant(id)
-      .then((row) => setGrant({ id: row.id, account: row.account_label }))
-      .catch(() => undefined);
-    params.delete('oauth_grant'); params.delete('connector');
-    const rest = params.toString();
-    window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''));
-  }, []);
-
-  const startOauth = useMutation({
-    mutationFn: () => transformApi.startOauth(system.connector_key),
-    onSuccess: (result) => { window.location.href = result.authorize_url; },
-  });
-
-  const create = useMutation({
-    mutationFn: () => transformApi.createConnection({
-      connector_key: system.connector_key,
-      name: name.trim(),
-      auth_method: method,
-      ...(system.connector_key === 'destination-bigquery'
-        ? {
-          project_id: form.project_id.trim() || undefined,
-          dataset_location: form.dataset_location.trim() || undefined,
-          ...(method === 'oauth'
-            ? { oauth_grant_id: grant?.id }
-            : { credentials_json: form.credentials_json.trim() }),
-        }
-        : {
-          host: form.host.trim(),
-          port: Number(form.port) || undefined,
-          database: form.database.trim(),
-          username: form.username.trim(),
-          password: form.password,
-        }),
-    }),
-    onSuccess: async (row) => {
-      await queryClient.invalidateQueries({
-        queryKey: qk.transformConnections(workspaceId),
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      // Checked against the warehouse before it is kept: a connection nobody
+      // can use is worse in a list than absent from one, because it looks like
+      // a working choice.
+      const created = await transformApi.createConnection({
+        connector_key: system.connector_key,
+        name: fields.name ?? '',
+        auth_method: method,
+        project_id: fields.project_id,
+        dataset_location: fields.dataset_location,
+        credentials_json: fields.credentials_json,
+        host: fields.host,
+        port: fields.port ? Number(fields.port) : undefined,
+        database: fields.database,
+        username: fields.username,
+        password: fields.password,
+        ssl_mode: fields.ssl_mode,
       });
-      onCreated(row);
-    },
-  });
+      toast.success(`Đã kiểm tra và lưu kết nối “${created.name}”.`);
+      onCreated(created);
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? error.message : 'Không lưu được kết nối.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const isBigQuery = system.connector_key === 'destination-bigquery';
-  const ready = Boolean(name.trim()) && (
-    isBigQuery
-      ? (method === 'oauth'
-        ? Boolean(grant && form.project_id.trim())
-        : form.credentials_json.trim().length > 20)
-      : Boolean(form.host.trim() && form.database.trim() && form.username.trim())
-  );
 
   return (
-    <div className="mt-3 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
-      <h3 className="text-caption font-emphasis text-text-primary">{copy.newKeyTitle}</h3>
+    <form
+      onSubmit={submit}
+      className="space-y-2.5 rounded-md border border-[rgb(var(--border-line))] p-3"
+    >
+      <p className="text-caption font-emphasis text-text-primary">
+        Kết nối {system.label} mới
+      </p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label required>{copy.keyName}</Label>
-          <Input autoFocus value={name} placeholder={copy.keyNamePlaceholder}
-            onChange={(event) => setName(event.target.value)} />
-        </div>
-        {system.auth_methods.length > 1 && (
-          <div>
-            <Label>{copy.authMethod}</Label>
-            <Select value={method} onChange={(event) => setMethod(event.target.value)}>
-              {system.auth_methods.map((item) => (
-                <option key={item} value={item}>{copy.authLabel[item] ?? item}</option>
-              ))}
-            </Select>
-          </div>
-        )}
-      </div>
-
-      {isBigQuery ? (
-        <div className="mt-3 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label required={method === 'oauth'}>{copy.project}</Label>
-              <Input value={form.project_id} placeholder="my-gcp-project"
-                onChange={set('project_id')} />
-            </div>
-            <div>
-              <Label>{copy.location}</Label>
-              <Input value={form.dataset_location} placeholder="US"
-                onChange={set('dataset_location')} />
-            </div>
-          </div>
-          {method === 'oauth' ? (
-            <div className="rounded-md border border-[rgb(var(--border-line))] px-3 py-2.5">
-              <p className="text-caption text-text-secondary">{copy.oauthHint}</p>
-              {grant ? (
-                <p className="mt-1.5 font-mono text-tiny text-success">
-                  {copy.oauthDone} {grant.account}
-                </p>
-              ) : (
-                <Button size="xs" variant="secondary" className="mt-2"
-                  loading={startOauth.isPending}
-                  onClick={() => startOauth.mutate()}>{copy.oauthStart}</Button>
+      {system.auth_methods.length > 1 && (
+        <div className="flex gap-1.5">
+          {system.auth_methods.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setMethod(item)}
+              className={cn(
+                'rounded-sm px-2 py-1 text-tiny transition-colors',
+                method === item
+                  ? 'bg-brand text-text-inverse'
+                  : 'bg-surface-2 text-text-secondary hover:bg-surface-3',
               )}
-              {startOauth.error ? (
-                <p className="mt-1.5 text-caption text-danger">
-                  {(startOauth.error as Error).message}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <div>
-              <Label required>{copy.credentials}</Label>
-              <Textarea rows={5} value={form.credentials_json} spellCheck={false}
-                placeholder={'{ "type": "service_account", ... }'}
-                onChange={set('credentials_json')} />
-              <p className="mt-1 text-tiny text-text-tertiary">{copy.credentialsHint}</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label required>{copy.host}</Label>
-            <Input value={form.host} placeholder="10.0.0.4" onChange={set('host')} />
-          </div>
-          <div>
-            <Label>{copy.port}</Label>
-            <Input value={form.port} onChange={set('port')} />
-          </div>
-          <div>
-            <Label required>{copy.database}</Label>
-            <Input value={form.database} onChange={set('database')} />
-          </div>
-          <div>
-            <Label required>{copy.username}</Label>
-            <Input value={form.username} onChange={set('username')} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label required>{copy.password}</Label>
-            <Input type="password" value={form.password} autoComplete="off"
-              onChange={set('password')} />
-            <p className="mt-1 text-tiny text-text-tertiary">{copy.credentialsHint}</p>
-          </div>
+            >
+              {item === 'service_account' ? 'Khoá dịch vụ'
+                : item === 'oauth' ? 'Đăng nhập Google' : 'Mật khẩu'}
+            </button>
+          ))}
         </div>
       )}
 
-      {create.error ? (
-        <p className="mt-2 text-caption text-danger">{(create.error as Error).message}</p>
-      ) : null}
-      <div className="mt-3 flex justify-end gap-2">
-        <Button size="sm" variant="ghost" onClick={onCancel}>{copy.cancel}</Button>
-        <Button size="sm" variant="primary" loading={create.isPending} disabled={!ready}
-          leadingIcon={<KeyRound className="h-4 w-4" />}
-          onClick={() => create.mutate()}>{copy.save}</Button>
+      <Field label="Tên gợi nhớ">
+        <Input
+          value={fields.name ?? ''} onChange={set('name')}
+          placeholder="Kho phân tích" required size="sm"
+        />
+      </Field>
+
+      {isBigQuery ? (
+        <>
+          <Field label="Project ID">
+            <Input
+              value={fields.project_id ?? ''} onChange={set('project_id')}
+              placeholder="my-gcp-project" size="sm"
+            />
+          </Field>
+          <Field label="Vị trí dataset" hint="Ví dụ: asia-southeast1">
+            <Input
+              value={fields.dataset_location ?? ''} onChange={set('dataset_location')}
+              placeholder="US" size="sm"
+            />
+          </Field>
+          {method === 'service_account' && (
+            <Field label="Service account JSON">
+              <textarea
+                value={fields.credentials_json ?? ''}
+                onChange={set('credentials_json')}
+                rows={4}
+                required
+                spellCheck={false}
+                placeholder='{"type": "service_account", …}'
+                className={cn(
+                  'w-full rounded-md border border-[rgb(var(--border-line))] bg-surface-0',
+                  'px-2 py-1.5 font-mono text-tiny text-text-primary',
+                  'placeholder:text-text-quaternary focus:outline-none focus:ring-1 focus:ring-brand/40',
+                )}
+              />
+            </Field>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <Field label="Host">
+                <Input value={fields.host ?? ''} onChange={set('host')} size="sm" required />
+              </Field>
+            </div>
+            <Field label="Port">
+              <Input
+                value={fields.port ?? ''} onChange={set('port')}
+                placeholder="5432" size="sm" inputMode="numeric"
+              />
+            </Field>
+          </div>
+          <Field label="Database">
+            <Input value={fields.database ?? ''} onChange={set('database')} size="sm" required />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Tài khoản">
+              <Input value={fields.username ?? ''} onChange={set('username')} size="sm" required />
+            </Field>
+            <Field label="Mật khẩu">
+              <Input
+                type="password" value={fields.password ?? ''} onChange={set('password')}
+                size="sm" required
+              />
+            </Field>
+          </div>
+        </>
+      )}
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
+          Huỷ
+        </Button>
+        <Button
+          variant="primary" size="sm" type="submit" loading={saving}
+          leadingIcon={saving
+            ? <Loader2 className="h-3 w-3 animate-spin" />
+            : <RefreshCw className="h-3 w-3" />}
+        >
+          Kiểm tra &amp; lưu
+        </Button>
       </div>
-    </div>
+    </form>
+  );
+}
+
+function Field({
+  label, hint, children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-caption text-text-secondary">{label}</span>
+      {children}
+      {hint && <span className="mt-0.5 block text-tiny text-text-quaternary">{hint}</span>}
+    </label>
   );
 }

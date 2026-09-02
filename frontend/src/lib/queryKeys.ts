@@ -16,25 +16,64 @@ export const qk = {
   destination: (ws: string, id: string) => ['workspace', ws, 'destination', id] as const,
   pipelines: (ws: string, filters?: unknown) => ['workspace', ws, 'pipelines', filters] as const,
   pipeline: (ws: string, id: string) => ['workspace', ws, 'pipeline', id] as const,
+  // ── Transform V2 ────────────────────────────────────────────────────────
+  // One key per React Query boundary. A project with 5,000 resources must be
+  // able to refresh its file tree without refetching its lineage, so these are
+  // deliberately not nested under a single `transform` key.
   transforms: (ws: string, filters?: unknown) => ['workspace', ws, 'transforms', filters] as const,
   transform: (ws: string, id: string) => ['workspace', ws, 'transform', id] as const,
+  transformFiles: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'files'] as const,
+  transformFile: (ws: string, id: string, path: string) =>
+    ['workspace', ws, 'transform', id, 'file', path] as const,
+  transformTemplates: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'templates'] as const,
+  transformResources: (ws: string, id: string, filters?: unknown) =>
+    ['workspace', ws, 'transform', id, 'resources', filters] as const,
+  transformResource: (ws: string, id: string, uniqueId: string, scope?: string) =>
+    ['workspace', ws, 'transform', id, 'resource', uniqueId, scope ?? 'DRAFT'] as const,
+  transformFacets: (ws: string, id: string, scope?: string) =>
+    ['workspace', ws, 'transform', id, 'facets', scope ?? 'DRAFT'] as const,
+  transformLineage: (ws: string, id: string, options?: unknown) =>
+    ['workspace', ws, 'transform', id, 'lineage', options] as const,
+  transformCompiled: (ws: string, id: string, uniqueId: string) =>
+    ['workspace', ws, 'transform', id, 'compiled', uniqueId] as const,
+  transformProblems: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'problems'] as const,
+  transformCompletions: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'completions'] as const,
+  transformDocs: (ws: string, id: string, filters?: unknown) =>
+    ['workspace', ws, 'transform', id, 'docs', filters] as const,
+  transformSearch: (ws: string, id: string, q: string, content?: boolean) =>
+    ['workspace', ws, 'transform', id, 'search', q, content ?? false] as const,
+  transformEnvironments: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'environments'] as const,
+  transformInvocations: (ws: string, id: string, filters?: unknown) =>
+    ['workspace', ws, 'transform', id, 'invocations', filters] as const,
   transformReleases: (ws: string, id: string) =>
     ['workspace', ws, 'transform', id, 'releases'] as const,
-  transformDiff: (ws: string, id: string) =>
-    ['workspace', ws, 'transform', id, 'diff'] as const,
-  transformRelease: (ws: string, id: string, releaseId: string) =>
-    ['workspace', ws, 'transform', id, 'release', releaseId] as const,
-  transformDestinations: (ws: string) => ['workspace', ws, 'transform-destinations'] as const,
-  transformInputs: (ws: string, id: string) => ['workspace', ws, 'transform-inputs', id] as const,
-  /** Prefix for every warehouse listing of one Destination, schema or not. */
+  transformPublishPlan: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'publish-plan'] as const,
+  transformGitStatus: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'git-status'] as const,
+  transformGitDiff: (ws: string, id: string, path: string) =>
+    ['workspace', ws, 'transform', id, 'git-diff', path] as const,
+  transformGitBranches: (ws: string, id: string) =>
+    ['workspace', ws, 'transform', id, 'git-branches'] as const,
+  // Not scoped to one project: an invocation is addressable on its own so the
+  // Runs page and the workbench share one cache entry for it.
+  transformInvocation: (ws: string, invocationId: string) =>
+    ['workspace', ws, 'transform-invocation', invocationId] as const,
+  transformInvocationLogs: (ws: string, invocationId: string) =>
+    ['workspace', ws, 'transform-invocation', invocationId, 'logs'] as const,
   transformSystems: (ws: string) => ['workspace', ws, 'transform-systems'] as const,
-  transformConnections: (ws: string) => ['workspace', ws, 'transform-connections'] as const,
+  transformConnections: (ws: string, connectorKey?: string) =>
+    ['workspace', ws, 'transform-connections', connectorKey ?? ''] as const,
   transformWarehouseAll: (ws: string, id: string) =>
     ['workspace', ws, 'transform-warehouse', id] as const,
-  transformWarehouse: (ws: string, id: string, schema?: string) =>
-    ['workspace', ws, 'transform-warehouse', id, schema ?? ''] as const,
-  transformRun: (ws: string, id: string) => ['workspace', ws, 'transform-run', id] as const,
-  transformLineage: (ws: string, id: string) => ['workspace', ws, 'transform-lineage', id] as const,
+  transformWarehouse: (ws: string, id: string, catalog?: string, schema?: string) =>
+    ['workspace', ws, 'transform-warehouse', id, catalog ?? '', schema ?? ''] as const,
+
   // Not workspace-scoped: it is fetched from the engine on demand and never
   // part of the pipeline payload, so it must not be invalidated with it.
   pipelineState: (id: string) => ['pipeline-state', id] as const,

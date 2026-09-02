@@ -19,13 +19,14 @@ from app.models.engine import ConnectorDefinition
 from app.models.identity import User
 from app.models.integration import Destination, Pipeline, Source
 from app.models.run import PipelineRun
-from app.models.transform import Transform, TransformRun
+from app.transforms.models import TransformInvocation, TransformProject
 from app.schemas.common import ActorRef, PageInfo, Paginated
 from app.schemas.domain import (
     RunAttemptView, RunDetail, RunError, RunLogPage, RunView, TransformRunNodeView,
 )
 from app.services import runs as run_service
-from app.services import transforms as transform_service
+from app.transforms import executor as transform_executor
+from app.transforms import invocations as transform_service
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -49,11 +50,11 @@ async def _pipeline_ref(session, pipeline: Pipeline | None) -> ActorRef | None:
     )
 
 
-def _transform_ref(transform: Transform | None) -> ActorRef | None:
-    if transform is None:
+def _transform_ref(project: TransformProject | None) -> ActorRef | None:
+    if project is None:
         return None
     return ActorRef(
-        id=transform.id, name=transform.name, connector_key="transform",
+        id=project.id, name=project.name, connector_key="transform",
         connector_display_name="dbt Core", icon="workflow",
     )
 
@@ -69,7 +70,7 @@ async def _actor_ref(session, actor) -> ActorRef | None:
     )
 
 
-def _transform_stale(run: TransformRun) -> bool:
+def _transform_stale(run: TransformInvocation) -> bool:
     if not run.status.is_active:
         return False
     reference = run.heartbeat_at or run.started_at or run.created_at
@@ -77,7 +78,7 @@ def _transform_stale(run: TransformRun) -> bool:
 
 
 def _transform_run_view(
-    ctx, run: TransformRun, transform: Transform | None, user: User | None,
+    ctx, run: TransformInvocation, project: TransformProject | None, user: User | None,
 ) -> RunView:
     duration = None
     if run.started_at:
@@ -95,12 +96,17 @@ def _transform_run_view(
     retryable = run.status.value in {"FAILED", "FAILED_TO_START", "CANCELLED", "TIMED_OUT"}
     return RunView(
         id=run.id, short_id=str(run.id)[:8], run_type="TRANSFORM",
-        transform=_transform_ref(transform), operation=run.operation,
+        transform=_transform_ref(project),
+        # The dbt command plus its selector, which is what a person recognises a
+        # run by now that a run is not tied to one model.
+        operation=(
+            f"{run.command} {run.selector}" if run.selector else run.command
+        ),
         status=run.status.value, trigger_type=run.trigger_type.value,
         triggered_by=user_ref(user), retry_of_run_id=run.retry_of_run_id,
         queue_reason=run.queue_reason, started_at=run.started_at, ended_at=run.ended_at,
         created_at=run.created_at, duration_seconds=duration,
-        models_built=run.models_built, tests_passed=run.tests_passed,
+        models_built=run.nodes_succeeded, tests_passed=run.tests_passed,
         tests_failed=run.tests_failed, tests_warned=run.tests_warned,
         rows_affected=run.rows_affected, error=error, is_stale=_transform_stale(run),
         actions={
@@ -139,7 +145,7 @@ async def list_runs(
     fetch_limit = limit if normalized != "ALL" else offset + limit
     fetch_offset = offset if normalized != "ALL" else 0
     pipeline_rows: list[PipelineRun] = []
-    transform_rows: list[TransformRun] = []
+    transform_rows: list[TransformInvocation] = []
     pipeline_total = transform_total = 0
     pipeline_summary: dict[str, int] = {}
     transform_summary: dict[str, int] = {}
@@ -167,7 +173,7 @@ async def list_runs(
         )).all()
     } if triggered_ids else {}
     pipeline_cache: dict[uuid.UUID, ActorRef | None] = {}
-    transform_cache: dict[uuid.UUID, Transform | None] = {}
+    transform_cache: dict[uuid.UUID, TransformProject | None] = {}
     dated_items: list[tuple[datetime, RunView]] = []
     for run in pipeline_rows:
         if run.pipeline_id not in pipeline_cache:
@@ -179,10 +185,12 @@ async def list_runs(
             triggered_by=users.get(run.triggered_by), is_stale=run_service.is_stale(run),
         )))
     for run in transform_rows:
-        if run.transform_id not in transform_cache:
-            transform_cache[run.transform_id] = await session.get(Transform, run.transform_id)
+        if run.project_id not in transform_cache:
+            transform_cache[run.project_id] = await session.get(
+                TransformProject, run.project_id,
+            )
         dated_items.append((run.created_at, _transform_run_view(
-            ctx, run, transform_cache[run.transform_id], users.get(run.triggered_by),
+            ctx, run, transform_cache[run.project_id], users.get(run.triggered_by),
         )))
     dated_items.sort(key=lambda item: item[0], reverse=True)
     items = [item for _, item in dated_items]
@@ -212,8 +220,9 @@ async def _find(
     ))
     if pipeline_run is not None:
         return "PIPELINE", pipeline_run
-    transform_run = await session.scalar(select(TransformRun).where(
-        TransformRun.id == run_id, TransformRun.workspace_id == ctx.workspace_id,
+    transform_run = await session.scalar(select(TransformInvocation).where(
+        TransformInvocation.id == run_id,
+        TransformInvocation.workspace_id == ctx.workspace_id,
     ))
     if transform_run is not None:
         return "TRANSFORM", transform_run
@@ -247,7 +256,7 @@ async def retry(run_id: uuid.UUID, session: SessionDep, ctx: CtxDep) -> RunDetai
         run = await run_service.retry(session, ctx, run_id)
         await session.commit()
         return await _pipeline_detail(session, ctx, run)
-    run = await transform_service.retry_run(session, ctx, found)
+    run = await transform_service.retry(session, ctx, found)
     await session.commit()
     return await _transform_detail(session, ctx, run)
 
@@ -266,8 +275,9 @@ async def logs(
             session, ctx, run_id, cursor=cursor, limit=limit,
         )
     else:
-        lines, next_cursor, has_more, total = await transform_service.fetch_logs(
-            session, ctx, run_id, cursor=cursor, limit=limit,
+        invocation = await transform_service.get(session, ctx, run_id)
+        lines, next_cursor, has_more, total = await transform_executor.fetch_logs(
+            session, invocation, cursor=cursor, limit=limit,
         )
     return RunLogPage(
         run_id=run_id, lines=lines, next_cursor=next_cursor,
@@ -291,25 +301,20 @@ async def _pipeline_detail(session, ctx, run: PipelineRun) -> RunDetail:
     )
 
 
-async def _transform_detail(session, ctx, run: TransformRun) -> RunDetail:
-    transform = await session.get(Transform, run.transform_id)
+async def _transform_detail(session, ctx, run: TransformInvocation) -> RunDetail:
+    project = await session.get(TransformProject, run.project_id)
     user = await session.get(User, run.triggered_by) if run.triggered_by else None
-    destination = await session.get(Destination, transform.destination_id) if transform else None
-    base = _transform_run_view(ctx, run, transform, user)
+    base = _transform_run_view(ctx, run, project, user)
+    metadata = run.technical_metadata or {}
     return RunDetail(
         **base.model_dump(),
-        attempts=[RunAttemptView(
-            attempt_number=item.attempt_number, status=item.status.value,
-            started_at=item.started_at, ended_at=item.ended_at,
-            duration_seconds=(
-                ((item.ended_at or utcnow()) - item.started_at).total_seconds()
-                if item.started_at else None
-            ),
-            failure_summary=item.failure_summary,
-        ) for item in run.attempts],
-        destination=await _actor_ref(session, destination),
-        trace_id=(run.technical_metadata or {}).get("trace_id"),
-        technical_metadata=run.technical_metadata or {},
+        # A dbt invocation is one process. It either ran or it did not, so there
+        # is no per-attempt history to show; a retry is a separate run with its
+        # own row, which `retry_of_invocation_id` links.
+        attempts=[],
+        destination=None,
+        trace_id=metadata.get("trace_id"),
+        technical_metadata=metadata,
         transform_nodes=[TransformRunNodeView(
             name=node.name, resource_type=node.resource_type, status=node.status,
             execution_time=node.execution_time, relation_name=node.relation_name,

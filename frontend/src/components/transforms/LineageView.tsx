@@ -1,227 +1,288 @@
 'use client';
 
+/**
+ * The dependency graph, drawn from dbt's own parent/child maps.
+ *
+ * Not from SQL. dbt has already resolved every `ref` and `source` in order to
+ * build in the right order -- including the ones inside a macro, behind a var,
+ * or contributed by a package -- and a second answer computed here would be a
+ * different graph from the one that actually runs.
+ *
+ * Layout is by longest-path depth rather than by declared layer. A dbt project
+ * has no STAGING/CORE/MART enum, and a graph laid out by folder name would put
+ * a model in the wrong column the moment somebody organised their folders
+ * differently.
+ */
+
 import * as React from 'react';
-import { Maximize2, Minimize2, Scan, ZoomIn, ZoomOut } from 'lucide-react';
+import { Maximize2, Minimize2, Target, ZoomIn, ZoomOut } from 'lucide-react';
 
-import type { TransformLineage } from '@/lib/types';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import type { LineageNode, TransformLineage } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { EmptyState, Spinner } from '@/components/ui/Feedback';
-import { IconButton } from '@/components/ui/Button';
 
-export type LineageCopy = {
-  lineage: string;
-  lineageDescription: string;
-  noLineage: string;
-  zoomIn: string;
-  zoomOut: string;
-  zoomFit: string;
-  expand: string;
-  collapse: string;
-  legendSource: string;
-  legendSelected: string;
-  legendHealthy: string;
-};
-
-const NODE_W = 180;
-const NODE_H = 46;
-const COL_GAP = 56;
+const NODE_WIDTH = 168;
+const NODE_HEIGHT = 46;
+const COLUMN_GAP = 96;
 const ROW_GAP = 18;
-const PAD = 18;
+
+interface Placed extends LineageNode {
+  x: number;
+  y: number;
+}
 
 /**
- * The dependency graph, drawn where the results are.
+ * Depth by longest path from a root.
  *
- * Kept beside Preview and Results rather than behind a dialog: the question it
- * answers -- what feeds this, what breaks if I change it -- is asked while
- * reading the SQL, and a dialog hides the SQL to answer it.
+ * Longest, not shortest: a model that reads both a source and a mart belongs to
+ * the right of the mart, or its edge would point backwards and the graph would
+ * read as a cycle.
  */
-export function LineageView({
-  data, loading, copy, selectedName, expanded, onToggleExpand,
-}: {
-  data?: TransformLineage;
-  loading: boolean;
-  copy: LineageCopy;
-  /** The model open in the editor, highlighted so its place is obvious. */
-  selectedName?: string;
-  expanded: boolean;
-  onToggleExpand: () => void;
-}) {
-  const [zoom, setZoom] = React.useState(1);
-  const [focused, setFocused] = React.useState<string | null>(null);
+function layout(graph: TransformLineage): { nodes: Placed[]; width: number; height: number } {
+  const parents = new Map<string, string[]>();
+  const children = new Map<string, string[]>();
+  graph.edges.forEach(({ parent, child }) => {
+    parents.set(child, [...(parents.get(child) ?? []), parent]);
+    children.set(parent, [...(children.get(parent) ?? []), child]);
+  });
 
-  const graph = React.useMemo(() => {
-    if (!data?.nodes.length) return null;
-    const incoming = new Map<string, string[]>();
-    const outgoing = new Map<string, string[]>();
-    for (const edge of data.edges) {
-      incoming.set(edge.to, [...(incoming.get(edge.to) ?? []), edge.from]);
-      outgoing.set(edge.from, [...(outgoing.get(edge.from) ?? []), edge.to]);
-    }
-    // Longest-path layering: a node sits one column right of its deepest parent.
-    const depth = new Map<string, number>();
-    const resolve = (id: string, seen: Set<string>): number => {
-      if (depth.has(id)) return depth.get(id)!;
-      if (seen.has(id)) return 0;
-      seen.add(id);
-      const parents = incoming.get(id) ?? [];
-      const value = parents.length
-        ? Math.max(...parents.map((parent) => resolve(parent, seen) + 1)) : 0;
-      depth.set(id, value);
-      return value;
-    };
-    for (const node of data.nodes) resolve(node.id, new Set());
+  const depth = new Map<string, number>();
+  const visiting = new Set<string>();
 
-    const columns: (typeof data.nodes)[] = [];
-    for (const node of data.nodes) {
-      const level = depth.get(node.id) ?? 0;
-      (columns[level] ??= []).push(node);
-    }
-    const position = new Map<string, { x: number; y: number }>();
-    columns.forEach((column, columnIndex) => column.forEach((node, rowIndex) => {
-      position.set(node.id, {
-        x: PAD + columnIndex * (NODE_W + COL_GAP),
-        y: PAD + rowIndex * (NODE_H + ROW_GAP),
-      });
-    }));
-    return {
-      position,
-      width: PAD * 2 + columns.length * NODE_W + Math.max(columns.length - 1, 0) * COL_GAP,
-      height: PAD * 2 + Math.max(...columns.map((c) => c.length), 1) * (NODE_H + ROW_GAP),
-      related: (id: string) => new Set([
-        id, ...(incoming.get(id) ?? []), ...(outgoing.get(id) ?? []),
-      ]),
-    };
-  }, [data]);
-
-  const highlighted = focused && graph ? graph.related(focused) : null;
-
-  const accent: Record<string, string> = {
-    SOURCE: 'border-l-info',
-    PIPELINE: 'border-l-info',
-    DATA_ASSET: 'border-l-success',
-    MODEL: 'border-l-brand',
+  const resolve = (id: string): number => {
+    const known = depth.get(id);
+    if (known !== undefined) return known;
+    // Guard against a cycle in a stale index. dbt rejects cyclic projects, but
+    // an index written before a fix should not hang the browser.
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const own = parents.get(id) ?? [];
+    const value = own.length === 0 ? 0 : Math.max(...own.map(resolve)) + 1;
+    visiting.delete(id);
+    depth.set(id, value);
+    return value;
   };
 
+  graph.nodes.forEach((node) => resolve(node.unique_id));
+
+  const columns = new Map<number, LineageNode[]>();
+  graph.nodes.forEach((node) => {
+    const level = depth.get(node.unique_id) ?? 0;
+    columns.set(level, [...(columns.get(level) ?? []), node]);
+  });
+
+  const placed: Placed[] = [];
+  let height = 0;
+  [...columns.entries()]
+    .sort(([left], [right]) => left - right)
+    .forEach(([level, nodes]) => {
+      const sorted = [...nodes].sort((left, right) => left.name.localeCompare(right.name));
+      const columnHeight = sorted.length * (NODE_HEIGHT + ROW_GAP);
+      height = Math.max(height, columnHeight);
+      sorted.forEach((node, index) => {
+        placed.push({
+          ...node,
+          x: level * (NODE_WIDTH + COLUMN_GAP),
+          y: index * (NODE_HEIGHT + ROW_GAP),
+        });
+      });
+    });
+
+  const width = (Math.max(...[...columns.keys()], 0) + 1) * (NODE_WIDTH + COLUMN_GAP);
+  return { nodes: placed, width: width + 40, height: height + 40 };
+}
+
+function nodeColor(type: string): { fill: string; stroke: string } {
+  switch (type) {
+    case 'source': return { fill: 'rgb(var(--info) / 0.08)', stroke: 'rgb(var(--info) / 0.5)' };
+    case 'seed': return { fill: 'rgb(var(--success) / 0.08)', stroke: 'rgb(var(--success) / 0.5)' };
+    case 'snapshot': return { fill: 'rgb(var(--warning) / 0.08)', stroke: 'rgb(var(--warning) / 0.5)' };
+    case 'exposure': return { fill: 'rgb(var(--brand) / 0.06)', stroke: 'rgb(var(--brand) / 0.4)' };
+    default: return { fill: 'rgb(var(--surface-1))', stroke: 'rgb(var(--border-strong))' };
+  }
+}
+
+interface LineageViewProps {
+  graph: TransformLineage;
+  focusId: string | null;
+  onSelect: (node: LineageNode) => void;
+  onOpenFile?: (path: string) => void;
+  onShowFull: () => void;
+  showingFull: boolean;
+  loading?: boolean;
+  className?: string;
+}
+
+export function LineageView({
+  graph, focusId, onSelect, onOpenFile, onShowFull, showingFull, loading, className,
+}: LineageViewProps) {
+  const [zoom, setZoom] = React.useState(1);
+  const { nodes, width, height } = React.useMemo(() => layout(graph), [graph]);
+  const positions = React.useMemo(
+    () => new Map(nodes.map((node) => [node.unique_id, node])),
+    [nodes],
+  );
+
+  if (loading) {
+    return <Centered className={className}>Đang dựng sơ đồ…</Centered>;
+  }
+  if (nodes.length === 0) {
+    return (
+      <Centered className={className}>
+        Chưa có sơ đồ. Dự án cần parse thành công trước.
+      </Centered>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-7 shrink-0 items-center gap-1 px-1">
-        <span className="text-tiny text-text-tertiary">{copy.lineageDescription}</span>
-        <div className="ml-auto flex items-center gap-0.5">
-          <IconButton size="xs" variant="ghost" aria-label={copy.zoomOut} title={copy.zoomOut}
-            onClick={() => setZoom((value) => Math.max(0.5, Number((value - 0.15).toFixed(2))))}>
+    <div className={cn('relative flex h-full flex-col', className)}>
+      <div className="flex items-center gap-1.5 border-b border-[rgb(var(--border-line))] px-2 py-1.5">
+        <Badge variant={graph.scope === 'RELEASE' ? 'brand' : 'subtle'} size="xs">
+          {graph.scope === 'RELEASE' ? 'Bản đang chạy' : 'Bản nháp'}
+        </Badge>
+        <span className="text-tiny text-text-tertiary">
+          {nodes.length}
+          {graph.truncated ? ` / ${graph.total_nodes}` : ''} resource
+        </span>
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant="ghost" size="xs"
+            onClick={() => setZoom((value) => Math.max(0.4, value - 0.15))}
+            aria-label="Thu nhỏ"
+          >
             <ZoomOut className="h-3.5 w-3.5" />
-          </IconButton>
-          <IconButton size="xs" variant="ghost" aria-label={copy.zoomIn} title={copy.zoomIn}
-            onClick={() => setZoom((value) => Math.min(1.6, Number((value + 0.15).toFixed(2))))}>
+          </Button>
+          <span className="w-9 text-center text-tiny text-text-tertiary">
+            {Math.round(zoom * 100)}%
+          </span>
+          <Button
+            variant="ghost" size="xs"
+            onClick={() => setZoom((value) => Math.min(2, value + 0.15))}
+            aria-label="Phóng to"
+          >
             <ZoomIn className="h-3.5 w-3.5" />
-          </IconButton>
-          <IconButton size="xs" variant="ghost" aria-label={copy.zoomFit} title={copy.zoomFit}
-            onClick={() => setZoom(1)}>
-            <Scan className="h-3.5 w-3.5" />
-          </IconButton>
-          <IconButton size="xs" variant="ghost"
-            aria-label={expanded ? copy.collapse : copy.expand}
-            title={expanded ? copy.collapse : copy.expand}
-            onClick={onToggleExpand}>
-            {expanded
+          </Button>
+          <Button
+            variant="ghost" size="xs" onClick={onShowFull}
+            leadingIcon={showingFull
               ? <Minimize2 className="h-3.5 w-3.5" />
               : <Maximize2 className="h-3.5 w-3.5" />}
-          </IconButton>
+          >
+            {showingFull ? 'Thu về lân cận' : 'Toàn bộ sơ đồ'}
+          </Button>
         </div>
       </div>
 
-      {loading ? <Spinner /> : !graph ? (
-        <EmptyState title={copy.noLineage} compact />
-      ) : (
-        <>
-          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-[rgb(var(--border-line))] bg-surface-2">
-            <div
-              className="relative origin-top-left"
-              style={{ width: graph.width, height: graph.height, transform: `scale(${zoom})` }}
+      <div className="flex-1 overflow-auto p-5">
+        <svg
+          width={width * zoom}
+          height={height * zoom}
+          viewBox={`0 0 ${width} ${height}`}
+          className="overflow-visible"
+        >
+          <defs>
+            <marker
+              id="lineage-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="6" markerHeight="6" orient="auto-start-reverse"
             >
-              <svg className="absolute inset-0 h-full w-full" aria-hidden>
-                <defs>
-                  <marker id="lineage-arrow" viewBox="0 0 8 8" refX="7" refY="4"
-                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                    <path d="M 0 1 L 7 4 L 0 7 z" className="fill-[rgb(var(--border-strong))]" />
-                  </marker>
-                </defs>
-                {data!.edges.map((edge, index) => {
-                  const from = graph.position.get(edge.from);
-                  const to = graph.position.get(edge.to);
-                  if (!from || !to) return null;
-                  const x1 = from.x + NODE_W;
-                  const y1 = from.y + NODE_H / 2;
-                  const x2 = to.x - 7;
-                  const y2 = to.y + NODE_H / 2;
-                  const mid = (x1 + x2) / 2;
-                  const lit = !highlighted
-                    || (highlighted.has(edge.from) && highlighted.has(edge.to));
-                  return (
-                    <path
-                      key={`${edge.from}-${edge.to}-${index}`}
-                      d={`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
-                      fill="none" strokeWidth={1.5}
-                      markerEnd="url(#lineage-arrow)"
-                      className="stroke-[rgb(var(--border-strong))]"
-                      opacity={lit ? 1 : 0.28}
-                    />
-                  );
-                })}
-              </svg>
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="rgb(var(--border-strong))" />
+            </marker>
+          </defs>
 
-              {data!.nodes.map((node) => {
-                const at = graph.position.get(node.id)!;
-                const lit = !highlighted || highlighted.has(node.id);
-                const isCurrent = Boolean(selectedName) && node.label === selectedName;
-                return (
-                  <button
-                    key={node.id} type="button"
-                    onMouseEnter={() => setFocused(node.id)}
-                    onMouseLeave={() => setFocused(null)}
-                    onFocus={() => setFocused(node.id)}
-                    onBlur={() => setFocused(null)}
-                    style={{ left: at.x, top: at.y, width: NODE_W, height: NODE_H }}
-                    className={cn(
-                      'absolute flex flex-col justify-center rounded-md border border-l-2 px-2.5 text-left transition-opacity',
-                      accent[node.type] ?? 'border-l-neutral',
-                      isCurrent
-                        ? 'border-brand bg-brand/[0.07] shadow-focus-brand'
-                        : 'border-[rgb(var(--border-line))] bg-surface-1',
-                      lit ? 'opacity-100' : 'opacity-35',
-                    )}
+          {graph.edges.map(({ parent, child }) => {
+            const from = positions.get(parent);
+            const to = positions.get(child);
+            if (!from || !to) return null;
+            const x1 = from.x + NODE_WIDTH;
+            const y1 = from.y + NODE_HEIGHT / 2;
+            const x2 = to.x;
+            const y2 = to.y + NODE_HEIGHT / 2;
+            const midpoint = (x1 + x2) / 2;
+            const touchesFocus = parent === focusId || child === focusId;
+            return (
+              <path
+                key={`${parent}->${child}`}
+                d={`M ${x1} ${y1} C ${midpoint} ${y1}, ${midpoint} ${y2}, ${x2} ${y2}`}
+                fill="none"
+                stroke={touchesFocus ? 'rgb(var(--brand))' : 'rgb(var(--border-strong))'}
+                strokeWidth={touchesFocus ? 1.6 : 1}
+                markerEnd="url(#lineage-arrow)"
+                opacity={focusId && !touchesFocus ? 0.35 : 1}
+              />
+            );
+          })}
+
+          {nodes.map((node) => {
+            const colors = nodeColor(node.resource_type);
+            const isFocus = node.unique_id === focusId;
+            return (
+              <g
+                key={node.unique_id}
+                transform={`translate(${node.x}, ${node.y})`}
+                className="cursor-pointer"
+                onClick={() => onSelect(node)}
+                onDoubleClick={() => node.path && onOpenFile?.(node.path)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') onSelect(node);
+                }}
+              >
+                <rect
+                  width={NODE_WIDTH}
+                  height={NODE_HEIGHT}
+                  rx={6}
+                  fill={colors.fill}
+                  stroke={isFocus ? 'rgb(var(--brand))' : colors.stroke}
+                  strokeWidth={isFocus ? 2 : 1}
+                  opacity={node.enabled ? 1 : 0.5}
+                />
+                <text
+                  x={10} y={19}
+                  className="fill-[rgb(var(--text-primary))] text-[11px] font-medium"
+                >
+                  {node.name.length > 22 ? `${node.name.slice(0, 21)}…` : node.name}
+                </text>
+                <text
+                  x={10} y={34}
+                  className="fill-[rgb(var(--text-quaternary))] text-[9px]"
+                >
+                  {node.resource_type}
+                  {node.materialized ? ` · ${node.materialized}` : ''}
+                </text>
+                {/* AppBI's own contribution: this source is loaded by a
+                    Pipeline, which dbt has no way of knowing. */}
+                {node.produced_by_pipeline_id && (
+                  <circle
+                    cx={NODE_WIDTH - 10} cy={12} r={3}
+                    fill="rgb(var(--success))"
                   >
-                    <span className="truncate text-[10px] uppercase tracking-wide text-text-quaternary">
-                      {node.layer ?? node.type.replace('_', ' ')}
-                    </span>
-                    <span className="truncate text-caption font-emphasis text-text-primary">
-                      {node.label}
-                    </span>
-                    {node.materialization && (
-                      <span className="truncate text-[10px] text-text-quaternary">
-                        {node.materialization}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                    <title>Do Pipeline của AppBI nạp</title>
+                  </circle>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
 
-          {/* The colours mean something; saying so costs one line. */}
-          <div className="flex shrink-0 items-center gap-4 pt-1.5 text-[10px] text-text-quaternary">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-0.5 rounded-sm bg-info" />{copy.legendSource}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-0.5 rounded-sm bg-success" />{copy.legendHealthy}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-0.5 rounded-sm bg-brand" />{copy.legendSelected}
-            </span>
-          </div>
-        </>
+      {graph.truncated && !showingFull && (
+        <div className="flex items-center gap-2 border-t border-[rgb(var(--border-line))] px-3 py-1.5">
+          <Target className="h-3 w-3 text-text-quaternary" />
+          <span className="text-tiny text-text-tertiary">
+            Đang hiển thị vùng lân cận. Sơ đồ đầy đủ có {graph.total_nodes} resource.
+          </span>
+        </div>
       )}
+    </div>
+  );
+}
+
+function Centered({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('flex h-full items-center justify-center', className)}>
+      <p className="text-caption text-text-tertiary">{children}</p>
     </div>
   );
 }

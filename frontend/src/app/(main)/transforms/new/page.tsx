@@ -1,437 +1,476 @@
 'use client';
 
+/**
+ * New Transform project: three steps, in the order the blueprint sets out.
+ *
+ *   1. Where the project comes from
+ *   2. Which warehouse it runs on
+ *   3. What to call it, and where it writes
+ *
+ * "Connect an existing Git repository" does not convert anything. The repository
+ * is checked out as it is and stays a dbt project -- which is why step 1 offers
+ * inspection rather than a conversion preview.
+ */
+
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, Link2, Table2, X } from 'lucide-react';
+import {
+  ArrowLeft, ArrowRight, CircleAlert, FilePlus2, FolderGit2, Loader2,
+  PackageOpen, Search,
+} from 'lucide-react';
 
-import { transformApi } from '@/lib/api';
-import type { DataAsset } from '@/lib/types';
-import { qk } from '@/lib/queryKeys';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
-import { useI18n } from '@/providers/LanguageProvider';
-import { DetailBody, DetailHeader } from '@/components/layout/PageLayout';
-import { Stepper, WizardFooter } from '@/components/integrations/Stepper';
-import { Badge } from '@/components/ui/Badge';
-import { Button, IconButton } from '@/components/ui/Button';
-import { Input, Label, Select } from '@/components/ui/Input';
+import { transformApi } from '@/lib/api';
+import { qk } from '@/lib/queryKeys';
+import type { RepositoryInspectResult } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { WarehouseBrowser } from '@/components/transforms/WarehouseBrowser';
-import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
+
+type Source = 'NEW' | 'GIT' | 'UPLOAD';
+
+const SOURCES: { id: Source; title: string; description: string; icon: typeof FilePlus2 }[] = [
+  {
+    id: 'NEW',
+    title: 'Tạo dự án dbt mới',
+    description: 'Bắt đầu từ một dự án dbt chuẩn, có sẵn model và test mẫu.',
+    icon: FilePlus2,
+  },
+  {
+    id: 'GIT',
+    title: 'Kết nối repository đã có',
+    description:
+      'Lấy nguyên dự án dbt từ GitHub. Không chuyển đổi gì — vẫn là dự án đó.',
+    icon: FolderGit2,
+  },
+  {
+    id: 'UPLOAD',
+    title: 'Tải lên dự án dbt',
+    description: 'Nhận tệp ZIP chứa dbt_project.yml và các thư mục của nó.',
+    icon: PackageOpen,
+  },
+];
 
 export default function NewTransformPage() {
-  const { locale, t } = useI18n();
-  // Only what a step actually renders. The screen had accumulated copy for
-  // three earlier versions of itself -- a warehouse chooser, a Pipeline stream
-  // list, a per-step account form -- and every unused key is a phrase somebody
-  // has to read before working out it does not apply.
-  const copy = locale === 'vi' ? {
-    title: 'Transform mới', back: 'Transform',
-    warehouse: 'Kết nối', inputs: 'Chọn bảng', create: 'Đặt tên',
-    connect: {
-      systemTitle: 'Hệ thống dữ liệu',
-      systemHelp: 'Nơi Transform sẽ đọc và ghi.',
-      connectionTitle: 'Kết nối',
-      connectionHelp: 'Kết nối quyết định bạn thấy được dữ liệu nào ở bước sau.',
-      defaultKey: 'từ Đích dữ liệu',
-      noAccount: 'chưa đọc được tài khoản',
-      projects: 'project',
-      none: 'Chưa có kết nối nào',
-      addKey: 'Tạo kết nối mới',
-      newKeyTitle: 'Kết nối mới',
-      keyName: 'Tên kết nối',
-      keyNamePlaceholder: 'VD: Kho Sale',
-      authMethod: 'Cách đăng nhập',
-      authLabel: {
-        service_account: 'Service account',
-        oauth: 'Đăng nhập Google',
-        password: 'Tài khoản / mật khẩu',
-        inherited: 'Dùng chung với Đích dữ liệu',
-      } as Record<string, string>,
-      project: 'Project',
-      location: 'Vùng dữ liệu',
-      credentials: 'Service account JSON',
-      credentialsHint: 'Cần quyền đọc bảng nguồn và quyền ghi vào nơi chứa kết quả. Được mã hoá khi lưu và không hiển thị lại.',
-      host: 'Host / IP',
-      port: 'Cổng',
-      database: 'Database',
-      username: 'Tài khoản',
-      password: 'Mật khẩu',
-      oauthHint: 'Đăng nhập bằng tài khoản Google có quyền trên project BigQuery. AppBI không thấy mật khẩu của bạn.',
-      oauthStart: 'Đăng nhập với Google',
-      oauthDone: 'Đã đăng nhập:',
-      save: 'Kiểm tra và lưu',
-      cancel: 'Hủy',
-      remove: 'Xoá kết nối',
-      loadFailed: 'Không tải được danh sách kết nối',
-    },
-    chooseInputs: 'Bảng đầu vào',
-    chooseInputsHelp: 'Tích những bảng Transform này sẽ đọc — kể cả dataset bạn tự tạo, không đi qua Pipeline.',
-    chosenTables: 'Đã chọn', tableWord: 'bảng',
-    nothingChosen: 'Chưa chọn bảng nào',
-    clearAll: 'Bỏ hết',
-    removeTable: 'Bỏ bảng này',
-    fromTransform: 'Do Transform khác tạo',
-    columnsShort: 'cột',
-    manualEntry: 'Không thấy bảng cần tìm? Nhập tay tên bảng',
-    browse: {
-      project: 'Project',
-      dataset: 'Dataset',
-      chooseDataset: 'Chọn một dataset để xem các bảng bên trong',
-      filter: 'Lọc theo tên bảng',
-      noTables: 'Dataset này không có bảng nào',
-      noMatch: 'Không có bảng nào khớp',
-      loadFailed: 'Không đọc được danh sách bảng',
-      alreadyAdded: 'Đã thêm',
-      fromPipeline: 'từ',
-      addSelected: 'Thêm vào Transform',
-      selectedCount: 'Đã chọn {n} bảng',
-      nothingSelected: 'Tích vào bảng bạn cần dùng',
-    },
-    schema: 'Dataset', relation: 'Tên bảng', catalog: 'Project',
-    verify: 'Kiểm tra và thêm',
-    details: 'Đặt tên cho Transform', name: 'Tên Transform',
-    output: 'Nơi chứa kết quả',
-    outputHelp: 'Tên dataset (hoặc schema) Transform sẽ ghi bảng kết quả vào.',
-    continue: 'Tiếp tục', createAction: 'Tạo Transform',
-    registered: 'Đã thêm bảng vào Transform',
-    warehouseRelation: 'Bảng có sẵn trong kho',
-  } : {
-    title: 'New transform', back: 'Transform',
-    warehouse: 'Connect', inputs: 'Pick tables', create: 'Name it',
-    connect: {
-      systemTitle: 'Data system',
-      systemHelp: 'Where the Transform reads and writes.',
-      connectionTitle: 'Connection',
-      connectionHelp: 'The connection decides what you can see in the next step.',
-      defaultKey: 'from a Destination',
-      noAccount: 'account unavailable',
-      projects: 'projects',
-      none: 'No connection yet',
-      addKey: 'New connection',
-      newKeyTitle: 'New connection',
-      keyName: 'Connection name',
-      keyNamePlaceholder: 'e.g. Sale warehouse',
-      authMethod: 'Sign in with',
-      authLabel: {
-        service_account: 'Service account',
-        oauth: 'Google sign-in',
-        password: 'User and password',
-        inherited: "Shared with the Destination",
-      } as Record<string, string>,
-      project: 'Project',
-      location: 'Data location',
-      credentials: 'Service account JSON',
-      credentialsHint: 'Needs to read the source tables and write where the results go. Encrypted at rest and never shown again.',
-      host: 'Host / IP',
-      port: 'Port',
-      database: 'Database',
-      username: 'User',
-      password: 'Password',
-      oauthHint: 'Sign in with a Google account that has access to the BigQuery project. AppBI never sees your password.',
-      oauthStart: 'Sign in with Google',
-      oauthDone: 'Signed in as',
-      save: 'Check and save',
-      cancel: 'Cancel',
-      remove: 'Remove connection',
-      loadFailed: 'Could not load the connections',
-    },
-    chooseInputs: 'Input tables',
-    chooseInputsHelp: 'Tick the tables this Transform reads — including datasets you built yourself, without a Pipeline.',
-    chosenTables: 'Chosen', tableWord: 'tables',
-    nothingChosen: 'No table chosen yet',
-    clearAll: 'Clear all',
-    removeTable: 'Remove',
-    fromTransform: 'Built by another Transform',
-    columnsShort: 'columns',
-    manualEntry: "Can't find a table? Type its name",
-    browse: {
-      project: 'Project',
-      dataset: 'Dataset',
-      chooseDataset: 'Choose a dataset to see the tables inside it',
-      filter: 'Filter by table name',
-      noTables: 'This dataset has no tables',
-      noMatch: 'No table matches',
-      loadFailed: 'Could not list the tables',
-      alreadyAdded: 'Added',
-      fromPipeline: 'from',
-      addSelected: 'Add to Transform',
-      selectedCount: '{n} selected',
-      nothingSelected: 'Tick the tables you need',
-    },
-    schema: 'Dataset', relation: 'Table name', catalog: 'Project',
-    verify: 'Check and add',
-    details: 'Name the Transform', name: 'Transform name',
-    output: 'Where results go',
-    outputHelp: 'The dataset (or schema) this Transform writes its result tables into.',
-    continue: 'Continue', createAction: 'Create transform',
-    registered: 'Tables added to the Transform',
-    warehouseRelation: 'Table already in the warehouse',
-  };
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
-  const [step, setStep] = React.useState(0);
-  const [name, setName] = React.useState('');
-  const [outputSchema, setOutputSchema] = React.useState('analytics');
+
+  const [step, setStep] = React.useState(1);
+  const [source, setSource] = React.useState<Source>('NEW');
   const [connectionId, setConnectionId] = React.useState<string | null>(null);
-  const connectionList = useQuery({
-    queryKey: qk.transformConnections(workspaceId), queryFn: transformApi.connections,
+
+  const [name, setName] = React.useState('');
+  const [dbtProjectName, setDbtProjectName] = React.useState('');
+  const [devSchema, setDevSchema] = React.useState('');
+  const [prodSchema, setProdSchema] = React.useState('');
+  const [sourceSchema, setSourceSchema] = React.useState('raw');
+  const [perUser, setPerUser] = React.useState(false);
+  const [withExamples, setWithExamples] = React.useState(true);
+
+  const [repoUrl, setRepoUrl] = React.useState('');
+  const [branch, setBranch] = React.useState('');
+  const [subdirectory, setSubdirectory] = React.useState('');
+  const [token, setToken] = React.useState('');
+  const [autoPull, setAutoPull] = React.useState(false);
+  const [inspection, setInspection] = React.useState<RepositoryInspectResult | null>(null);
+
+  const [file, setFile] = React.useState<File | null>(null);
+
+  const { data: systems = [] } = useQuery({
+    queryKey: qk.transformSystems(workspaceId),
+    queryFn: () => transformApi.systems(),
   });
-  // The basket holds the assets it registered rather than looking them up
-  // again: registration already returned them, and a second source of truth is
-  // how the list and the count drift apart.
-  const [chosenAssets, setChosenAssets] = React.useState<DataAsset[]>([]);
-  const assetIds = React.useMemo(
-    () => chosenAssets.map((item) => item.id), [chosenAssets],
-  );
-  // Manual entry is the escape hatch for a table the browser cannot list. It
-  // does not ask about Pipelines: the browser knows which Pipeline writes a
-  // relation and attaches it itself, and a field nobody can answer correctly
-  // is worse than no field.
-  const [assetForm, setAssetForm] = React.useState({
-    catalog_name: '', schema_name: '', relation_name: '',
+  const { data: connections = [], refetch: refetchConnections } = useQuery({
+    queryKey: qk.transformConnections(workspaceId),
+    queryFn: () => transformApi.connections(),
   });
 
-
-  const register = useMutation({
-    mutationFn: () => transformApi.registerAsset(connectionId ?? '', {
-      catalog_name: assetForm.catalog_name || undefined,
-      schema_name: assetForm.schema_name,
-      relation_name: assetForm.relation_name,
+  const inspect = useMutation({
+    mutationFn: () => transformApi.inspectRepository({
+      repo_url: repoUrl,
+      branch: branch || undefined,
+      subdirectory: subdirectory || undefined,
+      token: token || undefined,
     }),
-    onSuccess: async (asset) => {
-      setChosenAssets((current) => current.some((row) => row.id === asset.id)
-        ? current : [...current, asset]);
-      await queryClient.invalidateQueries({ queryKey: qk.transformInputs(workspaceId, connectionId ?? '') });
-      await queryClient.invalidateQueries({
-        queryKey: qk.transformWarehouseAll(workspaceId, connectionId ?? ''),
-      });
-      setAssetForm((current) => ({ ...current, schema_name: '', relation_name: '' }));
-      toastSuccess(copy.registered);
+    onSuccess: (result) => {
+      setInspection(result);
+      // Prefill from what the repository actually says, so nothing has to be
+      // retyped and nothing is guessed.
+      if (result.dbt_project_name && !name) setName(result.dbt_project_name);
+      if (result.branch && !branch) setBranch(result.branch);
+      if (result.detected_root && !subdirectory) setSubdirectory(result.detected_root);
+      toastSuccess(`Đã tìm thấy dự án dbt với ${result.model_count} model.`);
     },
-    onError: (error) => toastError(error),
-  });
-  /**
-   * Register the relations picked out of the warehouse, then select them.
-   *
-   * One at a time rather than in parallel: each is verified against the
-   * warehouse, and a burst of concurrent metadata calls is how browsing a large
-   * dataset turns into a rate limit.
-   */
-  const addBrowsed = useMutation({
-    mutationFn: async (relations: {
-      schema_name: string; relation_name: string; catalog_name: string | null;
-      pipeline_id: string | null; pipeline_stream_id: string | null;
-    }[]) => {
-      const added = [];
-      for (const relation of relations) {
-        added.push(await transformApi.registerAsset(connectionId ?? '', {
-          catalog_name: relation.catalog_name || undefined,
-          schema_name: relation.schema_name,
-          relation_name: relation.relation_name,
-          pipeline_id: relation.pipeline_id || undefined,
-          pipeline_stream_id: relation.pipeline_stream_id || undefined,
-        }));
-      }
-      return added;
-    },
-    onSuccess: async (assets) => {
-      setChosenAssets((current) => [
-        ...current,
-        ...assets.filter((item) => !current.some((row) => row.id === item.id)),
-      ]);
-      await queryClient.invalidateQueries({
-        queryKey: qk.transformInputs(workspaceId, connectionId ?? ''),
-      });
-      // Prefix, not the exact key: the listing for the open dataset carries the
-      // schema as a final segment, and it is the one that has to redraw so the
-      // row switches from Add to Added.
-      await queryClient.invalidateQueries({
-        queryKey: qk.transformWarehouseAll(workspaceId, connectionId ?? ''),
-      });
-      toastSuccess(copy.registered);
-    },
-    onError: (error) => toastError(error),
+    onError: (error) => { setInspection(null); toastError(error); },
   });
 
   const create = useMutation({
-    mutationFn: () => transformApi.create({
-      name, warehouse_connection_id: connectionId ?? '',
-      default_schema: outputSchema, input_asset_ids: assetIds,
-    }),
-    onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: qk.transforms(workspaceId) });
-      router.push(`/transforms/${created.id}`);
+    mutationFn: async () => {
+      if (source === 'UPLOAD') {
+        if (!file || !connectionId) throw new Error('missing');
+        const form = new FormData();
+        form.append('file', file);
+        const query = new URLSearchParams({
+          name, connection_id: connectionId,
+          ...(devSchema ? { development_schema: devSchema } : {}),
+          ...(prodSchema ? { production_schema: prodSchema } : {}),
+        });
+        const response = await fetch(
+          `/api/v1/transforms/upload?${query.toString()}`,
+          { method: 'POST', body: form, credentials: 'include' },
+        );
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error?.message ?? 'Không tải lên được.');
+        }
+        return response.json();
+      }
+      return transformApi.create({
+        name,
+        connection_id: connectionId!,
+        source,
+        dbt_project_name: dbtProjectName || undefined,
+        development_schema: devSchema || undefined,
+        production_schema: prodSchema || undefined,
+        source_schema: sourceSchema || undefined,
+        per_user_schemas: perUser,
+        with_examples: withExamples,
+        repo_url: source === 'GIT' ? repoUrl : undefined,
+        branch: source === 'GIT' ? (branch || undefined) : undefined,
+        subdirectory: source === 'GIT' ? (subdirectory || undefined) : undefined,
+        token: source === 'GIT' ? (token || undefined) : undefined,
+        auto_pull: source === 'GIT' ? autoPull : undefined,
+      });
+    },
+    onSuccess: (project: { id: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
+      toastSuccess('Đã tạo dự án. Đang đọc dự án bằng dbt…');
+      router.push(`/transforms/${project.id}`);
     },
     onError: (error) => toastError(error),
   });
 
-  const chosenConnectionName = connectionId
-    ? (connectionList.data ?? []).find((item) => item.id === connectionId)?.name ?? ''
-    : '';
-
-  const nextDisabled = step === 0 ? !connectionId : step === 1 ? assetIds.length === 0
-    : !name.trim() || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema);
+  const canAdvance =
+    step === 1
+      ? (source === 'NEW'
+        || (source === 'GIT' && Boolean(inspection))
+        || (source === 'UPLOAD' && Boolean(file)))
+      : step === 2
+        ? Boolean(connectionId)
+        : Boolean(name.trim());
 
   return (
-    // A flex column so the body can claim the height the header leaves, which
-    // is what puts the wizard footer at the foot instead of halfway down.
-    <div className="flex min-h-0 flex-1 flex-col">
-      <DetailHeader backHref="/transforms" backLabel={copy.back} title={copy.title} icon={<Database className="h-5 w-5 text-brand" />} />
-      <DetailBody>
-        {/* Natural height. Stretching this column to the viewport put the
-            buttons at the very bottom with a third of the page empty above
-            them on a short step; the footer is `sticky bottom-0`, so it
-            reaches the foot by itself only when there is enough to scroll. */}
-        <div className="mx-auto w-full max-w-4xl">
-          <Stepper steps={[
-            { id: 'warehouse', label: copy.warehouse },
-            { id: 'inputs', label: copy.inputs },
-            { id: 'create', label: copy.create },
-          ]} current={step} onStepClick={setStep} />
+    <div className="mx-auto flex h-full max-w-3xl flex-col px-4 pt-5 sm:px-6">
+      <header className="mb-4 shrink-0">
+        <Link
+          href="/transforms"
+          className="mb-2 inline-flex items-center gap-1 text-caption text-text-tertiary hover:text-text-primary"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Transform
+        </Link>
+        <h1 className="text-h3 font-strong text-text-primary">Dự án Transform mới</h1>
+        <ol className="mt-3 flex items-center gap-2">
+          {['Nguồn dự án', 'Kho dữ liệu', 'Thiết lập'].map((label, index) => (
+            <li key={label} className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'flex h-5 w-5 items-center justify-center rounded-full text-tiny',
+                  step > index + 1
+                    ? 'bg-success text-white'
+                    : step === index + 1
+                      ? 'bg-brand text-text-inverse'
+                      : 'bg-surface-2 text-text-tertiary',
+                )}
+              >
+                {index + 1}
+              </span>
+              <span
+                className={cn(
+                  'text-caption',
+                  step === index + 1 ? 'text-text-primary font-emphasis' : 'text-text-tertiary',
+                )}
+              >
+                {label}
+              </span>
+              {index < 2 && <span className="text-text-quaternary">›</span>}
+            </li>
+          ))}
+        </ol>
+      </header>
 
-          <div className="mt-6">
-            {step === 0 && (
-              // One list, one click. A key row already says which warehouse it
-              // reaches, so asking for the warehouse separately would be asking
-              // the same question twice.
-              <ConnectionPicker
-                copy={copy.connect} value={connectionId}
-                // The basket holds assets registered through one connection,
-                // and an asset is only valid for the connection it was read
-                // through. Carrying it to another one meant filling in the
-                // whole wizard and being refused at the last click.
-                onChange={(next) => {
-                  if (next !== connectionId) setChosenAssets([]);
-                  setConnectionId(next);
-                }} />
-            )}
-
-            {step === 1 && (
-              <section>
+      <div className="min-h-0 flex-1 overflow-auto pb-4">
+        {step === 1 && (
+          <div className="space-y-3">
+            {SOURCES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => { setSource(item.id); setInspection(null); }}
+                className={cn(
+                  'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+                  source === item.id
+                    ? 'border-brand bg-brand/5'
+                    : 'border-[rgb(var(--border-line))] hover:bg-surface-2',
+                )}
+              >
+                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
                 <div>
-                  <h2 className="text-small font-strong text-text-primary">{copy.chooseInputs}</h2>
-                  <p className="mt-1 text-caption text-text-tertiary">{copy.chooseInputsHelp}</p>
+                  <p className="text-small font-emphasis text-text-primary">{item.title}</p>
+                  <p className="mt-0.5 text-caption text-text-tertiary">{item.description}</p>
                 </div>
+              </button>
+            ))}
 
-                {/* Browsing is the way in, not an alternative to a list of
-                    Pipeline streams. A table either exists in the warehouse or
-                    it does not; whether a Pipeline keeps it fresh is a label on
-                    that table, not a second place to look for it.
-                    No card around it: the controls and the table list carry
-                    their own frames, and a third one only ate the width. */}
-                <div className="mt-3">
-                  <WarehouseBrowser
-                    copy={copy.browse}
-                    connectionId={connectionId ?? ''}
-                    chosen={assetIds}
-                    adding={addBrowsed.isPending}
-                    onAdd={(relations) => addBrowsed.mutate(relations)} />
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-caption text-text-tertiary hover:text-text-secondary">
-                      {copy.manualEntry}
-                    </summary>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <div><Label>{copy.catalog}</Label><Input value={assetForm.catalog_name} onChange={(event) => setAssetForm({ ...assetForm, catalog_name: event.target.value })} /></div>
-                      <div><Label required>{copy.schema}</Label><Input value={assetForm.schema_name} onChange={(event) => setAssetForm({ ...assetForm, schema_name: event.target.value })} /></div>
-                      <div><Label required>{copy.relation}</Label><Input value={assetForm.relation_name} onChange={(event) => setAssetForm({ ...assetForm, relation_name: event.target.value })} /></div>
+            {source === 'GIT' && (
+              <div className="space-y-2.5 rounded-lg border border-[rgb(var(--border-line))] p-3">
+                <Field label="Địa chỉ repository">
+                  <Input
+                    value={repoUrl}
+                    onChange={(event) => { setRepoUrl(event.target.value); setInspection(null); }}
+                    placeholder="https://github.com/acme/analytics"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Nhánh" hint="Bỏ trống để dùng nhánh mặc định">
+                    <Input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="main" />
+                  </Field>
+                  <Field label="Thư mục con" hint="Nếu dbt_project.yml nằm trong thư mục con">
+                    <Input
+                      value={subdirectory}
+                      onChange={(event) => setSubdirectory(event.target.value)}
+                      placeholder="transform"
+                    />
+                  </Field>
+                </div>
+                <Field label="Access token" hint="Cần cho repo riêng tư, và để commit ngược lên">
+                  <Input
+                    type="password" value={token}
+                    onChange={(event) => setToken(event.target.value)}
+                    placeholder="ghp_…"
+                  />
+                </Field>
+                <Button
+                  variant="secondary" size="sm"
+                  onClick={() => inspect.mutate()}
+                  loading={inspect.isPending}
+                  disabled={!repoUrl.trim()}
+                  leadingIcon={inspect.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Search className="h-3.5 w-3.5" />}
+                >
+                  Kiểm tra repository
+                </Button>
+
+                {inspection && (
+                  <div className="space-y-2 rounded-md bg-surface-2 p-2.5">
+                    <p className="text-caption font-emphasis text-text-primary">
+                      Đã tìm thấy dự án dbt
+                    </p>
+                    <dl className="space-y-0.5 text-tiny">
+                      <Pair label="Tên dự án dbt" value={inspection.dbt_project_name ?? '—'} />
+                      <Pair label="Thư mục" value={inspection.detected_root || '/'} />
+                      <Pair label="Số model" value={String(inspection.model_count)} />
+                      <Pair label="Tổng số tệp" value={String(inspection.file_count)} />
+                      {inspection.packages.length > 0 && (
+                        <Pair label="Package" value={inspection.packages.join(', ')} />
+                      )}
+                    </dl>
+                    <div className="flex flex-wrap gap-1">
+                      {inspection.resource_directories.map((directory) => (
+                        <Badge key={directory} variant="subtle" size="xs">{directory}</Badge>
+                      ))}
                     </div>
-                    <div className="mt-3 flex justify-end"><Button variant="primary" size="sm" loading={register.isPending} disabled={!assetForm.schema_name || !assetForm.relation_name} onClick={() => register.mutate()} leadingIcon={<Link2 className="h-4 w-4" />}>{copy.verify}</Button></div>
-                  </details>
-                </div>
-
-                {/* A basket, not a second list to tick. The upper list is
-                    where you choose; this is what you chose. One checkbox with
-                    two meanings was the thing that made this screen confusing. */}
-                <div className="mt-5 flex items-center justify-between gap-3">
-                  <h3 className="text-caption font-emphasis text-text-secondary">
-                    {copy.chosenTables} ({assetIds.length})
-                  </h3>
-                  {assetIds.length > 0 && (
-                    <Button size="xs" variant="ghost" onClick={() => setChosenAssets([])}>
-                      {copy.clearAll}
-                    </Button>
-                  )}
-                </div>
-                {assetIds.length === 0 ? (
-                  // A one-line note, not a framed empty state: the basket is
-                  // empty for the whole first half of this step, and a 130px
-                  // box saying so pushed the buttons off a laptop screen.
-                  <p className="mt-1 text-caption text-text-quaternary">{copy.nothingChosen}</p>
-                ) : (
-                  <div className="mt-2 divide-y divide-[rgb(var(--border-line))] overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
-                    {assetIds.map((id) => {
-                      const asset = chosenAssets.find((item) => item.id === id);
-                      if (!asset) return null;
-                      return (
-                        <div key={id} className="flex items-center gap-3 px-4 py-2.5">
-                          <Table2 className="h-3.5 w-3.5 shrink-0 text-text-quaternary" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-mono text-caption text-text-primary">
-                              {asset.schema_name}.{asset.relation_name}
-                            </span>
-                            <span className="block truncate text-tiny text-text-tertiary">
-                              {asset.pipeline_name
-                                ? `${copy.browse.fromPipeline} ${asset.pipeline_name}`
-                                : copy.warehouseRelation}
-                              {asset.columns.length
-                                ? ` · ${asset.columns.length} ${copy.columnsShort}` : ''}
-                            </span>
-                          </span>
-                          {asset.owner_type === 'TRANSFORM' && (
-                            <Badge variant="info" size="xs">{copy.fromTransform}</Badge>
-                          )}
-                          <IconButton size="xs" variant="ghost"
-                            aria-label={copy.removeTable} title={copy.removeTable}
-                            onClick={() => setChosenAssets(
-                              (current) => current.filter((item) => item.id !== id),
-                            )}>
-                            <X className="h-3.5 w-3.5" />
-                          </IconButton>
-                        </div>
-                      );
-                    })}
+                    {inspection.warnings.map((warning) => (
+                      <p
+                        key={warning}
+                        className="flex items-start gap-1.5 text-tiny text-warning"
+                      >
+                        <CircleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                        {warning}
+                      </p>
+                    ))}
+                    <label className="flex items-center gap-2 text-caption text-text-secondary">
+                      <input
+                        type="checkbox" checked={autoPull}
+                        onChange={(event) => setAutoPull(event.target.checked)}
+                        className="h-3.5 w-3.5 accent-[rgb(var(--brand))]"
+                      />
+                      Tự động lấy commit mới
+                    </label>
                   </div>
                 )}
-              </section>
+              </div>
             )}
 
-            {step === 2 && (
-              <section className="max-w-xl">
-                <h2 className="text-small font-strong text-text-primary">{copy.details}</h2>
-                <div className="mt-4 space-y-4">
-                  <div><Label required>{copy.name}</Label><Input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Sales Analytics" /></div>
-                  <div>
-                    <Label required>{copy.output}</Label>
-                    <Input value={outputSchema} placeholder="analytics_sales"
-                      onChange={(event) => setOutputSchema(event.target.value)}
-                      invalid={Boolean(outputSchema && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputSchema))} />
-                    <p className="mt-1 text-tiny text-text-quaternary">{copy.outputHelp}</p>
-                  </div>
-                  <div className="rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-4 py-3 text-caption text-text-secondary">
-                    <span className="font-emphasis text-text-primary">{chosenConnectionName}</span>
-                    <span className="mx-2 text-text-quaternary">·</span>
-                    {assetIds.length} {copy.tableWord}
-                  </div>
-                </div>
-              </section>
+            {source === 'UPLOAD' && (
+              <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
+                <Field label="Tệp ZIP dự án dbt">
+                  <input
+                    type="file"
+                    accept=".zip"
+                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                    className="block w-full text-caption text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-caption file:text-text-primary hover:file:bg-surface-3"
+                  />
+                </Field>
+                {file && (
+                  <p className="mt-1.5 text-tiny text-text-tertiary">
+                    {file.name} · {Math.round(file.size / 1024)} KB
+                  </p>
+                )}
+              </div>
             )}
           </div>
+        )}
 
-          <WizardFooter
-            // Left half of the bar was empty on the first step, which read as
-            // a rendering fault rather than as a bar with one button.
-            hint={t('wizard.stepOf', { current: String(step + 1), total: '3' })}
-            onBack={step > 0 ? () => setStep((current) => current - 1) : undefined}
-            onNext={() => step < 2 ? setStep((current) => current + 1) : create.mutate()}
-            nextDisabled={nextDisabled}
-            nextLoading={create.isPending}
-            nextLabel={step === 2 ? copy.createAction : copy.continue}
+        {step === 2 && (
+          <ConnectionPicker
+            systems={systems}
+            connections={connections}
+            value={connectionId}
+            onChange={setConnectionId}
+            onCreated={() => refetchConnections()}
           />
-        </div>
-      </DetailBody>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-3">
+            <Field label="Tên dự án">
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Phân tích bán hàng"
+                autoFocus
+              />
+            </Field>
+
+            {source === 'NEW' && (
+              <Field
+                label="Tên dbt project"
+                hint="Tên trong dbt_project.yml. Chỉ chữ thường, số và gạch dưới."
+              >
+                <Input
+                  value={dbtProjectName}
+                  onChange={(event) => setDbtProjectName(event.target.value)}
+                  placeholder="sales_analytics"
+                  className="font-mono"
+                />
+              </Field>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Schema khi phát triển" hint="Nơi bản nháp ghi kết quả">
+                <Input
+                  value={devSchema} onChange={(event) => setDevSchema(event.target.value)}
+                  placeholder="analytics_dev" className="font-mono"
+                />
+              </Field>
+              <Field label="Schema chạy thật" hint="Nơi bản đã xuất bản ghi kết quả">
+                <Input
+                  value={prodSchema} onChange={(event) => setProdSchema(event.target.value)}
+                  placeholder="analytics" className="font-mono"
+                />
+              </Field>
+            </div>
+
+            {source === 'NEW' && (
+              <Field
+                label="Schema dữ liệu nguồn"
+                hint="Nơi dữ liệu thô đang nằm, dùng cho source mẫu"
+              >
+                <Input
+                  value={sourceSchema} onChange={(event) => setSourceSchema(event.target.value)}
+                  placeholder="raw" className="font-mono"
+                />
+              </Field>
+            )}
+
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox" checked={perUser}
+                onChange={(event) => setPerUser(event.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
+              />
+              <span className="text-caption text-text-secondary">
+                Mỗi người một schema riêng khi phát triển
+                <span className="block text-tiny text-text-tertiary">
+                  Để hai người cùng sửa một dự án không ghi đè bảng của nhau.
+                </span>
+              </span>
+            </label>
+
+            {source === 'NEW' && (
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox" checked={withExamples}
+                  onChange={(event) => setWithExamples(event.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
+                />
+                <span className="text-caption text-text-secondary">
+                  Tạo kèm model và test mẫu
+                  <span className="block text-tiny text-text-tertiary">
+                    Một staging model, một mart, và YAML đi kèm — để có thứ chạy thử ngay.
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center justify-between border-t border-[rgb(var(--border-line))] py-3">
+        <Button
+          variant="ghost"
+          onClick={() => (step === 1 ? router.push('/transforms') : setStep(step - 1))}
+        >
+          {step === 1 ? 'Huỷ' : 'Quay lại'}
+        </Button>
+        {step < 3 ? (
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            onClick={() => setStep(step + 1)}
+            trailingIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            Tiếp tục
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            loading={create.isPending}
+            onClick={() => create.mutate()}
+          >
+            Tạo dự án
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label, hint, children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-caption text-text-secondary">{label}</span>
+      {children}
+      {hint && <span className="mt-0.5 block text-tiny text-text-quaternary">{hint}</span>}
+    </label>
+  );
+}
+
+function Pair({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-32 shrink-0 text-text-tertiary">{label}</dt>
+      <dd className="min-w-0 flex-1 break-all text-text-secondary">{value}</dd>
     </div>
   );
 }

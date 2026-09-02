@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: with_package
+    columns:
+      - name: id
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0

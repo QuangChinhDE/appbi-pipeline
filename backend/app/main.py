@@ -20,12 +20,17 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.adapters.registry import close_adapter
 from app.api.v1 import (
-    actors, auth, builder, builder_ai, oauth, ops, pipelines, runs, schema, transforms,
+    actors, auth, builder, builder_ai, oauth, ops, pipelines, runs, schema,
 )
 from app.core.config import settings
 from app.core.readiness import enforce_at_startup, probe_engine_at_startup
 from app.core.errors import AppError, ErrorCategory
 from app.core.logging import configure_logging, log_event, new_trace_id, trace_id_var
+# Transform's router lives in its own package alongside the services it calls,
+# rather than under api/v1 -- the module owns a dbt project runtime, not just a
+# CRUD surface, and keeping the two together is what stopped it sprawling back
+# into a 2,500-line service.
+from app.transforms import api as transform_api
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +185,8 @@ app.include_router(metrics_module.router)
 API_PREFIX = "/api/v1"
 for router in (
     auth.router, actors.sources_router, actors.destinations_router, schema.router,
-    pipelines.router, transforms.router, runs.router, ops.router, ops.admin_router, builder.router, builder_ai.router,
+    pipelines.router, transform_api.router, transform_api.invocation_router,
+    runs.router, ops.router, ops.admin_router, builder.router, builder_ai.router,
     oauth.router,
 ):
     app.include_router(router, prefix=API_PREFIX)

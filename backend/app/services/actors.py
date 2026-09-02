@@ -39,7 +39,9 @@ from app.models.enums import (
 )
 from app.models.identity import User
 from app.models.integration import Destination, Pipeline, SchemaSnapshot, Source
-from app.models.transform import Transform
+from app.transforms.models import (
+    TransformConnection, TransformEnvironment, TransformProject,
+)
 from app.services import audit, catalog, oauth, outbox
 
 logger = logging.getLogger(__name__)
@@ -200,12 +202,31 @@ async def dependent_pipelines(
 
 async def dependent_transforms(
     session: AsyncSession, workspace_id: uuid.UUID, destination_id: uuid.UUID,
-) -> list[Transform]:
-    return list((await session.scalars(select(Transform).where(
-        Transform.workspace_id == workspace_id,
-        Transform.destination_id == destination_id,
-        Transform.deleted_at.is_(None),
-    ).order_by(Transform.name))).all())
+) -> list[TransformProject]:
+    """Transform projects that run on this Destination's warehouse.
+
+    The link is no longer a column on the project. A project runs in an
+    environment, an environment names a connection, and a connection may have
+    come from a Destination -- so the join walks that chain. A connection
+    somebody created by pasting a key has no Destination and correctly matches
+    nothing here.
+    """
+    return list((await session.scalars(
+        select(TransformProject)
+        .join(TransformEnvironment,
+              TransformEnvironment.project_id == TransformProject.id)
+        .join(TransformConnection,
+              TransformConnection.id == TransformEnvironment.connection_id)
+        .where(
+            TransformProject.workspace_id == workspace_id,
+            TransformConnection.destination_id == destination_id,
+            TransformConnection.deleted_at.is_(None),
+            TransformEnvironment.deleted_at.is_(None),
+            TransformProject.deleted_at.is_(None),
+        )
+        .order_by(TransformProject.name)
+        .distinct()
+    )).all())
 
 
 async def owner_of(session: AsyncSession, user_id: uuid.UUID | None) -> User | None:
@@ -510,7 +531,8 @@ async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
         for transform in await dependent_transforms(session, ctx.workspace_id, actor.id):
             transform.health_status = HealthLevel.UNKNOWN
             transform.health_message = (
-                "Destination settings changed. Validate the Transform connection before the next build."
+                "Destination settings changed. Check the warehouse connection "
+                "before the next build."
             )
 
     ref = await engine_ref(session, kind, actor.id)

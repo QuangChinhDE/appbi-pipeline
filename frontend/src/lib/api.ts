@@ -12,19 +12,16 @@ import type {
   BuilderDefinition, BuilderIconKey, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
   ConnectorDetail, CurrentUser, EngineStatus, Member, MonitoringResponse, Overview, Paginated,
   ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
-  SchemaSnapshot, DataAsset, Transform, TransformDestinationCapability, TransformDetail,
-  TransformExecution, TransformInputCandidates, TransformLineage, TransformModel,
-  TransformDiffEntry, TransformOperation, TransformRelease, TransformReleaseModel,
-  TransformTest,
-  ColumnProfile,
-  WarehouseBrowse,
-  WarehouseConnection,
-  TransformSystem,
-  RepositoryImportPreview,
-  GitSourceState,
-  GitPullResult,
-  DraftedModel,
-  ScheduleConfig, WorkspaceSettings,
+  SchemaSnapshot, ScheduleConfig, WorkspaceSettings,
+  // Transform V2: a project of dbt files, its artifacts, and its Git binding.
+  CompiledCode, Completions, DocEntry, FileContent, FileTemplate, FileTree,
+  GitBranch, GitCommitResult, GitDiff, GitPullResult, GitStatus,
+  InvocationRequest, PublishPlan, PublishResult, RepositoryInspectResult,
+  ResourceDetail, ResourceFacets, ResourcePage, SaveResult, Transform,
+  TransformDetail, TransformEnvironment, TransformInvocation,
+  TransformInvocationDetail, TransformLineage, TransformLogPage,
+  TransformProblems, TransformRelease, TransformSearch, TransformSystem,
+  WarehouseBrowse, WarehouseConnection,
 } from './types';
 
 const BASE = '/api/v1';
@@ -430,32 +427,39 @@ export const pipelineApi = {
     ),
 };
 
-// ── runs ───────────────────────────────────────────────────────────────────
+// ── transforms (dbt projects) ──────────────────────────────────────────────
+//
+// One method per route, grouped the way the workbench consumes them. The
+// grouping matters: each group is a React Query boundary, so opening a project
+// does not fetch every file and a 5,000-resource project can lazy-load.
 export const transformApi = {
+  // projects
   list: (query?: { search?: string; limit?: number; offset?: number }) =>
     get<Paginated<Transform>>('/transforms', query as Query),
   detail: (id: string) => get<TransformDetail>(`/transforms/${id}`),
-  destinations: () => get<TransformDestinationCapability[]>('/transforms/destinations'),
-  inputCandidates: (connectionId: string) =>
-    get<TransformInputCandidates>(`/transforms/connections/${connectionId}/inputs`),
-  registerAsset: (connectionId: string, body: {
-    catalog_name?: string; schema_name: string; relation_name: string;
-    pipeline_id?: string; pipeline_stream_id?: string;
-  }) => post<DataAsset>(`/transforms/connections/${connectionId}/assets`, body),
   create: (body: {
-    name: string; description?: string; warehouse_connection_id: string;
-    default_schema: string; input_asset_ids: string[];
+    name: string; description?: string; connection_id: string;
+    source?: 'NEW' | 'GIT' | 'UPLOAD';
+    dbt_project_name?: string;
+    development_schema?: string; production_schema?: string;
+    source_schema?: string; per_user_schemas?: boolean; with_examples?: boolean;
+    repo_url?: string; branch?: string; subdirectory?: string; token?: string;
+    auto_pull?: boolean; interval_minutes?: number;
   }) => post<TransformDetail>('/transforms', body),
-  update: (id: string, body: unknown) => patch<TransformDetail>(`/transforms/${id}`, body),
+  update: (id: string, body: {
+    name?: string; description?: string; timezone?: string;
+    schedule_type?: string; schedule_config?: Record<string, unknown>;
+    schedule_command?: Record<string, unknown>;
+  }) => patch<TransformDetail>(`/transforms/${id}`, body),
   remove: (id: string) => del<void>(`/transforms/${id}`),
-  createModel: (id: string, body: unknown) =>
-    post<TransformModel>(`/transforms/${id}/models`, body),
-  updateModel: (id: string, modelId: string, body: unknown) =>
-    patch<TransformModel>(`/transforms/${id}/models/${modelId}`, body),
-  removeModel: (id: string, modelId: string) =>
-    del<void>(`/transforms/${id}/models/${modelId}`),
+  exportUrl: (id: string, releaseId?: string) =>
+    `/api/v1/transforms/${id}/export${releaseId ? `?release_id=${releaseId}` : ''}`,
+
+  // systems and connections
   systems: () => get<TransformSystem[]>('/transforms/systems'),
-  connections: () => get<WarehouseConnection[]>('/transforms/connections'),
+  connections: (connectorKey?: string) =>
+    get<WarehouseConnection[]>('/transforms/connections',
+      connectorKey ? { connector_key: connectorKey } : undefined),
   createConnection: (body: {
     connector_key: string; name: string; auth_method: string;
     project_id?: string; dataset_location?: string; credentials_json?: string;
@@ -463,6 +467,14 @@ export const transformApi = {
     username?: string; password?: string; ssl_mode?: string;
     oauth_grant_id?: string;
   }) => post<WarehouseConnection>('/transforms/connections', body),
+  updateConnection: (id: string, body: {
+    name?: string; project_id?: string; dataset_location?: string;
+    credentials_json?: string; host?: string; port?: number; database?: string;
+    username?: string; password?: string; ssl_mode?: string;
+  }) => patch<WarehouseConnection>(`/transforms/connections/${id}`, body),
+  /** Re-check a stored key. Failure comes back as a verdict, not an error. */
+  verifyConnection: (id: string) =>
+    post<WarehouseConnection>(`/transforms/connections/${id}/verify`, {}),
   removeConnection: (id: string) => del<void>(`/transforms/connections/${id}`),
   startOauth: (connectorKey: string) =>
     post<{ authorize_url: string; state: string }>(`/oauth/${connectorKey}/start`),
@@ -482,56 +494,126 @@ export const transformApi = {
       `/transforms/connections/${connectionId}/warehouse${suffix ? `?${suffix}` : ''}`,
     );
   },
-  inspectRepository: (body: {
-    repo_url: string; ref?: string; subdirectory?: string; token?: string;
-  }) => post<RepositoryImportPreview>('/transforms/imports/inspect', body),
-  importRepository: (body: {
-    repo_url: string; ref?: string; subdirectory?: string; token?: string;
-    name: string; warehouse_connection_id: string; default_schema: string;
-    auto_pull?: boolean; interval_minutes?: number;
-  }) => post<{ transform: TransformDetail; warnings: string[] }>('/transforms/imports', body),
-  configureGit: (id: string, body: {
-    repo_url?: string; ref?: string | null; subdirectory?: string;
-    token?: string; auto_pull?: boolean; interval_minutes?: number;
-    auto_publish?: boolean;
-  }) => put<GitSourceState>(`/transforms/${id}/git`, body),
-  /** Reads the repository into this Transform. There is no write counterpart. */
-  pullGit: (id: string, force = false) =>
-    post<GitPullResult>(`/transforms/${id}/git/pull${force ? '?force=true' : ''}`, {}),
-  profileInput: (id: string, assetId: string) =>
-    post<{ columns: ColumnProfile[] }>(`/transforms/${id}/inputs/${assetId}/profile`, {}),
-  draftModel: (id: string, body: { asset_id: string; intent: string }) =>
-    post<DraftedModel>(`/transforms/${id}/ai/draft-model`, body),
-  addTest: (id: string, modelId: string, body: unknown) =>
-    post<TransformTest>(`/transforms/${id}/models/${modelId}/tests`, body),
-  removeTest: (id: string, modelId: string, testId: string) =>
-    del<void>(`/transforms/${id}/models/${modelId}/tests/${testId}`),
-  run: (
-    id: string,
-    operation: TransformOperation,
-    modelId?: string,
-    options?: { fullRefresh?: boolean; source?: 'DRAFT' | 'RELEASE' },
-  ) => post<TransformExecution>(`/transforms/${id}/runs`, {
-    operation, model_id: modelId, full_refresh: options?.fullRefresh ?? false,
-    source: options?.source ?? 'DRAFT',
-  }),
-  releases: (id: string) => get<TransformRelease[]>(`/transforms/${id}/releases`),
-  diff: (id: string) =>
-    get<{ changes: TransformDiffEntry[] }>(`/transforms/${id}/diff`),
+
+  // environments
+  environments: (id: string) =>
+    get<TransformEnvironment[]>(`/transforms/${id}/environments`),
+  updateEnvironment: (id: string, environmentId: string, body: {
+    name?: string; connection_id?: string; target_name?: string;
+    schema_name?: string; schema_strategy?: 'STATIC' | 'PER_USER';
+    schema_prefix?: string; schema_suffix?: string; threads?: number;
+    vars?: Record<string, unknown>;
+  }) => patch<TransformEnvironment>(
+    `/transforms/${id}/environments/${environmentId}`, body),
+
+  // files -- the canonical project
+  files: (id: string) => get<FileTree>(`/transforms/${id}/files`),
+  fileContent: (id: string, path: string, revisionId?: string) => {
+    const query = new URLSearchParams({ path });
+    if (revisionId) query.set('revision_id', revisionId);
+    return get<FileContent>(`/transforms/${id}/files/content?${query.toString()}`);
+  },
+  fileRawUrl: (id: string, path: string) =>
+    `/api/v1/transforms/${id}/files/raw?path=${encodeURIComponent(path)}`,
+  /** Every write names the revision it was based on; a stale one is a 409. */
+  saveFile: (id: string, body: {
+    path: string; content: string; expected_revision_id?: string | null;
+  }) => put<SaveResult>(`/transforms/${id}/files/content`, body),
+  /** Save All: one revision and one parse, not one per file. */
+  saveBatch: (id: string, body: {
+    changes: { path: string; content?: string | null; from_path?: string | null }[];
+    expected_revision_id?: string | null;
+  }) => post<SaveResult>(`/transforms/${id}/files/batch`, body),
+  createFile: (id: string, body: {
+    path: string; content?: string; template?: string;
+    expected_revision_id?: string | null;
+  }) => post<SaveResult>(`/transforms/${id}/files`, body),
+  moveFile: (id: string, body: {
+    from_path: string; to_path: string; expected_revision_id?: string | null;
+  }) => post<SaveResult>(`/transforms/${id}/files/move`, body),
+  deleteFiles: (id: string, body: {
+    paths: string[]; expected_revision_id?: string | null;
+  }) => post<SaveResult>(`/transforms/${id}/files/delete`, body),
+  fileTemplates: (id: string) =>
+    get<FileTemplate[]>(`/transforms/${id}/file-templates`),
+
+  // resources -- read out of manifest.json, never inferred
+  resources: (id: string, query?: {
+    resource_type?: string[]; search?: string; tag?: string; package?: string;
+    path?: string; materialized?: string; group?: string;
+    scope?: 'DRAFT' | 'RELEASE'; limit?: number; offset?: number;
+  }) => get<ResourcePage>(`/transforms/${id}/resources`, query as Query),
+  resourceFacets: (id: string, scope: 'DRAFT' | 'RELEASE' = 'DRAFT') =>
+    get<ResourceFacets>(`/transforms/${id}/resources/facets`, { scope }),
+  resourceDetail: (id: string, uniqueId: string, scope: 'DRAFT' | 'RELEASE' = 'DRAFT') =>
+    get<ResourceDetail>(`/transforms/${id}/resources/detail`,
+      { unique_id: uniqueId, scope }),
+  lineage: (id: string, options?: {
+    focus?: string; upstream?: number; downstream?: number;
+    full?: boolean; scope?: 'DRAFT' | 'RELEASE'; max_nodes?: number;
+  }) => get<TransformLineage>(`/transforms/${id}/lineage`, options as Query),
+  compiled: (id: string, uniqueId: string) =>
+    get<CompiledCode>(`/transforms/${id}/compiled`, { unique_id: uniqueId }),
+  problems: (id: string) => get<TransformProblems>(`/transforms/${id}/problems`),
+  completions: (id: string) => get<Completions>(`/transforms/${id}/completions`),
+  docs: (id: string, query?: {
+    search?: string; resource_type?: string[]; scope?: 'DRAFT' | 'RELEASE';
+    limit?: number;
+  }) => get<DocEntry[]>(`/transforms/${id}/docs`, query as Query),
+  search: (id: string, q: string, options?: {
+    include_content?: boolean; limit?: number;
+  }) => get<TransformSearch>(`/transforms/${id}/search`, { q, ...options } as Query),
+
+  // invocations -- one structured dbt command, never a shell string
+  run: (id: string, body: InvocationRequest) =>
+    post<TransformInvocation>(`/transforms/${id}/invocations`, body),
+  invocations: (id: string, query?: {
+    command?: string[]; status?: string[]; environment_id?: string;
+    trigger_type?: string; limit?: number; offset?: number;
+  }) => get<Paginated<TransformInvocation>>(
+    `/transforms/${id}/invocations`, query as Query),
+  invocation: (invocationId: string) =>
+    get<TransformInvocationDetail>(`/transform-invocations/${invocationId}`),
+  cancel: (invocationId: string) =>
+    post<TransformInvocation>(`/transform-invocations/${invocationId}/cancel`, {}),
+  /** Re-runs the same revision, release, environment and command. */
+  retry: (invocationId: string) =>
+    post<TransformInvocation>(`/transform-invocations/${invocationId}/retry`, {}),
+  logs: (invocationId: string, cursor = 0, limit = 500) =>
+    get<TransformLogPage>(`/transform-invocations/${invocationId}/logs`,
+      { cursor, limit } as Query),
+
+  // releases -- an immutable project revision production may execute
+  publishPlan: (id: string) => get<PublishPlan>(`/transforms/${id}/publish-plan`),
   publish: (id: string, body: { notes?: string | null; activate?: boolean }) =>
-    post<TransformRelease>(`/transforms/${id}/releases`, body),
+    post<PublishResult>(`/transforms/${id}/releases`, body),
+  releases: (id: string) => get<TransformRelease[]>(`/transforms/${id}/releases`),
   activateRelease: (id: string, releaseId: string) =>
     post<TransformRelease>(`/transforms/${id}/releases/${releaseId}/activate`, {}),
-  releaseModels: (id: string, releaseId: string) =>
-    get<{ models: TransformReleaseModel[] }>(
-      `/transforms/${id}/releases/${releaseId}/models`),
+  /** Puts a release's files back in the editor. Does not change what is live. */
   restoreRelease: (id: string, releaseId: string) =>
     post<TransformDetail>(`/transforms/${id}/releases/${releaseId}/restore`, {}),
-  execution: (runId: string) => get<TransformExecution>(`/transforms/runs/${runId}`),
-  cancel: (runId: string) => post<TransformExecution>(`/transforms/runs/${runId}/cancel`),
-  lineage: (id: string) => get<TransformLineage>(`/transforms/${id}/lineage`),
-  project: (id: string) => get<Record<string, string>>(`/transforms/${id}/project`),
-  exportUrl: (id: string) => `/api/v1/transforms/${id}/export`,
+
+  // git -- two-way, on the same files dbt runs
+  inspectRepository: (body: {
+    repo_url: string; branch?: string; subdirectory?: string; token?: string;
+  }) => post<RepositoryInspectResult>('/transforms/inspect-repository', body),
+  gitStatus: (id: string, checkRemote = false) =>
+    get<GitStatus>(`/transforms/${id}/git/status`,
+      checkRemote ? { check_remote: true } : undefined),
+  gitDiff: (id: string, path: string) =>
+    get<GitDiff>(`/transforms/${id}/git/diff`, { path }),
+  gitPull: (id: string, body?: { force?: boolean; discard_local?: boolean }) =>
+    post<GitPullResult>(`/transforms/${id}/git/pull`, body ?? {}),
+  gitCommit: (id: string, body: { message: string; paths?: string[] | null }) =>
+    post<GitCommitResult>(`/transforms/${id}/git/commit`, body),
+  gitBranches: (id: string) => get<GitBranch[]>(`/transforms/${id}/git/branches`),
+  gitCheckout: (id: string, body: { branch: string; discard_local?: boolean }) =>
+    post<GitPullResult & { branch: string }>(`/transforms/${id}/git/checkout`, body),
+  configureGit: (id: string, body: {
+    branch?: string; subdirectory?: string; token?: string;
+    auto_pull?: boolean; interval_minutes?: number;
+  }) => put<GitStatus>(`/transforms/${id}/git`, body),
 };
 
 export const runApi = {

@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: shopify
+    schema: raw_shopify
+    loaded_at_field: loaded_at
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    tables:
+      - name: orders
+        identifier: orders_raw
+        columns:
+          - name: id
+            description: Primary key.
+      - name: customers

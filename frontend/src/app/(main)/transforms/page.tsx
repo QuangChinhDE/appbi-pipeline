@@ -1,148 +1,219 @@
 'use client';
 
+/**
+ * The Transform list.
+ *
+ * One row per dbt project. The columns are the four things somebody scanning
+ * this page actually wants: which warehouse it runs on, whether it parses,
+ * whether the draft differs from what production runs, and when it last built.
+ */
+
 import * as React from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Github, Plus, Workflow } from 'lucide-react';
+import {
+  ChevronRight, CircleDot, FolderGit2, GitBranch, Package, Plus,
+} from 'lucide-react';
 
-import { transformApi } from '@/lib/api';
-import { qk } from '@/lib/queryKeys';
-import { formatRelative } from '@/lib/format';
-import { cn } from '@/lib/utils';
-import { useWorkspaceId } from '@/hooks/use-current-user';
-import { usePermissions } from '@/hooks/use-permissions';
-import { useI18n } from '@/providers/LanguageProvider';
+import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
+import { useWorkspaceId } from '@/hooks/use-current-user';
+import { usePermissions } from '@/hooks/use-permissions';
+import { transformApi } from '@/lib/api';
+import { formatRelative } from '@/lib/format';
+import { qk } from '@/lib/queryKeys';
+import type { Transform } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
-const tone: Record<string, BadgeVariant> = {
-  HEALTHY: 'success', WARNING: 'warning', ERROR: 'danger', UNKNOWN: 'neutral',
-};
+function healthVariant(status: string): BadgeVariant {
+  switch (status) {
+    case 'HEALTHY': return 'success';
+    case 'WARNING': return 'warning';
+    case 'ERROR': return 'danger';
+    default: return 'subtle';
+  }
+}
+
+function healthLabel(status: string): string {
+  switch (status) {
+    case 'HEALTHY': return 'Bình thường';
+    case 'WARNING': return 'Có cảnh báo';
+    case 'ERROR': return 'Đang lỗi';
+    default: return 'Chưa chạy';
+  }
+}
 
 export default function TransformsPage() {
   const workspaceId = useWorkspaceId();
-  const { locale } = useI18n();
   const { can } = usePermissions();
+
   const [search, setSearch] = React.useState('');
-  const copy = locale === 'vi' ? {
-    title: 'Transform', description: 'Biến đổi dữ liệu trong kho thành các bảng sẵn sàng cho báo cáo.',
-    create: 'Transform mới', importFromGit: 'Import từ GitHub', empty: 'Chưa có Transform', emptyDescription: 'Tạo Transform đầu tiên từ một kết nối kho dữ liệu đã có.',
-    name: 'Tên', warehouse: 'Kết nối', models: 'Model', tests: 'Test', health: 'Tình trạng', lastRun: 'Lần chạy cuối', open: 'Mở',
-    total: 'Tổng', healthy: 'Ổn định', attention: 'Cần chú ý', search: 'Tìm Transform', never: 'Chưa chạy', loadError: 'Không tải được Transform',
-    healthLabel: {
-      HEALTHY: 'Ổn định', WARNING: 'Cảnh báo', ERROR: 'Lỗi', UNKNOWN: 'Chưa rõ',
-    } as Record<string, string>,
-  } : {
-    title: 'Transform', description: 'Turn warehouse data into business-ready datasets.',
-    create: 'New transform', importFromGit: 'Import from GitHub', empty: 'No transforms yet', emptyDescription: 'Create the first Transform from a warehouse connection you already have.',
-    name: 'Name', warehouse: 'Connection', models: 'Models', tests: 'Tests', health: 'Health', lastRun: 'Last run', open: 'Open',
-    total: 'Total', healthy: 'Healthy', attention: 'Needs attention', search: 'Search transforms', never: 'Never run', loadError: 'Could not load transforms',
-    healthLabel: {
-      HEALTHY: 'Healthy', WARNING: 'Warning', ERROR: 'Error', UNKNOWN: 'Unknown',
-    } as Record<string, string>,
-  };
-  const query = useQuery({
-    queryKey: qk.transforms(workspaceId, { search }),
-    queryFn: () => transformApi.list({ search: search || undefined, limit: 100 }),
+  const [debounced, setDebounced] = React.useState('');
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filters = { search: debounced || undefined };
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: qk.transforms(workspaceId, filters),
+    queryFn: () => transformApi.list(filters),
+    refetchInterval: 20_000,
   });
-  const items = query.data?.items ?? [];
-  const healthy = items.filter((item) => item.health_status === 'HEALTHY').length;
-  const attention = items.filter((item) => ['WARNING', 'ERROR'].includes(item.health_status)).length;
+
+  // Memoised because `?? []` allocates a fresh array each render, which would
+  // make the stats below recompute on every keystroke in the search box.
+  const projects = React.useMemo(() => data?.items ?? [], [data?.items]);
+  const stats = React.useMemo(() => {
+    const unpublished = projects.filter((item) => item.has_unpublished_changes).length;
+    const broken = projects.filter((item) => item.parse_status === 'ERROR').length;
+    return [
+      { label: 'Dự án', value: data?.page.total ?? projects.length },
+      ...(unpublished
+        ? [{ label: 'Chưa xuất bản', value: unpublished, tone: 'warning' as const }]
+        : []),
+      ...(broken
+        ? [{ label: 'Đang lỗi', value: broken, tone: 'danger' as const }]
+        : []),
+    ];
+  }, [projects, data?.page.total]);
 
   return (
     <PageListLayout
-      title={copy.title}
-      description={copy.description}
+      title="Transform"
+      description="Mỗi Transform là một dự án dbt thật: tệp dự án là bản gốc, dbt là thứ chạy nó."
+      overview={<ModuleOverview stats={stats} />}
       searchValue={search}
       onSearchChange={setSearch}
-      searchPlaceholder={copy.search}
-      action={can('transforms', 'create') ? (
-        <div className="flex items-center gap-2">
-          {/* Somebody arriving from Dataform has the work already written; the
-              import is their first step, not an advanced option. */}
-          <Link href="/transforms/import">
-            <Button variant="secondary" size="sm" leadingIcon={<Github className="h-4 w-4" />}>
-              {copy.importFromGit}
-            </Button>
-          </Link>
+      searchPlaceholder="Tìm theo tên dự án"
+      action={
+        can('transforms', 'create') ? (
           <Link href="/transforms/new">
-            <Button variant="primary" size="sm" leadingIcon={<Plus className="h-4 w-4" />}>
-              {copy.create}
+            <Button variant="primary" leadingIcon={<Plus className="h-4 w-4" />}>
+              Dự án mới
             </Button>
           </Link>
-        </div>
-      ) : null}
-      overview={<ModuleOverview stats={[
-        { label: copy.total, value: query.data?.page.total ?? 0 },
-        { label: copy.healthy, value: healthy, tone: 'success' },
-        { label: copy.attention, value: attention, tone: attention ? 'warning' : 'default' },
-      ]} />}
+        ) : undefined
+      }
     >
-      {query.isLoading ? <TableSkeleton rows={6} columns={6} /> : query.error ? (
-        <ErrorState title={copy.loadError} message={(query.error as Error).message} onRetry={() => query.refetch()} />
-      ) : items.length === 0 ? (
+      {isLoading ? (
+        <TableSkeleton rows={5} columns={6} />
+      ) : error ? (
+        <ErrorState
+          title="Không tải được danh sách"
+          message={(error as Error).message}
+          onRetry={() => refetch()}
+        />
+      ) : projects.length === 0 ? (
         <EmptyState
-          icon={Workflow}
-          title={copy.empty}
-          description={copy.emptyDescription}
-          action={can('transforms', 'create') ? (
-            <Link href="/transforms/new"><Button variant="primary" size="sm">{copy.create}</Button></Link>
-          ) : undefined}
+          icon={Package}
+          title={debounced ? 'Không có dự án nào khớp' : 'Chưa có dự án Transform nào'}
+          description={
+            debounced
+              ? 'Thử một từ khoá khác.'
+              : 'Tạo một dự án dbt mới, hoặc kết nối tới repository đã có.'
+          }
+          action={
+            !debounced && can('transforms', 'create') ? (
+              <Link href="/transforms/new">
+                <Button variant="primary">Dự án mới</Button>
+              </Link>
+            ) : undefined
+          }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[840px] text-left">
-              <thead>
-                <tr className="border-b border-[rgb(var(--border-line))] text-tiny uppercase tracking-[0.08em] text-text-quaternary">
-                  {[copy.name, copy.warehouse, copy.models, copy.tests, copy.health, copy.lastRun, ''].map((label) => (
-                    <th key={label} scope="col" className="px-4 py-2 font-emphasis">{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[rgb(var(--border-line))]">
-                {items.map((item) => (
-                  <tr key={item.id} className="hover:bg-surface-2/60">
-                    <td className="px-4 py-3">
-                      <Link href={`/transforms/${item.id}`} className="font-emphasis text-text-primary hover:text-brand">
-                        {item.name}
-                      </Link>
-                      <span className="mt-0.5 block text-tiny text-text-quaternary">{item.default_schema}</span>
-                    </td>
-                    <td className="px-4 py-3 text-caption text-text-secondary">{item.warehouse.name}</td>
-                    <td className="px-4 py-3 text-caption tabular-nums text-text-secondary">{item.model_count}</td>
-                    <td className="px-4 py-3 text-caption tabular-nums text-text-secondary">{item.test_count}</td>
-                    <td className="px-4 py-3">
-                      <Badge size="xs" variant={tone[item.health_status] ?? 'neutral'}
-                        title={item.health_message ?? undefined}>
-                        {copy.healthLabel[item.health_status] ?? item.health_status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-caption text-text-tertiary">
-                      {item.last_run ? (
-                        <span className="flex items-center gap-1.5">
-                          <span className={cn(
-                            'h-1.5 w-1.5 shrink-0 rounded-full',
-                            item.last_run.status === 'SUCCEEDED' ? 'bg-success'
-                              : item.last_run.status === 'RUNNING' ? 'bg-info'
-                                : 'bg-danger',
-                          )} />
-                          {formatRelative(item.last_run.started_at ?? item.last_run.created_at, locale)}
-                        </span>
-                      ) : copy.never}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link href={`/transforms/${item.id}`} className="text-caption font-emphasis text-brand hover:underline">{copy.open}</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ul className="space-y-1.5 pb-6">
+          {projects.map((project) => (
+            <ProjectRow key={project.id} project={project} />
+          ))}
+        </ul>
       )}
     </PageListLayout>
+  );
+}
+
+function ProjectRow({ project }: { project: Transform }) {
+  return (
+    <li>
+      <Link
+        href={`/transforms/${project.id}`}
+        className={cn(
+          'flex items-center gap-3 rounded-lg border border-[rgb(var(--border-line))]',
+          'bg-surface-1 px-3.5 py-3 transition-colors hover:bg-surface-2',
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-small font-emphasis text-text-primary">
+              {project.name}
+            </span>
+            {project.mode === 'GIT' ? (
+              <Badge variant="subtle" size="xs">
+                <FolderGit2 className="h-2.5 w-2.5" /> Git
+              </Badge>
+            ) : null}
+            {/* A project that will not parse is broken in a way that no other
+                badge conveys: nothing can run until it is fixed. */}
+            {project.parse_status === 'ERROR' && (
+              <Badge variant="danger" size="xs">không parse được</Badge>
+            )}
+          </div>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-tiny text-text-tertiary">
+            {project.warehouse && (
+              <span>
+                {project.warehouse.connector_display_name ?? project.warehouse.connector_key}
+                {' · '}
+                {project.warehouse.name}
+              </span>
+            )}
+            {project.dbt_project_name && (
+              <span className="font-mono">{project.dbt_project_name}</span>
+            )}
+            {project.git && (
+              <span className="flex items-center gap-1">
+                <GitBranch className="h-3 w-3" />
+                {project.git.branch}
+                {project.git.behind && (
+                  <span className="text-warning">· có commit mới</span>
+                )}
+              </span>
+            )}
+            <span>{project.file_count} tệp</span>
+          </p>
+        </div>
+
+        {project.has_unpublished_changes && (
+          <Badge variant="warning" size="xs" className="shrink-0">
+            <CircleDot className="h-2.5 w-2.5" /> chưa xuất bản
+          </Badge>
+        )}
+
+        {project.active_release ? (
+          <span className="hidden shrink-0 text-tiny text-text-tertiary sm:block">
+            bản {project.active_release.release_number}
+          </span>
+        ) : (
+          <span className="hidden shrink-0 text-tiny text-text-quaternary sm:block">
+            chưa xuất bản
+          </span>
+        )}
+
+        <div className="hidden w-28 shrink-0 text-right md:block">
+          <Badge variant={healthVariant(project.health_status)} size="sm">
+            {healthLabel(project.health_status)}
+          </Badge>
+          {project.last_success_at && (
+            <p className="mt-0.5 text-tiny text-text-quaternary">
+              {formatRelative(project.last_success_at)}
+            </p>
+          )}
+        </div>
+
+        <ChevronRight className="h-4 w-4 shrink-0 text-text-quaternary" />
+      </Link>
+    </li>
   );
 }

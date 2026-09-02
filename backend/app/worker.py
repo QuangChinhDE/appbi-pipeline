@@ -38,10 +38,15 @@ from app.models.enums import (
 )
 from app.models.integration import Destination, Pipeline, Source
 from app.models.run import PipelineRun
-from app.models.transform import Transform
+from app.transforms.models import TransformProject, TransformProjectRevision
 from app.services import (
     alerts as alert_service, catalog, pipelines as pipeline_service, runs as run_service,
-    scheduling, transform_import, transforms as transform_service,
+    scheduling,
+)
+from app.transforms import (
+    environments as transform_environments, files as transform_files,
+    git as transform_git, invocations as transform_service,
+    releases as transform_releases,
 )
 
 logger = logging.getLogger(__name__)
@@ -173,11 +178,11 @@ class Worker:
                 async with SessionLocal() as session:
                     now = utcnow()
                     due = list((await session.scalars(
-                        select(Transform).where(
-                            Transform.status == "ACTIVE",
-                            Transform.deleted_at.is_(None),
-                            Transform.next_run_at.is_not(None),
-                            Transform.next_run_at <= now,
+                        select(TransformProject).where(
+                            TransformProject.status == "ACTIVE",
+                            TransformProject.deleted_at.is_(None),
+                            TransformProject.next_run_at.is_not(None),
+                            TransformProject.next_run_at <= now,
                         ).limit(50)
                     )).all())
                     for transform in due:
@@ -189,60 +194,113 @@ class Worker:
             await self._sleep(10)
 
     async def git_pull_loop(self) -> None:
-        """Read new commits from the repositories Transforms were imported from.
+        """Read new commits from the repositories Git-backed projects follow.
 
         Each tick asks GitHub for the branch head, which is a few hundred bytes,
         and only downloads when it has moved. A failure -- a revoked token, a
-        deleted branch -- is recorded on the Transform and the interval is
-        rescheduled rather than retried tightly, so a broken connection does not
-        turn into a request loop against somebody else's API.
+        deleted branch, uncommitted local changes -- is recorded on the binding
+        and auto-pull is stood down rather than retried tightly, so a broken
+        connection does not turn into a request loop against somebody else's API.
         """
         while not self.stopping.is_set():
             try:
                 async with SessionLocal() as session:
-                    due = await transform_import.due_for_pull(session)
-                    for transform in due:
+                    due = await transform_git.due_for_pull(session)
+                    for binding in due:
+                        project = await session.get(
+                            TransformProject, binding.project_id,
+                        )
+                        if project is None:
+                            continue
                         ctx = RequestContext.system(
-                            transform.workspace_id, new_trace_id(), transform.timezone,
+                            project.workspace_id, new_trace_id(), project.timezone,
                         )
                         try:
-                            await transform_import.pull_now(session, ctx, transform)
+                            result = await transform_git.pull(session, ctx, project)
+                            if result.get("changed"):
+                                await self._parse_after_pull(session, ctx, project)
                         except AppError as exc:
                             log_event(logger, logging.INFO, "git_pull.rejected",
-                                      transform_id=str(transform.id), error=str(exc))
-                            transform.git_next_pull_at = None
+                                      project_id=str(project.id), error=str(exc))
+                            binding.next_pull_at = None
+                            binding.last_status = "FAILED"
+                            binding.last_message = str(exc)[:1000]
                     if due:
                         await session.commit()
             except Exception as exc:  # noqa: BLE001
                 log_event(logger, logging.ERROR, "git_pull.error", error=str(exc))
             await self._sleep(60)
 
-    async def _fire_transform(self, session, transform: Transform) -> None:
-        fired_for = transform.next_run_at
+    async def _parse_after_pull(self, session, ctx, project: TransformProject) -> None:
+        """Parse what was just pulled, so the resource tree is not stale.
+
+        A pull that changed files leaves the last parse describing code that is
+        no longer there; without this the explorer shows resources from the
+        previous commit until somebody happens to save a file.
+        """
+        try:
+            revision = await transform_files.working_revision(session, project)
+            environment = await transform_environments.resolve(session, project, None)
+            await transform_service.enqueue(
+                session, ctx, project,
+                command="parse", environment=environment, revision=revision,
+                trigger_type=TriggerType.SYSTEM, enforce_permission=False,
+            )
+        except AppError as exc:
+            log_event(logger, logging.INFO, "git_pull.parse_skipped",
+                      project_id=str(project.id), error=str(exc))
+
+    async def _fire_transform(self, session, project: TransformProject) -> None:
+        fired_for = project.next_run_at
         # Advance first, exactly as the pipeline scheduler does, so a skipped
         # tick cannot become a retry loop.
-        transform.next_run_at = scheduling.next_run_at(
-            transform.schedule_type, transform.schedule_config, transform.timezone,
+        project.next_run_at = scheduling.next_run_at(
+            project.schedule_type, project.schedule_config, project.timezone,
         )
         # A schedule runs published code. With nothing published there is
         # nothing safe to run unattended, so skip rather than fall back to a
         # draft somebody may be halfway through editing.
-        if transform.active_release_id is None:
+        release = await transform_releases.active(session, project)
+        if release is None:
             log_event(logger, logging.WARNING, "transform_scheduler.skipped_unpublished",
-                      transform_id=str(transform.id))
+                      project_id=str(project.id))
             return
 
-        ctx = RequestContext.system(transform.workspace_id, new_trace_id(), transform.timezone)
+        revision = await session.get(TransformProjectRevision, release.revision_id)
+        if revision is None:
+            log_event(logger, logging.ERROR,
+                      "transform_scheduler.release_revision_missing",
+                      project_id=str(project.id), release_id=str(release.id))
+            return
+
+        ctx = RequestContext.system(
+            project.workspace_id, new_trace_id(), project.timezone,
+        )
         try:
+            environment = await transform_environments.resolve(
+                session, project, None,
+                default_to=transform_environments.PRODUCTION,
+            )
+            # Whatever the project's schedule was configured to run -- a build by
+            # default, but a project that only needs its snapshots taken should
+            # be able to say so.
+            command = project.schedule_command or {}
             await transform_service.enqueue(
-                session, ctx, transform, operation="BUILD", model_id=None,
-                source="RELEASE", trigger_type=TriggerType.SCHEDULE,
+                session, ctx, project,
+                command=str(command.get("command") or "build"),
+                environment=environment,
+                revision=revision,
+                selector=command.get("selector"),
+                exclude=command.get("exclude"),
+                full_refresh=bool(command.get("full_refresh")),
+                release=release,
+                trigger_type=TriggerType.SCHEDULE,
                 enforce_permission=False,
-                idempotency_key=f"schedule:{transform.id}:{fired_for.isoformat()}",
+                idempotency_key=f"schedule:{project.id}:{fired_for.isoformat()}",
             )
         except AppError as exc:
             log_event(logger, logging.INFO, "transform_scheduler.rejected",
-                      transform_id=str(transform.id), error=str(exc))
+                      project_id=str(project.id), error=str(exc))
 
     async def _fire(self, session, pipeline: Pipeline) -> None:
         # Always advance the clock first, so a skipped or rejected tick cannot

@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: exotic
+    description: Carries configs the product has no form for.
+    config:
+      tags: ['finance', 'daily']
+    columns:
+      - name: order_id
+        description: Primary key.

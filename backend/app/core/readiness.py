@@ -235,6 +235,30 @@ async def _probe_engine(*, required: bool, fresh: bool) -> DependencyState:
     return state
 
 
+async def _probe_transform_storage(*, required: bool) -> DependencyState:
+    """Can Transform's object store be written and read back?
+
+    Only Transform uses this store, so a failure here means Transform cannot
+    save a file or run a command -- and nothing else in the product is affected.
+    That asymmetry is why it is reported separately rather than folded into the
+    database check.
+    """
+    from app.transforms.storage import check_storage
+
+    health = await check_storage()
+    return DependencyState(
+        name="transform_storage",
+        ok=health.writable,
+        required=required,
+        # The backend is in the detail either way: an operator reading a green
+        # probe still needs to know whether it is checking a local directory or
+        # the S3 bucket production actually uses.
+        detail=(
+            f"{health.backend}: {health.detail}" if health.detail else health.backend
+        ),
+    )
+
+
 async def probe(*, deep: bool) -> tuple[bool, dict]:
     """Whether this instance should be sent traffic, and why.
 
@@ -257,8 +281,9 @@ async def probe(*, deep: bool) -> tuple[bool, dict]:
 
     database = await _probe_database()
     engine = await _probe_engine(required=engine_required, fresh=deep)
+    storage = await _probe_transform_storage(required=deep)
 
-    states = [database, engine]
+    states = [database, engine, storage]
     ok = all(state.ok for state in states if state.required)
 
     return ok, {

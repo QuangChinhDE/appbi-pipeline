@@ -86,6 +86,22 @@ x-backend-env: &backend-env
   TRANSFORM_WORKER_MAX_PARALLEL: ${TRANSFORM_WORKER_MAX_PARALLEL:-2}
   TRANSFORM_WORKSPACE_DIR: /transform/workspace
   TRANSFORM_LOG_DIR: /transform/logs
+  # Where dbt project revisions and artifacts live. Postgres keeps only the
+  # metadata and index rows that point at them.
+  #
+  # `local` is a shared volume and is the default, so a plain `docker compose
+  # up` needs no extra service. Production should set `s3` plus the four S3
+  # variables below -- any S3-compatible endpoint works, and MinIO is available
+  # for local rehearsal through docker-compose.storage.yml.
+  TRANSFORM_STORAGE_BACKEND: ${TRANSFORM_STORAGE_BACKEND:-local}
+  TRANSFORM_STORAGE_LOCAL_DIR: /transform/objects
+  TRANSFORM_STORAGE_S3_BUCKET: ${TRANSFORM_STORAGE_S3_BUCKET:-}
+  TRANSFORM_STORAGE_S3_REGION: ${TRANSFORM_STORAGE_S3_REGION:-us-east-1}
+  TRANSFORM_STORAGE_S3_ACCESS_KEY: ${TRANSFORM_STORAGE_S3_ACCESS_KEY:-}
+  TRANSFORM_STORAGE_S3_SECRET_KEY: ${TRANSFORM_STORAGE_S3_SECRET_KEY:-}
+  TRANSFORM_STORAGE_S3_ENDPOINT_URL: ${TRANSFORM_STORAGE_S3_ENDPOINT_URL:-}
+  TRANSFORM_STORAGE_S3_PREFIX: ${TRANSFORM_STORAGE_S3_PREFIX:-transform}
+  TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE: ${TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE:-false}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
 services:
@@ -162,6 +178,9 @@ services:
       - engine_workspace:/engine/workspace
       - engine_logs:/engine/logs
       - transform_logs:/transform/logs:ro
+      # Read-write: the API stores every file save and reads file content back.
+      # Ignored when TRANSFORM_STORAGE_BACKEND is `s3`.
+      - transform_objects:/transform/objects
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
@@ -215,6 +234,8 @@ services:
     volumes:
       - transform_workspace:/transform/workspace
       - transform_logs:/transform/logs
+      # The worker materialises a revision from here and writes artifacts back.
+      - transform_objects:/transform/objects
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
@@ -262,6 +283,9 @@ volumes:
   engine_logs:
   transform_workspace:
   transform_logs:
+  # Content-addressed dbt project revisions and artifacts. Shared between the
+  # API and the Transform worker, because both read and write it.
+  transform_objects:
 
 networks:
   appbi:

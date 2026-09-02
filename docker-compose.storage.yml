@@ -1,0 +1,84 @@
+# Optional: rehearse the production object store locally, with MinIO.
+#
+# Deliberately a separate file. `docker-compose.yml` defaults Transform's
+# storage to a shared volume so a plain `docker compose up` needs no extra
+# service, and Pipeline and Airbyte never touch this store at all -- adding a
+# required MinIO to the base file would make every developer run a service that
+# only one module uses.
+#
+# Production should point `TRANSFORM_STORAGE_*` at real S3 (or R2, or any
+# S3-compatible endpoint) rather than running this.
+#
+# Use it with:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.storage.yml up -d
+#
+# The API and the Transform worker then read and write through the same S3 API
+# they would use in production, which is the point: a bug that only appears
+# against object storage should appear here too.
+
+services:
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: appbi-pipeline-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${TRANSFORM_STORAGE_S3_ACCESS_KEY:-appbi-local}
+      MINIO_ROOT_PASSWORD: ${TRANSFORM_STORAGE_S3_SECRET_KEY:-appbi-local-secret}
+    volumes:
+      - minio_data:/data
+    ports:
+      # Loopback only. The console is for a developer on this machine; the API
+      # and worker reach MinIO over the compose network, not through these.
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [appbi]
+
+  # Creates the bucket once, then exits. Without this the first save fails with
+  # a NoSuchBucket that reads like a configuration error rather than a missing
+  # setup step.
+  minio-init:
+    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
+    container_name: appbi-pipeline-minio-init
+    depends_on:
+      minio: {condition: service_healthy}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000
+      '${TRANSFORM_STORAGE_S3_ACCESS_KEY:-appbi-local}'
+      '${TRANSFORM_STORAGE_S3_SECRET_KEY:-appbi-local-secret}' &&
+      mc mb --ignore-existing local/'${TRANSFORM_STORAGE_S3_BUCKET:-appbi-transform}' &&
+      echo 'bucket ready'
+      "
+    networks: [appbi]
+
+  api:
+    environment:
+      TRANSFORM_STORAGE_BACKEND: s3
+      TRANSFORM_STORAGE_S3_BUCKET: ${TRANSFORM_STORAGE_S3_BUCKET:-appbi-transform}
+      TRANSFORM_STORAGE_S3_ACCESS_KEY: ${TRANSFORM_STORAGE_S3_ACCESS_KEY:-appbi-local}
+      TRANSFORM_STORAGE_S3_SECRET_KEY: ${TRANSFORM_STORAGE_S3_SECRET_KEY:-appbi-local-secret}
+      TRANSFORM_STORAGE_S3_ENDPOINT_URL: http://minio:9000
+      # MinIO does not serve virtual-hosted buckets, so requests are path style.
+      TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      minio-init: {condition: service_completed_successfully}
+
+  transform-worker:
+    environment:
+      TRANSFORM_STORAGE_BACKEND: s3
+      TRANSFORM_STORAGE_S3_BUCKET: ${TRANSFORM_STORAGE_S3_BUCKET:-appbi-transform}
+      TRANSFORM_STORAGE_S3_ACCESS_KEY: ${TRANSFORM_STORAGE_S3_ACCESS_KEY:-appbi-local}
+      TRANSFORM_STORAGE_S3_SECRET_KEY: ${TRANSFORM_STORAGE_S3_SECRET_KEY:-appbi-local-secret}
+      TRANSFORM_STORAGE_S3_ENDPOINT_URL: http://minio:9000
+      TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      minio-init: {condition: service_completed_successfully}
+
+volumes:
+  minio_data:

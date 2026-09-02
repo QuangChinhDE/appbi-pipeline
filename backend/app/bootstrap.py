@@ -25,8 +25,13 @@ from app.models import (  # noqa: F401 - import registers every table
     AlertRule, AuditEvent, BuilderProject, ConnectorDefinition, Destination, EngineInstance,
     EngineMapping,
     Membership, Notification, Operation, Pipeline, PipelineRun, PipelineStream, RunAttempt,
-    SchemaSnapshot, SecretRecord, Source, User, Workspace,
+    SchemaSnapshot, SecretRecord, Source, User, Workspace, register_transform_tables,
 )
+
+# Transform's tables register through a call rather than an import, because
+# `app.transforms.models` imports `app.models.enums` and a top-level import
+# either way round is a cycle.
+register_transform_tables()
 from app.models.enums import EngineStatus, EngineType
 from app.services import actors as actor_service
 from app.services import alerts, catalog
