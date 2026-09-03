@@ -382,3 +382,136 @@ TEMPLATES: dict[str, dict[str, str]] = {
         "content": "",
     },
 }
+
+
+# ── generating a staging model from a real source table ───────────────────
+#
+# The wizard behind this exists because a dbt project's first hour is the part
+# a non-specialist cannot do: you must know that a staging model is a `select`
+# over a `source()`, that the source has to be declared in YAML before `ref`
+# will resolve it, and that tests live in a third place again. Someone who
+# knows their own data still has to learn dbt's filing system before they can
+# express what they already know.
+#
+# So the form asks only what a person knows -- which table, which columns,
+# view or table, which columns are unique and which are never empty -- and this
+# writes what dbt requires. What comes out is ordinary dbt: a `.sql` file and
+# YAML entries, in the conventional places, editable by hand afterwards. That
+# is the whole point of generating rather than hiding.
+
+#: Identifiers dbt and every warehouse accept without quoting.
+_IDENT = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def validate_identifier(value: str, *, field: str) -> str:
+    name = (value or "").strip().lower()
+    if not _IDENT.fullmatch(name):
+        raise ValidationError(
+            f"{field} chỉ gồm chữ thường, số và gạch dưới, và bắt đầu bằng chữ.",
+            code="TRANSFORM_INVALID_NAME",
+        )
+    return name
+
+
+def _yaml_block(payload: dict, indent: int) -> str:
+    """`yaml.safe_dump` output re-indented to sit inside a larger document."""
+    text = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True).rstrip("\n")
+    pad = " " * indent
+    return "\n".join(pad + line if line else line for line in text.splitlines())
+
+
+def source_yaml_entry(
+    *, source_name: str, schema_name: str, table_name: str,
+    columns: list[dict], description: str | None = None,
+) -> dict:
+    """One `sources:` entry, shaped the way dbt expects to read it."""
+    table: dict = {"name": table_name}
+    if description:
+        table["description"] = description
+    column_entries = [
+        {
+            "name": column["name"],
+            **({"data_tests": tests} if (tests := _tests_for(column)) else {}),
+        }
+        for column in columns
+        if _tests_for(column)
+    ]
+    if column_entries:
+        table["columns"] = column_entries
+    return {
+        "name": source_name,
+        "schema": schema_name,
+        "tables": [table],
+    }
+
+
+def _tests_for(column: dict) -> list[str]:
+    tests: list[str] = []
+    if column.get("unique"):
+        tests.append("unique")
+    if column.get("not_null"):
+        tests.append("not_null")
+    return tests
+
+
+def staging_model_sql(
+    *, source_name: str, table_name: str, columns: list[dict], materialized: str,
+) -> str:
+    """The `select` itself.
+
+    Columns are emitted in the order given, which is the warehouse's own
+    ordinal order, so the generated file reads like the table it came from.
+    A column may carry an `alias`; renaming at the staging layer is the most
+    common single edit and doing it here saves the round trip.
+    """
+    if materialized not in ("view", "table"):
+        raise ValidationError(
+            "Kiểu materialization phải là view hoặc table.",
+            code="TRANSFORM_INVALID_MATERIALIZATION",
+        )
+    if not columns:
+        raise ValidationError(
+            "Chọn ít nhất một cột.", code="TRANSFORM_NO_COLUMNS",
+        )
+
+    width = max(len(column["name"]) for column in columns)
+    lines = []
+    for column in columns:
+        name = column["name"]
+        alias = (column.get("alias") or "").strip()
+        if alias and alias != name:
+            lines.append(f"    {name.ljust(width)} as {alias},")
+        else:
+            lines.append(f"    {name},")
+    lines[-1] = lines[-1].rstrip(",")
+
+    return (
+        f"-- Staging model cho bảng `{table_name}`.\n"
+        "--\n"
+        "-- Tầng staging chỉ đổi tên và chọn cột, không đổi ý nghĩa dữ liệu.\n"
+        "-- Mọi phép tính, join hay tổng hợp nên nằm ở tầng marts.\n"
+        f"{{{{ config(materialized='{materialized}') }}}}\n"
+        "\n"
+        "select\n"
+        + "\n".join(lines) + "\n"
+        f"from {{{{ source('{source_name}', '{table_name}') }}}}\n"
+    )
+
+
+def model_yaml_entry(*, model_name: str, columns: list[dict],
+                     description: str | None = None) -> dict:
+    """The `models:` entry carrying the tests the form asked for."""
+    entry: dict = {"name": model_name}
+    if description:
+        entry["description"] = description
+    column_entries = [
+        {
+            "name": (column.get("alias") or column["name"]),
+            **({"data_tests": tests} if (tests := _tests_for(column)) else {}),
+        }
+        for column in columns
+        if _tests_for(column)
+    ]
+    if column_entries:
+        entry["columns"] = column_entries
+    return entry

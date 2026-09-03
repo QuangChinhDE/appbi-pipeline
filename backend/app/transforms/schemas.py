@@ -293,6 +293,31 @@ class FileSaveRequest(BaseModel):
     expected_revision_id: uuid.UUID | None = None
 
 
+class GenerateColumn(BaseModel):
+    """One column as the form describes it."""
+
+    name: str
+    #: Renaming at the staging layer is the most common single edit, so the
+    #: form offers it rather than making it the first thing you fix by hand.
+    alias: str | None = None
+    selected: bool = True
+    unique: bool = False
+    not_null: bool = False
+
+
+class GenerateModelRequest(BaseModel):
+    """A source table plus the choices a person can actually make about it."""
+
+    source_name: str
+    schema_name: str
+    table_name: str
+    model_name: str
+    columns: list[GenerateColumn]
+    materialized: Literal["view", "table"] = "view"
+    description: str | None = None
+    expected_revision_id: uuid.UUID | None = None
+
+
 class FileBatchItem(BaseModel):
     path: str
     content: str | None = None

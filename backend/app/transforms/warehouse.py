@@ -52,6 +52,13 @@ async def verify_relation(
 
 
 @dataclass(slots=True)
+class BrowsedColumn:
+    name: str
+    data_type: str
+    nullable: bool
+
+
+@dataclass(slots=True)
 class BrowsedRelation:
     schema_name: str
     relation_name: str
@@ -139,6 +146,85 @@ async def browse_relations(
         "This Destination cannot be browsed.",
         code="TRANSFORM_DESTINATION_UNSUPPORTED",
     )
+
+
+async def browse_columns(
+    connector_key: str,
+    configuration: dict[str, Any],
+    *,
+    catalog_name: str | None,
+    schema_name: str,
+    relation_name: str,
+) -> list[BrowsedColumn]:
+    """The columns of one table, in the order the warehouse declares them.
+
+    Ordinal order matters: it is the order a person reading the table expects,
+    and the order the generated `select` will list them in.
+    """
+    if connector_key == "destination-bigquery":
+        return await asyncio.to_thread(
+            _columns_bigquery, configuration, catalog_name, schema_name, relation_name,
+        )
+    if connector_key == "destination-postgres":
+        return await asyncio.to_thread(
+            _columns_postgres, configuration, schema_name, relation_name,
+        )
+    raise ValidationError(
+        "This Destination cannot be browsed.",
+        code="TRANSFORM_DESTINATION_UNSUPPORTED",
+    )
+
+
+def _columns_postgres(
+    configuration: dict[str, Any], schema_name: str, relation_name: str,
+) -> list[BrowsedColumn]:
+    try:
+        with _postgres_connect(configuration) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "select column_name, data_type, is_nullable "
+                    "from information_schema.columns "
+                    "where table_schema = %s and table_name = %s "
+                    "order by ordinal_position",
+                    (schema_name, relation_name),
+                )
+                return [
+                    BrowsedColumn(
+                        name=row[0], data_type=row[1], nullable=row[2] == "YES",
+                    )
+                    for row in cursor.fetchall()
+                ]
+    except Exception as exc:
+        raise ValidationError(
+            f"Không đọc được danh sách cột của bảng {relation_name}.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
+
+
+def _columns_bigquery(
+    configuration: dict[str, Any],
+    catalog_name: str | None,
+    schema_name: str,
+    relation_name: str,
+) -> list[BrowsedColumn]:
+    client = _bigquery_client(configuration, catalog_name)
+    try:
+        table = client.get_table(f"{client.project}.{schema_name}.{relation_name}")
+        return [
+            BrowsedColumn(
+                name=field.name,
+                data_type=field.field_type,
+                nullable=field.mode != "REQUIRED",
+            )
+            for field in table.schema
+        ]
+    except Exception as exc:
+        raise ValidationError(
+            f"Không đọc được danh sách cột của bảng {relation_name}.",
+            code="TRANSFORM_BROWSE_FAILED",
+            technical_message=f"{type(exc).__name__}: {exc}",
+        ) from exc
 
 
 def _bigquery_client(configuration: dict[str, Any], catalog_name: str | None):

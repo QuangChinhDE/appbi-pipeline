@@ -1021,6 +1021,38 @@ export interface WarehouseBrowse {
   relations?: BrowsedRelation[];
 }
 
+export interface WarehouseColumn {
+  name: string;
+  data_type: string;
+  nullable: boolean;
+}
+
+export interface WarehouseColumns {
+  schema: string;
+  table: string;
+  columns: WarehouseColumn[];
+}
+
+/** One column as the generator form describes it. */
+export interface GenerateColumn {
+  name: string;
+  alias?: string | null;
+  selected: boolean;
+  unique: boolean;
+  not_null: boolean;
+}
+
+export interface GenerateModelRequest {
+  source_name: string;
+  schema_name: string;
+  table_name: string;
+  model_name: string;
+  columns: GenerateColumn[];
+  materialized: 'view' | 'table';
+  description?: string | null;
+  expected_revision_id?: string | null;
+}
+
 export interface OverviewKpis {
   active_pipelines: number;
   running_now: number;

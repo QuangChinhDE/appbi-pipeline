@@ -29,9 +29,10 @@ from app.models.enums import TriggerType
 from app.schemas.common import PageInfo, Paginated
 from app.transforms import (
     connections as connection_service, environments as environment_service,
-    executor, export as export_service, files as file_service, git as git_service,
-    indexer, invocations as invocation_service, projects as project_service,
-    releases as release_service, resources as resource_service, scaffold,
+    executor, export as export_service, files as file_service, generator,
+    git as git_service, indexer, invocations as invocation_service,
+    projects as project_service, releases as release_service,
+    resources as resource_service, scaffold,
 )
 from app.transforms.models import (
     TransformArtifactBundle, TransformEnvironment, TransformInvocation,
@@ -42,8 +43,9 @@ from app.transforms.schemas import (
     BranchView, CompiledView, CompletionsView, ConnectionCreate, ConnectionUpdate,
     ConnectionView, DocEntry, EnvironmentUpdate, EnvironmentView, FacetsView,
     FileBatchRequest, FileContentView, FileCreateRequest, FileDeleteRequest,
-    FileMoveRequest, FileSaveRequest, FileTreeView, GitCheckoutRequest,
-    GitCommitRequest, GitConfigureRequest, GitDiffView, GitPullRequest,
+    FileMoveRequest, FileSaveRequest, FileTreeView, GenerateModelRequest,
+    GitCheckoutRequest, GitCommitRequest, GitConfigureRequest, GitDiffView,
+    GitPullRequest,
     GitStatusView, InvocationDetail, InvocationRequest, InvocationView, LineageView,
     LogPage, ProblemsView, ProjectCreate, ProjectDetail, ProjectUpdate, ProjectView,
     PublishPlanView, PublishResult, ReleaseCreate, ReleaseView, RepositoryInspectRequest,
@@ -185,18 +187,85 @@ async def browse_warehouse(
     key = connection_service.connector_key(connection)
 
     if schema:
-        relations = await browse_relations(key, configuration, schema, catalog)
+        relations = await browse_relations(
+            key, configuration, catalog_name=catalog, schema_name=schema,
+        )
         return {
             "catalog": catalog, "schema": schema,
             "relations": [
-                {"name": item.name, "type": item.relation_type, "schema": item.schema_name}
+                {
+                    "name": item.relation_name,
+                    "type": item.relation_type,
+                    "schema": item.schema_name,
+                }
                 for item in relations
             ],
         }
     return {
         "catalogs": await browse_catalogs(key, configuration),
-        "schemas": await browse_schemas(key, configuration, catalog),
+        "schemas": await browse_schemas(key, configuration, catalog_name=catalog),
     }
+
+
+@router.get("/connections/{connection_id}/warehouse/columns")
+async def browse_warehouse_columns(
+    connection_id: uuid.UUID,
+    session: SessionDep,
+    ctx: CtxDep,
+    schema: Annotated[str, Query(max_length=200)],
+    table: Annotated[str, Query(max_length=200)],
+    catalog: Annotated[str | None, Query(max_length=200)] = None,
+):
+    """The columns of one table, so a model can be written against real names."""
+    ctx.require(Module.TRANSFORMS, Action.VIEW)
+    from app.transforms.warehouse import browse_columns
+
+    connection = await connection_service.get(session, ctx.workspace_id, connection_id)
+    configuration = await connection_service.resolve_configuration(session, connection)
+    key = connection_service.connector_key(connection)
+    columns = await browse_columns(
+        key, configuration,
+        catalog_name=catalog, schema_name=schema, relation_name=table,
+    )
+    return {
+        "schema": schema, "table": table,
+        "columns": [
+            {"name": item.name, "data_type": item.data_type, "nullable": item.nullable}
+            for item in columns
+        ],
+    }
+
+
+@router.post("/{project_id}/generate-model", response_model=SaveResult)
+async def generate_model(
+    project_id: uuid.UUID,
+    body: GenerateModelRequest,
+    session: SessionDep,
+    ctx: CtxDep,
+):
+    """Write a staging model and its YAML from a description of a source table.
+
+    The output is ordinary dbt in the conventional places, so the next edit is
+    a normal edit -- this runs once and leaves nothing behind.
+    """
+    project = await project_service.get(session, ctx, project_id)
+    ctx.require(Module.TRANSFORMS, Action.EDIT)
+
+    revision, written = await generator.generate_staging_model(
+        session, ctx, project,
+        source_name=body.source_name,
+        schema_name=body.schema_name,
+        table_name=body.table_name,
+        model_name=body.model_name,
+        columns=[column.model_dump() for column in body.columns],
+        materialized=body.materialized,
+        description=body.description,
+        expected_revision_id=body.expected_revision_id,
+        store=object_store(),
+    )
+    parse = await _queue_parse(session, ctx, project)
+    await session.commit()
+    return _save_result(revision, written, parse)
 
 
 # ── repository inspection ─────────────────────────────────────────────────

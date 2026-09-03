@@ -35,6 +35,7 @@ import { Menu } from '@/components/ui/Menu';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { CommandBar, type ParsedCommand } from '@/components/transforms/CommandBar';
+import { GenerateModelDialog } from '@/components/transforms/GenerateModelDialog';
 import { DbtFileEditor } from '@/components/transforms/DbtFileEditor';
 import { EditorTabs, type OpenTab } from '@/components/transforms/EditorTabs';
 import { GitPanel } from '@/components/transforms/GitPanel';
@@ -89,6 +90,7 @@ export default function TransformWorkbenchPage() {
   const [lineageFocus, setLineageFocus] = React.useState<string | null>(null);
   const [lineageFull, setLineageFull] = React.useState(false);
   const [newFileOpen, setNewFileOpen] = React.useState(false);
+  const [generateOpen, setGenerateOpen] = React.useState(false);
   const [newFileParent, setNewFileParent] = React.useState('');
   const [conflict, setConflict] = React.useState<{ server: string; mine: string } | null>(null);
 
@@ -767,6 +769,7 @@ export default function TransformWorkbenchPage() {
                 }
                 onOpen={openFile}
                 onCreate={(parent) => { setNewFileParent(parent); setNewFileOpen(true); }}
+                onGenerate={canEdit ? () => setGenerateOpen(true) : undefined}
                 onRename={(path) => {
                   const next = window.prompt('Tên mới', path);
                   if (next && next !== path) moveFile.mutate({ from: path, to: next });
@@ -960,6 +963,27 @@ export default function TransformWorkbenchPage() {
           </div>
         )}
       </div>
+
+      {detail?.warehouse?.connection_id && (
+        <GenerateModelDialog
+          open={generateOpen}
+          onClose={() => setGenerateOpen(false)}
+          projectId={projectId}
+          connectionId={detail.warehouse.connection_id}
+          revisionId={revisionId}
+          onGenerated={({ savedPaths, parseId }) => {
+            if (parseId) setInvocationId(parseId);
+            invalidate(qk.transformFiles(workspaceId, projectId));
+            invalidate(qk.transformProblems(workspaceId, projectId));
+            invalidate(qk.transformResources(workspaceId, projectId));
+            // Open what was just written: the point of generating rather than
+            // hiding is that the result is an ordinary file you can now edit,
+            // and that is easier to believe when you are looking at it.
+            const model = savedPaths.find((path) => path.endsWith('.sql'));
+            if (model) void openFile(model);
+          }}
+        />
+      )}
 
       <NewFileDialog
         open={newFileOpen}

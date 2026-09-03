@@ -7,6 +7,7 @@
  */
 
 import type {
+  GenerateModelRequest, WarehouseColumns,
   Actor, ActorDetail, ActorTestResult, AlertRule, AppNotification, AuditEvent,
   BuilderAIChangeResult, BuilderAIPlan, BuilderAISession, BuilderAISource,
   BuilderDefinition, BuilderIconKey, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
@@ -494,6 +495,23 @@ export const transformApi = {
       `/transforms/connections/${connectionId}/warehouse${suffix ? `?${suffix}` : ''}`,
     );
   },
+
+  browseWarehouseColumns: (
+    connectionId: string,
+    options: { schema: string; table: string; catalog?: string },
+  ) => {
+    const query = new URLSearchParams({
+      schema: options.schema, table: options.table,
+    });
+    if (options.catalog) query.set('catalog', options.catalog);
+    return get<WarehouseColumns>(
+      `/transforms/connections/${connectionId}/warehouse/columns?${query}`,
+    );
+  },
+
+  /** Writes a staging model plus its source and model YAML as one revision. */
+  generateModel: (id: string, body: GenerateModelRequest) =>
+    post<SaveResult>(`/transforms/${id}/generate-model`, body),
 
   // environments
   environments: (id: string) =>
