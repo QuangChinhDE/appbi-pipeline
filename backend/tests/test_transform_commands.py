@@ -299,6 +299,50 @@ class OptionalRuntime(unittest.TestCase):
         self.assertTrue(Settings.model_fields["transform_runtime_available"].default)
 
 
+class ResourceOwnership(unittest.TestCase):
+    """The resource tree defaults to what the project itself owns.
+
+    A parsed manifest carries every macro dbt ships. For a bare project that is
+    477 rows against the 50 the project owns -- and none of the 477 can be
+    opened, because their path points inside the installed package rather than
+    the project's file set. Listing them by default buried the user's own
+    models under ten times as much noise they could not act on.
+    """
+
+    def test_the_query_filters_by_the_owning_package(self):
+        import inspect
+
+        from app.transforms import resources
+
+        signature = inspect.signature(resources.list_resources)
+        self.assertIn("own_package", signature.parameters)
+        self.assertIsNone(signature.parameters["own_package"].default)
+
+        source = inspect.getsource(resources.list_resources)
+        self.assertIn("own_package", source)
+
+    def test_the_endpoint_hides_other_packages_unless_asked(self):
+        import inspect
+
+        from app.transforms import api
+
+        signature = inspect.signature(api.list_resources)
+        self.assertIn("own_only", signature.parameters)
+        # Default on: the noisy case is the common one.
+        self.assertIs(signature.parameters["own_only"].default, True)
+
+    def test_asking_for_a_package_still_returns_that_package(self):
+        # `package=dbt` is an explicit request, so it must not be filtered away
+        # by the ownership default.
+        import inspect
+
+        from app.transforms import resources
+
+        source = inspect.getsource(resources.list_resources)
+        self.assertIn("elif own_package:", source,
+                      "an explicit package filter must win over own_package")
+
+
 class ErrorCategories(unittest.TestCase):
     """The categories invocations record must exist on the enum.
 

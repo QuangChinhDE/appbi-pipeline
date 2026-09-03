@@ -559,6 +559,8 @@ export const transformApi = {
   resources: (id: string, query?: {
     resource_type?: string[]; search?: string; tag?: string; package?: string;
     path?: string; materialized?: string; group?: string;
+    /** Defaults true server-side: hides resources installed packages own. */
+    own_only?: boolean;
     scope?: 'DRAFT' | 'RELEASE'; limit?: number; offset?: number;
   }) => get<ResourcePage>(`/transforms/${id}/resources`, query as Query),
   resourceFacets: (id: string, scope: 'DRAFT' | 'RELEASE' = 'DRAFT') =>

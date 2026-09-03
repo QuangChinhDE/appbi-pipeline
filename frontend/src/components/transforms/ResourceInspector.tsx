@@ -55,12 +55,21 @@ interface ResourceInspectorProps {
   onClose: () => void;
   onOpenFile: (path: string, line?: number) => void;
   onSelectResource: (uniqueId: string) => void;
+  /**
+   * The project's own dbt package name.
+   *
+   * A resource an installed package contributed lives inside that package, not
+   * in the project's file set, so its path cannot be opened -- it is shown as
+   * text with an explanation instead of a link that 404s.
+   */
+  ownPackage?: string | null;
   /** The Pipeline that loads this source, when AppBI loads it. */
   pipelineName?: string | null;
 }
 
 export function ResourceInspector({
   resource, loading, onClose, onOpenFile, onSelectResource, pipelineName,
+  ownPackage,
 }: ResourceInspectorProps) {
   const [tab, setTab] = React.useState<InspectorTab>('overview');
 
@@ -74,6 +83,11 @@ export function ResourceInspector({
     );
   }
   if (!resource) return null;
+
+  // Whether this project's files contain the resource at all.
+  const editable = !resource.package_name
+    || !ownPackage
+    || resource.package_name === ownPackage;
 
   const structured = Object.entries(resource.config)
     .filter(([key]) => STRUCTURED_KEYS.includes(key))
@@ -122,26 +136,20 @@ export function ResourceInspector({
             <Field label="Unique ID" mono>{resource.unique_id}</Field>
             {resource.path && (
               <Field label="Path">
-                <button
-                  type="button"
-                  onClick={() => onOpenFile(resource.path!)}
-                  className="flex items-start gap-1 text-left font-mono text-caption text-brand hover:underline"
-                >
-                  <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
-                  {resource.path}
-                </button>
+                <FilePath
+                  path={resource.path}
+                  editable={editable}
+                  onOpenFile={onOpenFile}
+                />
               </Field>
             )}
             {resource.patch_path && resource.patch_path !== resource.path && (
               <Field label="YAML">
-                <button
-                  type="button"
-                  onClick={() => onOpenFile(resource.patch_path!)}
-                  className="flex items-start gap-1 text-left font-mono text-caption text-brand hover:underline"
-                >
-                  <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
-                  {resource.patch_path}
-                </button>
+                <FilePath
+                  path={resource.patch_path}
+                  editable={editable}
+                  onOpenFile={onOpenFile}
+                />
               </Field>
             )}
             {resource.materialized && (
@@ -415,7 +423,7 @@ export function ResourceInspector({
                 </p>
               </div>
             )}
-            {resource.patch_path && (
+            {resource.patch_path && editable && (
               <Button
                 variant="secondary" size="sm"
                 onClick={() => onOpenFile(resource.patch_path!)}
@@ -463,6 +471,34 @@ function RelatedList({
     </ul>
   );
 }
+
+/** A path: a link when the project owns the file, plain text when it does not. */
+function FilePath({
+  path, editable, onOpenFile,
+}: { path: string; editable: boolean; onOpenFile: (path: string) => void }) {
+  if (!editable) {
+    return (
+      <span
+        className="flex items-start gap-1 font-mono text-caption text-text-tertiary"
+        title="Tệp này thuộc package đã cài, không nằm trong dự án nên không mở được."
+      >
+        <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
+        <span className="min-w-0 break-all">{path}</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenFile(path)}
+      className="flex items-start gap-1 text-left font-mono text-caption text-brand hover:underline"
+    >
+      <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
+      <span className="min-w-0 break-all">{path}</span>
+    </button>
+  );
+}
+
 
 function Field({
   label, children, mono,

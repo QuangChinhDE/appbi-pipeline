@@ -135,6 +135,9 @@ export default function TransformWorkbenchPage() {
     tag: filters.tag ?? undefined,
     package: filters.packageName ?? undefined,
     materialized: filters.materialized ?? undefined,
+    // Asking for a specific package means wanting that package's resources,
+    // so an explicit choice overrides the default of hiding them.
+    own_only: filters.packageName ? false : !filters.includePackages,
     limit: 500,
   }), [filters]);
 
@@ -823,7 +826,12 @@ export default function TransformWorkbenchPage() {
                 activeUniqueId={inspectorId ?? activeResource?.unique_id ?? null}
                 onSelect={(resource) => {
                   setInspectorId(resource.unique_id);
-                  if (resource.path) void openFile(resource.path);
+                  // A resource an installed package contributed has a path
+                  // inside that package, which is not in the project's file
+                  // set -- opening it 404s. The inspector still describes it.
+                  const own = !resource.package_name
+                    || resource.package_name === detail?.dbt_project_name;
+                  if (resource.path && own) void openFile(resource.path);
                 }}
                 loading={resources.isLoading}
                 truncated={(resources.data?.total ?? 0) > (resources.data?.items.length ?? 0)}
@@ -979,6 +987,7 @@ export default function TransformWorkbenchPage() {
               onClose={() => setInspectorId(null)}
               onOpenFile={(path, line) => void openFile(path, line)}
               onSelectResource={setInspectorId}
+              ownPackage={detail?.dbt_project_name ?? null}
             />
           </div>
         )}

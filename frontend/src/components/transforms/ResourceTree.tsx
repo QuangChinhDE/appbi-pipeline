@@ -14,8 +14,9 @@
 
 import * as React from 'react';
 import {
-  Boxes, ChevronDown, ChevronRight, CircleSlash, Database, FileCode, FlaskConical,
-  GitBranch, Layers, Package, Search, Sheet, Sparkles, TestTube, Workflow, X,
+  Boxes, ChevronDown, ChevronRight, CircleSlash, Database, Eye, EyeOff, FileCode,
+  FlaskConical, GitBranch, Layers, Package, Search, Sheet, Sparkles, TestTube,
+  Workflow, X,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/Badge';
@@ -70,10 +71,21 @@ export interface ResourceFilters {
   tag: string | null;
   packageName: string | null;
   materialized: string | null;
+  /**
+   * Show what installed packages contribute, not just this project.
+   *
+   * Off by default because a parsed manifest carries every macro dbt itself
+   * ships -- 477 rows against the 50 a bare project owns -- and none of them
+   * can be opened: their path points inside the installed package, which is
+   * not part of the project's file set, so the editor gets a 404. Someone
+   * debugging a package macro turns this on deliberately.
+   */
+  includePackages: boolean;
 }
 
 export const EMPTY_FILTERS: ResourceFilters = {
-  search: '', resourceTypes: [], tag: null, packageName: null, materialized: null,
+  search: '', resourceTypes: [], tag: null, packageName: null,
+  materialized: null, includePackages: false,
 };
 
 interface ResourceTreeProps {
@@ -302,6 +314,35 @@ export function ResourceTree({
           </p>
         )}
       </div>
+
+      {/* Mirrors the PROJECT tree's "show config files" row: the same promise,
+          that nothing is gone, only out of the way. Hidden while a package is
+          explicitly selected, because then the choice is already made. */}
+      {!filters.packageName && (
+        <button
+          type="button"
+          onClick={() => onFiltersChange({
+            ...filters, includePackages: !filters.includePackages,
+          })}
+          className={cn(
+            'flex w-full shrink-0 items-center justify-center gap-1.5 border-t px-2 py-1.5',
+            'border-[rgb(var(--border-line))] text-tiny text-text-tertiary',
+            'transition-colors hover:bg-surface-2 hover:text-text-secondary',
+          )}
+        >
+          {filters.includePackages ? (
+            <>
+              <EyeOff className="h-3 w-3" />
+              Chỉ hiện resource của dự án
+            </>
+          ) : (
+            <>
+              <Eye className="h-3 w-3" />
+              Hiện cả resource từ package dbt
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

@@ -52,6 +52,14 @@ async def list_resources(
     search: str | None = None,
     tag: str | None = None,
     package: str | None = None,
+    # When set, hide everything a package other than this one contributed.
+    #
+    # A parsed manifest carries every macro dbt itself ships: 477 of them for a
+    # bare project, against 50 resources the project actually owns. They are
+    # unreachable as well as noisy -- their `path` points inside the installed
+    # package, which is not part of the project's file set, so opening one is a
+    # 404. Somebody debugging a package macro can still ask for it by name.
+    own_package: str | None = None,
     path_prefix: str | None = None,
     materialized: str | None = None,
     group: str | None = None,
@@ -82,6 +90,8 @@ async def list_resources(
         base = base.where(TransformResourceIndex.tags_json.contains([tag]))
     if package:
         base = base.where(TransformResourceIndex.package_name == package)
+    elif own_package:
+        base = base.where(TransformResourceIndex.package_name == own_package)
     if path_prefix:
         base = base.where(
             TransformResourceIndex.original_file_path.like(f"{path_prefix}%")

@@ -956,6 +956,11 @@ async def list_resources(
     path: Annotated[str | None, Query()] = None,
     materialized: Annotated[str | None, Query()] = None,
     group: Annotated[str | None, Query()] = None,
+    # Default on: a parsed manifest lists every macro dbt itself ships, which
+    # is 477 rows against the 50 a bare project owns, and each one's path
+    # points inside the installed package rather than the project. Set false
+    # to see them -- the tree offers that as an explicit choice.
+    own_only: Annotated[bool, Query()] = True,
     scope: Annotated[str, Query(pattern="^(DRAFT|RELEASE)$")] = "DRAFT",
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -968,6 +973,7 @@ async def list_resources(
     page = await resource_service.list_resources(
         session, bundle.id,
         resource_types=resource_type, search=search, tag=tag, package=package,
+        own_package=project.dbt_project_name if own_only else None,
         path_prefix=path, materialized=materialized, group=group,
         limit=limit, offset=offset,
     )
