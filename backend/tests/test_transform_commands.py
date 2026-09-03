@@ -11,6 +11,7 @@ from __future__ import annotations
 import unittest
 
 from app.core.errors import ValidationError
+from app.transforms import invocations
 from app.transforms.runtime.commands import (
     COMMANDS, PRODUCTION_ALLOWED, SCHEDULABLE, build_argv, validate_command,
 )
@@ -173,6 +174,63 @@ class CommandClassification(unittest.TestCase):
     def test_production_allows_ordinary_work_but_not_arbitrary_macros(self):
         self.assertIn("build", PRODUCTION_ALLOWED)
         self.assertNotIn("run-operation", PRODUCTION_ALLOWED)
+
+
+class TargetPathFlag(unittest.TestCase):
+    """`dbt deps` and `dbt debug` reject `--target-path`.
+
+    dbt parses its flags before it does any work, so passing the flag to those
+    two makes the process exit non-zero on the option alone.  This shipped: a
+    new project's first `deps` failed with "No such option '--target-path'"
+    and the parse behind it never ran.  The directory still reaches them
+    through DBT_TARGET_PATH in the subprocess environment.
+    """
+
+    def test_deps_and_debug_do_not_get_the_flag(self):
+        for name in ("deps", "debug"):
+            self.assertNotIn("--target-path", argv_for(name), name)
+
+    def test_every_other_command_still_gets_it(self):
+        for name in COMMANDS:
+            if name in ("deps", "debug"):
+                continue
+            kwargs = {"macro": "m"} if name == "run-operation" else {}
+            argv = argv_for(name, **kwargs)
+            self.assertIn("--target-path", argv, name)
+            self.assertEqual(argv[argv.index("--target-path") + 1], "/w/target", name)
+
+    def test_the_spec_is_what_decides(self):
+        off = {n for n, spec in COMMANDS.items() if not spec.supports_target_path}
+        self.assertEqual(off, {"deps", "debug"})
+
+
+class ErrorCategories(unittest.TestCase):
+    """The categories invocations record must exist on the enum.
+
+    These are read at failure time, so a name that does not exist turns an
+    ordinary dbt failure into an AttributeError inside the error handler --
+    which is how a crashed run stayed RUNNING forever instead of going FAILED.
+    pyflakes cannot see an attribute that is missing from an Enum, so the
+    check is here.
+    """
+
+    def test_categories_used_by_invocations_are_real(self):
+        import ast
+        import pathlib
+
+        from app.core.errors import ErrorCategory
+
+        source = pathlib.Path(invocations.__file__).read_text(encoding="utf-8")
+        used = {
+            node.attr
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "ErrorCategory"
+        }
+        self.assertTrue(used, "expected invocations to categorise failures")
+        for name in sorted(used):
+            self.assertIn(name, ErrorCategory.__members__, f"ErrorCategory.{name}")
 
 
 if __name__ == "__main__":

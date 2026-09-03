@@ -421,12 +421,12 @@ def _category(
     cancelled: bool, timed_out: bool, error_code: str | None,
 ) -> ErrorCategory:
     if cancelled:
-        return ErrorCategory.USER_ACTION
+        return ErrorCategory.CANCELLED
     if timed_out:
-        return ErrorCategory.TRANSIENT
+        return ErrorCategory.TIMEOUT
     if error_code and "PERMISSION" in error_code:
         return ErrorCategory.PERMISSION
-    return ErrorCategory.USER_CONFIG
+    return ErrorCategory.CONFIGURATION
 
 
 def _remediation(invocation: TransformInvocation, error_code: str | None) -> str | None:
@@ -448,7 +448,7 @@ async def fail_start(
     invocation.status = RunStatus.FAILED_TO_START
     invocation.ended_at = utcnow()
     invocation.error_code = "TRANSFORM_START_FAILED"
-    invocation.error_category = ErrorCategory.SYSTEM
+    invocation.error_category = ErrorCategory.ENGINE
     invocation.error_summary = f"{type(exc).__name__}: {exc}"[:1000]
     await session.commit()
 
@@ -480,7 +480,7 @@ async def stale(session: AsyncSession) -> int:
             else RunStatus.TIMED_OUT
         row.ended_at = now
         row.error_code = "TRANSFORM_ABANDONED"
-        row.error_category = ErrorCategory.SYSTEM
+        row.error_category = ErrorCategory.ENGINE
         row.error_summary = (
             "This run was not picked up by a worker." if row.status == RunStatus.FAILED_TO_START
             else "This run stopped reporting and was abandoned."

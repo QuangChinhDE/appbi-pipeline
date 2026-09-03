@@ -40,6 +40,10 @@ class CommandSpec:
     privileged: bool = False
     #: Whether the invocation is expected to leave a run_results.json behind.
     produces_run_results: bool = True
+    #: `dbt deps` and `dbt debug` are the two subcommands that do not accept
+    #: `--target-path`; passing it makes dbt exit non-zero on the flag alone,
+    #: before it does any work.  Everything else takes it.
+    supports_target_path: bool = True
     label: str = ""
 
 
@@ -50,11 +54,13 @@ COMMANDS: dict[str, CommandSpec] = {
     ),
     "deps": CommandSpec(
         "deps", ("deps",), supports_select=False, supports_exclude=False,
-        produces_run_results=False, label="Install dependencies",
+        produces_run_results=False, supports_target_path=False,
+        label="Install dependencies",
     ),
     "debug": CommandSpec(
         "debug", ("debug",), supports_select=False, supports_exclude=False,
-        produces_run_results=False, label="Check connection",
+        produces_run_results=False, supports_target_path=False,
+        label="Check connection",
     ),
     "ls": CommandSpec(
         "ls", ("ls",), produces_run_results=False, label="List resources",
@@ -260,8 +266,9 @@ def build_argv(
         "--project-dir", project_dir,
         "--profiles-dir", profiles_dir,
         "--target", _target(target),
-        "--target-path", target_path,
     ]
+    if spec.supports_target_path:
+        argv += ["--target-path", target_path]
 
     if command.selector:
         argv += ["--select", command.selector]
