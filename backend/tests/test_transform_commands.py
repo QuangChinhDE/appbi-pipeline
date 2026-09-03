@@ -204,6 +204,46 @@ class TargetPathFlag(unittest.TestCase):
         self.assertEqual(off, {"deps", "debug"})
 
 
+class UnifiedRunsView(unittest.TestCase):
+    """`/runs` presents Transform invocations beside Pipeline runs.
+
+    The two share one `RunView` schema but not their column names, so the
+    presenter reads V2 attributes and writes V1-shaped schema fields. A field
+    renamed on the model shows up only when someone opens the Runs page --
+    `run.retry_of_run_id` (V1) against `retry_of_invocation_id` (V2) made the
+    whole endpoint 500 for every workspace with a Transform run in it.
+    """
+
+    def test_transform_run_view_reads_only_real_attributes(self):
+        import ast
+        import pathlib
+
+        from sqlalchemy import inspect as sa_inspect
+
+        from app.api.v1 import runs as runs_module
+        from app.transforms.models import TransformInvocation
+
+        mapper = sa_inspect(TransformInvocation).mapper
+        real = {c.key for c in mapper.column_attrs}
+        real |= {r.key for r in mapper.relationships}
+        real |= {a for a in dir(TransformInvocation) if not a.startswith("_")}
+
+        tree = ast.parse(pathlib.Path(runs_module.__file__).read_text(encoding="utf-8"))
+        checked = 0
+        for func in ast.walk(tree):
+            if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if func.name != "_transform_run_view":
+                continue
+            checked += 1
+            for node in ast.walk(func):
+                if (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "run"):
+                    self.assertIn(node.attr, real, f"run.{node.attr}")
+        self.assertEqual(checked, 1, "expected to find _transform_run_view")
+
+
 class ErrorCategories(unittest.TestCase):
     """The categories invocations record must exist on the enum.
 

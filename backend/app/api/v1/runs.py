@@ -103,7 +103,7 @@ def _transform_run_view(
             f"{run.command} {run.selector}" if run.selector else run.command
         ),
         status=run.status.value, trigger_type=run.trigger_type.value,
-        triggered_by=user_ref(user), retry_of_run_id=run.retry_of_run_id,
+        triggered_by=user_ref(user), retry_of_run_id=run.retry_of_invocation_id,
         queue_reason=run.queue_reason, started_at=run.started_at, ended_at=run.ended_at,
         created_at=run.created_at, duration_seconds=duration,
         models_built=run.nodes_succeeded, tests_passed=run.tests_passed,
