@@ -197,6 +197,20 @@ export default function TransformWorkbenchPage() {
     enabled: newFileOpen,
   });
 
+  // The most recent run for this project, so opening the page shows the last
+  // build's results rather than an empty panel.  Without this `invocationId`
+  // only ever gets set by an action taken in this page session, and a reload
+  // threw away everything the project had already done.
+  const lastInvocation = useQuery({
+    queryKey: qk.transformInvocations(workspaceId, projectId, { limit: 1 }),
+    queryFn: () => transformApi.invocations(projectId, { limit: 1 }),
+  });
+
+  React.useEffect(() => {
+    const latest = lastInvocation.data?.items?.[0]?.id;
+    if (latest) setInvocationId((current) => current ?? latest);
+  }, [lastInvocation.data]);
+
   // The run being watched. Polled only while it is still moving -- a finished
   // run is immutable, so continuing to poll it is pure waste.
   const invocation = useQuery({
