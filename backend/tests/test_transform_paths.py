@@ -204,5 +204,58 @@ class LocalStore(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.store.get(results[0]), b"racing")
 
 
+class ProjectNaming(unittest.TestCase):
+    """A Vietnamese project label has to survive becoming an identifier.
+
+    The label reaches three places a person then reads: `dbt_project.yml`, the
+    warehouse schema, and the exported archive's filename. Stripping accented
+    characters instead of folding them turned "Phân tích bán hàng" into
+    `ph_n_t_ch_b_n_h_ng` in all three.
+    """
+
+    def test_accents_fold_to_their_base_letter(self):
+        from app.transforms.projects import _default_project_name
+
+        self.assertEqual(_default_project_name("Phân tích bán hàng"),
+                         "phan_tich_ban_hang")
+        self.assertEqual(_default_project_name("Doanh thu Quý 4"),
+                         "doanh_thu_quy_4")
+
+    def test_d_with_stroke_is_mapped_by_hand(self):
+        # đ/Đ have no combining-accent decomposition under NFKD, so they would
+        # otherwise vanish entirely.
+        from app.transforms.projects import _default_project_name
+
+        self.assertEqual(_default_project_name("Đơn hàng"), "don_hang")
+
+    def test_a_leading_digit_is_prefixed_not_dropped(self):
+        from app.transforms.projects import _default_project_name
+
+        self.assertEqual(_default_project_name("2024 Revenue"), "p_2024_revenue")
+
+    def test_ascii_labels_are_unchanged(self):
+        from app.transforms.projects import _default_project_name
+
+        self.assertEqual(_default_project_name("Sales Analytics"),
+                         "sales_analytics")
+
+    def test_a_label_with_nothing_usable_still_yields_a_name(self):
+        from app.transforms.projects import _default_project_name
+
+        self.assertEqual(_default_project_name("!!!"), "appbi_project")
+
+    def test_schema_is_capped_and_shares_the_folding(self):
+        from app.transforms.projects import _default_schema
+
+        self.assertEqual(_default_schema("Phân tích bán hàng"),
+                         "phan_tich_ban_hang")
+        self.assertLessEqual(len(_default_schema("Phân tích " * 20)), 50)
+
+    def test_export_archive_name_folds_the_same_way(self):
+        from app.transforms.export import _slug
+
+        self.assertEqual(_slug("Phân tích bán hàng"), "phan_tich_ban_hang")
+
+
 if __name__ == "__main__":
     unittest.main()

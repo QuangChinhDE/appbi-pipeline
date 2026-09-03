@@ -196,18 +196,39 @@ async def create(
     return project
 
 
-def _default_project_name(label: str) -> str:
-    import re
+def _slugify(label: str) -> str:
+    """A project label reduced to something dbt and a warehouse will accept.
 
-    slug = re.sub(r"[^A-Za-z0-9]+", "_", label).strip("_").lower()
-    return slug or "appbi_project"
+    Accents are folded to their base letter before non-alphanumerics are
+    replaced, because this product's users name things in Vietnamese: dropping
+    the accented characters instead turns "Phân tích bán hàng" into
+    `ph_n_t_ch_b_n_h_ng`, which is what a person then sees as their schema
+    name and in `dbt_project.yml`.  `đ`/`Đ` decompose to nothing under NFKD, so
+    they are mapped by hand.
+
+    dbt requires the project name to be a valid identifier, so a leading digit
+    is prefixed rather than dropped -- "2024 Revenue" is `p_2024_revenue`, not
+    `_2024_revenue`.
+    """
+    import re
+    import unicodedata
+
+    folded = label.replace("đ", "d").replace("Đ", "D")
+    folded = unicodedata.normalize("NFKD", folded)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", folded).strip("_").lower()
+    slug = re.sub(r"_+", "_", slug)
+    if slug and slug[0].isdigit():
+        slug = f"p_{slug}"
+    return slug
+
+
+def _default_project_name(label: str) -> str:
+    return _slugify(label) or "appbi_project"
 
 
 def _default_schema(label: str) -> str:
-    import re
-
-    slug = re.sub(r"[^A-Za-z0-9]+", "_", label).strip("_").lower()
-    return (slug or "analytics")[:50]
+    return (_slugify(label) or "analytics")[:50]
 
 
 async def update(

@@ -71,10 +71,11 @@ async def export_zip(
 
 
 def _slug(value: str) -> str:
-    import re
+    # Shared with project naming so an exported archive is named the way the
+    # project is, accents folded rather than dropped.
+    from app.transforms.projects import _slugify
 
-    slug = re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower()
-    return slug or "dbt_project"
+    return _slugify(value) or "dbt_project"
 
 
 def safe_filename(value: str) -> str:
