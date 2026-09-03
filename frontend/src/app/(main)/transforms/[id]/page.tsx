@@ -558,14 +558,19 @@ export default function TransformWorkbenchPage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-small font-emphasis text-text-primary">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            className="truncate text-small font-emphasis text-text-primary"
+            title={detail.name}
+          >
             {detail.name}
           </span>
           {environment && (
-            <Badge variant={environment.protected ? 'warning' : 'subtle'} size="xs">
-              {environment.name}
-            </Badge>
+            <span className="shrink-0">
+              <Badge variant={environment.protected ? 'warning' : 'subtle'} size="xs">
+                {environment.name}
+              </Badge>
+            </span>
           )}
           {detail.git && (
             <span className="flex shrink-0 items-center gap-1 text-tiny text-text-tertiary">
@@ -574,10 +579,16 @@ export default function TransformWorkbenchPage() {
               {dirtyCount > 0 && <span className="text-brand">*</span>}
             </span>
           )}
-          <ParseBadge status={detail.parse_status} error={detail.parse_error} />
+          <span className="shrink-0">
+            <ParseBadge status={detail.parse_status} error={detail.parse_error} />
+          </span>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        {/* `ml-auto` alone pushed this group off the right edge once the title
+            was long: with nothing able to shrink, the row simply overflowed and
+            Build landed on top of Preview. The title yields space instead, and
+            a left margin keeps the two groups apart rather than touching. */}
+        <div className="flex shrink-0 items-center gap-2 pl-3 [&>*]:shrink-0">
           {canEdit && (
             <Button
               variant="ghost" size="xs"
@@ -703,7 +714,16 @@ export default function TransformWorkbenchPage() {
               },
             ]}
             trigger={
-              <span className="rounded-sm p-1.5 text-text-tertiary hover:bg-surface-2">
+              /* Same 28px box as the Buttons beside it, so the row sits on one
+                 baseline instead of one control floating half a pixel high. */
+              <span
+                className={cn(
+                  'inline-flex h-7 w-7 items-center justify-center rounded-md',
+                  'text-text-tertiary transition-colors',
+                  'hover:bg-surface-2 hover:text-text-primary',
+                )}
+                title="Tác vụ dự án"
+              >
                 <Settings2 className="h-4 w-4" />
               </span>
             }

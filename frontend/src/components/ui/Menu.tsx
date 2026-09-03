@@ -97,7 +97,10 @@ export function Menu({
   };
 
   return (
-    <div ref={root} className="relative inline-flex" onKeyDown={onKeyDown}>
+    // `shrink-0`: as a flex item this wrapper would otherwise be squeezed
+    // below its trigger's width, and the trigger -- which is not itself a flex
+    // item -- would keep its size and paint over the control to its left.
+    <div ref={root} className="relative inline-flex shrink-0" onKeyDown={onKeyDown}>
       <button
         ref={triggerRef}
         type="button"
@@ -106,11 +109,20 @@ export function Menu({
         aria-expanded={open}
         onClick={() => { setActive(0); setOpen((value) => !value); }}
         className={cn(
-          'inline-flex h-7 w-7 items-center justify-center rounded-md text-text-tertiary',
-          'transition-colors hover:bg-surface-2 hover:text-text-primary',
+          'inline-flex items-center justify-center rounded-md',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1',
           'focus-visible:outline-brand',
-          open && 'bg-surface-2 text-text-primary',
+          // A custom trigger brings its own size and colours. Forcing the
+          // icon-button box onto it clipped the button to 28px while the
+          // trigger stayed its natural width, so the trigger overflowed and
+          // painted over whatever sat to its left.
+          trigger
+            ? 'shrink-0'
+            : cn(
+                'h-7 w-7 text-text-tertiary transition-colors',
+                'hover:bg-surface-2 hover:text-text-primary',
+                open && 'bg-surface-2 text-text-primary',
+              ),
         )}
       >
         {trigger ?? <MoreVertical className="h-4 w-4" />}

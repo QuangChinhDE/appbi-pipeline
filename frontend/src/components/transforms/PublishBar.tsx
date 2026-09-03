@@ -86,35 +86,37 @@ export function PublishBar({
           </>
         ) : hasUnpublishedChanges ? (
           <>
-            <CircleDot className="h-3.5 w-3.5 text-warning" />
-            <span className="text-caption text-text-secondary">
+            <CircleDot className="h-3.5 w-3.5 shrink-0 text-warning" />
+            <span className="min-w-0 truncate text-caption text-text-secondary">
               Bản nháp có thay đổi chưa xuất bản
             </span>
           </>
         ) : activeRelease ? (
           <>
-            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-            <span className="text-caption text-text-secondary">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+            <span className="min-w-0 truncate text-caption text-text-secondary">
               Bản nháp trùng với bản {activeRelease.release_number} đang chạy
             </span>
           </>
         ) : (
           <>
-            <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-            <span className="text-caption text-text-secondary">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
+            <span className="min-w-0 truncate text-caption text-text-secondary">
               Chưa xuất bản lần nào — lịch chạy tự động chưa có gì để chạy
             </span>
           </>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Fixed width, and the status text truncates instead: `ml-auto` with
+            nothing shrinkable pushed this group off the right edge entirely. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 pl-3">
           {activeRelease && (
             <button
               type="button"
               onClick={() => onViewRelease?.(activeRelease)}
-              className="flex items-center gap-1 text-tiny text-text-tertiary hover:text-text-primary"
+              className="flex shrink-0 items-center gap-1 whitespace-nowrap text-tiny text-text-tertiary hover:text-text-primary"
             >
-              <GitCommitVertical className="h-3 w-3" />
+              <GitCommitVertical className="h-3 w-3 shrink-0" />
               Đang chạy: bản {activeRelease.release_number}
             </button>
           )}
