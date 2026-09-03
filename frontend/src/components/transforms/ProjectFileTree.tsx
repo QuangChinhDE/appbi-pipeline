@@ -11,8 +11,9 @@
 
 import * as React from 'react';
 import {
-  ChevronDown, ChevronRight, File, FileCode, FileJson, FileSpreadsheet,
-  FileText, FolderClosed, FolderOpen, MoreHorizontal, Plus, Search,
+  ChevronDown, ChevronRight, Eye, EyeOff, File, FileCode, FileJson,
+  FileSpreadsheet, FileText, FolderClosed, FolderOpen, MoreHorizontal,
+  Plus, Search, Wand2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
@@ -72,6 +73,50 @@ function filterTree(nodes: FileNode[], needle: string): FileNode[] {
   return walk(nodes);
 }
 
+/**
+ * Files a dbt project needs on disk but nobody edits by hand.
+ *
+ * `.gitkeep` exists only so Git tracks an empty directory; `.gitignore`,
+ * `packages.yml` and `README.md` are scaffolding a person opens once, if ever.
+ * Hiding them is a view filter and nothing more -- the files stay in the
+ * project, in Git, and in every export.
+ */
+const TREE_VIEW_KEY = 'appbi.transform.tree-view';
+
+const NOISE_FILES = new Set(['.gitkeep', '.gitignore', 'packages.yml', 'README.md']);
+
+/** True when the whole subtree is scaffolding: empty folders, markers, no real files. */
+function isNoise(node: FileNode): boolean {
+  if (node.type === 'file') return NOISE_FILES.has(node.name);
+  const children = node.children ?? [];
+  return children.length === 0 || children.every(isNoise);
+}
+
+/**
+ * The tree with scaffolding removed.
+ *
+ * A folder survives only if something inside it survives, so `macros/` holding
+ * one `.gitkeep` disappears while `macros/` holding a real macro stays.
+ */
+function simplifyTree(nodes: FileNode[]): FileNode[] {
+  return nodes.flatMap((node) => {
+    if (node.type === 'file') return NOISE_FILES.has(node.name) ? [] : [node];
+    const children = simplifyTree(node.children ?? []);
+    if (children.length === 0) return [];
+    return [{ ...node, children }];
+  });
+}
+
+/** How many nodes the simple view is hiding, for the toggle's label. */
+function countHidden(nodes: FileNode[]): number {
+  return nodes.reduce((total, node) => {
+    if (node.type === 'file') return total + (NOISE_FILES.has(node.name) ? 1 : 0);
+    const children = node.children ?? [];
+    if (isNoise(node)) return total + 1 + children.length;
+    return total + countHidden(children);
+  }, 0);
+}
+
 interface ProjectFileTreeProps {
   tree: FileNode[];
   activePath: string | null;
@@ -84,6 +129,8 @@ interface ProjectFileTreeProps {
   onRename: (path: string) => void;
   onDelete: (path: string) => void;
   onDuplicate: (path: string) => void;
+  /** Opens the generator. Absent when the viewer cannot edit. */
+  onGenerate?: () => void;
   canEdit: boolean;
 }
 
@@ -97,12 +144,36 @@ export function ProjectFileTree({
   onRename,
   onDelete,
   onDuplicate,
+  onGenerate,
   canEdit,
 }: ProjectFileTreeProps) {
   const [query, setQuery] = React.useState('');
   const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set());
+  // Simple by default: a first-time user should see their models, not five
+  // empty folders and a `.gitkeep`. The choice is remembered per browser --
+  // somebody who switched to the full tree meant it.
+  const [simple, setSimple] = React.useState(true);
 
-  const visible = React.useMemo(() => filterTree(tree, query), [tree, query]);
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(TREE_VIEW_KEY);
+      if (stored) setSimple(stored === 'simple');
+    } catch { /* private mode, or site data blocked */ }
+  }, []);
+
+  const chooseView = (next: boolean) => {
+    setSimple(next);
+    try {
+      window.localStorage.setItem(TREE_VIEW_KEY, next ? 'simple' : 'full');
+    } catch { /* not worth failing the click over */ }
+  };
+
+  const hidden = React.useMemo(() => countHidden(tree), [tree]);
+  const scoped = React.useMemo(
+    () => (simple ? simplifyTree(tree) : tree),
+    [tree, simple],
+  );
+  const visible = React.useMemo(() => filterTree(scoped, query), [scoped, query]);
 
   // A search result the user cannot see is not a result: while filtering,
   // every folder is treated as open regardless of what was collapsed before.
@@ -239,6 +310,17 @@ export function ProjectFileTree({
             )}
           />
         </div>
+        {canEdit && onGenerate && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onGenerate}
+            aria-label="Tạo model từ bảng"
+            title="Tạo model từ bảng trong kho dữ liệu"
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
         {canEdit && (
           <Button
             variant="ghost"
@@ -261,6 +343,32 @@ export function ProjectFileTree({
           renderNodes(visible, 0)
         )}
       </div>
+
+      {/* Only worth a row when there is actually something hidden, and never
+          while searching -- a filtered tree already explains itself. */}
+      {hidden > 0 && !query && (
+        <button
+          type="button"
+          onClick={() => chooseView(!simple)}
+          className={cn(
+            'flex w-full shrink-0 items-center justify-center gap-1.5 border-t px-2 py-1.5',
+            'border-[rgb(var(--border-line))] text-tiny text-text-tertiary',
+            'transition-colors hover:bg-surface-2 hover:text-text-secondary',
+          )}
+        >
+          {simple ? (
+            <>
+              <Eye className="h-3 w-3" />
+              Hiện {hidden} tệp cấu hình
+            </>
+          ) : (
+            <>
+              <EyeOff className="h-3 w-3" />
+              Ẩn tệp cấu hình
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }
