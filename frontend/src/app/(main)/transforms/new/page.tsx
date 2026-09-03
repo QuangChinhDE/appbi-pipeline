@@ -166,7 +166,11 @@ export default function NewTransformPage() {
         : Boolean(name.trim());
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col px-4 pt-5 sm:px-6">
+    // Not `h-full` with a `flex-1` body: that stretched the form to the full
+    // viewport and stranded the footer at the bottom of the screen, leaving a
+    // few hundred pixels of nothing between the last field and the buttons.
+    // The wizard is a short document -- it should be as tall as its content.
+    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 pt-5 sm:px-6 lg:px-8">
       <header className="mb-4 shrink-0">
         <Link
           href="/transforms"
@@ -204,28 +208,33 @@ export default function NewTransformPage() {
         </ol>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto pb-4">
+      <div className="pb-4">
         {step === 1 && (
           <div className="space-y-3">
-            {SOURCES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => { setSource(item.id); setInspection(null); }}
-                className={cn(
-                  'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
-                  source === item.id
-                    ? 'border-brand bg-brand/5'
-                    : 'border-[rgb(var(--border-line))] hover:bg-surface-2',
-                )}
-              >
-                <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
-                <div>
-                  <p className="text-small font-emphasis text-text-primary">{item.title}</p>
-                  <p className="mt-0.5 text-caption text-text-tertiary">{item.description}</p>
-                </div>
-              </button>
-            ))}
+            {/* Three mutually exclusive choices: side by side they are read as
+                alternatives at a glance, where a full-width stack made three
+                short labels each 1000px wide. */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {SOURCES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { setSource(item.id); setInspection(null); }}
+                  className={cn(
+                    'flex h-full w-full flex-col gap-2 rounded-lg border p-4 text-left transition-colors',
+                    source === item.id
+                      ? 'border-brand bg-brand/5'
+                      : 'border-[rgb(var(--border-line))] hover:bg-surface-2',
+                  )}
+                >
+                  <item.icon className="h-5 w-5 shrink-0 text-brand" />
+                  <div>
+                    <p className="text-small font-emphasis text-text-primary">{item.title}</p>
+                    <p className="mt-1 text-caption text-text-tertiary">{item.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
 
             {source === 'GIT' && (
               <div className="space-y-2.5 rounded-lg border border-[rgb(var(--border-line))] p-3">
@@ -339,7 +348,12 @@ export default function NewTransformPage() {
         )}
 
         {step === 3 && (
-          <div className="space-y-3">
+          /* Two columns on a desktop-width canvas: what the project is called
+             on the left, where it writes on the right. Stacked in one column
+             these five fields ran the height of the screen while two thirds of
+             the window stayed empty. */
+          <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+            <div className="space-y-3">
             <Field label="Tên dự án">
               <Input
                 value={name}
@@ -363,7 +377,20 @@ export default function NewTransformPage() {
               </Field>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            {source === 'NEW' && (
+              <Field
+                label="Schema dữ liệu nguồn"
+                hint="Nơi dữ liệu thô đang nằm, dùng cho source mẫu"
+              >
+                <Input
+                  value={sourceSchema} onChange={(event) => setSourceSchema(event.target.value)}
+                  placeholder="raw" className="font-mono"
+                />
+              </Field>
+            )}
+            </div>
+
+            <div className="space-y-3">
               <Field label="Schema khi phát triển" hint="Nơi bản nháp ghi kết quả">
                 <Input
                   value={devSchema} onChange={(event) => setDevSchema(event.target.value)}
@@ -376,20 +403,11 @@ export default function NewTransformPage() {
                   placeholder="analytics" className="font-mono"
                 />
               </Field>
+
             </div>
 
-            {source === 'NEW' && (
-              <Field
-                label="Schema dữ liệu nguồn"
-                hint="Nơi dữ liệu thô đang nằm, dùng cho source mẫu"
-              >
-                <Input
-                  value={sourceSchema} onChange={(event) => setSourceSchema(event.target.value)}
-                  placeholder="raw" className="font-mono"
-                />
-              </Field>
-            )}
-
+            {/* Options read as a group, so they span both columns. */}
+            <div className="space-y-3 md:col-span-2">
             <label className="flex items-start gap-2">
               <input
                 type="checkbox" checked={perUser}
@@ -419,11 +437,12 @@ export default function NewTransformPage() {
                 </span>
               </label>
             )}
+            </div>
           </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-t border-[rgb(var(--border-line))] py-3">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[rgb(var(--border-line))] py-3">
         <Button
           variant="ghost"
           onClick={() => (step === 1 ? router.push('/transforms') : setStep(step - 1))}

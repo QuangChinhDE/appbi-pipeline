@@ -51,7 +51,11 @@ export function ConnectionPicker({
         <p className="mb-1.5 text-caption font-emphasis text-text-primary">
           Kho dữ liệu
         </p>
-        <div className="flex flex-wrap gap-1.5">
+        {/* Cards, not pills: this is the step where somebody chooses which
+            warehouse their project runs on, and two small chips adrift in a
+            desktop-width row read as an afterthought. The adapter and dbt
+            versions were already in the response and never shown. */}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {systems.map((item) => (
             <button
               key={item.connector_key}
@@ -59,13 +63,22 @@ export function ConnectionPicker({
               disabled={disabled}
               onClick={() => { setSystem(item.connector_key); setCreating(false); }}
               className={cn(
-                'rounded-md border px-3 py-1.5 text-caption transition-colors',
+                'flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
+                'disabled:cursor-not-allowed disabled:opacity-50',
                 system === item.connector_key
-                  ? 'border-brand bg-brand/10 text-text-primary font-emphasis'
-                  : 'border-[rgb(var(--border-line))] text-text-secondary hover:bg-surface-2',
+                  ? 'border-brand bg-brand/5'
+                  : 'border-[rgb(var(--border-line))] hover:bg-surface-2',
               )}
             >
-              {item.label}
+              <span className="text-small font-emphasis text-text-primary">
+                {item.label}
+              </span>
+              {item.adapter && (
+                <span className="font-mono text-tiny text-text-tertiary">
+                  {item.adapter}
+                  {item.adapter_version ? ` ${item.adapter_version}` : ''}
+                </span>
+              )}
             </button>
           ))}
         </div>
