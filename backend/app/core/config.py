@@ -198,6 +198,14 @@ class Settings(BaseSettings):
     worker_max_parallel_syncs: int = 4
 
     # --- transformation engine -------------------------------------------
+    # Whether this deployment ships the Transform runtime at all.
+    #
+    # The image can be built with WITH_TRANSFORM=0, which leaves dbt out and
+    # saves about 560 MB -- worth it on a small VM for a module that deployment
+    # may not use. Set from the Dockerfile's build arg. When false the module's
+    # endpoints refuse politely and the UI hides the section, rather than
+    # letting somebody queue a run no worker can execute.
+    transform_runtime_available: bool = True
     # The API only queues work. A dedicated process reads these directories
     # and starts one isolated dbt subprocess per claimed run.
     transform_workspace_dir: str = "/transform/workspace"

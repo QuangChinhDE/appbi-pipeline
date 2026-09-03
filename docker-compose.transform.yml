@@ -1,0 +1,64 @@
+# The Transform module's worker.
+#
+# Kept out of the base file so a deployment that does not use Transform can
+# leave it out of COMPOSE_FILE and not run it at all:
+#
+#     COMPOSE_FILE=docker-compose.yml                          # no Transform
+#     COMPOSE_FILE=docker-compose.yml:docker-compose.transform.yml
+#
+# Pair it with WITH_TRANSFORM=0 to also build the API image without dbt, which
+# is where the real saving is -- dbt-core pulls in pandas, pyarrow, numpy and
+# the google-cloud stack, about 560 MB. This file only decides whether the
+# worker process runs; the build arg decides whether dbt is in the image.
+#
+# The transform_* volumes stay declared in the base file because the API mounts
+# them too: it serves file content and reads artifacts whether or not a worker
+# is running.
+#
+# YAML anchors do not cross files, so the environment here is spelled out
+# rather than merged from `x-backend-env`. It is the subset the worker actually
+# needs -- database, secrets, and the Transform runtime settings. It has no
+# engine, OAuth or Airbyte variables, because the worker runs dbt and nothing
+# else.
+
+services:
+  transform-worker:
+    build:
+      context: ./backend
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-}
+        WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
+    image: appbi-pipeline-backend
+    container_name: appbi-pipeline-transform-worker
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      SERVICE_NAME: transform-worker
+      DATABASE_URL: postgresql+asyncpg://appbi:${POSTGRES_PASSWORD:-appbi}@postgres:5432/appbi_integration
+      DATABASE_URL_SYNC: postgresql+psycopg://appbi:${POSTGRES_PASSWORD:-appbi}@postgres:5432/appbi_integration
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # --- Transform runtime ---
+      TRANSFORM_STORAGE_BACKEND: ${TRANSFORM_STORAGE_BACKEND:-local}
+      TRANSFORM_STORAGE_LOCAL_DIR: ${TRANSFORM_STORAGE_LOCAL_DIR:-/transform/objects}
+      TRANSFORM_STORAGE_S3_BUCKET: ${TRANSFORM_STORAGE_S3_BUCKET:-}
+      TRANSFORM_STORAGE_S3_REGION: ${TRANSFORM_STORAGE_S3_REGION:-us-east-1}
+      TRANSFORM_STORAGE_S3_ENDPOINT_URL: ${TRANSFORM_STORAGE_S3_ENDPOINT_URL:-}
+      TRANSFORM_STORAGE_S3_PREFIX: ${TRANSFORM_STORAGE_S3_PREFIX:-transform}
+      TRANSFORM_STORAGE_S3_ACCESS_KEY: ${TRANSFORM_STORAGE_S3_ACCESS_KEY:-}
+      TRANSFORM_STORAGE_S3_SECRET_KEY: ${TRANSFORM_STORAGE_S3_SECRET_KEY:-}
+      TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE: ${TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE:-false}
+      TRANSFORM_WORKSPACE_DIR: /transform/workspace
+      TRANSFORM_LOG_DIR: /transform/logs
+      TRANSFORM_TIMEOUT_SECONDS: ${TRANSFORM_TIMEOUT_SECONDS:-1800}
+    command: ["python", "-m", "app.transform_worker"]
+    volumes:
+      - transform_workspace:/transform/workspace
+      - transform_logs:/transform/logs
+      # The worker materialises a revision from here and writes artifacts back.
+      - transform_objects:/transform/objects
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [appbi]

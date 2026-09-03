@@ -147,6 +147,8 @@ services:
       args:
         BUILD_SHA: ${BUILD_SHA:-unknown}
         BUILD_TIME: ${BUILD_TIME:-}
+        # Whether dbt goes into the image. See WITH_TRANSFORM in .env.example.
+        WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-migrate
     environment: *backend-env
@@ -162,6 +164,8 @@ services:
       args:
         BUILD_SHA: ${BUILD_SHA:-unknown}
         BUILD_TIME: ${BUILD_TIME:-}
+        # Whether dbt goes into the image. See WITH_TRANSFORM in .env.example.
+        WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-api
     environment:
@@ -204,6 +208,8 @@ services:
       args:
         BUILD_SHA: ${BUILD_SHA:-unknown}
         BUILD_TIME: ${BUILD_TIME:-}
+        # Whether dbt goes into the image. See WITH_TRANSFORM in .env.example.
+        WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-worker
     environment:
@@ -219,27 +225,8 @@ services:
       migrate: {condition: service_completed_successfully}
     networks: [appbi]
 
-  transform-worker:
-    build:
-      context: ./backend
-      args:
-        BUILD_SHA: ${BUILD_SHA:-unknown}
-        BUILD_TIME: ${BUILD_TIME:-}
-    image: appbi-pipeline-backend
-    container_name: appbi-pipeline-transform-worker
-    environment:
-      <<: *backend-env
-      SERVICE_NAME: transform-worker
-    command: ["python", "-m", "app.transform_worker"]
-    volumes:
-      - transform_workspace:/transform/workspace
-      - transform_logs:/transform/logs
-      # The worker materialises a revision from here and writes artifacts back.
-      - transform_objects:/transform/objects
-    depends_on:
-      postgres: {condition: service_healthy}
-      migrate: {condition: service_completed_successfully}
-    networks: [appbi]
+  # `transform-worker` lives in docker-compose.transform.yml, so a deployment
+  # that does not use Transform simply leaves that file out of COMPOSE_FILE.
 
   frontend:
     build:

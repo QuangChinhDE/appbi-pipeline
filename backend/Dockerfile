@@ -30,8 +30,25 @@ RUN apt-get update \
 
 WORKDIR /srv
 
-COPY requirements.txt ./
-RUN pip install --default-timeout=120 --retries=10 -r requirements.txt
+# Whether this image can run dbt.  `1` (the default) installs the Transform
+# runtime; `0` leaves it out and saves roughly 560 MB -- dbt-core drags in
+# pandas, pyarrow, numpy and the google-cloud stack, two thirds of the
+# installed packages, for a module a small deployment may not use.
+#
+# Nothing in `app/` imports dbt: the runtime executes the `dbt` binary as a
+# subprocess. So a slim image runs every other part of AppBI unchanged, and the
+# Transform endpoints answer with a clear error rather than crashing.
+ARG WITH_TRANSFORM=1
+
+COPY requirements.txt requirements-transform.txt ./
+RUN pip install --default-timeout=120 --retries=10 -r requirements.txt \
+ && if [ "$WITH_TRANSFORM" = "1" ]; then \
+      pip install --default-timeout=120 --retries=10 -r requirements-transform.txt; \
+    fi
+
+# Read at runtime by the API, so a slim image can say so instead of failing
+# when somebody opens the Transform screen.
+ENV TRANSFORM_RUNTIME_AVAILABLE=${WITH_TRANSFORM}
 
 # The test suite is deliberately not in the runtime image. It used to be, and
 # an image that carries its own tests ships code nobody reviewed as product

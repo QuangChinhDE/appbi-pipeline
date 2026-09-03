@@ -244,6 +244,61 @@ class UnifiedRunsView(unittest.TestCase):
         self.assertEqual(checked, 1, "expected to find _transform_run_view")
 
 
+class OptionalRuntime(unittest.TestCase):
+    """An image can be built without dbt; the module must say so, not crash.
+
+    `WITH_TRANSFORM=0` leaves out dbt-core and the pandas/pyarrow/google-cloud
+    stack it drags in -- about a gigabyte, for a module a small deployment may
+    not use. Nothing in `app/` imports dbt (the runtime executes the binary as
+    a subprocess), so the rest of AppBI runs unchanged. What must not happen is
+    a queued run no worker can ever claim: it would sit at QUEUED until the
+    stale sweep collected it, having told the user nothing.
+    """
+
+    def test_nothing_in_app_imports_dbt(self):
+        # The moment something does, WITH_TRANSFORM=0 stops booting at all.
+        import ast
+        import pathlib
+
+        import app
+
+        root = pathlib.Path(app.__file__).parent
+        offenders = []
+        for path in root.rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    names = [node.module or ""]
+                else:
+                    continue
+                for name in names:
+                    if name == "dbt" or name.startswith("dbt."):
+                        offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+        self.assertEqual(offenders, [], "app/ must reach dbt by subprocess only")
+
+    def test_queueing_is_refused_when_the_runtime_is_absent(self):
+        import asyncio
+        from unittest import mock
+
+        from app.core.config import settings
+        from app.core.errors import ValidationError
+        from app.transforms import invocations
+
+        with mock.patch.object(settings, "transform_runtime_available", False):
+            with self.assertRaises(ValidationError) as caught:
+                asyncio.run(invocations.enqueue(
+                    None, None, None, command="build",
+                    environment=None, revision=None,
+                ))
+        self.assertEqual(caught.exception.code, "TRANSFORM_RUNTIME_UNAVAILABLE")
+
+    def test_the_default_build_still_ships_the_runtime(self):
+        from app.core.config import Settings
+
+        self.assertTrue(Settings.model_fields["transform_runtime_available"].default)
+
+
 class ErrorCategories(unittest.TestCase):
     """The categories invocations record must exist on the enum.
 

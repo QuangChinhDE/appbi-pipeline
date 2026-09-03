@@ -1,0 +1,18 @@
+# The Transform module's runtime, installed only when the image is built with
+# WITH_TRANSFORM=1.
+#
+# Split out because dbt is expensive and optional. dbt-core drags in pandas,
+# pyarrow, numpy and the google-cloud client stack: 564 MB of a 835 MB
+# site-packages, two thirds of it, for a module a deployment may not use. On a
+# 4 GB VM that is worth being able to leave out.
+#
+# Nothing in `app/` imports dbt -- the runtime shells out to the `dbt` binary
+# (see transforms/runtime/commands.py) -- so an image built without this file
+# runs the rest of AppBI unchanged. The Transform API answers with a clear
+# error instead of an ImportError.
+#
+# Versions are certified as a set in resources/transform_engine_lock.json;
+# never replace these with `latest`.
+dbt-core==1.12.3
+dbt-postgres==1.11.0
+dbt-bigquery==1.12.0

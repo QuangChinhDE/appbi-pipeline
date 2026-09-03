@@ -90,8 +90,17 @@ async def enqueue(
 
     The command is validated into a :class:`DbtCommand` here rather than in the
     worker, so a request that could never run is rejected while somebody is
-    still looking at the screen.
+    still looking at the screen.  An image built without the Transform runtime
+    is the same case: no worker can ever claim the row, so queueing it would
+    leave a run that sits at QUEUED until the stale sweep collects it.
     """
+    if not settings.transform_runtime_available:
+        raise ValidationError(
+            "Bản cài đặt này không kèm Transform. Dựng lại image với "
+            "WITH_TRANSFORM=1 để dùng tính năng này.",
+            code="TRANSFORM_RUNTIME_UNAVAILABLE",
+        )
+
     validated = validate_command(
         command,
         selector=selector,
