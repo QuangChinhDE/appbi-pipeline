@@ -91,14 +91,18 @@ export function ResourceInspector({
 
   return (
     <Drawer onClose={onClose} title={resource.name} subtitle={resource.resource_type}>
-      <div className="flex shrink-0 gap-0.5 border-b border-[rgb(var(--border-line))] px-2">
+      <div
+        className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-[rgb(var(--border-line))] px-2
+                   [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
             className={cn(
-              'flex items-center gap-1 border-b-2 px-2 py-1.5 text-caption transition-colors',
+              'flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 px-2 py-1.5',
+              'text-caption transition-colors',
               tab === item.id
                 ? 'border-brand text-text-primary font-emphasis'
                 : 'border-transparent text-text-tertiary hover:text-text-secondary',
@@ -121,9 +125,9 @@ export function ResourceInspector({
                 <button
                   type="button"
                   onClick={() => onOpenFile(resource.path!)}
-                  className="flex items-center gap-1 font-mono text-caption text-brand hover:underline"
+                  className="flex items-start gap-1 text-left font-mono text-caption text-brand hover:underline"
                 >
-                  <FileCode className="h-3 w-3" />
+                  <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
                   {resource.path}
                 </button>
               </Field>
@@ -133,9 +137,9 @@ export function ResourceInspector({
                 <button
                   type="button"
                   onClick={() => onOpenFile(resource.patch_path!)}
-                  className="flex items-center gap-1 font-mono text-caption text-brand hover:underline"
+                  className="flex items-start gap-1 text-left font-mono text-caption text-brand hover:underline"
                 >
-                  <FileCode className="h-3 w-3" />
+                  <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
                   {resource.patch_path}
                 </button>
               </Field>
@@ -398,11 +402,18 @@ export function ResourceInspector({
                 {resource.description}
               </p>
             ) : (
-              <p className="flex items-start gap-1.5 text-caption text-text-tertiary">
+              /* A flex container makes every text node and <code> its own
+                 flex item, so the sentence wraps at each of them and breaks
+                 apart mid-phrase in a narrow panel. The icon sits beside one
+                 text block instead, leaving the prose to wrap as prose. */
+              <div className="flex items-start gap-1.5 text-caption text-text-tertiary">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Chưa có mô tả. Thêm <code className="font-mono">description</code> vào
-                tệp YAML của resource này.
-              </p>
+                <p className="min-w-0">
+                  Chưa có mô tả. Thêm{' '}
+                  <code className="font-mono text-text-secondary">description</code>{' '}
+                  vào tệp YAML của resource này.
+                </p>
+              </div>
             )}
             {resource.patch_path && (
               <Button
@@ -496,7 +507,9 @@ function Drawer({
     >
       <div className="flex shrink-0 items-start gap-2 border-b border-[rgb(var(--border-line))] px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-small font-emphasis text-text-primary">{title}</p>
+          <p className="truncate text-small font-emphasis text-text-primary" title={title}>
+            {title}
+          </p>
           {subtitle && <p className="text-tiny text-text-tertiary">{subtitle}</p>}
         </div>
         <Button variant="ghost" size="xs" onClick={onClose} aria-label="Đóng">
