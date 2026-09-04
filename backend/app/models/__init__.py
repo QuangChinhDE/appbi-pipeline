@@ -7,7 +7,9 @@ from app.models.builder import (
 )
 from app.models.engine import ConnectorDefinition, EngineInstance, EngineMapping
 from app.models.enums import *  # noqa: F401,F403
-from app.models.identity import Membership, User, Workspace
+from app.models.identity import (
+    Membership, Organization, OrganizationMembership, User, Workspace,
+)
 from app.models.integration import (
     Destination, Pipeline, PipelineStream, PipelineStreamStat, SchemaSnapshot, Source,
 )
@@ -32,7 +34,9 @@ __all__ = [
     "BuilderTestRun", "BuilderTestSession", "ConnectorDefinition", "Destination", "EngineInstance",
     "EngineMapping", "Membership", "Notification", "Operation", "Pipeline", "PipelineRun",
     "PipelineStream", "PipelineStreamStat", "RunAttempt", "SchemaSnapshot", "SecretRecord",
-    "Source", "User", "Workspace", "register_transform_tables",
+    "Source", "User", "Workspace",
+    "Organization",
+    "OrganizationMembership", "register_transform_tables",
 ]
 
 

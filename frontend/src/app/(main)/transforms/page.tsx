@@ -15,7 +15,7 @@ import {
   ChevronRight, CircleDot, FolderGit2, GitBranch, Package, Plus,
 } from 'lucide-react';
 
-import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
+import { EmptyState, ErrorState, TableSkeleton, isPermissionDenied } from '@/components/ui/Feedback';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
@@ -103,8 +103,11 @@ export default function TransformsPage() {
         <TableSkeleton rows={5} columns={6} />
       ) : error ? (
         <ErrorState
-          title="Không tải được danh sách"
+          title={isPermissionDenied(error)
+            ? 'Bạn không có quyền xem mục này'
+            : 'Không tải được danh sách'}
           message={(error as Error).message}
+          error={error}
           onRetry={() => refetch()}
         />
       ) : projects.length === 0 ? (

@@ -315,7 +315,7 @@ async def test_payload(
     """Test an unsaved form -- nothing is persisted, nothing is written to the
     engine, and the credentials never leave this call. On success we hand back a
     signed token so the follow-up save does not have to pay for the check twice."""
-    ctx.require(kind.module, Action.OPERATE)
+    ctx.require(kind.module, Action.MANAGE_CREDENTIALS)
     connector = await catalog.require_usable(session, connector_key, kind.connector_type)
     merged = catalog.apply_spec_defaults(
         connector.spec_schema, catalog.merge_configuration(configuration, credentials)
@@ -334,6 +334,7 @@ async def create(
 ) -> Any:
     """Create saga (section 25.1): secret -> engine -> product row -> audit."""
     ctx.require(kind.module, Action.CREATE)
+    ctx.require(kind.module, Action.MANAGE_CREDENTIALS)
     connector = await catalog.require_usable(session, payload.connector_key, kind.connector_type)
 
     clash = await session.scalar(
@@ -459,6 +460,8 @@ async def create(
 async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
                  actor_id: uuid.UUID, payload) -> Any:
     ctx.require(kind.module, Action.EDIT)
+    if getattr(payload, "credentials", None):
+        ctx.require(kind.module, Action.MANAGE_CREDENTIALS)
     actor = await get(session, ctx, kind, actor_id)
     if payload.version is not None and payload.version != actor.version:
         raise ResourceModifiedError()
@@ -764,8 +767,9 @@ def available_actions(ctx: RequestContext, kind: ActorKind, actor) -> list[str]:
         actions.append("TEST")
     if ctx.can(kind.module, Action.EDIT):
         actions.append("EDIT")
-        actions.append("UPDATE_CREDENTIALS")
         actions.append("DISABLE" if actor.status is ResourceStatus.ACTIVE else "ENABLE")
+    if ctx.can(kind.module, Action.MANAGE_CREDENTIALS):
+        actions.append("UPDATE_CREDENTIALS")
     if ctx.can(kind.module, Action.DELETE):
         actions.append("DELETE")
     if kind.side == "SOURCE" and ctx.can(Module.SOURCES, Action.OPERATE):

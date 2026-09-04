@@ -114,7 +114,7 @@ async def enqueue(
     )
 
     if enforce_permission:
-        _authorise(ctx, environment, validated)
+        _authorise(ctx, environment, validated, full_refresh=full_refresh)
 
     if environment.protected and validated.command not in PRODUCTION_ALLOWED:
         raise ValidationError(
@@ -200,6 +200,7 @@ async def enqueue(
 
 def _authorise(
     ctx: RequestContext, environment: TransformEnvironment, command: DbtCommand,
+    *, full_refresh: bool = False,
 ) -> None:
     """Which permission this command needs.
 
@@ -209,6 +210,10 @@ def _authorise(
     command -- one that can execute arbitrary maintenance SQL -- needs OPERATE
     wherever it runs.
     """
+    if full_refresh and command.writes:
+        # Rebuilds every incremental model from scratch, discarding the
+        # materialised history. Same class of action as rewinding a cursor.
+        ctx.require(Module.TRANSFORMS, Action.RESET)
     if command.privileged:
         ctx.require(Module.TRANSFORMS, Action.OPERATE)
         return

@@ -16,7 +16,7 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Toggle } from '@/components/ui/Input';
-import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
+import { EmptyState, ErrorState, TableSkeleton, isPermissionDenied } from '@/components/ui/Feedback';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card, ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
 
@@ -106,8 +106,10 @@ export default function AlertsPage() {
 
       {tab === 'notifications' && (
         notifications.error ? (
-          <ErrorState title={t('common.errorTitle')}
+          <ErrorState title={isPermissionDenied(notifications.error)
+                        ? t('common.noAccessTitle') : t('common.errorTitle')}
                       message={(notifications.error as Error).message}
+                      error={notifications.error}
                       onRetry={() => notifications.refetch()} />
         ) : notifications.isLoading ? (
           <TableSkeleton rows={5} columns={4} />

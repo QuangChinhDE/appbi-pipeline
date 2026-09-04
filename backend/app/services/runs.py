@@ -133,7 +133,7 @@ async def fetch_logs(
     The engine job handle stays inside the service layer: the route asks for
     "logs for this run", never for "logs for this engine job".
     """
-    ctx.require(Module.MONITORING, Action.VIEW)
+    ctx.require(Module.MONITORING, Action.VIEW_DATA)
     run = await get(session, ctx, run_id)
     if not run.engine_job_ref:
         return [], None, False, 0

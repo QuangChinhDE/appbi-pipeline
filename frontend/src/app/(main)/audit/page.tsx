@@ -12,7 +12,7 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
-import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
+import { EmptyState, ErrorState, TableSkeleton, isPermissionDenied } from '@/components/ui/Feedback';
 import { PageListLayout } from '@/components/layout/PageLayout';
 
 const RESOURCE_TYPES = ['SOURCE', 'DESTINATION', 'PIPELINE', 'RUN', 'MEMBER',
@@ -71,7 +71,9 @@ export default function AuditPage() {
       }
     >
       {error ? (
-        <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
+        <ErrorState title={isPermissionDenied(error)
+                      ? t('common.noAccessTitle') : t('common.errorTitle')}
+                    message={(error as Error).message} error={error}
                     onRetry={() => refetch()} />
       ) : isLoading ? (
         <TableSkeleton rows={8} columns={5} />

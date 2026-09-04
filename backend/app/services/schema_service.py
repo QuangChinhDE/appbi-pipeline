@@ -395,6 +395,10 @@ async def approve(
     from app.models.enums import PipelineStatus
 
     ctx.require(Module.PIPELINES, Action.EDIT)
+    if drop_removed:
+        # Dropping streams stops delivering columns downstream models read, and
+        # the rows already in the warehouse stay behind as a partial history.
+        ctx.require(Module.PIPELINES, Action.RESET)
     before_hash = None
     if pipeline.active_schema_snapshot_id:
         previous = await session.get(SchemaSnapshot, pipeline.active_schema_snapshot_id)

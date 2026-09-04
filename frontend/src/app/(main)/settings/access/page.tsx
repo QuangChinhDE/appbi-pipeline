@@ -8,7 +8,7 @@ import { workspaceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { formatDateTime } from '@/lib/format';
 import { useCurrentUser, useWorkspaceId } from '@/hooks/use-current-user';
-import { usePermissions } from '@/hooks/use-permissions';
+import { summarisePermissions, usePermissions } from '@/hooks/use-permissions';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
@@ -19,7 +19,12 @@ import { ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { Card, PageListLayout } from '@/components/layout/PageLayout';
 import { SettingsTabs } from '@/components/layout/SettingsTabs';
 
-const ROLE_IDS = ['OWNER', 'DATA_ADMIN', 'OPERATOR', 'ANALYST', 'AUDITOR'];
+// Order runs from most to least authority so the picker reads as a ladder.
+// PLATFORM_ADMIN is missing on purpose: it is an account property rather than a
+// membership, so offering it here would be a control that silently does nothing.
+const ROLE_IDS = [
+  'OWNER', 'DATA_ADMIN', 'CONNECTOR_DEV', 'OPERATOR', 'ANALYST', 'AUDITOR',
+];
 
 export default function AccessSettingsPage() {
   const { t, tf, locale } = useI18n();
@@ -37,9 +42,16 @@ export default function AccessSettingsPage() {
     email: '', full_name: '', role: 'ANALYST', password: '',
   });
 
+  // OPERATOR and ANALYST hold no `members` permission at all, so this request
+  // can only ever 403 for them. Firing it anyway put a red "could not load"
+  // banner over a page that was working, with a Retry button that could never
+  // succeed. The rest of the page -- what your own role may do -- is exactly
+  // what those two came here to read.
+  const canViewMembers = can('members', 'view');
   const members = useQuery({
     queryKey: qk.members(workspaceId),
     queryFn: workspaceApi.members,
+    enabled: canViewMembers,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
@@ -84,7 +96,7 @@ export default function AccessSettingsPage() {
       <SettingsTabs active="access" />
 
       <div className="space-y-4">
-        {members.error ? (
+        {!canViewMembers ? null : members.error ? (
           <ErrorState title={t('common.errorTitle')} message={(members.error as Error).message}
                       onRetry={() => members.refetch()} />
         ) : members.isLoading ? (
@@ -167,27 +179,29 @@ export default function AccessSettingsPage() {
           title={t('settings.currentPermissions')}
           description={t('settings.currentPermissionsHint', { role: me?.role ?? '—' })}
         >
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {Object.entries(permissions ?? {}).map(([module, actions]) => (
-              <div key={module}
-                   className="rounded-md border border-[rgb(var(--border-line))] px-3 py-2">
-                <p className="text-caption font-emphasis text-text-primary">
-                  {tf([`module.${module}`], module)}
-                </p>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {actions.length === 0 ? (
-                    <span className="text-tiny text-text-quaternary">
-                      {t('settings.noPermission')}
-                    </span>
-                  ) : (
-                    actions.map((action) => (
-                      <Badge key={action} variant="subtle" size="xs" pill={false}>{action}</Badge>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ul className="divide-y divide-[rgb(var(--border-line))]">
+            {Object.entries(permissions ?? {}).map(([module, actions]) => {
+              const { level, flags } = summarisePermissions(actions);
+              return (
+                <li key={module}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0">
+                  <span className="flex-1 basis-32 text-caption font-emphasis text-text-primary">
+                    {tf([`module.${module}`], module)}
+                  </span>
+                  <span className={level === 'none'
+                    ? 'text-caption text-text-quaternary'
+                    : 'text-caption text-text-tertiary'}>
+                    {t(`perm.level.${level}`)}
+                  </span>
+                  {flags.map((flag) => (
+                    <Badge key={flag} variant="subtle" size="xs">
+                      {t(`perm.flag.${flag}`)}
+                    </Badge>
+                  ))}
+                </li>
+              );
+            })}
+          </ul>
         </Card>
 
         <Card title={t('settings.roleDescriptions')}>

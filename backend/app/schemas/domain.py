@@ -44,6 +44,53 @@ class WorkspaceSummary(ORMModel):
     role: str | None = None
     timezone: str = "Asia/Bangkok"
     status: str = "ACTIVE"
+    #: True when the reach came from administering the organisation rather than
+    #: from a membership row. The UI says so instead of implying somebody was
+    #: added to this workspace by hand.
+    via_organization: bool = False
+
+
+class OrganizationSummary(ORMModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    #: The caller's role in it; None for a platform admin who administers the
+    #: deployment without belonging to this organisation.
+    role: str | None = None
+    status: str = "ACTIVE"
+    workspace_count: int | None = None
+
+
+class OrganizationUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class OrgMemberInvite(_EmailMixin, BaseModel):
+    email: str = Field(max_length=255)
+    full_name: str = Field(min_length=1, max_length=255)
+    # Same bound as MemberInvite; the route runs `password_problems()`, which
+    # is the policy that actually decides.
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=200)
+    role: str = "ORG_MEMBER"
+
+
+class OrgMemberRoleUpdate(BaseModel):
+    role: str
+
+
+class OrgMemberView(ORMModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    email: str
+    full_name: str
+    role: str
+    created_at: datetime
+
+
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    timezone: str = "Asia/Bangkok"
 
 
 class ChangePasswordRequest(BaseModel):
@@ -61,6 +108,12 @@ class CurrentUser(BaseModel):
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
     role: str | None = None
     permissions: dict[str, list[str]] = Field(default_factory=dict)
+    #: The organisation the active workspace belongs to.
+    organization: OrganizationSummary | None = None
+    #: Kept beside `permissions` rather than merged into it: organisation
+    #: authority answers a different question from workspace authority, and
+    #: merging the two hid which one a screen was actually checking.
+    organization_permissions: list[str] = Field(default_factory=list)
     # True for an account created from the bootstrap one-time secret. The FE
     # sends the user straight to the change-password screen; the API refuses
     # everything else regardless of what the FE does.

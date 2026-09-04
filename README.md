@@ -133,10 +133,10 @@ hơn nhiều vì Docker dùng lại cache.
 Xong thì mở **http://localhost:8080** và đăng nhập:
 
 ```
-admin@appbi.local  /  Admin@12345
+admin@appbi.local  /  Admin@123456
 ```
 
-> Mật khẩu mặc định là `Admin@12345`. **Đổi nó trước khi dùng cho việc thật** —
+> Mật khẩu mặc định là `Admin@123456`. **Đổi nó trước khi dùng cho việc thật** —
 > đặt `SEED_ADMIN_PASSWORD` trong `.env` rồi chạy `./run.sh --clean`, hoặc đổi
 > trong giao diện sau khi đăng nhập.
 
@@ -266,7 +266,7 @@ Cần Transform thì bật lại sau.
 
 Mật khẩu nằm trong `.env`:
 
-Mặc định là `Admin@12345` cho tài khoản `admin@appbi.local`. Nếu đã đổi bằng
+Mặc định là `Admin@123456` cho tài khoản `admin@appbi.local`. Nếu đã đổi bằng
 `SEED_ADMIN_PASSWORD`:
 
 ```bash
@@ -274,7 +274,7 @@ grep SEED_ADMIN_PASSWORD .env
 ```
 
 Ba tài khoản demo còn lại — `dataadmin@`, `operator@`, `analyst@` — luôn dùng
-`Admin@12345` và **không** đổi theo `SEED_ADMIN_PASSWORD`. Trước khi dùng thật,
+`Admin@123456` và **không** đổi theo `SEED_ADMIN_PASSWORD`. Trước khi dùng thật,
 hãy xoá chúng hoặc đổi mật khẩu trong giao diện.
 </details>
 

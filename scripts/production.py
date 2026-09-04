@@ -453,7 +453,7 @@ def demo_env_file(config: dict) -> Path:
     # and never reaches this code.
     if config.get("profile") == "single-host-demo":
         seeded = str((config.get("operator") or {}).get("seed_password")
-                     or "Admin@12345")
+                     or "Admin@123456")
         lines.append("")
         lines.append("# Written by scripts/production.py for the demo profile.")
         lines.append(f"APPBI_DEMO_PASSWORD={seeded}")

@@ -7,6 +7,12 @@ export const qk = {
   workspace: (ws: string) => ['workspace', ws] as const,
   settings: (ws: string) => ['workspace', ws, 'settings'] as const,
   members: (ws: string) => ['workspace', ws, 'members'] as const,
+  // Organisation data sits above the workspace, but *which* organisation
+  // depends on the workspace in use -- so it stays under the workspace key and
+  // a switch evicts it like everything else.
+  organization: (ws: string) => ['workspace', ws, 'organization'] as const,
+  organizationWorkspaces: (ws: string) => ['workspace', ws, 'organization', 'workspaces'] as const,
+  organizationMembers: (ws: string) => ['workspace', ws, 'organization', 'members'] as const,
   connectors: (ws: string, filters?: unknown) => ['workspace', ws, 'connectors', filters] as const,
   connector: (ws: string, key: string) => ['workspace', ws, 'connector', key] as const,
   sources: (ws: string, filters?: unknown) => ['workspace', ws, 'sources', filters] as const,

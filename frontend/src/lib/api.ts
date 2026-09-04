@@ -13,7 +13,8 @@ import type {
   BuilderDefinition, BuilderIconKey, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
   ConnectorDetail, CurrentUser, EngineStatus, Member, MonitoringResponse, Overview, Paginated,
   ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
-  SchemaSnapshot, ScheduleConfig, WorkspaceSettings,
+  SchemaSnapshot, ScheduleConfig, WorkspaceSettings, WorkspaceSummary,
+  OrganizationSummary, OrgMember,
   // Transform V2: a project of dbt files, its artifacts, and its Git binding.
   CompiledCode, Completions, DocEntry, FileContent, FileTemplate, FileTree,
   GitBranch, GitCommitResult, GitDiff, GitPullResult, GitStatus,
@@ -165,6 +166,22 @@ export const workspaceApi = {
   updateRole: (memberId: string, role: string) =>
     patch<Member>(`/workspace/members/${memberId}`, { role }),
   removeMember: (memberId: string) => del<void>(`/workspace/members/${memberId}`),
+};
+
+// ── organisation: the tenant that owns workspaces ──────────────────────────
+export const organizationApi = {
+  get: () => get<OrganizationSummary>('/organization'),
+  rename: (name: string) => patch<OrganizationSummary>('/organization', { name }),
+  workspaces: () => get<WorkspaceSummary[]>('/organization/workspaces'),
+  createWorkspace: (body: { name: string; slug: string; timezone?: string }) =>
+    post<WorkspaceSummary>('/organization/workspaces', body),
+  deleteWorkspace: (id: string) => del<void>(`/organization/workspaces/${id}`),
+  members: () => get<OrgMember[]>('/organization/members'),
+  invite: (body: { email: string; full_name: string; role: string; password: string }) =>
+    post<OrgMember>('/organization/members', body),
+  updateRole: (memberId: string, role: string) =>
+    patch<OrgMember>(`/organization/members/${memberId}`, { role }),
+  removeMember: (memberId: string) => del<void>(`/organization/members/${memberId}`),
 };
 
 // ── connector builder ──────────────────────────────────────────────────────

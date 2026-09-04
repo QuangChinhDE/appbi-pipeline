@@ -1,15 +1,5 @@
 FROM python:3.11-slim-bookworm
 
-# Build identity, passed by the release pipeline. The defaults are honest
-# about not knowing: a build with BUILD_SHA=unknown cannot produce release
-# evidence, which is the right behaviour for an ad-hoc local build.
-ARG BUILD_SHA=unknown
-ARG BUILD_DIGEST=""
-ARG BUILD_TIME=""
-ENV BUILD_SHA=${BUILD_SHA} \
-    BUILD_DIGEST=${BUILD_DIGEST} \
-    BUILD_TIME=${BUILD_TIME}
-
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
@@ -62,6 +52,23 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 
 RUN mkdir -p /engine/workspace /engine/logs /transform/workspace /transform/logs
+
+# Build identity, passed by the release pipeline. The defaults are honest
+# about not knowing: a build with BUILD_SHA=unknown cannot produce release
+# evidence, which is the right behaviour for an ad-hoc local build.
+#
+# Declared last on purpose. BUILD_TIME changes on every invocation, and an
+# ARG invalidates every layer beneath it -- with this block at the top of
+# the file, each build reinstalled the apt packages and the ~1.5 GB of
+# Python dependencies from scratch, turning a source-only change into a
+# ten-minute rebuild. Nothing below consumes them at build time; they are
+# runtime metadata, so the cheapest place for them is the final layer.
+ARG BUILD_SHA=unknown
+ARG BUILD_DIGEST=""
+ARG BUILD_TIME=""
+ENV BUILD_SHA=${BUILD_SHA} \
+    BUILD_DIGEST=${BUILD_DIGEST} \
+    BUILD_TIME=${BUILD_TIME}
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

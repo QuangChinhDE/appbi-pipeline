@@ -20,7 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.adapters.registry import close_adapter
 from app.api.v1 import (
-    actors, auth, builder, builder_ai, oauth, ops, pipelines, runs, schema,
+    actors, auth, builder, builder_ai, oauth, ops, organizations, pipelines, runs, schema,
 )
 from app.core.config import settings
 from app.core.readiness import enforce_at_startup, probe_engine_at_startup
@@ -187,6 +187,6 @@ for router in (
     auth.router, actors.sources_router, actors.destinations_router, schema.router,
     pipelines.router, transform_api.router, transform_api.invocation_router,
     runs.router, ops.router, ops.admin_router, builder.router, builder_ai.router,
-    oauth.router,
+    oauth.router, organizations.router,
 ):
     app.include_router(router, prefix=API_PREFIX)

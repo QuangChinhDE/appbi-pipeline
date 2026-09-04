@@ -8,6 +8,7 @@ import { Card } from '@/components/layout/PageLayout';
 import { HealthBadge } from '@/components/integrations/Badges';
 import { ScheduleEditor } from '@/components/integrations/ScheduleEditor';
 import { Button } from '@/components/ui/Button';
+import { usePermissions } from '@/hooks/use-permissions';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { Spinner } from '@/components/ui/Feedback';
 import { ConfirmDialog } from '@/components/ui/Modal';
@@ -270,6 +271,11 @@ function ConnectionStatePanel({
   running: boolean;
 }) {
   const { t } = useI18n();
+  const { can } = usePermissions();
+  // Rewinding the cursor re-delivers history into the warehouse, so it sits
+  // behind `reset` rather than `operate`. Without this the panel offered a Save
+  // button to every role and answered 403 when it was pressed.
+  const canReset = can('pipelines', 'reset');
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = React.useState(false);
   const [draft, setDraft] = React.useState<string | null>(null);
@@ -358,6 +364,7 @@ function ConnectionStatePanel({
               <textarea
                 value={body}
                 spellCheck={false}
+                readOnly={!canReset}
                 aria-label={t('pipelines.settings.connectionState')}
                 onChange={(event) => setDraft(event.target.value)}
                 rows={Math.min(20, Math.max(6, body.split(String.fromCharCode(10)).length))}
@@ -382,20 +389,24 @@ function ConnectionStatePanel({
             )}
 
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="danger"
-                disabled={!dirty || !parsed.ok || running}
-                loading={save.isPending}
-                onClick={() => setConfirming(true)}
-                leadingIcon={<Save className="h-3.5 w-3.5" />}
-              >
-                {t('pipelines.settings.stateSave')}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={!dirty}
-                      onClick={() => setDraft(null)}>
-                {t('common.cancel')}
-              </Button>
+              {canReset && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={!dirty || !parsed.ok || running}
+                    loading={save.isPending}
+                    onClick={() => setConfirming(true)}
+                    leadingIcon={<Save className="h-3.5 w-3.5" />}
+                  >
+                    {t('pipelines.settings.stateSave')}
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={!dirty}
+                          onClick={() => setDraft(null)}>
+                    {t('common.cancel')}
+                  </Button>
+                </>
+              )}
               {state.data?.fetched_at && !dirty && (
                 <span className="text-tiny text-text-quaternary">
                   {t('pipelines.settings.stateFetched', {

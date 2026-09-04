@@ -99,10 +99,18 @@ export function Sidebar({
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
+  // The badge polls every thirty seconds from every screen, so a role without
+  // `alerts` produced a 403 on every page of the product -- noise in the logs,
+  // and a request that could never succeed being retried forever. The sidebar
+  // already hides the Alerts item for these roles; this stops the count that
+  // would have decorated it.
+  // `permissions` is destructured further down, after this hook; read it off
+  // `user` here rather than moving the declaration and reordering hooks.
+  const canSeeAlerts = hasPermission(user?.permissions, 'alerts', 'view');
   const { data: unread } = useQuery({
     queryKey: qk.unread(workspaceId),
     queryFn: opsApi.unreadCount,
-    enabled: Boolean(user),
+    enabled: Boolean(user) && canSeeAlerts,
     refetchInterval: 30_000,
   });
   const unreadCount = unread?.count ?? 0;

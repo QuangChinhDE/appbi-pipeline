@@ -579,6 +579,7 @@ async def replication_state(
     when the engine is unwell is the opposite of useful -- the engine being
     unwell is when someone opens it.
     """
+    ctx.require(Module.PIPELINES, Action.VIEW)
     pipeline = await get(session, ctx, pipeline_id)
     stored = pipeline.sync_state if isinstance(pipeline.sync_state, list) else []
 
@@ -625,7 +626,7 @@ async def set_replication_state(
     our `sync_state` column in embedded mode. `replication_state` reads them
     back in the same order.
     """
-    ctx.require(Module.PIPELINES, Action.OPERATE)
+    ctx.require(Module.PIPELINES, Action.RESET)
     pipeline = await get(session, ctx, pipeline_id)
 
     running = await active_run(session, pipeline.id)

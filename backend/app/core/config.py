@@ -275,7 +275,7 @@ class Settings(BaseSettings):
     # `seed_demo_data` is what decides. It was declared and never read, so
     # production manifests set it to false and got the demo accounts anyway.
     seed_admin_email: str = "admin@appbi.local"
-    seed_admin_password: str = "Admin@12345"
+    seed_admin_password: str = "Admin@123456"
     seed_demo_data: bool = True
 
     # The production path: a one-time secret supplied by the deployment, used

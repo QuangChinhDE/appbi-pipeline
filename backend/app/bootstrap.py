@@ -17,15 +17,16 @@ from sqlalchemy.exc import DBAPIError
 from app.core.config import settings
 from app.core.db import Base, SessionLocal, engine
 from app.core.logging import configure_logging, log_event
-from app.core.permissions import Role
+from app.core.permissions import OrgRole, Role
 from email_validator import EmailNotValidError, validate_email
 
 from app.core.security import hash_password, password_problems
 from app.models import (  # noqa: F401 - import registers every table
     AlertRule, AuditEvent, BuilderProject, ConnectorDefinition, Destination, EngineInstance,
     EngineMapping,
-    Membership, Notification, Operation, Pipeline, PipelineRun, PipelineStream, RunAttempt,
-    SchemaSnapshot, SecretRecord, Source, User, Workspace, register_transform_tables,
+    Membership, Notification, Operation, Organization, OrganizationMembership, Pipeline,
+    PipelineRun, PipelineStream, RunAttempt, SchemaSnapshot, SecretRecord, Source, User,
+    Workspace, register_transform_tables,
 )
 
 # Transform's tables register through a call rather than an import, because
@@ -303,6 +304,36 @@ async def seed() -> None:
         await session.commit()
 
 
+async def _ensure_organization(session) -> Organization:
+    """The organisation every workspace hangs off.
+
+    `workspaces.organization_id` is NOT NULL, so a seed that creates a workspace
+    without one does not fail later in some subtle way -- it fails at insert, on
+    a fresh install, which is the first thing anybody runs.
+    """
+    organization = await session.scalar(
+        select(Organization).where(Organization.slug == "default")
+    )
+    if organization is None:
+        organization = Organization(name="Tổ chức mặc định", slug="default")
+        session.add(organization)
+        await session.flush()
+    return organization
+
+
+async def _ensure_org_membership(session, organization, user, role: OrgRole) -> None:
+    existing = await session.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization.id,
+            OrganizationMembership.user_id == user.id,
+        )
+    )
+    if existing is None:
+        session.add(OrganizationMembership(
+            organization_id=organization.id, user_id=user.id, role=role
+        ))
+
+
 async def _seed_demo(session, engine_instance) -> None:
     """What a first look at the product needs, and what production may not have."""
     admin = await session.scalar(
@@ -318,10 +349,16 @@ async def _seed_demo(session, engine_instance) -> None:
         session.add(admin)
         await session.flush()
 
+    organization = await _ensure_organization(session)
+    # The seeded admin runs the organisation, which is what makes the second
+    # workspace below administrable without a membership row per workspace.
+    await _ensure_org_membership(session, organization, admin, OrgRole.ORG_OWNER)
+
     workspace = await session.scalar(select(Workspace).where(Workspace.slug == "default"))
     if workspace is None:
         workspace = Workspace(
             name="AppBI Data Team", slug="default", timezone="Asia/Bangkok",
+            organization_id=organization.id,
             engine_instance_id=engine_instance.id,
         )
         session.add(workspace)
@@ -337,10 +374,17 @@ async def _seed_demo(session, engine_instance) -> None:
 
     # A second tenant plus non-owner accounts make tenant isolation and RBAC
     # observable in the running system, not just in tests.
+    #
+    # One account per assignable role, so every row of the matrix can be signed
+    # in as. Three of the six were seeded before, which left CONNECTOR_DEV and
+    # AUDITOR -- the two whose whole purpose is to hold *less* than the others
+    # -- impossible to look at without creating an account by hand first.
     for email, name, role, password in (
-        ("dataadmin@appbi.local", "Data Admin", Role.DATA_ADMIN, "Admin@12345"),
-        ("operator@appbi.local", "Operator", Role.OPERATOR, "Admin@12345"),
-        ("analyst@appbi.local", "Analyst", Role.ANALYST, "Admin@12345"),
+        ("dataadmin@appbi.local", "Data Admin", Role.DATA_ADMIN, "Admin@123456"),
+        ("connectordev@appbi.local", "Connector Dev", Role.CONNECTOR_DEV, "Admin@123456"),
+        ("operator@appbi.local", "Operator", Role.OPERATOR, "Admin@123456"),
+        ("analyst@appbi.local", "Analyst", Role.ANALYST, "Admin@123456"),
+        ("auditor@appbi.local", "Auditor", Role.AUDITOR, "Admin@123456"),
     ):
         user = await session.scalar(select(User).where(User.email == email))
         if user is None:
@@ -354,11 +398,15 @@ async def _seed_demo(session, engine_instance) -> None:
         )
         if exists is None:
             session.add(Membership(workspace_id=workspace.id, user_id=user.id, role=role))
+        # Plain organisation members: they reach the workspaces they were added
+        # to and no others, which is what makes the two layers observable.
+        await _ensure_org_membership(session, organization, user, OrgRole.ORG_MEMBER)
 
     other = await session.scalar(select(Workspace).where(Workspace.slug == "marketing"))
     if other is None:
         other = Workspace(name="Marketing Analytics", slug="marketing",
-                          timezone="Asia/Bangkok", engine_instance_id=engine_instance.id)
+                          timezone="Asia/Bangkok", organization_id=organization.id,
+                          engine_instance_id=engine_instance.id)
         session.add(other)
         await session.flush()
         session.add(Membership(workspace_id=other.id, user_id=admin.id, role=Role.OWNER))
@@ -430,10 +478,14 @@ async def _bootstrap_admin(session, engine_instance) -> None:
     session.add(admin)
     await session.flush()
 
+    organization = await _ensure_organization(session)
+    await _ensure_org_membership(session, organization, admin, OrgRole.ORG_OWNER)
+
     workspace = await session.scalar(select(Workspace).where(Workspace.slug == "default"))
     if workspace is None:
         workspace = Workspace(
             name="Default", slug="default", timezone="Asia/Bangkok",
+            organization_id=organization.id,
             engine_instance_id=engine_instance.id,
         )
         session.add(workspace)

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { AlertTriangle, Info, Loader2, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Info, Loader2, Lock, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
@@ -97,30 +97,51 @@ export function EmptyState({
  * Section-level failure. A partial outage must never blank the whole page
  * (section 33.1), so this renders inline where the data would have been.
  */
+/** Is this the server saying "not allowed", rather than "it went wrong"? */
+export function isPermissionDenied(error: unknown): boolean {
+  return Boolean(error) && (error as { code?: string }).code === 'PERMISSION_DENIED';
+}
+
 export function ErrorState({
   title,
   message,
   onRetry,
   traceId,
   compact,
+  error,
 }: {
   title: string;
   message?: string;
   onRetry?: () => void;
   traceId?: string;
   compact?: boolean;
+  /**
+   * The error itself, when the caller has it. A refusal is not a failure: the
+   * request worked and the answer was no. Framed in red as "could not load"
+   * with a Retry button, it reads as a broken product and invites the person to
+   * press a button that can only ever refuse again.
+   */
+  error?: unknown;
 }) {
   const { t } = useI18n();
+  const denied = isPermissionDenied(error);
   return (
     <div
       className={cn(
-        'rounded-lg border border-danger/25 bg-danger/[0.04]',
+        'rounded-lg',
+        denied
+          ? 'border border-[rgb(var(--border-line))] bg-surface-1'
+          : 'border border-danger/25 bg-danger/[0.04]',
         compact ? 'p-3' : 'p-5',
       )}
       role="alert"
     >
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger" />
+        {denied ? (
+          <Lock className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-quaternary" />
+        ) : (
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger" />
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-caption font-strong text-text-primary">{title}</p>
           {message && (
@@ -130,7 +151,7 @@ export function ErrorState({
             <p className="mt-1.5 font-mono text-tiny text-text-quaternary">trace: {traceId}</p>
           )}
         </div>
-        {onRetry && (
+        {onRetry && !denied && (
           <Button size="xs" variant="secondary" onClick={onRetry}>
             {t('common.retry')}
           </Button>

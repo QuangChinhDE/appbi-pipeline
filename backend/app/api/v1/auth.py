@@ -8,25 +8,27 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Header, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import CtxDep, SessionDep, UserDep, _bearer
 from app.core.config import settings
 from app.core.db import utcnow
 from app.core.errors import ForbiddenError, RateLimitedError, UnauthorizedError, ValidationError
-from app.core.permissions import Action, Module, Role, permission_map
+from app.core.permissions import (
+    ASSIGNABLE_ROLES, Action, Module, OrgRole, Role, org_permissions, permission_map,
+)
 from app.core.security import (
     decode_session_token,
     hash_password, issue_session_token, password_problems, verify_password,
 )
 from app.models.enums import AuditResult
-from app.models.identity import Membership, User, Workspace
+from app.models.identity import Membership, Organization, User, Workspace
 from app.schemas.common import Acknowledged
 from app.schemas.domain import (
     ChangePasswordRequest, CurrentUser, LoginRequest, MemberInvite, MemberRoleUpdate, MemberView,
-    WorkspaceSettingsUpdate, WorkspaceSummary,
+    OrganizationSummary, WorkspaceSettingsUpdate, WorkspaceSummary,
 )
-from app.services import audit
+from app.services import access, audit
 
 router = APIRouter(tags=["auth"])
 
@@ -36,10 +38,15 @@ LOCK_MINUTES = 15
 MAX_LOCK_MINUTES = 240
 
 
-async def _memberships(session, user: User) -> list[Membership]:
-    return list((await session.scalars(
-        select(Membership).where(Membership.user_id == user.id)
-    )).all())
+async def _reachable_ids(session, user: User) -> list[uuid.UUID]:
+    """Workspaces this account can open, membership or organisation.
+
+    Was `_memberships`, and reading only the membership table is what would
+    have locked an organisation administrator out of a workspace they
+    administer: /auth/me would pick nothing, and switch-workspace would answer
+    "you are not a member of this workspace" about a workspace they own.
+    """
+    return [entry.workspace.id for entry in await access.reachable(session, user)]
 
 
 def _set_cookie(response: Response, token: str) -> None:
@@ -97,8 +104,8 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
     # yesterday's typos do not make tomorrow's lockout an hour long.
     user.lockout_count = 0
     user.last_login_at = utcnow()
-    memberships = await _memberships(session, user)
-    workspace_id = memberships[0].workspace_id if memberships else None
+    reachable = await _reachable_ids(session, user)
+    workspace_id = reachable[0] if reachable else None
 
     token = issue_session_token(user.id, workspace_id, user.session_version)
     _set_cookie(response, token)
@@ -136,20 +143,29 @@ async def me(
     route is still refused -- this returns identity and the flag, and nothing
     that reads or writes tenant data.
     """
-    memberships = await _memberships(session, user)
-    workspace_id = memberships[0].workspace_id if memberships else None
-    # Honour an explicit workspace the same way `request_context` does, but
-    # only if the caller is really a member of it.
+    reachable = await _reachable_ids(session, user)
+    workspace_id = reachable[0] if reachable else None
     token = _bearer(authorization) or appbi_session
     claims = decode_session_token(token) if token else {}
-    wanted = x_workspace_id or claims.get("ws")
-    if wanted:
+
+    # Same rule as `request_context`, so one header means one thing across the
+    # API: naming a workspace you cannot reach is refused, while a stale
+    # workspace remembered in the token quietly gives way to one you can.
+    if x_workspace_id:
         try:
-            wanted_id = uuid.UUID(str(wanted))
+            wanted_id = uuid.UUID(str(x_workspace_id))
         except (ValueError, TypeError):
-            wanted_id = None
-        if wanted_id and any(m.workspace_id == wanted_id for m in memberships):
-            workspace_id = wanted_id
+            raise ForbiddenError("X-Workspace-Id không hợp lệ.") from None
+        if wanted_id not in reachable:
+            raise ForbiddenError("Bạn không truy cập được workspace này.")
+        workspace_id = wanted_id
+    elif claims.get("ws"):
+        try:
+            remembered = uuid.UUID(str(claims["ws"]))
+        except (ValueError, TypeError):
+            remembered = None
+        if remembered in reachable:
+            workspace_id = remembered
     return await _current_user_payload(session, user, workspace_id)
 
 
@@ -157,40 +173,60 @@ async def me(
 async def switch_workspace(
     workspace_id: uuid.UUID, response: Response, session: SessionDep, user: UserDep
 ) -> CurrentUser:
-    memberships = await _memberships(session, user)
-    if not any(m.workspace_id == workspace_id for m in memberships):
-        raise ForbiddenError("Bạn không thuộc workspace này.")
+    if workspace_id not in await _reachable_ids(session, user):
+        raise ForbiddenError("Bạn không truy cập được workspace này.")
     _set_cookie(response, issue_session_token(user.id, workspace_id, user.session_version))
     return await _current_user_payload(session, user, workspace_id)
 
 
 async def _current_user_payload(session, user: User, workspace_id) -> CurrentUser:
-    memberships = await _memberships(session, user)
+    # The same resolver the request context uses, so the switcher never offers
+    # a workspace that would 403 -- nor hides one that would open.
+    accesses = await access.reachable(session, user)
     summaries: list[WorkspaceSummary] = []
     active: WorkspaceSummary | None = None
     role: Role | None = None
-    for membership in memberships:
-        workspace = await session.get(Workspace, membership.workspace_id)
-        if workspace is None:
-            continue
+    for entry in accesses:
+        workspace = entry.workspace
         summary = WorkspaceSummary(
             id=workspace.id, name=workspace.name, slug=workspace.slug,
-            role=membership.role.value, timezone=workspace.timezone,
-            status=workspace.status.value,
+            role=entry.role.value, timezone=workspace.timezone,
+            status=workspace.status.value, via_organization=entry.via_organization,
         )
         summaries.append(summary)
         if workspace.id == workspace_id:
             active = summary
-            role = membership.role
+            role = entry.role
     if active is None and summaries:
         active = summaries[0]
         role = Role(active.role)
 
     effective = Role.PLATFORM_ADMIN if user.is_platform_admin else (role or Role.ANALYST)
+
+    # Prefer the organisation that owns the workspace being used; fall back to
+    # the account's own, so a platform admin with no membership still sees one.
+    org_role = None
+    organization = None
+    if active is not None:
+        workspace = next(a.workspace for a in accesses if a.workspace.id == active.id)
+        organization = await session.get(Organization, workspace.organization_id)
+        org_role = await access.org_role_of(session, user, workspace.organization_id)
+    if organization is None:
+        organization, org_role = await access.primary_organization(session, user)
+
     return CurrentUser(
         id=user.id, email=user.email, full_name=user.full_name, locale=user.locale,
         is_platform_admin=user.is_platform_admin, workspace=active, workspaces=summaries,
         role=effective.value, permissions=permission_map(effective),
+        organization=(
+            OrganizationSummary(
+                id=organization.id, name=organization.name, slug=organization.slug,
+                role=org_role.value if org_role else None,
+                status=organization.status.value,
+            ) if organization is not None else None
+        ),
+        organization_permissions=org_permissions(org_role) if not user.is_platform_admin
+        else org_permissions(OrgRole.ORG_OWNER),
         password_change_required=user.password_change_required,
     )
 
@@ -233,8 +269,8 @@ async def change_password(
                        resource_type="USER", resource_id=user.id)
     await session.commit()
 
-    memberships = await _memberships(session, user)
-    workspace_id = memberships[0].workspace_id if memberships else None
+    reachable = await _reachable_ids(session, user)
+    workspace_id = reachable[0] if reachable else None
     # The caller's own token was just revoked along with everyone else's, so
     # hand back a new one. Without this the change succeeds and the next
     # request from the same browser is a 401.
@@ -296,6 +332,42 @@ async def update_workspace_settings(
     return await workspace_settings(session, ctx)
 
 
+async def _assert_not_last_owner(session, workspace_id, membership_id: uuid.UUID) -> None:
+    """Refuse to leave a workspace with nobody who can administer it.
+
+    Demoting or removing the last OWNER is not recoverable from inside the
+    product: members, settings and the role picker itself all sit behind
+    permissions only an OWNER holds, so the workspace becomes a room whose door
+    locks from the outside. `remove_member` already refused self-removal; this
+    covers the other three ways in -- demoting yourself, demoting the last
+    owner, and removing them.
+    """
+    remaining = await session.scalar(
+        select(func.count()).select_from(Membership).where(
+            Membership.workspace_id == workspace_id,
+            Membership.role == Role.OWNER,
+            Membership.id != membership_id,
+        )
+    )
+    if not remaining:
+        raise ValidationError(
+            "Workspace phải còn ít nhất một Owner. Hãy chỉ định Owner khác trước.",
+            code="LAST_OWNER",
+        )
+
+
+def _parse_assignable_role(raw: str) -> Role:
+    """PLATFORM_ADMIN is an account property, not a membership: accepting it
+    here wrote a role the permission matrix reads but the account never gets."""
+    try:
+        role = Role(raw.upper())
+    except ValueError as exc:
+        raise ValidationError(f"Vai trò '{raw}' không hợp lệ.") from exc
+    if role not in ASSIGNABLE_ROLES:
+        raise ValidationError(f"Vai trò '{role.value}' không thể gán cho thành viên workspace.")
+    return role
+
+
 @router.get("/workspace/members", response_model=list[MemberView])
 async def list_members(session: SessionDep, ctx: CtxDep) -> list[MemberView]:
     ctx.require(Module.MEMBERS, Action.VIEW)
@@ -318,10 +390,7 @@ async def list_members(session: SessionDep, ctx: CtxDep) -> list[MemberView]:
 @router.post("/workspace/members", response_model=MemberView, status_code=201)
 async def invite_member(payload: MemberInvite, session: SessionDep, ctx: CtxDep) -> MemberView:
     ctx.require(Module.MEMBERS, Action.CREATE)
-    try:
-        role = Role(payload.role.upper())
-    except ValueError as exc:
-        raise ValidationError(f"Vai trò '{payload.role}' không hợp lệ.") from exc
+    role = _parse_assignable_role(payload.role)
 
     # The same policy the account holder will face when they change it, and
     # the same one bootstrap enforces. This route hashed whatever it was given
@@ -375,10 +444,9 @@ async def update_member_role(
     )
     if membership is None:
         raise ValidationError("Không tìm thấy thành viên.")
-    try:
-        role = Role(payload.role.upper())
-    except ValueError as exc:
-        raise ValidationError(f"Vai trò '{payload.role}' không hợp lệ.") from exc
+    role = _parse_assignable_role(payload.role)
+    if membership.role is Role.OWNER and role is not Role.OWNER:
+        await _assert_not_last_owner(session, ctx.workspace_id, membership.id)
 
     before = membership.role.value
     membership.role = role
@@ -404,6 +472,8 @@ async def remove_member(member_id: uuid.UUID, session: SessionDep, ctx: CtxDep) 
         return Response(status_code=204)
     if membership.user_id == ctx.user_id:
         raise ValidationError("Không thể tự xóa chính mình khỏi workspace.")
+    if membership.role is Role.OWNER:
+        await _assert_not_last_owner(session, ctx.workspace_id, membership.id)
     await audit.record(session, ctx, "member.removed", resource_type="MEMBER",
                        resource_id=membership.user_id)
     await session.delete(membership)

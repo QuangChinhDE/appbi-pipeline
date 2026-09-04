@@ -45,6 +45,30 @@ export interface WorkspaceSummary {
   role: string | null;
   timezone: string;
   status: string;
+  /**
+   * True when the reach came from administering the organisation rather than
+   * from a membership row. Worth showing: "you can open this because you run
+   * the organisation" and "somebody added you to this" are different facts.
+   */
+  via_organization?: boolean;
+}
+
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: string | null;
+  status: string;
+  workspace_count?: number | null;
+}
+
+export interface OrgMember {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  created_at: string;
 }
 
 export type PermissionMap = Record<string, string[]>;
@@ -59,6 +83,12 @@ export interface CurrentUser {
   workspaces: WorkspaceSummary[];
   role: string | null;
   permissions: PermissionMap;
+  organization: OrganizationSummary | null;
+  /**
+   * Kept beside `permissions` rather than merged into it: organisation
+   * authority answers a different question from workspace authority.
+   */
+  organization_permissions: string[];
   /**
    * Set for an account created from the bootstrap one-time secret, or invited
    * by somebody else. Until it is cleared, every product route answers
