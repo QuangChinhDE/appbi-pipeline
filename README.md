@@ -1,4 +1,4 @@
-# AppBI Data Integration
+# AppBI Data Pipeline
 
 **Đưa dữ liệu từ mọi hệ thống bạn đang dùng về một kho, tự động, theo lịch — rồi
 biến nó thành bảng báo cáo dùng được.**
