@@ -110,6 +110,29 @@ def _check_api() -> list[str]:
     return problems
 
 
+def credential_key_problem() -> str | None:
+    """Why SECRET_ENCRYPTION_KEY cannot be used, if it cannot.
+
+    Separate and callable on its own because this is the one misconfiguration
+    that must stop the process in every environment, not just production. A
+    wrong value here is completely silent: the stack comes up, migrations run,
+    sign-in works, and the failure waits until somebody saves their first
+    Source -- by which point nothing on screen points back at a line in .env.
+    The rest of `check_configuration` is advice; this is a prerequisite.
+    """
+    from app.core.secrets import build_kek  # local: keeps crypto off the import path
+
+    try:
+        build_kek(settings.secret_encryption_key)
+    except RuntimeError as exc:
+        return (
+            f"SECRET_ENCRYPTION_KEY is not usable: {exc} "
+            "`./run.sh` generates one; by hand it is "
+            "`openssl rand -base64 32 | tr '+/' '-_'`."
+        )
+    return None
+
+
 def check_configuration() -> Readiness:
     """Static checks only — no network. Safe to call before anything is running."""
     engine_type = (settings.engine_type or "").upper()
@@ -129,6 +152,23 @@ def check_configuration() -> Readiness:
     else:
         problems = [f"ENGINE_TYPE={engine_type!r} is not a known engine."]
         notes = []
+
+    key_problem = credential_key_problem()
+    if key_problem:
+        problems.append(key_problem)
+
+    # Shipped in the repository, so a deployment that kept it is one anybody
+    # holding this code can mint a session for.
+    if settings.jwt_secret.strip() in ("", "dev-jwt-secret-change-me"):
+        message = (
+            "JWT_SECRET is the value published in this repository, so anyone "
+            "with the source can forge a session for this deployment. ./run.sh "
+            "generates one per machine."
+        )
+        if settings.is_production:
+            problems.append("APP_ENV=production with " + message)
+        else:
+            notes.append(message)
 
     if settings.is_production and engine_type == "AIRBYTE_EMBEDDED":
         problems.append(
@@ -409,6 +449,13 @@ async def enforce_at_startup() -> None:
     for problem in readiness.problems:
         log_event(logger, logging.ERROR, "startup.misconfigured",
                   engine_type=readiness.engine_type, detail=problem)
+
+    # Refused everywhere, production or not. Starting without a usable
+    # credential key produces a product that looks healthy and cannot save a
+    # single connection -- worse for a developer than a process that says why.
+    key_problem = credential_key_problem()
+    if key_problem:
+        raise RuntimeError("Refusing to start: " + key_problem)
 
     if separation_problems:
         raise RuntimeError(

@@ -120,15 +120,30 @@ cd appbi-pipeline
 
 Trên PowerShell (Windows) thì dùng `.\run.ps1` thay cho `./run.sh`.
 
-Một lệnh là xong. Nó tự làm những việc sau:
+Một lệnh là xong. **Không cần sửa gì trong `.env` trước khi chạy.** Nó tự làm:
 
-1. Tạo `.env` từ `.env.example` và **tự sinh khoá mã hoá** cho bạn
-2. Dựng image từ mã nguồn đang có
-3. Chạy migration cơ sở dữ liệu
-4. Khởi động toàn bộ và đợi tới khi API thật sự phục vụ được
+1. Tạo `.env` từ `.env.example`, rồi **sinh `SECRET_ENCRYPTION_KEY` và
+   `JWT_SECRET` riêng cho máy này**. Hai khoá này để trống trong
+   `.env.example` là có chủ đích — chúng phải khác nhau ở mỗi bản triển khai.
+2. Kiểm tra trước khi build: cổng có ai chiếm không, RAM có đủ cho số lần chạy
+   song song đang đặt không. Cả hai đều báo *trước* khi build, kèm tên container
+   đang giữ cổng và biến cần sửa.
+3. Bổ sung vào `.env` những khoá mới có trong `.env.example` mà file của bạn
+   chưa có — dành cho lần `git pull` sau. Giá trị bạn đã đặt không bị đụng tới.
+4. Dựng image từ mã nguồn đang có, chạy migration, khởi động toàn bộ và đợi tới
+   khi API thật sự phục vụ được.
+
+Chạy lại bao nhiêu lần cũng được: khoá đã sinh **không bao giờ bị ghi đè** (ghi
+đè là mất toàn bộ credential đã lưu), và `.env` được sao lưu vào
+`.env.backups/` mỗi lần chạy.
 
 Lần đầu mất khoảng **5–15 phút** (tải image, cài thư viện). Những lần sau nhanh
 hơn nhiều vì Docker dùng lại cache.
+
+> Nếu `run.sh` dừng lại và nói cổng nào đang bị chiếm: đó là một dự án khác trên
+> máy bạn. Hoặc dừng nó, hoặc đổi biến mà thông báo nêu tên trong `.env`
+> (`API_PORT`, `PROXY_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`) rồi chạy lại.
+> Chưa có gì được build nên không mất thời gian.
 
 Xong thì mở **http://localhost:8080** và đăng nhập:
 
@@ -339,6 +354,40 @@ grep SEED_ADMIN_PASSWORD .env
 Ba tài khoản demo còn lại — `dataadmin@`, `operator@`, `analyst@` — luôn dùng
 `Admin@123456` và **không** đổi theo `SEED_ADMIN_PASSWORD`. Trước khi dùng thật,
 hãy xoá chúng hoặc đổi mật khẩu trong giao diện.
+</details>
+
+<details>
+<summary><b><code>SECRET_ENCRYPTION_KEY</code> không dùng được / app không khởi động</b></summary>
+
+Thông báo dạng `SECRET_ENCRYPTION_KEY is not usable` hoặc `... is N characters;
+it has to be 44`.
+
+Khoá phải là 32 byte dạng urlsafe-base64, tức đúng **44 ký tự**. `./run.sh` sinh
+sẵn cho bạn, nên gặp lỗi này thường là vì `.env` được tạo tay hoặc giá trị bị sửa.
+
+Nếu **chưa lưu Nguồn/Đích nào**, cứ sinh khoá mới:
+
+```bash
+openssl rand -base64 32 | tr '+/' '-_'
+```
+
+rồi dán vào `.env`. Không có `openssl` thì:
+
+```bash
+head -c 32 /dev/urandom | base64 | tr '+/' '-_'
+```
+
+Nếu **đã lưu credential rồi**, đừng sinh khoá mới — khoá cũ mới giải mã được
+chúng. Tìm lại trong bản sao lưu:
+
+```bash
+ls -t .env.backups/          # bản gần nhất nằm trên cùng
+grep SECRET_ENCRYPTION_KEY .env.backups/env-*.bak
+```
+
+Sản phẩm giờ từ chối khởi động khi khoá không dùng được, ở mọi môi trường. Trước
+đây nó khởi động bình thường và chỉ hỏng lúc bạn lưu Nguồn đầu tiên — xa nguyên
+nhân tới mức không ai đoán được.
 </details>
 
 <details>

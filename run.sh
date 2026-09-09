@@ -74,25 +74,130 @@ docker info >/dev/null 2>&1 || fail \
     "the Docker daemon is not responding. Start Docker Desktop (Windows/macOS) or 'sudo systemctl start docker' (Linux), then run this again."
 
 # ── environment ───────────────────────────────────────────────────────────
-# The credential store is encrypted with SECRET_ENCRYPTION_KEY. Generating a
-# new one silently makes every stored credential undecryptable, so .env is
-# created once from the example and then left alone.
+#
+# Everything a first run needs has to land in .env without anybody being asked
+# to read a file and guess. What used to happen instead: the key generator only
+# fired when the line was *empty*, .env.example shipped
+# `SECRET_ENCRYPTION_KEY=REPLACE_ME__...`, so a fresh clone got a placeholder
+# that is not a valid key. Compose's `${VAR:?}` guard passed it -- a placeholder
+# is not empty -- the stack came up healthy, sign-in worked, and the failure
+# surfaced later, at the first attempt to save a credential. Which is the
+# hardest possible moment to connect back to a line in a file nobody edited.
+
+#: 32 random bytes as urlsafe base64, from whatever this machine happens to
+#: have.
+#
+# `python` alone was not enough. It is absent from a plain Windows install, and
+# `python3` there is often a Microsoft Store shim that prints nothing and exits
+# 0 -- which the old code read as success. Every branch is therefore checked
+# for a 44-character result rather than trusted.
+generate_key() {
+    local key=''
+    if command -v openssl >/dev/null 2>&1; then
+        key="$(openssl rand -base64 32 2>/dev/null | tr '+/' '-_' | tr -d '\r\n')"
+    fi
+    if [ "${#key}" -ne 44 ] && [ -r /dev/urandom ]; then
+        key="$(head -c 32 /dev/urandom | base64 2>/dev/null | tr '+/' '-_' | tr -d '\r\n')"
+    fi
+    if [ "${#key}" -ne 44 ]; then
+        local candidate
+        for candidate in python3 python py; do
+            command -v "$candidate" >/dev/null 2>&1 || continue
+            key="$("$candidate" -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 2>/dev/null | tr -d '\r\n')"
+            [ "${#key}" -eq 44 ] && break
+        done
+    fi
+    [ "${#key}" -eq 44 ] || return 1
+    printf '%s' "$key"
+}
+
+#: Read a value out of .env, comments stripped.
+env_value() {
+    sed 's/#.*//' .env 2>/dev/null | grep -E "^[[:space:]]*$1=" | tail -1 \
+        | cut -d= -f2- | tr -d '[:space:]'
+}
+
+#: Replace one value in place. The file is rewritten because BSD and GNU sed
+#: disagree about -i.
+set_env_value() {
+    awk -v k="$1" -v v="$2" \
+        'index($0, k "=") == 1 { print k "=" v; next } { print }' \
+        .env > .env.tmp && mv .env.tmp .env
+}
+
+#: A value that was shipped rather than chosen. Counts as absent.
+is_placeholder() {
+    case "$1" in
+        ''|REPLACE_ME*|*change-me*|*changeme*|*CHANGEME*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+#: Fill a secret that was never really set, and never touch a real one: a
+#: rewritten SECRET_ENCRYPTION_KEY makes every stored credential
+#: undecryptable, which is worse than any error message.
+ensure_secret() {
+    local key="$1" hint="$2" current generated
+    current="$(env_value "$key")"
+    is_placeholder "$current" || return 0
+    if generated="$(generate_key)"; then
+        set_env_value "$key" "$generated"
+        ok "generated $key"
+    else
+        fail "cannot generate $key: this machine has no openssl, no readable
+    /dev/urandom and no working python. Put a value in .env by hand:
+        $hint"
+    fi
+}
+
 if [ ! -f .env ]; then
     [ -f .env.example ] || fail ".env is missing and there is no .env.example to copy"
     step "Creating .env from .env.example"
     cp .env.example .env
-    if grep -qE '^SECRET_ENCRYPTION_KEY=\s*$' .env 2>/dev/null; then
-        KEY="$(python -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 2>/dev/null || true)"
-        if [ -n "$KEY" ]; then
-            # BSD and GNU sed disagree about -i, so rewrite the file instead.
-            awk -v k="$KEY" '/^SECRET_ENCRYPTION_KEY=/{print "SECRET_ENCRYPTION_KEY=" k; next} {print}' \
-                .env > .env.tmp && mv .env.tmp .env
-            ok "generated SECRET_ENCRYPTION_KEY"
-        else
-            warn "python not found: set SECRET_ENCRYPTION_KEY in .env before starting"
+    ok "wrote .env"
+fi
+
+# Runs on every invocation, not only on creation. A clone from six weeks ago
+# has an .env without the keys added since, and a setting missing from the file
+# is a setting nobody knows exists: CONNECTOR_MEMORY_LIMIT decides whether a
+# sync survives on a small VM, and Compose's built-in default hid it.
+sync_env_keys() {
+    [ -f .env.example ] || return 0
+    local added=0 line key
+    while IFS= read -r line; do
+        case "$line" in
+            [A-Z]*=*) key="${line%%=*}" ;;
+            *) continue ;;
+        esac
+        grep -qE "^[[:space:]]*$key=" .env && continue
+        if [ "$added" -eq 0 ]; then
+            printf '\n# ── run.sh: khóa mới có trong .env.example ──\n' >> .env
+            added=1
         fi
+        printf '%s\n' "$line" >> .env
+        info "added $key"
+    done < .env.example
+    if [ "$added" -eq 1 ]; then
+        warn "new settings were appended to .env; what they do is in .env.example"
     fi
-    warn "review .env before using this for anything real"
+    return 0
+}
+sync_env_keys
+
+ensure_secret SECRET_ENCRYPTION_KEY 'SECRET_ENCRYPTION_KEY=<44 ký tự urlsafe-base64>'
+# Signs session cookies. Shipped as one fixed string, so anybody holding this
+# repository could mint a session for a deployment that never changed it.
+# Generated per machine now.
+ensure_secret JWT_SECRET 'JWT_SECRET=<chuỗi ngẫu nhiên>'
+
+# The key is the one value whose mistakes stay silent until the first
+# credential is saved, so it is checked here instead of discovered there.
+KEY_VALUE="$(env_value SECRET_ENCRYPTION_KEY)"
+if [ "${#KEY_VALUE}" -ne 44 ]; then
+    fail "SECRET_ENCRYPTION_KEY in .env is ${#KEY_VALUE} characters; it has to be 44
+    (32 bytes, urlsafe base64). Nothing else would complain until the first
+    Source is saved, so this stops here. Generate one with:
+        openssl rand -base64 32 | tr '+/' '-_'"
 fi
 
 # Back up .env on every run. A rewritten key is unrecoverable and takes the
@@ -118,6 +223,10 @@ get_env() {
 }
 PROXY_PORT="$(get_env PROXY_PORT 8080)"
 API_PORT="$(get_env API_PORT 8010)"
+# Read for the pre-flight port check. Every one of these is published on the
+# host, so every one of them can collide with another project on this machine.
+FRONTEND_PORT="$(get_env FRONTEND_PORT 3000)"
+POSTGRES_PORT="$(get_env POSTGRES_PORT 55432)"
 ENGINE_TYPE="$(get_env ENGINE_TYPE AIRBYTE_EMBEDDED)"
 
 # ── non-build actions ─────────────────────────────────────────────────────
@@ -133,6 +242,100 @@ case "$ACTION" in
     down)
         step "Removing containers and networks"; dc down; ok "removed (volumes kept)"; exit 0 ;;
 esac
+
+# ── pre-flight ────────────────────────────────────────────────────────────
+#
+# Checked here, after the read-only actions have already returned and before
+# anything is built. A port collision used to surface as the last line of a
+# ten-minute build -- `Bind for 127.0.0.1:8010 failed: port is already
+# allocated` -- with nothing saying who holds it or which setting moves it.
+
+#: The container publishing PORT on the host, if it is a container at all.
+port_holder() {
+    docker ps --format '{{.Names}}\t{{.Ports}}' 2>/dev/null \
+        | awk -F'\t' -v p=":$1->" 'index($2, p) { print $1; exit }'
+}
+
+#: Is anything listening on PORT? Several probes because none of them exists
+#: everywhere: Git Bash on Windows has none of ss, lsof or netstat by default.
+port_busy() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | grep -qE "[:.]$port[[:space:]]" && return 0
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -an 2>/dev/null | grep -qE "[:.]$port[[:space:]]+.*LISTEN" && return 0
+    elif command -v lsof >/dev/null 2>&1; then
+        lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+    fi
+    # Last resort, and the only one that works everywhere: ask Docker. It
+    # misses non-Docker listeners, so it is a fallback rather than the rule.
+    [ -n "$(port_holder "$port")" ]
+}
+
+check_ports() {
+    local conflicts=0 name port holder mine
+    # The project's own containers already hold these ports on a restart, and
+    # that is not a conflict -- Compose is about to replace them.
+    mine="$(docker ps --filter label=com.docker.compose.project=appbi-pipeline \
+                --format '{{.Names}}' 2>/dev/null | tr '\n' ' ')"
+    for entry in "PROXY_PORT $PROXY_PORT" "API_PORT $API_PORT" \
+                 "FRONTEND_PORT $FRONTEND_PORT" "POSTGRES_PORT $POSTGRES_PORT"; do
+        name="${entry%% *}"; port="${entry##* }"
+        [ -n "$port" ] || continue
+        port_busy "$port" || continue
+        holder="$(port_holder "$port")"
+        case " $mine " in *" $holder "*) continue ;; esac
+        conflicts=1
+        if [ -n "$holder" ]; then
+            warn "port $port is taken by container '$holder' ($name)"
+        else
+            warn "port $port is taken by something on this machine ($name)"
+        fi
+    done
+    if [ "$conflicts" = 1 ]; then
+        fail "the ports above are in use, so the stack cannot start. Either stop
+    whatever holds them, or move this deployment by setting the named
+    variables in .env -- for example API_PORT=8011 -- and run this again.
+    Nothing has been built yet."
+    fi
+}
+check_ports
+
+# Two containers run per sync, and the arithmetic is not obvious enough to
+# leave to the reader: somebody on a 2-core VM with the shipped defaults is
+# asking for 8 GB of connectors and will meet the OOM killer instead of an
+# error message.
+check_memory_budget() {
+    local total_bytes total_mb runs limit_mb budget
+    total_bytes="$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)"
+    case "$total_bytes" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$total_bytes" -gt 0 ] || return 0
+    total_mb=$(( total_bytes / 1024 / 1024 ))
+
+    runs="$(get_env MAX_CONCURRENT_RUNS_GLOBAL 4)"
+    case "$runs" in ''|*[!0-9]*) runs=4 ;; esac
+
+    # `1g`, `1500m` or a bare byte count -- all three are what docker accepts.
+    local raw_limit
+    raw_limit="$(get_env CONNECTOR_MEMORY_LIMIT 1g)"
+    limit_mb=0
+    case "$raw_limit" in
+        '')      limit_mb=0 ;;
+        *[gG])   limit_mb=$(( ${raw_limit%[gG]} * 1024 )) ;;
+        *[mM])   limit_mb="${raw_limit%[mM]}" ;;
+        *[0-9])  limit_mb=$(( raw_limit / 1024 / 1024 )) ;;
+    esac
+    case "$limit_mb" in ''|*[!0-9]*) limit_mb=1024 ;; esac
+
+    budget=$(( runs * 2 * limit_mb + 1000 ))
+    if [ "$limit_mb" -gt 0 ] && [ "$budget" -gt "$total_mb" ]; then
+        warn "Docker has ${total_mb} MB; ${runs} concurrent runs x 2 containers x
+      ${limit_mb} MB plus ~1000 MB for AppBI needs about ${budget} MB. A sync
+      may be killed for memory. Set MAX_CONCURRENT_RUNS_GLOBAL=1 in .env --
+      on two cores concurrency costs RAM without buying speed."
+    fi
+}
+check_memory_budget
 
 # ── pull ──────────────────────────────────────────────────────────────────
 if [ "$DO_PULL" = 1 ]; then
@@ -175,7 +378,24 @@ step "Starting the stack"
 UP_ARGS="-d --remove-orphans"
 [ "$DO_FRESH" = 1 ] && UP_ARGS="$UP_ARGS --force-recreate"
 # shellcheck disable=SC2086
-dc up $UP_ARGS || fail "the stack did not start. './run.sh --logs api' usually says why."
+if ! dc up $UP_ARGS; then
+    # Naming `api` unconditionally sent people to the wrong logs: when the
+    # migration job is what failed, `api` never started and its log is empty.
+    # Ask Compose which container actually exited badly.
+    BROKEN_SERVICE=''
+    for cid in $(dc ps -a --status exited --quiet 2>/dev/null); do
+        if [ "$(docker inspect -f '{{.State.ExitCode}}' "$cid" 2>/dev/null)" != "0" ]; then
+            BROKEN_SERVICE="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$cid" 2>/dev/null)"
+            [ -n "$BROKEN_SERVICE" ] && break
+        fi
+    done
+    if [ -n "$BROKEN_SERVICE" ]; then
+        fail "the stack did not start: '$BROKEN_SERVICE' failed.
+    ./run.sh --logs $BROKEN_SERVICE"
+    fi
+    fail "the stack did not start. Check the error above; './run.sh --logs api'
+    and './run.sh --logs migrate' are the two worth reading."
+fi
 
 # ── wait until it is actually serving ─────────────────────────────────────
 # `up -d` returns once containers are created, which is well before the API can

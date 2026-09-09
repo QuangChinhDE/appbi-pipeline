@@ -51,13 +51,33 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Stop-WithError 'docker is not installed or not on PATH'
 }
 
-docker compose version *>$null
-if ($LASTEXITCODE -ne 0) {
+# Run a native command for its exit code alone, with output discarded and its
+# warnings unable to become terminating errors.
+#
+# `docker info *>$null` looked equivalent and was not. Windows PowerShell 5.1
+# wraps each stderr line from a native executable in an ErrorRecord, and with
+# $ErrorActionPreference = 'Stop' the first one terminates the script. A
+# healthy Docker daemon prints warnings -- "WARNING: No blkio
+# throttle.read_bps_device support" among them -- so this script refused to
+# run on machines where Docker was working perfectly. Letting cmd.exe discard
+# the streams keeps PowerShell from reinterpreting them.
+function Test-NativeCommand {
+    param([string]$CommandLine)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & cmd.exe /c "$CommandLine >NUL 2>NUL"
+        return $LASTEXITCODE -eq 0
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
+if (-not (Test-NativeCommand 'docker compose version')) {
     Stop-WithError 'docker compose is not available (need Docker Compose v2)'
 }
 
-docker info *>$null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Test-NativeCommand 'docker info')) {
     Stop-WithError 'the Docker daemon is not responding. Start Docker Desktop, then run this again.'
 }
 
@@ -76,16 +96,78 @@ if (-not (Test-Path .env)) {
     }
     Write-Step 'Creating .env from .env.example'
     Copy-Item .env.example .env
-    $lines = Get-Content .env
-    if ($lines -match '^SECRET_ENCRYPTION_KEY=\s*$') {
-        $bytes = New-Object byte[] 32
-        [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-        $key = [Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_')
-        $lines = $lines -replace '^SECRET_ENCRYPTION_KEY=\s*$', "SECRET_ENCRYPTION_KEY=$key"
-        Set-Content -Path .env -Value $lines -Encoding utf8
-        Write-Ok 'generated SECRET_ENCRYPTION_KEY'
+    Write-Ok 'wrote .env'
+}
+
+# Everything below runs on every invocation, not only on creation, so an .env
+# from an older clone gains the settings added since and a placeholder secret
+# is replaced. This used to fire only when the line was empty while
+# .env.example shipped `SECRET_ENCRYPTION_KEY=REPLACE_ME__...`, so a fresh
+# clone got a key that is not a key -- and nothing said so until the first
+# Source was saved.
+function Get-EnvValue {
+    param([string]$Key)
+    $line = Select-String -Path .env -Pattern "^\s*$Key=" -ErrorAction SilentlyContinue |
+        Select-Object -Last 1
+    if (-not $line) { return '' }
+    return ($line.Line -replace "^\s*$Key=", '').Split('#')[0].Trim()
+}
+
+function Set-EnvValue {
+    param([string]$Key, [string]$Value)
+    $out = Get-Content .env | ForEach-Object {
+        if ($_ -like "$Key=*") { "$Key=$Value" } else { $_ }
     }
-    Write-Warn 'review .env before using this for anything real'
+    Set-Content -Path .env -Value $out -Encoding utf8
+}
+
+function New-RandomKey {
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_')
+}
+
+function Set-SecretIfUnset {
+    param([string]$Key)
+    $current = Get-EnvValue $Key
+    $shipped = ($current -eq '') -or ($current -like 'REPLACE_ME*') -or
+               ($current -like '*change-me*') -or ($current -like '*changeme*')
+    if (-not $shipped) { return }
+    Set-EnvValue $Key (New-RandomKey)
+    Write-Ok "generated $Key"
+}
+
+# An .env from an older clone has none of the settings added since, and a
+# setting missing from the file is a setting nobody knows exists.
+if (Test-Path .env.example) {
+    $addedAny = $false
+    foreach ($line in Get-Content .env.example) {
+        if ($line -notmatch '^[A-Z][A-Z0-9_]*=') { continue }
+        $key = $line.Split('=')[0]
+        if (Select-String -Path .env -Pattern "^\s*$key=" -Quiet) { continue }
+        if (-not $addedAny) {
+            Add-Content -Path .env -Value '' -Encoding utf8
+            Add-Content -Path .env -Value '# -- run.ps1: khoa moi co trong .env.example --' -Encoding utf8
+            $addedAny = $true
+        }
+        Add-Content -Path .env -Value $line -Encoding utf8
+        Write-Info "added $key"
+    }
+    if ($addedAny) {
+        Write-Warn 'new settings were appended to .env; what they do is in .env.example'
+    }
+}
+
+Set-SecretIfUnset 'SECRET_ENCRYPTION_KEY'
+Set-SecretIfUnset 'JWT_SECRET'
+
+$keyValue = Get-EnvValue 'SECRET_ENCRYPTION_KEY'
+if ($keyValue.Length -ne 44) {
+    Stop-WithError @"
+SECRET_ENCRYPTION_KEY in .env is $($keyValue.Length) characters; it has to be 44
+    (32 bytes, urlsafe base64). Nothing else would complain until the first
+    Source is saved, so this stops here.
+"@
 }
 
 # Back up .env on every run. A rewritten key is unrecoverable and takes the
