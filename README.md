@@ -181,6 +181,37 @@ hẳn.
 > dữ liệu khách hàng thật hoặc chạy connector từ nguồn không tin cậy.** Khi đó
 > hãy dùng `AIRBYTE_API`.
 
+#### `CONNECTOR_MEMORY_LIMIT` và số lần chạy song song — cách tính RAM
+
+Đây là chỗ dễ hết RAM nhất, và phép tính không hiển nhiên: **mỗi lần sync chạy
+hai container**, một cho Nguồn và một cho Đích. Ngân sách là
+
+```
+MAX_CONCURRENT_RUNS_GLOBAL × 2 × CONNECTOR_MEMORY_LIMIT
+    + ~800 MB cho AppBI + ~200 MB cho Postgres   ≤   RAM của máy
+```
+
+Với mặc định `4 × 2 × 1g`, riêng connector đã cần **8 GB**. Nên trên VM nhỏ thì
+điều cần sửa là số lần chạy song song, không phải hạn mức:
+
+| Máy | `MAX_CONCURRENT_RUNS_GLOBAL` | `CONNECTOR_MEMORY_LIMIT` | Connector cần |
+|---|---|---|---|
+| 2 CPU / 4 GB | `1` | `1g` | ~2 GB |
+| 2 CPU / 8 GB | `1` hoặc `2` | `1g` | ~2–4 GB |
+| 4 CPU / 16 GB | `4` | `1g` | ~8 GB |
+
+Với 2 nhân thì chạy song song **không** nhanh hơn — nó chỉ nhân RAM lên.
+
+> **Đừng để `CONNECTOR_MEMORY_LIMIT` trống.** Container connector khi đó không
+> có trần và có thể lấy hết RAM máy; thứ dừng nó sẽ là OOM killer của hệ điều
+> hành, mà nó có thể chọn `api` hoặc `worker` làm nạn nhân thay vì chính
+> connector đó. Khi ấy lỗi hiện ra không liên quan gì tới nguyên nhân.
+
+Destination BigQuery, Postgres và MSSQL của Airbyte chạy trên JVM và lấy heap
+theo **tỷ lệ của trần container**. JVM mặc định chỉ lấy 25%, tức 256 MB với trần
+1 GB — không đủ. `CONNECTOR_JAVA_OPTS=-XX:MaxRAMPercentage=75.0` là thứ làm cho
+cái trần dùng được; đổi trần thì không phải đổi gì thêm.
+
 #### Ví dụ: VM 2 CPU / 4 GB RAM
 
 ```bash
@@ -189,11 +220,9 @@ COMPOSE_PATH_SEPARATOR=:
 COMPOSE_FILE=docker-compose.yml:docker-compose.embedded.yml:docker-compose.transform.yml
 WITH_TRANSFORM=1
 ENGINE_TYPE=AIRBYTE_EMBEDDED
-MAX_CONCURRENT_RUNS_GLOBAL=1     # quan trọng: connector khá nặng
+MAX_CONCURRENT_RUNS_GLOBAL=1     # quan trọng: mỗi lần sync là 2 container
+CONNECTOR_MEMORY_LIMIT=1g
 ```
-
-`MAX_CONCURRENT_RUNS_GLOBAL` mặc định là 4. Trên máy 4 GB, bốn connector chạy
-cùng lúc sẽ hết RAM — đặt về `1` (nhiều nhất là `2`).
 
 ### Các lệnh thường dùng
 
@@ -234,6 +263,40 @@ lsof -i :8080
 # Windows (PowerShell)
 Get-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess
 ```
+</details>
+
+<details>
+<summary><b>Sync hỏng vì hết RAM, hoặc <code>exit 137</code></b></summary>
+
+`exit 137` là 128+9: container bị kill. Nếu lần chạy không phải do bạn hủy và
+cũng không quá thời gian, thì gần như luôn là connector vượt bộ nhớ.
+
+Mỗi lần sync là **hai** container. Giảm số chạy song song trước, vì đó là thứ
+nhân RAM lên:
+
+```bash
+# .env
+MAX_CONCURRENT_RUNS_GLOBAL=1
+MAX_CONCURRENT_RUNS_PER_WORKSPACE=1
+```
+
+Rồi `./run.sh`. Nếu vẫn hỏng mà máy còn RAM trống, nâng trần cho từng connector:
+
+```bash
+CONNECTOR_MEMORY_LIMIT=2g
+```
+
+Xem thực tế container đang dùng bao nhiêu:
+
+```bash
+docker stats --no-stream
+```
+
+Nếu chính `api` hoặc `worker` bị chết thay vì connector, đó là dấu hiệu
+`CONNECTOR_MEMORY_LIMIT` đang để trống: connector không có trần, và hệ điều
+hành chọn nạn nhân theo bộ nhớ chứ không theo lỗi của ai.
+
+Xem [cách tính RAM](#connector_memory_limit-và-số-lần-chạy-song-song--cách-tính-ram).
 </details>
 
 <details>

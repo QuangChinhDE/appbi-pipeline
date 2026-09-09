@@ -79,6 +79,35 @@ class Settings(BaseSettings):
     egress_allowlist: str = ""
     engine_workspace_volume: str = "appbi-pipeline_engine_workspace"
     engine_docker_binary: str = "docker"
+
+    # --- connector container resources ---
+    #
+    # Two containers run per sync -- a source and a destination -- and until
+    # this existed neither had a ceiling. `docker run` without `--memory` lets
+    # one connector grow into all of the host's RAM, and what happens next is
+    # the kernel's OOM killer choosing a victim: often the connector, sometimes
+    # this API or the worker. A product failing because something unrelated was
+    # killed is the worst kind of bug to read, and Airbyte does not have it
+    # because its worker passes JOB_MAIN_CONTAINER_MEMORY_LIMIT to every job.
+    #
+    # A ceiling converts that into a connector that fails on its own, with a
+    # message naming memory, while everything else keeps running.
+    #
+    # Budget it as: MAX_CONCURRENT_RUNS_GLOBAL x 2 x this, plus ~800 MB for
+    # AppBI and ~200 MB for Postgres, must fit in the host. Empty disables the
+    # ceiling and restores the old unbounded behaviour.
+    connector_memory_limit: str = "1g"
+    #: CPU shares per connector container, as `docker run --cpus`. Empty means
+    #: unbounded. On a 2-core box an unbounded connector starves the API's
+    #: event loop, which shows up as a UI that stops responding mid-sync.
+    connector_cpu_limit: str = ""
+    #: Airbyte's Java connectors (the BigQuery, Postgres and MSSQL
+    #: destinations) size their heap from the container limit. A container-aware
+    #: JVM defaults to a quarter of it, so a 1 GB ceiling would leave a 256 MB
+    #: heap and the destination would fail for a reason that looks nothing like
+    #: the cause. Raising the fraction is what makes the ceiling usable.
+    #: Ignored by Python connectors, which read no JAVA_OPTS.
+    connector_java_opts: str = "-XX:MaxRAMPercentage=75.0"
     adapter_contract_version: str = "1"
 
     # Readiness policy. Both default to the lenient answer on purpose; see

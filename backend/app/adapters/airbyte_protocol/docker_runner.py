@@ -129,6 +129,7 @@ class DockerRunner:
             args += ["--name", container_name]
         if self.network:
             args += ["--network", self.network]
+        args += self.resource_args()
         # The shared volume is mounted at the identical path inside the worker
         # and inside the connector, so a path written here resolves there.
         args += ["-v", f"{self.volume}:{self.mount_target}"]
@@ -138,6 +139,31 @@ class DockerRunner:
         # else on the daemon.
         args += ["--label", "app=appbi-pipeline"]
         args += [image, *command]
+        return args
+
+    def resource_args(self) -> list[str]:
+        """The ceiling a connector runs under.
+
+        `--memory-swap` is pinned to the same value on purpose. Left alone,
+        Docker allows swap up to twice the memory limit, so a connector over
+        budget does not fail -- it swaps, and on a small VM the whole host slows
+        to the point where healthchecks time out and unrelated containers get
+        restarted. Failing is more useful than that.
+
+        `JAVA_OPTS` is set rather than appended because the Airbyte Java
+        connectors read it as a whole; an operator who needs different flags
+        sets CONNECTOR_JAVA_OPTS and owns the whole string.
+        """
+        args: list[str] = []
+        limit = (settings.connector_memory_limit or "").strip()
+        if limit:
+            args += ["--memory", limit, "--memory-swap", limit]
+            java_opts = (settings.connector_java_opts or "").strip()
+            if java_opts:
+                args += ["--env", f"JAVA_OPTS={java_opts}"]
+        cpus = (settings.connector_cpu_limit or "").strip()
+        if cpus:
+            args += ["--cpus", cpus]
         return args
 
     async def run_connector(

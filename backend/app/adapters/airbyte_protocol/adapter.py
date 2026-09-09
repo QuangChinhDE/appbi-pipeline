@@ -43,6 +43,38 @@ from app.models.enums import EngineResourceType, EngineStatus, EngineType, RunSt
 logger = logging.getLogger(__name__)
 
 
+def _exit_without_explanation(side: str, exit_code: int | None) -> str:
+    """Wording for a connector that died saying nothing.
+
+    A connector killed by Docker's memory ceiling, or by the kernel's OOM
+    killer, gets SIGKILL and no chance to print why -- so the only evidence is
+    the exit code, and "connector exited with code 137" is a sentence that has
+    never helped anybody. 137 is 128+9: killed.
+
+    Safe to read as memory here because the two other reasons a container gets
+    killed are already handled above this point: a cancelled run is caught by
+    `job.cancel_requested`, and a run over its deadline by the TimeoutError
+    branch. What is left on a small host is a connector that asked for more
+    memory than it was allowed.
+    """
+    who = "Source" if side == "SOURCE" else "Destination"
+    if exit_code != 137:
+        return f"{side.lower()} connector exited with code {exit_code}"
+    limit = (settings.connector_memory_limit or "").strip()
+    ceiling = (
+        f"Hạn mức đang đặt: CONNECTOR_MEMORY_LIMIT={limit}."
+        if limit else
+        "Chưa đặt CONNECTOR_MEMORY_LIMIT, nên container không có trần và hệ "
+        "điều hành là thứ đã dừng nó."
+    )
+    return (
+        f"{who} connector bị kill (exit 137) mà không kịp báo lỗi — killed for "
+        f"exceeding its memory. {ceiling} Giảm MAX_CONCURRENT_RUNS_GLOBAL, hoặc "
+        "tăng hạn mức nếu máy còn RAM."
+    )
+
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -730,8 +762,9 @@ class EmbeddedAirbyteAdapter:
                 )
                 raw = next((c for c in candidates if c), "")
                 if not raw:
-                    raw = f"{side.lower()} connector exited with code " \
-                          f"{source_rc if side == 'SOURCE' else dest_rc}"
+                    raw = _exit_without_explanation(
+                        side, source_rc if side == "SOURCE" else dest_rc
+                    )
                 job.status = RunStatus.FAILED
                 job.failure = classify(raw, side=side,
                                        default_category=ErrorCategory.SOURCE_READ

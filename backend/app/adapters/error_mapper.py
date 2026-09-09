@@ -32,6 +32,20 @@ _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
      r"|cannot parse access token|unauthenticated|re-?authenticate",
      ErrorCategory.AUTHENTICATION, "SOURCE_AUTHENTICATION_FAILED", "UPDATE_CREDENTIALS"),
 
+    # Memory, first, because everything a dying connector prints on the way out
+    # looks like something else. A JVM out of heap emits a stack trace whose
+    # frames mention connections and sockets; the network pattern below would
+    # claim it and the user would go and check a firewall that is fine.
+    #
+    # Only unambiguous strings here. A bare exit code cannot be classified from
+    # text alone -- 137 is SIGKILL, which is also what cancelling a run looks
+    # like -- so that judgement is made where the cancellation state is known,
+    # in the embedded adapter, and arrives here already worded.
+    (r"outofmemoryerror|out of memory|gc overhead limit exceeded"
+     r"|java heap space|memoryerror|cannot allocate memory|oomkilled"
+     r"|killed for exceeding its memory",
+     ErrorCategory.ENGINE, "CONNECTOR_OUT_OF_MEMORY", "INCREASE_CONNECTOR_MEMORY"),
+
     (r"permission denied|insufficient privile|not authorized|403 forbidden"
      r"|must be owner of|access to table .* denied",
      ErrorCategory.PERMISSION, "SOURCE_PERMISSION_DENIED", "GRANT_PERMISSION"),
@@ -87,6 +101,15 @@ _VI_SUMMARY: dict[ErrorCategory, str] = {
     ErrorCategory.UNKNOWN: "Đồng bộ thất bại vì lỗi chưa phân loại.",
 }
 
+#: Where the category's sentence is too vague to act on. "Engine gặp sự cố nội
+#: bộ" sends somebody to read logs; naming memory sends them to the one setting
+#: that fixes it.
+_CODE_SUMMARY: dict[str, str] = {
+    "CONNECTOR_OUT_OF_MEMORY":
+        "Connector bị dừng vì dùng quá bộ nhớ cho phép. Hãy giảm "
+        "MAX_CONCURRENT_RUNS_GLOBAL hoặc tăng CONNECTOR_MEMORY_LIMIT.",
+}
+
 
 def fingerprint(text: str) -> str:
     """Stable-ish hash used for alert dedup: strip digits/uuids/timestamps first."""
@@ -110,7 +133,9 @@ def classify(
             return EngineFailure(
                 code=code,
                 category=category,
-                summary=_VI_SUMMARY.get(category, _VI_SUMMARY[ErrorCategory.UNKNOWN]),
+                summary=_CODE_SUMMARY.get(
+                    code, _VI_SUMMARY.get(category, _VI_SUMMARY[ErrorCategory.UNKNOWN])
+                ),
                 technical_message=text[:4000] or None,
                 remediation_action=action,
                 fingerprint=fingerprint(text or code),
