@@ -151,6 +151,21 @@ class Incremental:
     #: is on the older `extapi/v1`, which answers `Updated to param is
     #: required` until it gets one.
     end_param: str | None = None
+    #: How far back to re-read on every sync, as an ISO-8601 duration.
+    #:
+    #: A cursor window of `[state, now]` with no overlap loses any record whose
+    #: `last_update` lands before the high-water mark but arrives after the
+    #: sync that would have collected it -- clock skew between Base and this
+    #: host is enough, and incremental never looks back to notice.
+    #:
+    #: Empty means the stream's own default is `PT0S`, and the reason it is off
+    #: rather than a few safe minutes is that the destination write mode is the
+    #: workspace's choice, not this connector's. Re-reading an overlap is free
+    #: under `append_dedup`, which deduplicates on the primary key every stream
+    #: here declares; under plain `append` it writes the overlap again. So the
+    #: value is offered per source through the `lookback_window` config field
+    #: and defaults to off, rather than being decided here for everybody.
+    lookback: str = ""
     #: Where the bounds go. Every `publicapi/v2` application reads them from
     #: the query string. Income does not: with `?updated_from=0` it answers
     #: `Updated from param is required`, and the same value in the form body
@@ -269,7 +284,17 @@ class ConfigField:
 #: That was wrong. The *path* belongs to the product; the host is which Base a
 #: customer is on, and only they know it.
 DEFAULT_DOMAIN = "base.com.vn"
-KNOWN_DOMAINS = ("base.com.vn", "base.vn")
+#: The two Base installations, primary first.
+#
+# Order is not cosmetic: `domains[0]` is both the form's pre-selected value and
+# the fallback the manifest interpolates when a config carries no domain. It
+# used to put `base.com.vn` first, so a customer on the primary installation
+# who left the dropdown alone had every request sent to a separate installation
+# that does not know their token -- and Base answers that with a message
+# indistinguishable from an expired token, which is the single most expensive
+# way this can go wrong. The field's own description already said base.vn is
+# the primary one; now the default agrees with it.
+KNOWN_DOMAINS = ("base.vn", "base.com.vn")
 
 
 @dataclass(frozen=True)
@@ -316,7 +341,21 @@ class BaseConnector:
     #: run against a real tenant is `BETA` -- it is honest to ship the shape and
     #: dishonest to call it certified. Promote it when the measurements exist,
     #: not when the code is finished.
-    certification: str = "SUPPORTED"
+    #
+    #: The default was `SUPPORTED`, which made that policy unenforceable: every
+    #: connector claimed the strongest statement in the vocabulary by doing
+    #: nothing, and no connector in this package had ever set it. `BETA` is the
+    #: honest default -- a connector arrives unmeasured and earns the promotion.
+    #
+    #: This is safe to flip only because the launch scope no longer reads it for
+    #: bundled connectors. It used to gate them: `SUPPORTED_ONLY` (the shipped
+    #: default) offers `certification == "SUPPORTED"` and nothing else, so a
+    #: truthful `BETA` here would have removed all twelve from the create
+    #: wizard. `Settings.connector_is_offered` now exempts BUNDLED for the same
+    #: reason it already exempted BUILDER: the launch scope exists to fence off
+    #: the hundreds of *upstream* connectors nobody here has tested, and a
+    #: connector this product wrote is not upstream.
+    certification: str = "BETA"
     #: Key to look this application's field contracts up under in
     #: `schemas.json`. Defaults to `app`; set it where the reviewed YAML is
     #: filed under a different name -- `base_crm_sale.yaml` yields `crm_sale`
@@ -526,6 +565,11 @@ def _incremental(inc: Incremental) -> dict[str, Any]:
         "cursor_datetime_formats": [inc.fmt, "%s", "%Y-%m-%dT%H:%M:%SZ"],
         "cursor_granularity": "PT1S",
         "step": "P1000Y",
+        # Interpolated rather than baked, so an operator who sees records going
+        # missing can widen the overlap on one source without a code change.
+        "lookback_window": (
+            "{{ config.get('lookback_window') or '" + (inc.lookback or "PT0S") + "' }}"
+        ),
         "start_datetime": {
             "type": "MinMaxDatetime",
             "datetime": "{{ config.get('updated_from') or 0 }}",
@@ -705,8 +749,27 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
             "examples": ["0"],
             "order": 2,
         }
+        properties["lookback_window"] = {
+            "type": "string",
+            "title": "Đọc lùi lại mỗi lần đồng bộ",
+            "description": (
+                "Khoảng thời gian đọc chồng lại, dạng ISO-8601: PT10M là mười "
+                "phút, PT1H là một giờ. Để PT0S là tắt. "
+                "Dùng khi thấy bản ghi bị thiếu dù đã sửa: cửa sổ đồng bộ chạy "
+                "từ mốc lần trước tới hiện tại, nên một bản ghi có thời điểm "
+                "cập nhật nằm trước mốc đó nhưng về muộn — lệch giờ giữa máy "
+                "chủ Base và máy chạy đồng bộ là đủ — sẽ không bao giờ được "
+                "đọc lại. "
+                "Chỉ bật khi đích ghi theo chế độ Append + khử trùng lặp: với "
+                "Append thuần, phần đọc chồng được ghi thêm một lần nữa thành "
+                "bản ghi trùng."
+            ),
+            "default": "PT0S",
+            "examples": ["PT0S", "PT10M", "PT1H"],
+            "order": 3,
+        }
 
-    for index, extra in enumerate(connector.config, start=3):
+    for index, extra in enumerate(connector.config, start=4):
         properties[extra.name] = {
             "type": extra.kind,
             "title": extra.title,

@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.adapters.airbyte_protocol.adapter import _exit_without_explanation
+from app.adapters.airbyte_protocol.adapter import (
+    _exit_without_explanation,
+    _suspect_truncation,
+)
 from app.adapters.airbyte_protocol.docker_runner import DockerRunner
 from app.adapters.error_mapper import classify
 from app.core.config import settings
@@ -139,3 +142,54 @@ def test_memory_wins_over_the_network_pattern() -> None:
         "\tCaused by: could not connect to destination"
     )
     assert classify(trace, side="DESTINATION").code == "CONNECTOR_OUT_OF_MEMORY"
+
+
+# ── a stream that stopped on a page boundary ───────────────────────────────
+
+class _Stat:
+    """Only the two fields the heuristic reads."""
+
+    def __init__(self, stream_name: str, records_emitted: int) -> None:
+        self.stream_name = stream_name
+        self.records_emitted = records_emitted
+
+
+@pytest.mark.parametrize("count", [20, 25, 50, 100, 200, 250, 500, 1000])
+def test_common_page_sizes_are_called_out(count: int) -> None:
+    """A connector that cannot page emits whatever one request returned. If the
+    server capped it, there is no error and no log line -- the sync succeeds
+    and the table is quietly short. A total that is exactly a page size is the
+    only signal available without knowing the endpoint."""
+    lines = _suspect_truncation({"s": _Stat("ticket", count)})
+    assert len(lines) == 1
+    assert "ticket" in lines[0]
+    assert str(count) in lines[0]
+
+
+@pytest.mark.parametrize("count", [0, 1, 19, 21, 499, 501, 1234])
+def test_ordinary_counts_are_left_alone(count: int) -> None:
+    """The heuristic has to stay quiet on normal reads, or it becomes noise
+    that people learn to skip past."""
+    assert _suspect_truncation({"s": _Stat("ticket", count)}) == []
+
+
+def test_every_suspicious_stream_is_named() -> None:
+    stats = {
+        "a": _Stat("service", 500),
+        "b": _Stat("ticket", 4321),
+        "c": _Stat("stage", 100),
+    }
+    lines = _suspect_truncation(stats)
+    assert len(lines) == 2
+    named = " ".join(lines)
+    assert "service" in named and "stage" in named
+    assert "ticket" not in named
+
+
+def test_the_warning_says_what_to_do_about_it() -> None:
+    """A warning nobody can act on is noise. It has to say why the number is
+    suspicious and that the source is where to check."""
+    line = _suspect_truncation({"s": _Stat("service", 500)})[0]
+    assert "page size" in line
+    assert "source" in line
+

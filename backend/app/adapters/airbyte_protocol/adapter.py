@@ -43,6 +43,40 @@ from app.models.enums import EngineResourceType, EngineStatus, EngineType, RunSt
 logger = logging.getLogger(__name__)
 
 
+#: Counts that almost never occur naturally at the end of a stream, because
+#: they are what an API returns when it decided how much to give you. A stream
+#: that stops on one of these looks identical to a complete read.
+_PAGE_SIZED_COUNTS = frozenset({20, 25, 50, 100, 200, 250, 500, 1000})
+
+
+def _suspect_truncation(stats: dict) -> list[str]:
+    """Streams whose record count is suspiciously round.
+
+    A connector that cannot page -- because the endpoint takes no page
+    parameter, or because the manifest says `NoPagination` -- issues one
+    request and emits whatever came back. If the server capped that response,
+    the missing records produce no error, no log line and no failed run: the
+    sync succeeds and the table is quietly short. This is the one signal
+    available without knowing the endpoint: a total that is exactly a common
+    page size is far more likely to be a cap than a coincidence.
+
+    Deliberately a warning in the run log rather than a failure. It is a
+    heuristic -- a table really can hold exactly 500 rows -- and failing a sync
+    on a coincidence would be worse than the problem. What it buys is that
+    somebody reading the log has a reason to check, which is more than silence.
+    """
+    lines: list[str] = []
+    for stat in stats.values():
+        if stat.records_emitted in _PAGE_SIZED_COUNTS:
+            lines.append(
+                f"[engine] stream '{stat.stream_name}' ended on exactly "
+                f"{stat.records_emitted} records. That is a common page size, so "
+                "it may be the endpoint's cap rather than the end of the data. "
+                "Worth checking against the source before trusting the count."
+            )
+    return lines
+
+
 def _exit_without_explanation(side: str, exit_code: int | None) -> str:
     """Wording for a connector that died saying nothing.
 
@@ -744,6 +778,9 @@ class EmbeddedAirbyteAdapter:
 
             for stat in job.stream_stats.values():
                 stat.status = "COMPLETED"
+
+            for line in _suspect_truncation(job.stream_stats):
+                emit(line)
 
             if job.cancel_requested:
                 job.status = RunStatus.CANCELLED

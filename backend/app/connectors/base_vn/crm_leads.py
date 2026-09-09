@@ -96,8 +96,9 @@ from __future__ import annotations
 
 from ._shared import BaseConnector, ConfigField, Incremental, Parent, Stream
 
-#: The same two hosts the Sales connector answers on.
-DOMAINS = ("basecrm.vn", "base.vn")
+#: The same hosts the Sales connector answers on, primary first -- see the
+#: comment there, including why `base.com.vn` is offered but not the default.
+DOMAINS = ("base.vn", "basecrm.vn", "base.com.vn")
 
 #: A closed range plus the field it applies to.
 #:

@@ -165,7 +165,16 @@ class Settings(BaseSettings):
         """
         if certification in ("BLOCKED", "HIDDEN"):
             return False
-        if (spec_source or "").upper() == "BUILDER":
+        # BUNDLED is exempt for the same reason, one step further: these are
+        # the connectors this product wrote and ships in its own image. The
+        # launch scope exists so hundreds of *upstream* connectors nobody here
+        # has tested are not offered; a first-party connector is not upstream,
+        # and gating it on `certification` made that field do two jobs at once.
+        # It had to claim SUPPORTED to stay usable, which is why every bundled
+        # connector claimed the strongest word in the vocabulary regardless of
+        # what had actually been measured. Exempting it here is what lets
+        # `certification` go back to being a statement about evidence.
+        if (spec_source or "").upper() in ("BUILDER", "BUNDLED"):
             return True
         if self.connector_launch_scope.upper() == "FULL_CATALOG":
             return True

@@ -83,8 +83,19 @@ from __future__ import annotations
 
 from ._shared import BaseConnector, ConfigField, Incremental, Parent, Stream
 
-#: Both hosts answer identically; the first is the default.
-DOMAINS = ("basecrm.vn", "base.vn")
+#: The CRM hosts, primary first.
+#
+# `basecrm.vn` and `base.vn` answer identically -- measured -- so which of the
+# two leads is a matter of the default being the one most customers are on.
+#
+# `base.com.vn` is here because leaving it out meant a customer on that
+# installation could not select it at all: the field is an enum, so the two
+# CRM connectors were the only ones in the package with no route to the second
+# installation. The host follows the same `apis.{domain}` shape as the other
+# two and is the one value in this tuple nobody has confirmed against a live
+# account -- it is offered rather than defaulted, so selecting it is a
+# deliberate act by somebody who knows their installation.
+DOMAINS = ("base.vn", "basecrm.vn", "base.com.vn")
 
 #: A closed range in the body, like Income and unlike the older applications.
 #: Both bounds are required for the server to filter at all -- see the module

@@ -108,8 +108,19 @@ def catalogue_entries() -> list[dict[str, Any]]:
             # is the connector. Pinning the runner is what pins behaviour.
             "docker_repository": RUNNER_REPOSITORY,
             "version": RUNNER_VERSION,
-            "release_stage": "beta",
-            "support_level": "certified",
+            # Both derived from `certification`, because three fields
+            # describing the same thing disagreed on screen: a connector showed
+            # `certification=SUPPORTED` beside `release_stage=beta` beside
+            # `support_level=certified`, and a reader had no way to know which
+            # one to believe. One source of truth, two presentations of it.
+            "release_stage": (
+                "generally_available" if connector.certification == "SUPPORTED"
+                else "beta"
+            ),
+            "support_level": (
+                "certified" if connector.certification == "SUPPORTED"
+                else "community"
+            ),
             "supports_oauth": False,
             "supports_incremental": any(s.incremental for s in streams),
             "supports_cdc": False,
