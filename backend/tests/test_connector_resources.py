@@ -90,11 +90,11 @@ def test_image_and_command_stay_last(runner: DockerRunner, monkeypatch) -> None:
 # ── how a silent kill reads ────────────────────────────────────────────────
 
 def test_sigkill_is_explained_as_memory(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "connector_memory_limit", "1g", raising=False)
+    monkeypatch.setattr(settings, "connector_memory_limit", "2g", raising=False)
     text = _exit_without_explanation("SOURCE", 137)
     assert "exceeding its memory" in text
     # The two settings that decide it, so the reader is not left searching.
-    assert "CONNECTOR_MEMORY_LIMIT=1g" in text
+    assert "CONNECTOR_MEMORY_LIMIT=2g" in text
     assert "MAX_CONCURRENT_RUNS_GLOBAL" in text
 
 

@@ -96,7 +96,16 @@ class Settings(BaseSettings):
     # Budget it as: MAX_CONCURRENT_RUNS_GLOBAL x 2 x this, plus ~800 MB for
     # AppBI and ~200 MB for Postgres, must fit in the host. Empty disables the
     # ceiling and restores the old unbounded behaviour.
-    connector_memory_limit: str = "1g"
+    #
+    # 2 GB rather than 1, and the number came from a measurement rather than a
+    # guess. Base Service against a live tenant emitted 2,553 records totalling
+    # 729 MB -- roughly 326 KB per ticket -- and pages 500 of them at a time, so
+    # one page alone is ~163 MB before the CDK's own overhead. At 1 GB the
+    # source was killed at record 820 with exit 137; at 2 GB the same sync
+    # completed. A ceiling that the product's own flagship connectors cannot
+    # work under is worse than no ceiling, because it fails on a healthy
+    # tenant and blames memory for what looks like a product fault.
+    connector_memory_limit: str = "2g"
     #: CPU shares per connector container, as `docker run --cpus`. Empty means
     #: unbounded. On a 2-core box an unbounded connector starves the API's
     #: event loop, which shows up as a UI that stops responding mid-sync.

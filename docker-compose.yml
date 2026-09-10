@@ -41,7 +41,7 @@ x-backend-env: &backend-env
   # MAX_CONCURRENT_RUNS_GLOBAL x 2 x this. Empty removes the ceiling, which is
   # what shipped before and is how one connector takes a small host down with
   # it. See CONNECTOR_MEMORY_LIMIT in .env.example.
-  CONNECTOR_MEMORY_LIMIT: ${CONNECTOR_MEMORY_LIMIT:-1g}
+  CONNECTOR_MEMORY_LIMIT: ${CONNECTOR_MEMORY_LIMIT:-2g}
   CONNECTOR_CPU_LIMIT: ${CONNECTOR_CPU_LIMIT:-}
   CONNECTOR_JAVA_OPTS: ${CONNECTOR_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
   # Used only when ENGINE_TYPE=AIRBYTE_API (point at a real Airbyte deployment)

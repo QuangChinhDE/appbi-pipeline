@@ -212,8 +212,17 @@ Với mặc định `4 × 2 × 1g`, riêng connector đã cần **8 GB**. Nên t
 | Máy | `MAX_CONCURRENT_RUNS_GLOBAL` | `CONNECTOR_MEMORY_LIMIT` | Connector cần |
 |---|---|---|---|
 | 2 CPU / 4 GB | `1` | `1g` | ~2 GB |
-| 2 CPU / 8 GB | `1` hoặc `2` | `1g` | ~2–4 GB |
-| 4 CPU / 16 GB | `4` | `1g` | ~8 GB |
+| 2 CPU / 8 GB | `1` | `2g` | ~4 GB |
+| 4 CPU / 16 GB | `2` | `2g` | ~8 GB |
+| 8 CPU / 32 GB | `4` | `2g` | ~16 GB |
+
+> **`2g` là con số đo được, không phải phỏng đoán.** Base Service trên một
+> tenant thật phát ra 2.553 bản ghi nặng tổng cộng 729 MB — khoảng 326 KB mỗi
+> ticket — và nó đọc 500 bản ghi mỗi trang, nên riêng một trang đã ~163 MB
+> trước khi tính overhead của CDK. Với trần 1 GB, container nguồn bị giết ở
+> bản ghi thứ 820 (`exit 137`); với 2 GB thì cùng lần đồng bộ đó chạy xong.
+> Connector nào có bản ghi lớn — ticket, hồ sơ ứng viên, bảng lương — đều
+> thuộc nhóm này.
 
 Với 2 nhân thì chạy song song **không** nhanh hơn — nó chỉ nhân RAM lên.
 
@@ -236,7 +245,7 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.embedded.yml:docker-compose.trans
 WITH_TRANSFORM=1
 ENGINE_TYPE=AIRBYTE_EMBEDDED
 MAX_CONCURRENT_RUNS_GLOBAL=1     # quan trọng: mỗi lần sync là 2 container
-CONNECTOR_MEMORY_LIMIT=1g
+CONNECTOR_MEMORY_LIMIT=2g
 ```
 
 ### Các lệnh thường dùng
@@ -295,11 +304,15 @@ MAX_CONCURRENT_RUNS_GLOBAL=1
 MAX_CONCURRENT_RUNS_PER_WORKSPACE=1
 ```
 
-Rồi `./run.sh`. Nếu vẫn hỏng mà máy còn RAM trống, nâng trần cho từng connector:
+Rồi `./run.sh`. Nếu vẫn hỏng mà máy còn RAM trống, nâng trần cho từng connector
+(mặc định đã là `2g`):
 
 ```bash
-CONNECTOR_MEMORY_LIMIT=2g
+CONNECTOR_MEMORY_LIMIT=3g
 ```
+
+Muốn biết connector thực sự cần bao nhiêu: xem `bytes` của lần chạy chia cho
+số bản ghi. Bản ghi ~300 KB trở lên, nhân với cỡ trang, là đã ra con số.
 
 Xem thực tế container đang dùng bao nhiêu:
 
