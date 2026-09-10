@@ -284,16 +284,25 @@ class ConfigField:
 #: That was wrong. The *path* belongs to the product; the host is which Base a
 #: customer is on, and only they know it.
 DEFAULT_DOMAIN = "base.com.vn"
-#: The two Base installations, primary first.
+#: The two Base installations. Both are always offered; the first is merely
+#: what the form pre-selects.
 #
-# Order is not cosmetic: `domains[0]` is both the form's pre-selected value and
-# the fallback the manifest interpolates when a config carries no domain. It
-# used to put `base.com.vn` first, so a customer on the primary installation
-# who left the dropdown alone had every request sent to a separate installation
-# that does not know their token -- and Base answers that with a message
-# indistinguishable from an expired token, which is the single most expensive
-# way this can go wrong. The field's own description already said base.vn is
-# the primary one; now the default agrees with it.
+# Order is not cosmetic -- `domains[0]` is the pre-selected value *and* the
+# fallback the manifest interpolates when a config carries no domain -- but it
+# is also not a claim about which installation is "correct". Measured on two
+# real accounts: ten tokens from one were refused on `base.vn` and accepted on
+# `base.com.vn`, while a token from another was accepted on `base.vn`. Both are
+# in live use, so whichever leads, some customers change the dropdown.
+#
+# What actually matters, and what this list guarantees, is that **both are
+# selectable on every connector**. They were not: the two CRM connectors
+# offered `basecrm.vn` and `base.vn` only, so a customer on the second
+# installation had no way to reach it at all. Picking the wrong one is a
+# thirty-second fix once you know to look; having no option is not.
+#
+# Getting it wrong is expensive to diagnose, which is why the field's
+# description says so plainly: Base answers a token from the other
+# installation with a message indistinguishable from an expired token.
 KNOWN_DOMAINS = ("base.vn", "base.com.vn")
 
 
