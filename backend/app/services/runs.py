@@ -30,7 +30,7 @@ from app.core.logging import log_event, new_trace_id
 from app.core.params import as_enum
 from app.core.permissions import Action, Module
 from app.models.enums import (
-    ACTIVE_RUN_STATUSES, HealthLevel, PipelineStatus, RunStatus, TriggerType,
+    ACTIVE_RUN_STATUSES, HealthLevel, PipelineStatus, RunStatus, SyncMode, TriggerType,
 )
 from app.models.integration import Destination, Pipeline, PipelineStreamStat, Source
 from app.models.run import PipelineRun, RunAttempt
@@ -374,6 +374,54 @@ async def claim_next(session: AsyncSession, worker_id: str) -> PipelineRun | Non
     return candidate
 
 
+def _incremental_stream_keys(pipeline: Pipeline) -> set[tuple[str | None, str]]:
+    """(namespace, name) of the streams configured to read incrementally."""
+    return {
+        (stream.namespace, stream.stream_name)
+        for stream in pipeline.streams
+        if stream.selected and stream.sync_mode is SyncMode.INCREMENTAL
+    }
+
+
+def _incremental_only(pipeline: Pipeline, state: list | None) -> list:
+    """Drop the state entries that belong to full-refresh streams.
+
+    State is a resumption token, and only an incremental stream has anything to
+    resume. A modern source emits state during a *full* refresh too -- Postgres
+    checkpoints by ctid so a failed run can pick up where it stopped -- and that
+    token means "this table has been read to the end". It is meaningful inside
+    one run and meaningless after it.
+
+    Keeping it was silent data loss. Second run of a full-refresh pipeline: the
+    saved ctid state went back to the source, the source correctly emitted
+    nothing because it had already reached the end, and the destination -- in
+    `overwrite`, which truncates before it writes -- replaced the table with the
+    nothing it received. Measured on the demo warehouse: 500 customers and
+    2,000 orders became 0 and 0, and the run reported SUCCEEDED with 0 records.
+    """
+    if not state:
+        return []
+    keep = _incremental_stream_keys(pipeline)
+    kept: list = []
+    for entry in state:
+        descriptor = ((entry or {}).get("stream") or {}).get("stream_descriptor") or {}
+        name = descriptor.get("name")
+        if name is None:
+            # Not a per-stream token -- a global or legacy shape. Keeping it is
+            # the safe side of the trade: dropping a global cursor would make an
+            # incremental pipeline re-read its whole history.
+            kept.append(entry)
+            continue
+        if (descriptor.get("namespace"), name) in keep:
+            kept.append(entry)
+    return kept
+
+
+def _state_for_incremental_streams(pipeline: Pipeline) -> list:
+    """What this run is allowed to resume from."""
+    return _incremental_only(pipeline, pipeline.sync_state)
+
+
 async def build_sync_request(session: AsyncSession, run: PipelineRun) -> EngineSyncRequest:
     """Resolve everything the engine needs, including decrypted credentials."""
     pipeline = await session.get(Pipeline, run.pipeline_id)
@@ -410,7 +458,7 @@ async def build_sync_request(session: AsyncSession, run: PipelineRun) -> EngineS
         source_config=source_config,
         destination_config=destination_config,
         streams=pipeline_service.configured_streams(pipeline),
-        state=pipeline.sync_state,
+        state=_state_for_incremental_streams(pipeline),
         generation_id=pipeline.generation_id,
         sync_id=pipeline.sync_counter,
         timeout_seconds=settings.run_timeout_seconds,
@@ -522,9 +570,12 @@ async def _apply_pipeline_outcome(
     elif run.status in (RunStatus.FAILED, RunStatus.FAILED_TO_START, RunStatus.TIMED_OUT):
         pipeline.consecutive_failures += 1
 
-    # Persist destination-committed state so the next incremental run resumes.
+    # Persist destination-committed state so the next incremental run resumes,
+    # and only for the streams that have a next run to resume. See
+    # `_state_for_incremental_streams`: keeping a full-refresh stream's state
+    # is what let it be replayed.
     if state:
-        pipeline.sync_state = state
+        pipeline.sync_state = _incremental_only(pipeline, state)
 
     if pipeline.status is PipelineStatus.ACTIVE:
         pipeline.next_run_at = scheduling.next_run_at(

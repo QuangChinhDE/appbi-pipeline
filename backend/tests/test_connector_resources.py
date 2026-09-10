@@ -16,6 +16,7 @@ import pytest
 
 from app.adapters.airbyte_protocol.adapter import (
     _exit_without_explanation,
+    _non_paginating_streams,
     _suspect_truncation,
 )
 from app.adapters.airbyte_protocol.docker_runner import DockerRunner
@@ -160,7 +161,7 @@ def test_common_page_sizes_are_called_out(count: int) -> None:
     server capped it, there is no error and no log line -- the sync succeeds
     and the table is quietly short. A total that is exactly a page size is the
     only signal available without knowing the endpoint."""
-    lines = _suspect_truncation({"s": _Stat("ticket", count)})
+    lines = _suspect_truncation({"s": _Stat("ticket", count)}, {"ticket"})
     assert len(lines) == 1
     assert "ticket" in lines[0]
     assert str(count) in lines[0]
@@ -170,7 +171,7 @@ def test_common_page_sizes_are_called_out(count: int) -> None:
 def test_ordinary_counts_are_left_alone(count: int) -> None:
     """The heuristic has to stay quiet on normal reads, or it becomes noise
     that people learn to skip past."""
-    assert _suspect_truncation({"s": _Stat("ticket", count)}) == []
+    assert _suspect_truncation({"s": _Stat("ticket", count)}, {"ticket"}) == []
 
 
 def test_every_suspicious_stream_is_named() -> None:
@@ -179,7 +180,7 @@ def test_every_suspicious_stream_is_named() -> None:
         "b": _Stat("ticket", 4321),
         "c": _Stat("stage", 100),
     }
-    lines = _suspect_truncation(stats)
+    lines = _suspect_truncation(stats, {"service", "ticket", "stage"})
     assert len(lines) == 2
     named = " ".join(lines)
     assert "service" in named and "stage" in named
@@ -189,7 +190,39 @@ def test_every_suspicious_stream_is_named() -> None:
 def test_the_warning_says_what_to_do_about_it() -> None:
     """A warning nobody can act on is noise. It has to say why the number is
     suspicious and that the source is where to check."""
-    line = _suspect_truncation({"s": _Stat("service", 500)})[0]
+    line = _suspect_truncation({"s": _Stat("service", 500)}, {"service"})[0]
     assert "page size" in line
     assert "source" in line
+
+
+def test_a_paginating_stream_is_never_warned_about() -> None:
+    """The false positive that made this necessary.
+
+    The demo warehouse holds exactly 500 customers, read across five pages by a
+    connector that pages correctly, and the first version of the check warned
+    about it on a healthy sync. Where a paginator exists a round total is
+    arithmetic, not evidence.
+    """
+    assert _suspect_truncation({"s": _Stat("customers", 500)}, set()) == []
+    assert _suspect_truncation({"s": _Stat("customers", 500)}, {"other"}) == []
+
+
+def test_streams_that_cannot_page_are_read_off_the_manifest() -> None:
+    manifest = {
+        "definitions": {
+            "streams": {
+                "service": {"retriever": {"paginator": {"type": "NoPagination"}}},
+                "ticket": {"retriever": {"paginator": {"type": "DefaultPaginator"}}},
+                "odd": {"retriever": {}},
+            }
+        }
+    }
+    assert _non_paginating_streams(manifest) == {"service"}
+
+
+def test_an_image_connector_contributes_no_stream_names() -> None:
+    """An ordinary Airbyte image has no manifest to inspect, pages properly,
+    and so must produce no warnings at all rather than guesses."""
+    assert _non_paginating_streams(None) == set()
+    assert _non_paginating_streams({}) == set()
 

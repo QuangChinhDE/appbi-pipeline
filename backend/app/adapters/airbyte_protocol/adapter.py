@@ -49,24 +49,49 @@ logger = logging.getLogger(__name__)
 _PAGE_SIZED_COUNTS = frozenset({20, 25, 50, 100, 200, 250, 500, 1000})
 
 
-def _suspect_truncation(stats: dict) -> list[str]:
-    """Streams whose record count is suspiciously round.
+def _non_paginating_streams(manifest: dict | None) -> set[str]:
+    """Streams the manifest declares as unable to page.
 
-    A connector that cannot page -- because the endpoint takes no page
-    parameter, or because the manifest says `NoPagination` -- issues one
-    request and emits whatever came back. If the server capped that response,
-    the missing records produce no error, no log line and no failed run: the
-    sync succeeds and the table is quietly short. This is the one signal
-    available without knowing the endpoint: a total that is exactly a common
-    page size is far more likely to be a cap than a coincidence.
+    Only a declarative connector can answer this, and only for itself. An
+    ordinary Airbyte image pages properly and its record counts mean what they
+    say, so it contributes nothing here and gets no warnings -- which is the
+    point: the check must be silent where it cannot be informative.
+    """
+    if not manifest:
+        return set()
+    names: set[str] = set()
+    for name, stream in (manifest.get("definitions", {}).get("streams") or {}).items():
+        paginator = (stream.get("retriever") or {}).get("paginator") or {}
+        if paginator.get("type") == "NoPagination":
+            names.add(name)
+    return names
 
-    Deliberately a warning in the run log rather than a failure. It is a
-    heuristic -- a table really can hold exactly 500 rows -- and failing a sync
-    on a coincidence would be worse than the problem. What it buys is that
-    somebody reading the log has a reason to check, which is more than silence.
+
+def _suspect_truncation(stats: dict, non_paginating: set[str] | None = None) -> list[str]:
+    """Streams that cannot page and stopped on a suspiciously round number.
+
+    A stream with `NoPagination` issues one request and emits whatever came
+    back. If the server capped that response the missing records produce no
+    error, no log line and no failed run: the sync succeeds and the table is
+    quietly short. A total that is exactly a common page size is the one signal
+    available without knowing the endpoint.
+
+    Restricted to streams that cannot page, and the reason is a real false
+    positive: the demo warehouse has exactly 500 customers, read across five
+    pages by a connector that paginates correctly, and the first version of
+    this warned about it. A warning that fires on healthy syncs is one people
+    learn to scroll past, which costs more than it ever saves. Where a
+    paginator exists, a round total is arithmetic rather than evidence.
+
+    Still a warning rather than a failure. A non-paginating endpoint really can
+    hold exactly 500 rows, and failing a sync on a coincidence would be worse
+    than the problem.
     """
     lines: list[str] = []
+    allowed = non_paginating or set()
     for stat in stats.values():
+        if stat.stream_name not in allowed:
+            continue
         if stat.records_emitted in _PAGE_SIZED_COUNTS:
             lines.append(
                 f"[engine] stream '{stat.stream_name}' ended on exactly "
@@ -779,7 +804,10 @@ class EmbeddedAirbyteAdapter:
             for stat in job.stream_stats.values():
                 stat.status = "COMPLETED"
 
-            for line in _suspect_truncation(job.stream_stats):
+            for line in _suspect_truncation(
+                job.stream_stats,
+                _non_paginating_streams(request.source.declarative_manifest),
+            ):
                 emit(line)
 
             if job.cancel_requested:
