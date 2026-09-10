@@ -28,6 +28,7 @@ Không viết script, không dựng cron, không ai phải nhớ chạy tay mỗ
   - [Khi gặp trục trặc](#khi-gặp-trục-trặc)
 - [Thử ngay bằng dữ liệu mẫu](#thử-ngay-bằng-dữ-liệu-mẫu)
 - [Dùng hằng ngày](#dùng-hằng-ngày)
+- [Tổ chức, workspace và phân quyền](#tổ-chức-workspace-và-phân-quyền)
 - [Transform: từ dữ liệu thô sang bảng báo cáo](#transform-từ-dữ-liệu-thô-sang-bảng-báo-cáo)
 - [Dành cho người vận hành](#dành-cho-người-vận-hành)
 - [Bảo mật](#bảo-mật)
@@ -65,6 +66,22 @@ AppBI làm phần gom ấy thành một sản phẩm có giao diện:
 | Nhân sự | HRM, Tuyển dụng, Chấm công, Nghỉ phép, Lương |
 | Vận hành | Quy trình, Yêu cầu, Dịch vụ, WeWork, Tài khoản |
 | Kinh doanh | CRM Deals, CRM Leads |
+
+> **Base có hai bản cài, và token của bản này bị bản kia từ chối.** `base.vn` và
+> `base.com.vn` là hai hệ thống riêng, tài khoản riêng — chỉ khách hàng biết
+> mình đang ở bản nào. Mỗi Nguồn Base có ô **Tên miền Base** để chọn; sai ô đó
+> thì Base trả về một lỗi **trông y hệt token hết hạn**, nên nếu token vừa lấy
+> mà vẫn bị từ chối thì kiểm tra ô này *trước* khi đi cấp token mới. Đo thật:
+> mười token của cùng một tài khoản đều bị từ chối trên một bản và đều chạy
+> trên bản kia.
+>
+> Mỗi ứng dụng Base cần **token riêng của nó** — token của Workflow không đọc
+> được HRM.
+>
+> Mười hai connector này được đánh dấu **beta**: chúng do đội Data viết và
+> chạy được với tài khoản thật, nhưng con số đo đạc cho từng ứng dụng chưa đủ
+> để gọi là đã chứng nhận. Nhãn sẽ lên khi có số đo, không lên khi code viết
+> xong.
 
 **Bán hàng & marketing**
 
@@ -203,11 +220,19 @@ hai container**, một cho Nguồn và một cho Đích. Ngân sách là
 
 ```
 MAX_CONCURRENT_RUNS_GLOBAL × 2 × CONNECTOR_MEMORY_LIMIT
-    + ~800 MB cho AppBI + ~200 MB cho Postgres   ≤   RAM của máy
+    + ~550 MB cho toàn bộ AppBI (đã gồm Postgres)   ≤   RAM của máy
 ```
 
-Với mặc định `4 × 2 × 1g`, riêng connector đã cần **8 GB**. Nên trên VM nhỏ thì
-điều cần sửa là số lần chạy song song, không phải hạn mức:
+Con số 550 MB là **đo thật** khi bốn lần sync chạy song song: api 126 MB,
+worker 123 MB, transform-worker 60 MB, frontend 46 MB, proxy 9 MB, postgres
+186 MB. Mỗi container AppBI đều có trần riêng (gấp 3-4 lần mức đó, xem
+`*_MEMORY_LIMIT` trong `.env.example`) để một connector ngốn RAM không kéo
+`api` hay `worker` chết theo — khi hệ điều hành hết bộ nhớ, nó giết theo *kích
+thước* chứ không theo *lỗi của ai*.
+
+Với mặc định `4 × 2 × 2g`, riêng connector đã cần **16 GB**. Nên trên VM nhỏ
+thì điều cần sửa là số lần chạy song song, không phải hạn mức — hai nhân CPU
+thì chạy song song cũng không nhanh hơn, chỉ nhân RAM lên:
 
 | Máy | `MAX_CONCURRENT_RUNS_GLOBAL` | `CONNECTOR_MEMORY_LIMIT` | Connector cần |
 |---|---|---|---|
@@ -235,6 +260,39 @@ Destination BigQuery, Postgres và MSSQL của Airbyte chạy trên JVM và lấ
 theo **tỷ lệ của trần container**. JVM mặc định chỉ lấy 25%, tức 256 MB với trần
 1 GB — không đủ. `CONNECTOR_JAVA_OPTS=-XX:MaxRAMPercentage=75.0` là thứ làm cho
 cái trần dùng được; đổi trần thì không phải đổi gì thêm.
+
+#### `lookback_window` — khi bản ghi về muộn
+
+Đồng bộ tăng dần chạy cửa sổ `[mốc lần trước, hiện tại]`. Một bản ghi có thời
+điểm cập nhật *trước* mốc đó nhưng về *sau* lần đồng bộ lẽ ra phải lấy nó — lệch
+giờ giữa máy chủ nguồn và máy chạy đồng bộ là đủ — sẽ không bao giờ được đọc
+lại, vì tăng dần không nhìn lùi.
+
+Mỗi Nguồn có ô **"Đọc lùi lại mỗi lần đồng bộ"**, mặc định `PT0S` (tắt). Bật
+bằng một khoảng ISO-8601: `PT10M` là mười phút.
+
+> **Chỉ bật khi đích ghi theo chế độ Append + khử trùng lặp.** Phần đọc chồng
+> khi đó miễn phí vì trùng khoá chính sẽ bị khử. Với Append thuần, nó được ghi
+> thêm một lần nữa thành bản ghi trùng. Đó là lý do mặc định là tắt: chế độ ghi
+> ở đích là lựa chọn của từng workspace, không phải quyết định của connector.
+
+#### Hai pipeline trên cùng một kho dữ liệu
+
+Nếu hai pipeline có stream **trùng tên** — Base Service và Base Workflow đều có
+stream `stage`, Base Service và Base Request đều có `group` — thì trên
+`AIRBYTE_EMBEDDED` chúng sẽ ghi vào **cùng một bảng** và phá bảng tạm
+(`<tên>_airbyte_tmp`) của nhau khi hai lần chạy trùng thời điểm.
+
+**Cách tách: cho mỗi pipeline một Đích riêng, với `schema` khác nhau.** Ví dụ
+một Đích trỏ `schema=base_service`, một Đích trỏ `schema=base_workflow`, cùng
+một database.
+
+`stream_prefix` **không dùng được** ở chế độ `AIRBYTE_EMBEDDED` và sản phẩm sẽ
+từ chối khi bạn đặt nó: engine này đưa cùng một catalog cho cả Nguồn và Đích rồi
+chuyển bản ghi qua nguyên vẹn, nên tên stream ở đích không thể khác tên Nguồn
+phát ra. Ở `AIRBYTE_API` thì nó hoạt động bình thường. Từ chối thẳng còn hơn
+nhận rồi bỏ qua — lưu mà không áp dụng chính là cách hai pipeline ghi đè lên
+nhau trong im lặng.
 
 #### Ví dụ: VM 2 CPU / 4 GB RAM
 
@@ -481,6 +539,79 @@ Sản phẩm dùng tiếng Việt, có thể chuyển sang tiếng Anh.
 
 ---
 
+## Tổ chức, workspace và phân quyền
+
+Ba tầng, và mỗi tầng trả lời một câu hỏi khác nhau:
+
+```
+Tổ chức  ──sở hữu──▶  Workspace  ──chứa──▶  Nguồn / Pipeline / Transform
+   │                      │
+ OrgRole                Role
+ "ai mở được             "làm được gì
+  workspace nào"          bên trong"
+```
+
+### Tổ chức: ai mở được workspace nào
+
+Tổ chức là đơn vị một khách hàng ký hợp đồng, và là nơi các workspace thuộc về.
+
+| Vai trò tổ chức | Quyền |
+|---|---|
+| `ORG_OWNER` | Toàn quyền, kể cả xoá workspace và đổi vai trò Org Owner khác |
+| `ORG_ADMIN` | Tạo workspace, quản trị thành viên tổ chức — không xoá được |
+| `ORG_MEMBER` | Chỉ vào được những workspace được thêm vào |
+
+**`ORG_OWNER` và `ORG_ADMIN` tự động là Owner trong mọi workspace của tổ chức**,
+không cần thêm từng cái một. Đó là lý do tầng này tồn tại: trước đây một
+workspace tạo hôm nay thì quản trị viên không thấy nó cho tới khi có người thêm
+họ vào — và họ phải làm việc đó cho từng workspace.
+
+Hai chốt an toàn: không hạ được **Org Owner cuối cùng** của tổ chức, và không
+xoá được **workspace cuối cùng** — cả hai đều sẽ tạo ra một căn phòng khoá từ
+bên ngoài, vì mọi màn hình đều dựng bối cảnh từ một workspace.
+
+Xoá workspace **bị từ chối khi nó còn pipeline, nguồn, đích hay dự án
+Transform**, kèm danh sách cụ thể. Xoá thẳng dòng workspace sẽ cascade mất
+chúng mà không dọn tài nguyên phía engine — connection Airbyte vẫn chạy, secret
+vẫn nằm trong kho. Xoá từng cái trước là đường đã dọn đúng.
+
+### Workspace: làm được gì bên trong
+
+Sáu vai trò, gán được cho từng thành viên của từng workspace:
+
+| Vai trò | Dùng cho |
+|---|---|
+| `OWNER` | Toàn quyền, kể cả thành viên và tua lại dữ liệu |
+| `DATA_ADMIN` | Tạo và vận hành nguồn / đích / pipeline / transform |
+| `CONNECTOR_DEV` | Viết connector trong Builder — **không đụng pipeline** |
+| `OPERATOR` | Chạy, hủy, thử lại — không sửa cấu hình |
+| `ANALYST` | Chỉ xem, kèm xem dữ liệu Transform |
+| `AUDITOR` | Xem cấu hình và nhật ký kiểm toán, **không xem dữ liệu** |
+
+Ba quyền được tách riêng vì chúng chạm tới dữ liệu thật, và gộp chung là sai:
+
+- **`reset`** — tua con trỏ đồng bộ, `dbt --full-refresh`, duyệt thay đổi schema
+  làm mất stream. Những việc này *ghi đè dữ liệu đã giao vào kho đích*, khác
+  hẳn "bấm Chạy". Chỉ Owner có.
+- **`manage_credentials`** — đổi mật khẩu mà một kết nối dùng để đăng nhập. Đổi
+  tên một nguồn là việc khác.
+- **`view_data`** — đọc chính các bản ghi, không chỉ cấu hình và số đếm. Nhờ nó
+  mà một Auditor rà soát được cấu hình của pipeline chở dữ liệu họ không được
+  đọc.
+
+Backend là nơi duy nhất quyết định; giao diện chỉ ẩn nút để màn hình không mời
+người ta bấm thứ sẽ bị từ chối. `scripts/verify-permissions.py` kiểm tra đúng
+điều đó trên một bản triển khai đang chạy:
+
+```bash
+python scripts/verify-permissions.py     --account owner@example.com:... --account analyst@example.com:...
+```
+
+Nó báo cả hai chiều — `HOLE` khi endpoint cho qua thứ ma trận cấm, và
+`OVER-BLOCKED` khi ngược lại — và thoát mã 1 nên chặn được deploy.
+
+---
+
 ## Transform: từ dữ liệu thô sang bảng báo cáo
 
 Dữ liệu vừa đồng bộ về thường chưa dùng ngay được — tên cột khó hiểu, phải join
@@ -560,7 +691,11 @@ Chạy thử tại chỗ bằng MinIO thì thêm `docker-compose.storage.yml` v�
 - Thông tin đăng nhập được mã hoá bằng khoá riêng của từng cài đặt, lưu tách khỏi
   phần cấu hình còn lại, và **không bao giờ hiển thị lại** sau khi lưu — kể cả
   cho quản trị viên.
-- Phân quyền theo vai trò, phạm vi theo workspace.
+- Phân quyền hai tầng: vai trò tổ chức quyết định mở được workspace nào, vai
+  trò workspace quyết định làm được gì bên trong. Ba quyền chạm tới dữ liệu
+  thật — tua lại dữ liệu, đổi thông tin đăng nhập, xem chính các bản ghi — được
+  tách riêng thay vì gộp vào quyền "sửa". Xem
+  [Tổ chức, workspace và phân quyền](#tổ-chức-workspace-và-phân-quyền).
 - Mọi thao tác chạm vào thông tin đăng nhập hay dữ liệu đều được ghi nhật ký kiểm
   toán, kèm giá trị trước và sau.
 - Chỉ những địa chỉ được phép mới gọi ra ngoài được; nhật ký tự che thông tin
@@ -572,10 +707,21 @@ Chạy thử tại chỗ bằng MinIO thì thêm `docker-compose.storage.yml` v�
 **Trước khi dùng cho việc thật, nhớ:**
 
 1. Đổi mật khẩu quản trị (`SEED_ADMIN_PASSWORD`, hoặc đổi trong giao diện)
-2. Đặt `JWT_SECRET` thành một chuỗi ngẫu nhiên
-3. Sao lưu `.env` — mất `SECRET_ENCRYPTION_KEY` là mất toàn bộ thông tin đăng nhập
+2. Sao lưu `.env` — mất `SECRET_ENCRYPTION_KEY` là mất toàn bộ thông tin đăng
+   nhập, không giải mã lại được. `run.sh` tự sao lưu vào `.env.backups/` mỗi
+   lần chạy.
+3. Đặt `APP_ENV=production` và `COOKIE_SECURE=true`. Ở chế độ production, sản
+   phẩm **từ chối khởi động** nếu còn `SEED_DEMO_DATA=true` hoặc `JWT_SECRET`
+   vẫn là giá trị ship kèm repository — hai thứ đều tạo ra tài khoản hoặc phiên
+   mà bất kỳ ai đọc repo này cũng dựng lại được.
 4. Cân nhắc `ENGINE_TYPE=AIRBYTE_API` thay vì `AIRBYTE_EMBEDDED`
    ([lý do](#engine_type--chạy-connector-bằng-cách-nào))
+
+> `JWT_SECRET` và `SECRET_ENCRYPTION_KEY` **do `run.sh` sinh riêng cho từng
+> máy** ngay lần chạy đầu, nên không có bước "đặt khoá" nào phải làm tay. Sản
+> phẩm cũng từ chối khởi động nếu `SECRET_ENCRYPTION_KEY` không dùng được — ở
+> mọi môi trường, không riêng production, vì đó là sai sót duy nhất im lặng cho
+> tới lúc lưu Nguồn đầu tiên.
 
 ---
 

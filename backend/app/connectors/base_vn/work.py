@@ -146,6 +146,19 @@ SERVICE = BaseConnector(
             incremental=Incremental(field="last_update", param="last_update_from"),
             fields={"name": "string", "service_id": "string",
                     "stage_id": "string", "status": "string"},
+            # Measured on two live tenants: a ticket averages ~326 KB, so a
+            # page of 500 is ~163 MB in the source's memory before the CDK's
+            # own overhead. On one tenant that killed a 1 GB container at
+            # record 820; the same sync completed under 2 GB, which is why
+            # CONNECTOR_MEMORY_LIMIT defaults to 2 GB.
+            #
+            # Dropping page_size to ~100 would cut peak memory about fivefold
+            # for fivefold the requests, and on records this size that is
+            # probably the better trade. Left alone deliberately: one tenant's
+            # record size is not enough to change the request pattern for
+            # every deployment, and `page_size` is also what the CDK compares
+            # a short page against to decide a stream is finished. Measure a
+            # few tenants first, then pick the number.
             note="Tickets, per service desk. Had no primary key, so a "
                  "re-sync could not deduplicate the largest table here.",
         ),

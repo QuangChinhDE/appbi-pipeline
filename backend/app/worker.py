@@ -138,14 +138,20 @@ class Worker:
         if hasattr(adapter, "forget"):
             adapter.forget(run.engine_job_ref)
 
-        queued_transforms = await transform_service.enqueue_after_upstream(session, run)
+        # There used to be a call to `transform_service.enqueue_after_upstream`
+        # here -- running a Transform the moment the pipeline feeding it
+        # finished. No such function exists, in this module or anywhere else:
+        # Transforms run on their own schedule, through
+        # `transform_scheduler_loop`.
+        #
+        # So every reconcile raised AttributeError, and because the raise came
+        # *before* the two lines below, the loop's error handler swallowed it
+        # and the run's alerts were never evaluated and the session never
+        # committed. A missing feature had quietly taken alerting with it. The
+        # capability is worth having; a call to a function nobody wrote is not
+        # how to have it.
         notifications = await alert_service.evaluate_run(session, run)
         await session.commit()
-        if queued_transforms:
-            log_event(
-                logger, logging.INFO, "transforms.queued_after_upstream",
-                run_id=str(run.id), count=len(queued_transforms),
-            )
         if notifications:
             log_event(logger, logging.INFO, "alerts.created",
                       run_id=str(run.id), count=len(notifications))
