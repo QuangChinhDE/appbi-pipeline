@@ -289,7 +289,13 @@ def _validate_streams(
     return resolved
 
 
-def _reject_unsupported_naming(namespace_format: str | None, stream_prefix: str | None) -> None:
+def _reject_unsupported_naming(
+    namespace_format: str | None,
+    stream_prefix: str | None,
+    *,
+    current_namespace_format: str | None = None,
+    current_stream_prefix: str | None = None,
+) -> None:
     """Refuse a rename the engine in use cannot perform.
 
     `stream_prefix` and `namespace_format` are honoured by the Airbyte API
@@ -312,10 +318,23 @@ def _reject_unsupported_naming(namespace_format: str | None, stream_prefix: str 
     """
     if (settings.engine_type or "").upper() != "AIRBYTE_EMBEDDED":
         return
+    # Only a *change* is refused, and the reason is what the settings form
+    # sends. It submits every field it knows, so a pipeline that already
+    # carries a prefix -- created before this guard existed -- posts that
+    # prefix back on every save. Refusing the value rather than the change
+    # made those pipelines uneditable: choosing a schedule was answered with a
+    # message about `stream_prefix`, which is neither what the person did nor
+    # something they can act on from that screen.
+    #
+    # The stored value is already inert at sync time. Leaving it alone costs
+    # nothing; refusing to save around it strands the pipeline.
     unsupported = [
-        label for label, value in (("stream_prefix", stream_prefix),
-                                   ("namespace_format", namespace_format))
-        if value
+        label
+        for label, value, current in (
+            ("stream_prefix", stream_prefix, current_stream_prefix),
+            ("namespace_format", namespace_format, current_namespace_format),
+        )
+        if value and value != current
     ]
     if not unsupported:
         return
@@ -501,11 +520,20 @@ async def update(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.U
         pipeline.name = payload.name.strip()
     if payload.description is not None:
         pipeline.description = payload.description
+    # Only what this request is asking for, never what the pipeline already
+    # carries. Reading the stored value locked every pipeline created before
+    # this guard existed out of *all* editing -- renaming it, or setting a
+    # schedule, was refused with a message about `stream_prefix` that had
+    # nothing to do with what the caller was doing. The stored value is
+    # already inert at sync time; refusing to edit around it protects nothing
+    # and strands the pipeline.
+    #
+    # `""` is how the form clears the field, so it has to be allowed through.
     _reject_unsupported_naming(
-        payload.namespace_format if payload.namespace_format is not None
-        else pipeline.namespace_format,
-        payload.stream_prefix if payload.stream_prefix is not None
-        else pipeline.stream_prefix,
+        payload.namespace_format or None,
+        payload.stream_prefix or None,
+        current_namespace_format=pipeline.namespace_format,
+        current_stream_prefix=pipeline.stream_prefix,
     )
     if payload.namespace_format is not None:
         pipeline.namespace_format = payload.namespace_format or None
