@@ -16,6 +16,14 @@ from app.core.errors import ErrorCategory
 # Ordered: first match wins, so put the specific patterns above the generic ones.
 _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
     # (regex, category, product code, remediation action)
+    # Base says this and nothing else when a token is refused. It was landing
+    # in UNKNOWN, so the screen read "lỗi chưa phân loại" while the connector's
+    # own sentence -- "the token is not accepted for this application" -- sat
+    # unread in the technical detail. Measured against a live tenant: every one
+    # of the ten Base applications answers a wrong-installation token this way.
+    (r"access_token_v2_invalid|access_token_invalid",
+     ErrorCategory.AUTHENTICATION, "SOURCE_AUTHENTICATION_FAILED", "UPDATE_CREDENTIALS"),
+
     (r"password authentication failed|authentication failed|invalid credentials"
           # "Request had invalid authentication credentials" is Google's standard
      # wording across Ads and Sheets, and `invalid credentials` alone misses it.
@@ -55,8 +63,37 @@ _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
      r"|econnrefused|network is unreachable|ssl.*handshake|connect timed out",
      ErrorCategory.NETWORK, "SOURCE_NETWORK_UNREACHABLE", "CHECK_NETWORK"),
 
+    # One of the two connector processes stopped talking mid-sync. Seen once
+    # in twenty runs against Base: the run failed after 1,603 records and the
+    # identical run succeeded with 2,793 a minute later, so it is transient and
+    # the useful advice is to run it again. It was landing in UNKNOWN, whose
+    # remediation is "view technical details" -- an invitation to investigate
+    # something that has already fixed itself.
+    #
+    # Not NETWORK: that summary tells somebody their server is unreachable and
+    # sends them to check a firewall, when what broke was a pipe between two
+    # local processes.
+    (r"connection lost|connection reset by peer|broken pipe"
+     r"|server closed the connection unexpectedly|incomplete message from server",
+     ErrorCategory.ENGINE, "CONNECTOR_STREAM_INTERRUPTED", "RETRY_LATER"),
+
     (r"rate limit|too many requests|429|quota exceeded|throttl",
      ErrorCategory.RATE_LIMIT, "SOURCE_RATE_LIMITED", "RETRY_LATER"),
+
+    # A destination's own scratch table, above the schema rule, because the
+    # words are identical and the advice is opposite. Airbyte destinations
+    # stage into `<stream>_airbyte_tmp`; when two pipelines write a stream of
+    # the same name into one schema they collide there, and Postgres answers
+    # `column "data" of relation "stage_airbyte_tmp" does not exist`.
+    #
+    # The schema rule below claimed it, so the run reported "cấu trúc dữ liệu
+    # nguồn đã thay đổi" and offered to re-discover the source -- sending
+    # somebody to inspect a source that had not changed, for a collision in
+    # the destination. Observed four times in thirty-six scheduled runs
+    # against a live tenant.
+    (r"_airbyte_tmp|_airbyte_raw|airbyte_internal",
+     ErrorCategory.DESTINATION_WRITE, "DESTINATION_STAGING_CONFLICT",
+     "VIEW_TECHNICAL_DETAILS"),
 
     (r"relation .* does not exist|column .* does not exist|table .* not found"
      r"|no such table|schema .* does not exist|cursor field .* not found"
@@ -105,6 +142,13 @@ _VI_SUMMARY: dict[ErrorCategory, str] = {
 #: bộ" sends somebody to read logs; naming memory sends them to the one setting
 #: that fixes it.
 _CODE_SUMMARY: dict[str, str] = {
+    "DESTINATION_STAGING_CONFLICT":
+        "Lỗi ở bảng tạm của đích, không phải ở nguồn. Thường gặp khi hai "
+        "pipeline ghi hai stream trùng tên vào cùng một schema — đặt tiền tố "
+        "khác nhau, hoặc cho mỗi pipeline một schema riêng.",
+    "CONNECTOR_STREAM_INTERRUPTED":
+        "Kết nối giữa connector và engine bị đứt giữa chừng. Thường là tạm "
+        "thời — chạy lại là được; nếu lặp lại nhiều lần thì xem log kỹ thuật.",
     "CONNECTOR_OUT_OF_MEMORY":
         "Connector bị dừng vì dùng quá bộ nhớ cho phép. Hãy giảm "
         "MAX_CONCURRENT_RUNS_GLOBAL hoặc tăng CONNECTOR_MEMORY_LIMIT.",

@@ -115,6 +115,20 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: appbi-pipeline-postgres
+    # Ceilings on the product's own containers.
+    #
+    # There were none, and on a large machine that is invisible. On a 2-core /
+    # 8 GB VM it is the difference between a connector failing and the kernel
+    # killing whichever process happens to be biggest -- which is often `api`
+    # or `worker`, so the product dies for something a connector did and the
+    # error says nothing about either.
+    #
+    # Measured under four concurrent syncs against a live tenant: api 126 MB,
+    # worker 123 MB, transform-worker 60 MB, frontend 46 MB, proxy 9 MB,
+    # postgres 186 MB -- about 550 MB for the whole control plane. These
+    # ceilings are three to four times that: room for a bad day, not room to
+    # eat into the connector budget.
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-768m}
     environment:
       POSTGRES_USER: appbi
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-appbi}
@@ -158,6 +172,7 @@ services:
         WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-migrate
+    mem_limit: ${MIGRATE_MEMORY_LIMIT:-512m}
     environment: *backend-env
     command: ["python", "-m", "app.bootstrap"]
     depends_on:
@@ -175,6 +190,7 @@ services:
         WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-api
+    mem_limit: ${API_MEMORY_LIMIT:-768m}
     environment:
       <<: *backend-env
       SERVICE_NAME: product-api
@@ -219,6 +235,7 @@ services:
         WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-worker
+    mem_limit: ${WORKER_MEMORY_LIMIT:-768m}
     environment:
       <<: *backend-env
       SERVICE_NAME: product-worker
@@ -247,6 +264,7 @@ services:
         NEXT_PUBLIC_DEMO_EMAIL: ${NEXT_PUBLIC_DEMO_EMAIL:-}
         NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-}
     container_name: appbi-pipeline-frontend
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-512m}
     environment:
       NODE_ENV: production
       API_INTERNAL_URL: http://api:8000
@@ -261,6 +279,7 @@ services:
   proxy:
     image: nginx:1.27-alpine
     container_name: appbi-pipeline-proxy
+    mem_limit: ${PROXY_MEMORY_LIMIT:-128m}
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:

@@ -226,3 +226,65 @@ def test_an_image_connector_contributes_no_stream_names() -> None:
     assert _non_paginating_streams(None) == set()
     assert _non_paginating_streams({}) == set()
 
+
+# ── what a live tenant actually answered ───────────────────────────────────
+
+def test_base_token_refusal_is_an_authentication_failure() -> None:
+    """Measured against a live Base tenant: every one of the ten applications
+    answers a token from the wrong installation with this string, and it was
+    landing in UNKNOWN -- so the screen said "lỗi chưa phân loại" while the
+    connector's own explanation sat unread in the technical detail."""
+    failure = classify(
+        "Stream service is not available: Base rejected this request: "
+        "access_token_v2_invalid_3. An `access_token_v2_invalid` message means "
+        "the token is not accepted for this application.",
+        side="SOURCE",
+    )
+    assert failure.code == "SOURCE_AUTHENTICATION_FAILED"
+    assert failure.remediation_action == "UPDATE_CREDENTIALS"
+
+
+def test_a_mid_sync_disconnect_says_to_try_again() -> None:
+    """Seen once in twenty scheduled runs: failed after 1,603 records, and the
+    identical run succeeded with 2,793 a minute later. UNKNOWN's remediation is
+    "view technical details", which invites investigating something that has
+    already fixed itself."""
+    failure = classify("Connection lost", side="SOURCE")
+    assert failure.code == "CONNECTOR_STREAM_INTERRUPTED"
+    assert failure.remediation_action == "RETRY_LATER"
+    assert "tạm" in failure.summary
+
+
+def test_a_dropped_stream_is_not_reported_as_a_network_problem() -> None:
+    """NETWORK's summary sends somebody to check a firewall. What broke was a
+    pipe between two local processes."""
+    failure = classify("broken pipe", side="DESTINATION")
+    assert failure.category is not None
+    assert "Không thể kết nối tới máy chủ" not in failure.summary
+
+
+def test_a_destination_staging_clash_is_not_a_source_schema_change() -> None:
+    """Observed four times in thirty-six scheduled runs against a live tenant.
+
+    Two pipelines whose sources both expose a stream called `stage` -- Base
+    Service and Base Workflow do -- wrote into one schema and collided on the
+    `stage_airbyte_tmp` staging table. Postgres says `column "data" of relation
+    "stage_airbyte_tmp" does not exist`, the schema rule claimed it, and the
+    run offered to re-discover a source that had not changed.
+    """
+    failure = classify(
+        'org.postgresql.util.PSQLException: ERROR: column "data" of relation '
+        '"stage_airbyte_tmp" does not exist',
+        side="DESTINATION",
+    )
+    assert failure.code == "DESTINATION_STAGING_CONFLICT"
+    assert failure.remediation_action != "REDISCOVER_SCHEMA"
+    assert "đích" in failure.summary
+
+
+def test_a_real_source_schema_change_is_still_recognised() -> None:
+    """The narrower rule must not swallow the case it was carved out of."""
+    failure = classify('column "email" does not exist', side="SOURCE")
+    assert failure.code == "SCHEMA_CHANGED"
+    assert failure.remediation_action == "REDISCOVER_SCHEMA"
+

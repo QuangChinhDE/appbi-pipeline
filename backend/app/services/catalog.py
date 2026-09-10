@@ -324,17 +324,36 @@ async def refresh_specs(
             continue
 
         new_hash = spec_hash(metadata.spec_schema)
-        if metadata.spec_schema:
+        # A bundled declarative manifest owns its customer-facing spec, and the
+        # guard has to cover the schema itself -- not just the label saying
+        # where it came from.
+        #
+        # It used to protect `spec_source` alone, so the refresh wrote the
+        # runner's spec over the connector's and left the label reading
+        # BUNDLED. The runner's spec describes its own internal slot: a single
+        # required field called `__injected_declarative_manifest`. Every Base
+        # connector's token-and-domain form was replaced by that, and creating
+        # a source answered "Thiếu thông tin bắt buộc: Low-code manifest".
+        #
+        # Worst of all, this loop prioritises connectors with `usage_count > 0`
+        # -- so it broke precisely the connectors customers were using, and
+        # only after they had started using them. A restart reseeded the
+        # bundled spec and the next refresh broke it again.
+        #
+        # For these, the engine is authoritative about the runner and the image
+        # tag it executes, and about nothing else.
+        owns_its_spec = connector.declarative_manifest is not None
+        if metadata.spec_schema and not owns_its_spec:
             connector.spec_schema = metadata.spec_schema
             connector.spec_hash = new_hash
-            # A bundled declarative manifest owns its customer-facing spec.
-            # Airbyte only sees the generic runner's internal manifest slot.
-            if connector.declarative_manifest is None:
-                connector.spec_source = "ENGINE"
-        connector.supports_incremental = metadata.supports_incremental
-        connector.supports_oauth = metadata.supports_oauth
-        if metadata.supported_destination_sync_modes:
-            connector.supported_destination_sync_modes = metadata.supported_destination_sync_modes
+            connector.spec_source = "ENGINE"
+        if not owns_its_spec:
+            connector.supports_incremental = metadata.supports_incremental
+            connector.supports_oauth = metadata.supports_oauth
+            if metadata.supported_destination_sync_modes:
+                connector.supported_destination_sync_modes = (
+                    metadata.supported_destination_sync_modes
+                )
         # What the engine says it will run. In embedded mode this equals the
         # product's pinned version; in API mode it is Airbyte's own choice, and
         # the difference is exactly what an operator needs to see.

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.dto import ConfiguredStream, EngineConnectionRequest
 from app.adapters.registry import get_adapter
+from app.core.config import settings
 from app.core.context import RequestContext
 from app.core.db import utcnow
 from app.core.errors import (
@@ -288,6 +289,46 @@ def _validate_streams(
     return resolved
 
 
+def _reject_unsupported_naming(namespace_format: str | None, stream_prefix: str | None) -> None:
+    """Refuse a rename the engine in use cannot perform.
+
+    `stream_prefix` and `namespace_format` are honoured by the Airbyte API
+    adapter and by sql_direct. The embedded runner ignores both: it hands the
+    same configured catalog to the source and the destination and forwards
+    records between them untouched, so a destination stream cannot be named
+    anything other than what the source emitted.
+
+    Storing the value and ignoring it was the worst of the three options. Two
+    pipelines whose sources both expose a stream called `stage` -- Base Service
+    and Base Workflow do -- were given prefixes precisely so they would not
+    collide, then wrote into the same table anyway. When their scheduled runs
+    overlapped they corrupted each other's `stage_airbyte_tmp` staging table
+    and the run failed with something that reads like a source problem.
+    Measured: four failures in thirty-six runs.
+
+    Refusing is honest until the embedded runner can rename. Until then the way
+    to separate two pipelines on one warehouse is a schema each, set on the
+    destination.
+    """
+    if (settings.engine_type or "").upper() != "AIRBYTE_EMBEDDED":
+        return
+    unsupported = [
+        label for label, value in (("stream_prefix", stream_prefix),
+                                   ("namespace_format", namespace_format))
+        if value
+    ]
+    if not unsupported:
+        return
+    raise ValidationError(
+        f"Engine đang chạy (AIRBYTE_EMBEDDED) chưa đổi được tên stream ở đích, "
+        f"nên {' và '.join(unsupported)} sẽ không có tác dụng. Đặt vào đây thì "
+        "hai pipeline có stream trùng tên vẫn ghi chung một bảng và phá bảng "
+        "tạm của nhau. Hãy để trống, và tách hai pipeline bằng cách cho mỗi cái "
+        "một schema riêng ở Đích.",
+        details={"unsupported_fields": unsupported, "engine_type": settings.engine_type},
+    )
+
+
 def configured_streams(pipeline: Pipeline) -> list[ConfiguredStream]:
     return [
         ConfiguredStream(
@@ -311,6 +352,7 @@ def configured_streams(pipeline: Pipeline) -> list[ConfiguredStream]:
 
 async def create(session: AsyncSession, ctx: RequestContext, payload) -> Pipeline:
     ctx.require(Module.PIPELINES, Action.CREATE)
+    _reject_unsupported_naming(payload.namespace_format, payload.stream_prefix)
 
     source = await actors.get(session, ctx, actors.SOURCE, payload.source_id)
     destination = await actors.get(session, ctx, actors.DESTINATION, payload.destination_id)
@@ -459,6 +501,12 @@ async def update(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.U
         pipeline.name = payload.name.strip()
     if payload.description is not None:
         pipeline.description = payload.description
+    _reject_unsupported_naming(
+        payload.namespace_format if payload.namespace_format is not None
+        else pipeline.namespace_format,
+        payload.stream_prefix if payload.stream_prefix is not None
+        else pipeline.stream_prefix,
+    )
     if payload.namespace_format is not None:
         pipeline.namespace_format = payload.namespace_format or None
     if payload.stream_prefix is not None:

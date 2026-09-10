@@ -31,6 +31,10 @@ services:
         WITH_TRANSFORM: ${WITH_TRANSFORM:-1}
     image: appbi-pipeline-backend
     container_name: appbi-pipeline-transform-worker
+    # dbt pulls in pandas, pyarrow and the Google Cloud libraries, so this
+    # is the one product container that can genuinely grow. Measured at
+    # 60 MB idle; the ceiling is for a real dbt build, not for idling.
+    mem_limit: ${TRANSFORM_WORKER_MEMORY_LIMIT:-1536m}
     environment:
       APP_ENV: ${APP_ENV:-local}
       SERVICE_NAME: transform-worker
