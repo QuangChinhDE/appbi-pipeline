@@ -102,6 +102,9 @@ function SecretField({ name, schema, value, onChange, required, error, secretCon
             {t('common.change')}
           </Button>
         </div>
+        {/* This branch drew no error at all, so a refusal that named this
+            field was invisible and the form looked broken for no reason. */}
+        <FieldError>{error}</FieldError>
         <FieldHelp>{t('actor.secretStored')}</FieldHelp>
       </div>
     );
@@ -489,13 +492,22 @@ export function validateAgainstSpec(
   spec: JsonSchema,
   values: FormValues,
   t: (key: string, vars?: Record<string, string | number>) => string,
+  secretsConfigured?: Record<string, boolean>,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const key of spec.required ?? []) {
     const value = values[key];
+    // A stored secret is not in `values` and never will be -- the server does
+    // not send credentials back. Counting it as missing made the settings tab
+    // of any saved source unsaveable: pressing Save answered "1 field(s) still
+    // need a value", the masked token box showed no error because it renders
+    // without one, and the only way through was to re-enter a token that was
+    // already correct.
+    const stored = Boolean(secretsConfigured?.[key]);
     const empty =
-      value === undefined || value === null || value === '' ||
-      (Array.isArray(value) && value.length === 0);
+      !stored && (
+        value === undefined || value === null || value === '' ||
+        (Array.isArray(value) && value.length === 0));
     if (empty) {
       errors[key] = `${spec.properties?.[key]?.title ?? key} ${t('common.required')}`;
     }

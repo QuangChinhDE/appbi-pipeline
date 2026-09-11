@@ -487,7 +487,7 @@ function ConfigurationTab({ kind, actor }: { kind: Kind; actor: import('@/lib/ty
 
   const save = useMutation({
     mutationFn: async () => {
-      const found = validateAgainstSpec(actor.spec_schema, values, t);
+      const found = validateAgainstSpec(actor.spec_schema, values, t, secretsConfigured);
       setErrors(found);
       if (Object.keys(found).length > 0) {
         throw new Error(t('wizard.missingFields', { n: Object.keys(found).length }));
