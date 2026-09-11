@@ -335,11 +335,27 @@ def run_detail(
     base: RunView,
     run: PipelineRun,
     *,
+    attempts: list[Any],
     stream_stats: list[Any],
     source_ref: ActorRef | None,
     destination_ref: ActorRef | None,
 ) -> RunDetail:
-    attempts = [
+    """Every collection this needs is passed in, loaded by the caller.
+
+    It used to read `run.attempts` itself. That relationship is `selectin`, so
+    it arrives loaded on a run fetched by a query and *unloaded* on one just
+    created -- and a retry returns exactly that. Touching it then emitted a
+    lazy SELECT from synchronous code inside an async request, which SQLAlchemy
+    refuses: `MissingGreenlet`.
+
+    Seen on a customer deployment. The retry was queued and committed before
+    the serialiser ran, so the run started anyway and the person who asked for
+    it got a 500 -- three times, before one attempt happened to succeed.
+
+    A presenter is synchronous by design. Handing it loaded data rather than
+    an ORM object with lazy edges is what keeps it that way.
+    """
+    attempt_views = [
         RunAttemptView(
             attempt_number=a.attempt_number,
             status=a.status.value,
@@ -353,7 +369,7 @@ def run_detail(
             bytes_synced=a.bytes_synced,
             failure_summary=a.failure_summary,
         )
-        for a in run.attempts
+        for a in attempts
     ]
     metadata = {
         key: value for key, value in (run.technical_metadata or {}).items()
@@ -361,7 +377,7 @@ def run_detail(
     }
     return RunDetail(
         **base.model_dump(),
-        attempts=attempts,
+        attempts=attempt_views,
         stream_stats=[
             RunStreamStat(
                 stream_name=s.stream_name, namespace=s.namespace,

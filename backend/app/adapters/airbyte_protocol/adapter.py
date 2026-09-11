@@ -385,7 +385,19 @@ class EmbeddedAirbyteAdapter:
         """
         if not connector.declarative_manifest:
             return configuration
-        return {**configuration, self.MANIFEST_CONFIG_KEY: connector.declarative_manifest}
+        # A source may ask for smaller pages than the connector declares. That
+        # is a per-tenant property -- it follows record size, not the
+        # connector -- so it is applied here, to a copy, rather than being
+        # edited into the shared connector definition.
+        manifest = ap.with_page_size(
+            connector.declarative_manifest,
+            ap.page_size_from_config(configuration, settings.connector_default_page_size),
+        )
+        # The knob itself is not a connector field; passing it through would
+        # have the CDK reject an unexpected property on some specs.
+        forwarded = {k: v for k, v in configuration.items()
+                     if k != ap.PAGE_SIZE_CONFIG_KEY}
+        return {**forwarded, self.MANIFEST_CONFIG_KEY: manifest}
 
     async def test_declarative_read(
         self,

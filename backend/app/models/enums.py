@@ -122,6 +122,10 @@ class TriggerType(str, Enum):
     SCHEDULE = "SCHEDULE"
     AFTER_UPSTREAM = "AFTER_UPSTREAM"
     RETRY = "RETRY"
+    #: The product retried by itself after a transient failure. Kept apart from
+    #: RETRY so "failed four times" and "failed once and recovered on its own"
+    #: do not read the same on the runs list.
+    AUTO_RETRY = "AUTO_RETRY"
     SYSTEM = "SYSTEM"
 
 

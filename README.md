@@ -310,15 +310,64 @@ namespace của Nguồn — giống hệt cú pháp của Airbyte.
 
 #### Ví dụ: VM 2 CPU / 4 GB RAM
 
+Thêm `docker-compose.production.yml` vào cuối `COMPOSE_FILE`. Nó đặt sẵn
+`restart: unless-stopped` cho mọi dịch vụ, hạ đồng thời xuống 1, và tắt dữ liệu
+mẫu — đúng những thứ mà bản mặc định (vốn tinh chỉnh cho máy lập trình, nơi
+luôn có người ngồi cạnh) không có.
+
 ```bash
 # .env
 COMPOSE_PATH_SEPARATOR=:
-COMPOSE_FILE=docker-compose.yml:docker-compose.embedded.yml:docker-compose.transform.yml
+COMPOSE_FILE=docker-compose.yml:docker-compose.embedded.yml:docker-compose.transform.yml:docker-compose.production.yml
 WITH_TRANSFORM=1
 ENGINE_TYPE=AIRBYTE_EMBEDDED
-MAX_CONCURRENT_RUNS_GLOBAL=1     # quan trọng: mỗi lần sync là 2 container
 CONNECTOR_MEMORY_LIMIT=2g
 ```
+
+Overlay đã đặt hộ `MAX_CONCURRENT_RUNS_GLOBAL=1`, `WORKER_MAX_PARALLEL_SYNCS=1`,
+`TRANSFORM_WORKER_MAX_PARALLEL=1` và `SEED_DEMO_DATA=0`. Cần khác đi thì ghi đè
+trong `.env`.
+
+> **Vì sao không tự sửa `docker-compose.yml`?** Sửa tay vào file gốc thì lần
+> `git pull` sau sẽ xung đột. Overlay là file riêng, `git pull` không đụng tới.
+> Một bản triển khai thực tế đã phải tự viết lại đúng file này — nên giờ nó nằm
+> sẵn trong repo.
+
+#### Khi connector bị giết vì hết bộ nhớ
+
+Một trang dữ liệu được giữ nguyên trong bộ nhớ của container nguồn trước khi
+ghi ra. Bản ghi càng to thì trang càng phải nhỏ. Có hai nấc, nấc dưới thắng:
+
+| Đặt ở đâu | Phạm vi | Khi nào dùng |
+|---|---|---|
+| Ô **Số bản ghi mỗi lần gọi** trong form Nguồn | một nguồn | một tenant có bản ghi to bất thường |
+| `CONNECTOR_DEFAULT_PAGE_SIZE` trong `.env` | cả cài đặt | máy nhỏ, muốn hạ hết |
+
+Ví dụ đo được: ticket của Base Work trung bình ~326 KB, một trang 500 bản ghi
+là ~163 MB — hạ xuống 100 thì bộ nhớ giảm khoảng năm lần, đổi lại số lần gọi
+API tăng năm lần. Chỉ có tác dụng với những luồng mà connector tự điều khiển
+được cỡ trang; luồng nào không khai báo thì giữ nguyên, vì cỡ trang cũng là
+thứ CDK dùng để biết đã đọc hết.
+
+> Đừng sửa `page_size` thẳng vào `backend/app/connectors/`. Bản vá đó mất sau
+> mỗi lần cập nhật, và áp cho mọi tenant chứ không riêng tenant cần nó.
+
+#### Lỗi tạm thời tự chạy lại
+
+Nguồn từ chối vài phút rồi bình thường trở lại là chuyện thường. Sản phẩm tự
+chạy lại, chờ lâu dần: 60s, 120s, 240s, tối đa 3 lần.
+
+```bash
+AUTO_RETRY_MAX_ATTEMPTS=3     # 0 là tắt hẳn
+AUTO_RETRY_BASE_SECONDS=60
+AUTO_RETRY_MAX_SECONDS=1800
+```
+
+Chỉ những lỗi được phân loại là **tạm thời** mới được chạy lại — mất kết nối
+giữa chừng, hết giờ chờ, bị giới hạn tần suất. Token sai thì không: nó sẽ
+không tự đúng lên, và thử lại ba lần chỉ làm chậm mất vài phút cái thông báo
+nói cho bạn biết phải sửa gì. Lần chạy lại tự động mang nhãn `AUTO_RETRY` để
+phân biệt với lần bạn tự bấm.
 
 ### Các lệnh thường dùng
 
@@ -672,6 +721,35 @@ docker compose logs -f api         # nhật ký, có trace_id để lần theo
 python scripts/backup.py           # sao lưu
 python scripts/reconcile.py        # đối chiếu sau khi khôi phục
 ```
+
+**Một lần chạy hỏng thì đọc ở đâu.** Dòng `run.terminal` trong log của worker
+mang theo lý do, không chỉ trạng thái:
+
+```bash
+docker compose logs worker | grep run.terminal
+```
+
+```json
+{"message": "run.terminal", "status": "FAILED", "records": 1319,
+ "attempt": 2, "error_code": "CONNECTOR_STREAM_INTERRUPTED",
+ "remediation": "RETRY_LATER", "error": "Kết nối tới nguồn bị ngắt giữa chừng.",
+ "auto_retry_in": 120}
+```
+
+`auto_retry_in` cho biết sản phẩm đã tự hẹn chạy lại sau bao nhiêu giây, hay
+`null` nếu lỗi này không đáng thử lại.
+
+**Dọn đĩa.** Mỗi lần build để lại image cũ và cache; một máy triển khai vài
+tháng có thể đọng vài GB không ai giữ. Docker không tự dọn:
+
+```bash
+docker image prune -af --filter "until=168h"   # image không container nào dùng, cũ hơn 7 ngày
+docker builder prune -af --filter "until=168h" # cache build
+docker system df                                # xem còn đọng bao nhiêu
+```
+
+Đặt vào cron hằng tuần là đủ. Đừng dùng `docker system prune -a --volumes`:
+`--volumes` sẽ xoá cả `pgdata`, tức toàn bộ cơ sở dữ liệu.
 
 | Địa chỉ | Trả lời | Dùng cho |
 |---|---|---|

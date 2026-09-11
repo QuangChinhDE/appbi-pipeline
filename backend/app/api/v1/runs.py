@@ -295,7 +295,9 @@ async def _pipeline_detail(session, ctx, run: PipelineRun) -> RunDetail:
     source = await session.get(Source, pipeline.source_id) if pipeline else None
     destination = await session.get(Destination, pipeline.destination_id) if pipeline else None
     return run_detail(
-        base, run, stream_stats=await run_service.stream_stats(session, run.id),
+        base, run,
+        attempts=await run_service.attempts_of(session, run.id),
+        stream_stats=await run_service.stream_stats(session, run.id),
         source_ref=await _actor_ref(session, source),
         destination_ref=await _actor_ref(session, destination),
     )

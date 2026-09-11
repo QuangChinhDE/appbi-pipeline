@@ -332,6 +332,29 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str = ""
     bootstrap_admin_password: str = ""
 
+    #: How many times the product retries a run by itself before leaving it
+    #: failed for a person to look at. 0 turns it off.
+    #:
+    #: Only failures the classifier calls transient are retried -- a wrong
+    #: token is not going to become right, and retrying it three times just
+    #: delays the message saying so by several minutes.
+    auto_retry_max_attempts: int = 3
+    #: First wait, in seconds. Each attempt doubles it: 60, 120, 240.
+    #: A source refusing requests needs time, not immediacy; measured on a
+    #: customer deployment, the same sync succeeded thirteen minutes later.
+    auto_retry_base_seconds: int = 60
+    #: Cap, so a long chain cannot push the next attempt into next week.
+    auto_retry_max_seconds: int = 1800
+
+    #: Records per request for every declarative connector that declares a
+    #: page size, unless a source overrides it. 0 leaves each connector's own
+    #: choice alone, which is the default.
+    #:
+    #: One page is held whole in the source container before records are
+    #: emitted, so this is the lever for a host that cannot give a connector
+    #: 2 GB. Lower means less memory for proportionally more requests.
+    connector_default_page_size: int = 0
+
     @property
     def is_production(self) -> bool:
         """Production is opt-in by name, so a forgotten variable never silently

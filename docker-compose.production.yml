@@ -1,0 +1,69 @@
+# Overlay for a real deployment on one host.
+#
+# Written after a customer install, where the engineer on site had to invent
+# this file themselves. Three things were missing from the defaults and all
+# three were the same class of problem: the base compose is tuned for a laptop
+# where somebody is watching.
+#
+#   * nothing restarts. A VM reboot, or a container the kernel killed, and the
+#     deployment is simply down until a person notices.
+#   * concurrency is set for a machine with cores to spare. Each sync runs two
+#     connector containers, so two parallel syncs on a 2-CPU VM means four
+#     containers competing with Postgres and the API.
+#   * the demo warehouse is seeded, which is noise in somebody's account.
+#
+# Use it *after* the others, so these values win:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.embedded.yml:docker-compose.transform.yml:docker-compose.production.yml
+#   COMPOSE_PATH_SEPARATOR=:
+#
+# Put those two lines in `.env` and every `docker compose` command in this
+# directory picks them up, including `./run.sh`.
+
+services:
+  postgres:
+    # `unless-stopped` rather than `always`: a container somebody stopped on
+    # purpose stays stopped across a reboot, which is what they meant.
+    restart: unless-stopped
+
+  api:
+    restart: unless-stopped
+    environment:
+      # The demo source and warehouse exist to make a fresh checkout
+      # explorable. On a customer's machine they are two connections nobody
+      # created, in a list where everything else is theirs.
+      SEED_DEMO_DATA: "0"
+
+  worker:
+    restart: unless-stopped
+    environment:
+      SEED_DEMO_DATA: "0"
+      # One sync at a time. Each one runs a source container and a destination
+      # container, so this is already two connectors plus Postgres, the API and
+      # the worker on the same host.
+      MAX_CONCURRENT_RUNS_GLOBAL: "1"
+      MAX_CONCURRENT_RUNS_PER_WORKSPACE: "1"
+      WORKER_MAX_PARALLEL_SYNCS: "1"
+
+  transform-worker:
+    restart: unless-stopped
+    environment:
+      # dbt is a third process with its own memory. Running it beside a sync is
+      # what puts a small host over the edge.
+      TRANSFORM_WORKER_MAX_PARALLEL: "1"
+
+  frontend:
+    restart: unless-stopped
+
+  proxy:
+    restart: unless-stopped
+
+  migrate:
+    # No restart policy: this is a one-shot job that must run to completion and
+    # then stay exited. Restarting it would re-run migrations on every boot.
+    #
+    # It does carry SEED_DEMO_DATA, because `migrate` is the service that
+    # seeds. Setting it on api and worker alone reads as if it works and does
+    # nothing at all -- the demo source and warehouse still appear.
+    environment:
+      SEED_DEMO_DATA: "0"

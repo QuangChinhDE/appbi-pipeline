@@ -778,7 +778,27 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
             "order": 3,
         }
 
-    for index, extra in enumerate(connector.config, start=4):
+    # Offered on every Base source, incremental or not: page size decides peak
+    # memory in the source container, which is what actually stops a sync on a
+    # small host. A deployment used to have no way to change it but to edit the
+    # connector's source and carry that patch across every update.
+    properties["page_size"] = {
+        "type": "string",
+        "title": "Số bản ghi mỗi lần gọi",
+        "description": (
+            "Để trống là dùng mặc định của connector (500). Hạ xuống khi đồng "
+            "bộ bị dừng vì hết bộ nhớ: một trang được giữ nguyên trong bộ nhớ "
+            "trước khi ghi ra, nên bản ghi càng to thì trang càng phải nhỏ. "
+            "Ví dụ ticket của Base Work trung bình ~326 KB, một trang 500 bản "
+            "ghi là ~163 MB — hạ xuống 100 thì bộ nhớ giảm khoảng năm lần, đổi "
+            "lại số lần gọi API tăng năm lần. Chỉ có tác dụng với những luồng "
+            "mà connector tự điều khiển được cỡ trang."
+        ),
+        "examples": ["100", "250"],
+        "order": 4,
+    }
+
+    for index, extra in enumerate(connector.config, start=5):
         properties[extra.name] = {
             "type": extra.kind,
             "title": extra.title,

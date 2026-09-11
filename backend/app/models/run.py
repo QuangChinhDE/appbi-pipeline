@@ -59,6 +59,11 @@ class PipelineRun(Base, TimestampMixin):
         SAEnum(RunStatus, name="run_status"), default=RunStatus.QUEUED, nullable=False
     )
     queue_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Earliest moment a worker may claim this run. NULL means now, which is
+    #: every run except one waiting out a backoff.
+    run_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     error_category: Mapped[ErrorCategory | None] = mapped_column(
         SAEnum(ErrorCategory, name="error_category"), nullable=True
     )

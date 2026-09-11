@@ -336,6 +336,65 @@ def normalize_state_for_source(state: Any) -> Any:
     return None
 
 
+#: Config key a source may carry to change how many records one request asks
+#: for. Blank or absent leaves the connector's own choice alone.
+PAGE_SIZE_CONFIG_KEY = "page_size"
+
+
+def with_page_size(manifest: dict[str, Any], page_size: int | None) -> dict[str, Any]:
+    """Return the manifest with every declared page size replaced.
+
+    How large a page is decides peak memory in the source container: one page
+    is held whole before records are emitted. A Base ticket averages ~326 KB,
+    so a page of 500 is ~163 MB before the CDK's own overhead, and on a tenant
+    with larger records that was enough to have the container killed. The
+    deployment engineer's only way out was to edit the connector's source and
+    carry the patch across every update -- which is what this replaces.
+
+    Only a page size the connector already declares is changed. Where none is
+    declared the connector deliberately says nothing, because the CDK compares
+    a short page against `page_size` to decide a stream has ended: asserting a
+    size the server was never told about either stops early on the server's
+    own default page, or pages past the end forever.
+
+    The manifest is copied rather than edited: it is the connector definition
+    shared by every source in the deployment, and one source's tuning must not
+    reach another's sync.
+    """
+    if not page_size or page_size <= 0 or not manifest:
+        return manifest
+
+    def rewrite(node: Any) -> Any:
+        if isinstance(node, dict):
+            out = {key: rewrite(value) for key, value in node.items()}
+            strategy = out.get("pagination_strategy")
+            if isinstance(strategy, dict) and "page_size" in strategy:
+                strategy["page_size"] = page_size
+            return out
+        if isinstance(node, list):
+            return [rewrite(item) for item in node]
+        return node
+
+    return rewrite(manifest)
+
+
+def page_size_from_config(configuration: dict[str, Any], fallback: int = 0) -> int:
+    """What this source asked for, or the deployment default, or nothing.
+
+    Read leniently: the value arrives from a JSON-schema string field, so "100"
+    and 100 both mean the same thing, and anything unreadable means "leave the
+    connector alone" rather than raising in the middle of a sync.
+    """
+    raw = (configuration or {}).get(PAGE_SIZE_CONFIG_KEY)
+    if raw is None or raw == "":
+        return fallback
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return fallback
+    return value if value > 0 else fallback
+
+
 def parse_spec(payload: dict[str, Any]) -> dict[str, Any]:
     spec = payload.get("spec") or {}
     return {

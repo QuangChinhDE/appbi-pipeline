@@ -43,6 +43,11 @@ x-backend-env: &backend-env
   # it. See CONNECTOR_MEMORY_LIMIT in .env.example.
   CONNECTOR_MEMORY_LIMIT: ${CONNECTOR_MEMORY_LIMIT:-2g}
   CONNECTOR_CPU_LIMIT: ${CONNECTOR_CPU_LIMIT:-}
+  # Records per request for every declarative connector that declares a page
+  # size, unless a source sets its own. 0 leaves each connector's choice alone.
+  # One page is held whole in the source container before records are emitted,
+  # so this is the lever for a host that cannot spare 2 GB per connector.
+  CONNECTOR_DEFAULT_PAGE_SIZE: ${CONNECTOR_DEFAULT_PAGE_SIZE:-0}
   CONNECTOR_JAVA_OPTS: ${CONNECTOR_JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
   # Used only when ENGINE_TYPE=AIRBYTE_API (point at a real Airbyte deployment)
   AIRBYTE_API_URL: ${AIRBYTE_API_URL:-}
@@ -87,6 +92,22 @@ x-backend-env: &backend-env
   # --- policy ---
   MAX_CONCURRENT_RUNS_GLOBAL: ${MAX_CONCURRENT_RUNS_GLOBAL:-4}
   MAX_CONCURRENT_RUNS_PER_WORKSPACE: ${MAX_CONCURRENT_RUNS_PER_WORKSPACE:-3}
+  # How many syncs one worker process runs at once. Absent from this list it
+  # was the same bug as the launch-scope settings above: the setting existed,
+  # .env could not reach it, and a deployment that lowered it got the default.
+  # A customer install worked around that with a bespoke override file.
+  WORKER_MAX_PARALLEL_SYNCS: ${WORKER_MAX_PARALLEL_SYNCS:-4}
+  # The demo source and warehouse. They make a fresh checkout explorable and
+  # are two connections nobody created on a customer's machine.
+  SEED_DEMO_DATA: ${SEED_DEMO_DATA:-1}
+  # --- automatic retry ---
+  # A transient source failure is retried without a person pressing a button.
+  # 0 turns it off entirely; the wait doubles from the base and stops at the
+  # cap. Only failures the classifier calls transient qualify -- a rejected
+  # token is never retried.
+  AUTO_RETRY_MAX_ATTEMPTS: ${AUTO_RETRY_MAX_ATTEMPTS:-3}
+  AUTO_RETRY_BASE_SECONDS: ${AUTO_RETRY_BASE_SECONDS:-60}
+  AUTO_RETRY_MAX_SECONDS: ${AUTO_RETRY_MAX_SECONDS:-1800}
   MIN_SCHEDULE_INTERVAL_SECONDS: ${MIN_SCHEDULE_INTERVAL_SECONDS:-300}
   RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-7200}
   TRANSFORM_TIMEOUT_SECONDS: ${TRANSFORM_TIMEOUT_SECONDS:-1800}

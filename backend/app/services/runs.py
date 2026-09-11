@@ -117,6 +117,20 @@ async def stream_stats(session: AsyncSession, run_id: uuid.UUID) -> list[Pipelin
     )).all())
 
 
+async def attempts_of(session: AsyncSession, run_id: uuid.UUID) -> list[RunAttempt]:
+    """Loaded by query rather than off `run.attempts`.
+
+    The relationship is `selectin`, which only helps when the run itself came
+    from a query. A run just created -- what a retry returns -- has the
+    collection unloaded, and reading it from the synchronous presenter emitted
+    a lazy SELECT that async SQLAlchemy refuses with `MissingGreenlet`.
+    """
+    return list((await session.scalars(
+        select(RunAttempt).where(RunAttempt.run_id == run_id)
+        .order_by(RunAttempt.attempt_number)
+    )).all())
+
+
 def is_stale(run: PipelineRun) -> bool:
     """Possible-stuck detection (section 9.4). We flag, we never fake a status."""
     if not run.status.is_active:
@@ -340,13 +354,76 @@ async def retry(session: AsyncSession, ctx: RequestContext, run_id: uuid.UUID) -
     return await trigger(session, ctx, pipeline, trigger_type=TriggerType.RETRY, retry_of=original.id)
 
 
+#: Remediation labels the classifier attaches to a failure that is worth
+#: trying again unchanged. Everything else is a configuration or data problem:
+#: a wrong token will not become right, and retrying it three times only
+#: delays by several minutes the message saying so.
+TRANSIENT_REMEDIATIONS = frozenset({"RETRY_LATER", "RETRY_RUN"})
+
+#: Codes that mean the same thing where no remediation was attached.
+TRANSIENT_CODES = frozenset({
+    "CONNECTOR_STREAM_INTERRUPTED",
+    "SOURCE_TIMEOUT",
+    "DESTINATION_TIMEOUT",
+    "ENGINE_UNAVAILABLE",
+    "RATE_LIMITED",
+})
+
+
+def is_transient(error_code: str | None, remediation: str | None) -> bool:
+    if remediation and remediation in TRANSIENT_REMEDIATIONS:
+        return True
+    return bool(error_code) and error_code in TRANSIENT_CODES
+
+
+def retry_delay_seconds(attempt: int) -> int:
+    """Wait before automatic attempt number `attempt`, counting from 1.
+
+    Doubling, capped. A source refusing requests needs time rather than
+    immediacy -- measured on a customer deployment, three retries a few minutes
+    apart all failed at the same record and the fourth, thirteen minutes after
+    the first, succeeded.
+    """
+    base = max(settings.auto_retry_base_seconds, 1)
+    delay = base * (2 ** max(attempt - 1, 0))
+    return min(delay, max(settings.auto_retry_max_seconds, base))
+
+
+def auto_retries_so_far(run: PipelineRun) -> int:
+    return int((run.technical_metadata or {}).get("auto_retry_attempt") or 0)
+
+
+def should_auto_retry(run: PipelineRun) -> bool:
+    """Whether the product should try this failed run again by itself.
+
+    Deliberately narrow. A run that a person asked to retry is theirs; a run
+    cancelled on purpose must stay cancelled; and a budget that resets per run
+    rather than per chain would retry forever.
+    """
+    if settings.auto_retry_max_attempts <= 0:
+        return False
+    if run.status is not RunStatus.FAILED:
+        return False
+    if run.trigger_type is TriggerType.RETRY:
+        # Somebody is already watching this one.
+        return False
+    if auto_retries_so_far(run) >= settings.auto_retry_max_attempts:
+        return False
+    return is_transient(run.error_code, run.remediation_action)
+
+
 # ── worker side: claim + execute ───────────────────────────────────────────
 
 async def claim_next(session: AsyncSession, worker_id: str) -> PipelineRun | None:
     """Atomically take one QUEUED run. SKIP LOCKED means N workers can race."""
     candidate = await session.scalar(
         select(PipelineRun)
-        .where(PipelineRun.status == RunStatus.QUEUED)
+        .where(
+            PipelineRun.status == RunStatus.QUEUED,
+            # NULL is every ordinary run: claimable now. A run waiting out a
+            # backoff carries the moment it becomes claimable.
+            or_(PipelineRun.run_after.is_(None), PipelineRun.run_after <= utcnow()),
+        )
         .order_by(PipelineRun.created_at)
         .limit(1)
         .with_for_update(skip_locked=True)
@@ -553,10 +630,73 @@ async def apply_engine_status(
         ))
 
     await _apply_pipeline_outcome(session, run, state=status.state)
+    scheduled = await _schedule_auto_retry(session, run)
     await session.commit()
-    log_event(logger, logging.INFO, "run.terminal", run_id=str(run.id),
-              status=run.status.value, records=run.records_synced)
+    # The reason belongs in the log line, not only in the row. A deployment
+    # is usually debugged through `docker logs`, and "FAILED, records=1319"
+    # three times running says nothing about what to do -- the classifier had
+    # already worked out the cause and written it to a column nobody reading
+    # the log could see.
+    log_event(
+        logger,
+        logging.WARNING if run.status is RunStatus.FAILED else logging.INFO,
+        "run.terminal",
+        run_id=str(run.id), pipeline_id=str(run.pipeline_id),
+        status=run.status.value, records=run.records_synced,
+        attempt=run.attempt_count,
+        error_code=run.error_code,
+        error_category=run.error_category.value if run.error_category else None,
+        remediation=run.remediation_action,
+        error=run.error_summary,
+        auto_retry_in=scheduled,
+    )
     return True
+
+
+async def _schedule_auto_retry(session: AsyncSession, run: PipelineRun) -> int | None:
+    """Queue one more attempt at a transient failure, after a wait.
+
+    Returns the delay in seconds when a retry was queued, so the caller can say
+    so in the same log line that reports the failure.
+
+    A person had to press retry three times on a customer deployment before a
+    source stopped refusing requests. Nothing about those presses carried
+    information -- the same run, unchanged, a few minutes later.
+
+    The new run is created directly rather than through `trigger`, which
+    requires a RequestContext and permission checks that belong to a person.
+    Nothing here is acting on anybody's behalf.
+    """
+    if not should_auto_retry(run):
+        return None
+
+    attempt = auto_retries_so_far(run) + 1
+    delay = retry_delay_seconds(attempt)
+    pipeline = await session.get(Pipeline, run.pipeline_id)
+    if pipeline is None or pipeline.deleted_at is not None:
+        return None
+    if pipeline.status is not PipelineStatus.ACTIVE:
+        # A paused pipeline should not be started by a retry it never asked
+        # for. The failure stands, and the person sees it when they return.
+        return None
+
+    session.add(PipelineRun(
+        workspace_id=run.workspace_id,
+        pipeline_id=run.pipeline_id,
+        trigger_type=TriggerType.AUTO_RETRY,
+        triggered_by=None,
+        retry_of_run_id=run.id,
+        status=RunStatus.QUEUED,
+        run_after=utcnow() + timedelta(seconds=delay),
+        queue_reason=f"Tự chạy lại sau {delay}s vì lỗi tạm thời.",
+        technical_metadata={"auto_retry_attempt": attempt,
+                            "auto_retry_of": str(run.id),
+                            "auto_retry_reason": run.error_code},
+    ))
+    log_event(logger, logging.INFO, "run.auto_retry_scheduled",
+              run_id=str(run.id), pipeline_id=str(run.pipeline_id),
+              attempt=attempt, delay_seconds=delay, error_code=run.error_code)
+    return delay
 
 
 async def _apply_pipeline_outcome(
