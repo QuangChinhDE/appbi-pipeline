@@ -98,6 +98,20 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class EngineCapabilities(BaseModel):
+    """The parts of a pipeline the running engine can honour.
+
+    A field the engine ignores used to be stored and silently dropped, which
+    let two pipelines write into one table. Refusing it at the API was the
+    fix, but the settings form kept drawing the box -- so typing a prefix and
+    pressing save produced a validation error and no way forward. The screen
+    has to know before it offers.
+    """
+
+    #: `stream_prefix` and `namespace_format`. False on the embedded runner.
+    destination_naming: bool = True
+
+
 class CurrentUser(BaseModel):
     id: uuid.UUID
     email: str
@@ -118,6 +132,10 @@ class CurrentUser(BaseModel):
     # sends the user straight to the change-password screen; the API refuses
     # everything else regardless of what the FE does.
     password_change_required: bool = False
+    #: What the deployment's engine can actually do, for screens that would
+    #: otherwise offer a control the API will refuse. Not a permission -- it
+    #: does not vary by who is asking -- so it is kept out of `permissions`.
+    engine_capabilities: EngineCapabilities = Field(default_factory=lambda: EngineCapabilities())
 
 
 class WorkspaceSettingsUpdate(BaseModel):

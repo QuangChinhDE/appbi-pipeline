@@ -316,7 +316,7 @@ def _reject_unsupported_naming(
     to separate two pipelines on one warehouse is a schema each, set on the
     destination.
     """
-    if (settings.engine_type or "").upper() != "AIRBYTE_EMBEDDED":
+    if settings.supports_destination_naming:
         return
     # Only a *change* is refused, and the reason is what the settings form
     # sends. It submits every field it knows, so a pipeline that already

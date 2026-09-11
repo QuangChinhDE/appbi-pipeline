@@ -122,3 +122,44 @@ def test_one_unchanged_field_does_not_excuse_the_other() -> None:
     fields = caught.value.details["unsupported_fields"]
     assert fields == ["namespace_format"]
 
+
+# -- the screen and the API must agree ---------------------------------------
+
+def test_the_capability_says_no_on_the_embedded_engine() -> None:
+    """What `/auth/me` publishes to the frontend. Reported with a screenshot:
+    the create form drew "Tiền tố bảng ở đích", somebody typed `to_1`, and the
+    save came back with a validation error and no way forward. A box whose
+    only possible outcome is a refusal should not be drawn."""
+    from app.core.config import settings
+    assert settings.supports_destination_naming is False
+
+
+def test_the_capability_says_yes_where_the_engine_can_rename(monkeypatch) -> None:
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "engine_type", "AIRBYTE_API", raising=False)
+    assert settings.supports_destination_naming is True
+
+
+@pytest.mark.parametrize("engine", ["AIRBYTE_EMBEDDED", "AIRBYTE_API", "SQL_DIRECT"])
+def test_what_is_offered_is_exactly_what_is_accepted(engine: str, monkeypatch) -> None:
+    """The invariant worth holding: one predicate decides both whether the
+    frontend draws the field and whether the API accepts it. Two predicates
+    would drift, and the drift shows up as a form nobody can submit."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "engine_type", engine, raising=False)
+    offered = settings.supports_destination_naming
+
+    try:
+        _reject_unsupported_naming(None, "svc_")
+        accepted = True
+    except ValidationError:
+        accepted = False
+    assert offered == accepted
+
+
+def test_the_default_capability_is_permissive() -> None:
+    """An API older than the field sends nothing, and the frontend falls back
+    to this. Hiding a field that works is the worse of the two mistakes."""
+    from app.schemas.domain import EngineCapabilities
+    assert EngineCapabilities().destination_naming is True
+

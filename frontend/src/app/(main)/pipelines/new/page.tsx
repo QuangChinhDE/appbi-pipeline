@@ -9,7 +9,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Database, Lock } from 'lucide-rea
 import { destinationApi, pipelineApi, sourceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { describeSchedule, formatDateTime } from '@/lib/format';
-import { useWorkspaceId } from '@/hooks/use-current-user';
+import { useEngineCapabilities, useWorkspaceId } from '@/hooks/use-current-user';
 import { toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +34,7 @@ export default function NewPipelinePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const workspaceId = useWorkspaceId();
+  const { destinationNaming } = useEngineCapabilities();
   const { can } = usePermissions();
   const syncModeLabel = useSyncModeLabel();
   // A read-only role must not be walked through a wizard that will 403 on save.
@@ -111,8 +112,10 @@ export default function NewPipelinePage() {
         streams: chosen,
         schedule,
         overlap_policy: overlapPolicy,
-        namespace_format: namespaceFormat.trim() || null,
-        stream_prefix: streamPrefix.trim() || null,
+        // Never sent where the engine cannot honour them: the boxes are not
+        // drawn, so any value here would be a leftover nobody chose.
+        namespace_format: destinationNaming ? namespaceFormat.trim() || null : null,
+        stream_prefix: destinationNaming ? streamPrefix.trim() || null : null,
         run_first_sync: runFirst,
       });
     },
@@ -332,28 +335,48 @@ export default function NewPipelinePage() {
               </Card>
               <Card title={t('pipelines.destinationOptions')}>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor="pl-prefix" hint={t('common.optional')}>
-                      {t('pipelines.prefix')}
-                    </Label>
-                    <Input
-                      id="pl-prefix"
-                      value={streamPrefix}
-                      placeholder="base_"
-                      onChange={(event) => setStreamPrefix(event.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="pl-namespace" hint={t('common.optional')}>
-                      {t('pipelines.namespaceFormat')}
-                    </Label>
-                    <Input
-                      id="pl-namespace"
-                      value={namespaceFormat}
-                      placeholder="${SOURCE_NAMESPACE}"
-                      onChange={(event) => setNamespaceFormat(event.target.value)}
-                    />
-                  </div>
+                  {/*
+                    Only drawn where the engine can honour them. The embedded
+                    runner cannot rename a destination table, so these two
+                    boxes used to accept typing and then fail the save with a
+                    validation error -- the form offering something the API
+                    would always refuse.
+                  */}
+                  {destinationNaming ? (
+                    <>
+                      <div>
+                        <Label htmlFor="pl-prefix" hint={t('common.optional')}>
+                          {t('pipelines.prefix')}
+                        </Label>
+                        <Input
+                          id="pl-prefix"
+                          value={streamPrefix}
+                          placeholder="base_"
+                          onChange={(event) => setStreamPrefix(event.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="pl-namespace" hint={t('common.optional')}>
+                          {t('pipelines.namespaceFormat')}
+                        </Label>
+                        <Input
+                          id="pl-namespace"
+                          value={namespaceFormat}
+                          placeholder="${SOURCE_NAMESPACE}"
+                          onChange={(event) => setNamespaceFormat(event.target.value)}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="sm:col-span-2 rounded-md border border-[rgb(var(--border-line))] bg-[rgb(var(--surface-sunken))] px-3 py-2.5">
+                      <p className="text-caption font-strong text-text-primary">
+                        {t('pipelines.namingUnsupported')}
+                      </p>
+                      <p className="mt-0.5 text-tiny leading-relaxed text-text-tertiary">
+                        {t('pipelines.namingUnsupportedHelp')}
+                      </p>
+                    </div>
+                  )}
                   <div className="sm:col-span-2">
                     <Label htmlFor="pl-overlap">{t('pipelines.overlapLabel')}</Label>
                     <Select
@@ -418,12 +441,14 @@ export default function NewPipelinePage() {
                       </dt>
                       <dd className="text-caption text-text-primary">{schedule.timezone}</dd>
                     </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-caption text-text-tertiary">
-                        {t('pipelines.prefix')}
-                      </dt>
-                      <dd className="text-caption text-text-primary">{streamPrefix || '—'}</dd>
-                    </div>
+                    {destinationNaming && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-caption text-text-tertiary">
+                          {t('pipelines.prefix')}
+                        </dt>
+                        <dd className="text-caption text-text-primary">{streamPrefix || '—'}</dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
               </Card>

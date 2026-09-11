@@ -342,6 +342,21 @@ class Settings(BaseSettings):
     def is_embedded_engine(self) -> bool:
         return self.engine_type.upper() == "AIRBYTE_EMBEDDED"
 
+    @property
+    def supports_destination_naming(self) -> bool:
+        """Whether a destination table can be named something other than what
+        the source emitted -- `stream_prefix` and `namespace_format`.
+
+        The embedded runner cannot: it hands one configured catalog to both
+        sides and forwards records between them untouched. The Airbyte API
+        adapter and sql_direct both can.
+
+        Read by the API that refuses the fields *and* published to the
+        frontend that draws them, so a screen cannot offer a box whose only
+        possible outcome is a validation error.
+        """
+        return not self.is_embedded_engine
+
 
 @lru_cache
 def get_settings() -> Settings:

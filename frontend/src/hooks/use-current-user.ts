@@ -41,3 +41,14 @@ export function useWorkspaceSwitch() {
     [queryClient, router],
   );
 }
+
+/**
+ * What the running engine can honour, for screens that would otherwise draw a
+ * control the API refuses. Defaults to permissive: an API that does not send
+ * the block is older than the block, and hiding a working field would be the
+ * worse failure.
+ */
+export function useEngineCapabilities() {
+  const { data } = useCurrentUser();
+  return { destinationNaming: data?.engine_capabilities?.destination_naming ?? true };
+}

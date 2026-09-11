@@ -14,7 +14,7 @@ import { Spinner } from '@/components/ui/Feedback';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { Input, Select } from '@/components/ui/Input';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
-import { useWorkspaceId } from '@/hooks/use-current-user';
+import { useEngineCapabilities, useWorkspaceId } from '@/hooks/use-current-user';
 import { pipelineApi } from '@/lib/api';
 import { describeSchedule, formatDateTime } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
@@ -57,6 +57,7 @@ export function SettingsTab({
 }) {
   const { t, locale } = useI18n();
   const workspaceId = useWorkspaceId();
+  const { destinationNaming } = useEngineCapabilities();
   const queryClient = useQueryClient();
 
   const [name, setName] = React.useState(pipeline.name);
@@ -89,8 +90,11 @@ export function SettingsTab({
     mutationFn: () => pipelineApi.update(pipeline.id, {
       name,
       schedule,
-      namespace_format: namespace || null,
-      stream_prefix: prefix || null,
+      // Only what changed. `null` means "leave it alone" to the API and `""`
+      // means "clear it", so mapping an untouched empty box to `null` made
+      // the clear button below do nothing at all.
+      namespace_format: namespace !== (pipeline.namespace_format ?? '') ? namespace : undefined,
+      stream_prefix: prefix !== (pipeline.stream_prefix ?? '') ? prefix : undefined,
       overlap_policy: overlap,
       version: pipeline.version,
     }),
@@ -131,26 +135,60 @@ export function SettingsTab({
           <div className="py-3.5">
             <Disclosure label={t('pipelines.settings.advanced')}>
               <div className="divide-y divide-[rgb(var(--border-line))]">
-                <Row
-                  label={t('pipelines.settings.namespace')}
-                  description={t('pipelines.settings.namespaceHelp')}
-                >
-                  <Input
-                    value={namespace}
-                    placeholder={t('pipelines.settings.namespacePlaceholder')}
-                    onChange={(event) => setNamespace(event.target.value)}
-                  />
-                </Row>
-                <Row
-                  label={t('pipelines.settings.prefix')}
-                  description={t('pipelines.settings.prefixHelp')}
-                >
-                  <Input
-                    value={prefix}
-                    placeholder={t('pipelines.settings.prefixPlaceholder')}
-                    onChange={(event) => setPrefix(event.target.value)}
-                  />
-                </Row>
+                {/*
+                  Drawn only where the engine can honour them. Otherwise the
+                  boxes accepted typing and the save came back with a
+                  validation error -- and a pipeline created before the API
+                  started refusing still carries a value, which the row below
+                  names and offers to clear rather than leaving it to look
+                  like it is doing something.
+                */}
+                {destinationNaming ? (
+                  <>
+                    <Row
+                      label={t('pipelines.settings.namespace')}
+                      description={t('pipelines.settings.namespaceHelp')}
+                    >
+                      <Input
+                        value={namespace}
+                        placeholder={t('pipelines.settings.namespacePlaceholder')}
+                        onChange={(event) => setNamespace(event.target.value)}
+                      />
+                    </Row>
+                    <Row
+                      label={t('pipelines.settings.prefix')}
+                      description={t('pipelines.settings.prefixHelp')}
+                    >
+                      <Input
+                        value={prefix}
+                        placeholder={t('pipelines.settings.prefixPlaceholder')}
+                        onChange={(event) => setPrefix(event.target.value)}
+                      />
+                    </Row>
+                  </>
+                ) : (
+                  <Row
+                    label={t('pipelines.namingUnsupported')}
+                    description={t('pipelines.namingUnsupportedHelp')}
+                  >
+                    {prefix || namespace ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-caption text-text-secondary">
+                          {t('pipelines.namingInertValue', { value: prefix || namespace })}
+                        </span>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => { setNamespace(''); setPrefix(''); }}
+                        >
+                          {t('pipelines.namingClear')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-caption text-text-tertiary">—</span>
+                    )}
+                  </Row>
+                )}
                 <Row
                   label={t('pipelines.settings.overlap')}
                   description={t('pipelines.settings.overlapHelp')}

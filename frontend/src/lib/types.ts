@@ -96,6 +96,20 @@ export interface CurrentUser {
    * than discover it one failed request at a time.
    */
   password_change_required: boolean;
+  /**
+   * What the deployment's engine can actually honour. A screen checks this
+   * before drawing a control, so it never offers a box whose only possible
+   * outcome is a validation error. Optional so an older API still parses.
+   */
+  engine_capabilities?: EngineCapabilities;
+}
+
+export interface EngineCapabilities {
+  /**
+   * `stream_prefix` and `namespace_format`. False on the embedded runner,
+   * which hands one catalog to both sides and cannot rename anything.
+   */
+  destination_naming: boolean;
 }
 
 export interface Connector {

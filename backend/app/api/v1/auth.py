@@ -25,8 +25,8 @@ from app.models.enums import AuditResult
 from app.models.identity import Membership, Organization, User, Workspace
 from app.schemas.common import Acknowledged
 from app.schemas.domain import (
-    ChangePasswordRequest, CurrentUser, LoginRequest, MemberInvite, MemberRoleUpdate, MemberView,
-    OrganizationSummary, WorkspaceSettingsUpdate, WorkspaceSummary,
+    ChangePasswordRequest, CurrentUser, EngineCapabilities, LoginRequest, MemberInvite,
+    MemberRoleUpdate, MemberView, OrganizationSummary, WorkspaceSettingsUpdate, WorkspaceSummary,
 )
 from app.services import access, audit
 
@@ -228,6 +228,9 @@ async def _current_user_payload(session, user: User, workspace_id) -> CurrentUse
         organization_permissions=org_permissions(org_role) if not user.is_platform_admin
         else org_permissions(OrgRole.ORG_OWNER),
         password_change_required=user.password_change_required,
+        engine_capabilities=EngineCapabilities(
+            destination_naming=settings.supports_destination_naming,
+        ),
     )
 
 
