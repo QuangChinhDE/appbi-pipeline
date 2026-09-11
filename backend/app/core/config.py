@@ -347,15 +347,18 @@ class Settings(BaseSettings):
         """Whether a destination table can be named something other than what
         the source emitted -- `stream_prefix` and `namespace_format`.
 
-        The embedded runner cannot: it hands one configured catalog to both
-        sides and forwards records between them untouched. The Airbyte API
-        adapter and sql_direct both can.
+        True everywhere now. The embedded runner could not, because it handed
+        one configured catalog to both sides and forwarded records untouched;
+        it builds two catalogs and maps the stream on the way past, which is
+        where Airbyte does the same work (`NamespacingMapper`, in the
+        replication worker rather than in any connector).
 
-        Read by the API that refuses the fields *and* published to the
-        frontend that draws them, so a screen cannot offer a box whose only
-        possible outcome is a validation error.
+        Kept as a predicate rather than deleted: it is what the API validates
+        on and what `/auth/me` publishes to the frontend that draws the fields,
+        and an engine that cannot rename would otherwise have to be discovered
+        one failed save at a time.
         """
-        return not self.is_embedded_engine
+        return True
 
 
 @lru_cache

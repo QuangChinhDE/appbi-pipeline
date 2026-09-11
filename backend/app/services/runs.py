@@ -459,6 +459,8 @@ async def build_sync_request(session: AsyncSession, run: PipelineRun) -> EngineS
         destination_config=destination_config,
         streams=pipeline_service.configured_streams(pipeline),
         state=_state_for_incremental_streams(pipeline),
+        namespace_format=pipeline.namespace_format,
+        stream_prefix=pipeline.stream_prefix,
         generation_id=pipeline.generation_id,
         sync_id=pipeline.sync_counter,
         timeout_seconds=settings.run_timeout_seconds,

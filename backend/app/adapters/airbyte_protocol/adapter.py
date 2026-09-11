@@ -654,8 +654,19 @@ class EmbeddedAirbyteAdapter:
             log_file.flush()
 
         try:
-            configured_catalog = ap.build_configured_catalog(
+            # Two catalogs, the way Airbyte's replication worker builds
+            # them. The source is asked for the streams it discovered; the
+            # destination is told the names its tables should carry. Sharing
+            # one catalog between the two is why a prefix could not work at
+            # all. With nothing renamed the two are identical.
+            naming = ap.StreamNaming(prefix=request.stream_prefix or None,
+                                     namespace_format=request.namespace_format or None)
+            source_catalog = ap.build_configured_catalog(
                 request.streams, generation_id=request.generation_id, sync_id=request.sync_id
+            )
+            destination_catalog = ap.build_configured_catalog(
+                request.streams, generation_id=request.generation_id,
+                sync_id=request.sync_id, naming=naming,
             )
             # A built connector's behaviour travels with its config, so the sync
             # path injects it exactly like check and discover do.
@@ -667,7 +678,10 @@ class EmbeddedAirbyteAdapter:
                 job_dir / "destination_config.json",
                 self._config_for(request.destination, request.destination_config),
             )
-            catalog_path = write_json(job_dir / "catalog.json", configured_catalog)
+            catalog_path = write_json(job_dir / "catalog.json", source_catalog)
+            destination_catalog_path = write_json(
+                job_dir / "destination_catalog.json", destination_catalog
+            )
 
             read_command = ["read", "--config", str(source_config), "--catalog", str(catalog_path)]
             state = ap.normalize_state_for_source(request.state)
@@ -682,6 +696,9 @@ class EmbeddedAirbyteAdapter:
                  f"({', '.join(s.name for s in request.streams[:10])})")
             emit(f"state       : {'resuming from committed state' if state else 'none (initial sync)'}")
             emit(f"generation  : {request.generation_id} (sync #{request.sync_id})")
+            if naming.active:
+                emit(f"naming      : destination tables take prefix "
+                     f"{naming.prefix!r}, namespace format {naming.namespace_format!r}")
 
             emit("pulling connector images if needed...")
             await self.runner.ensure_image(request.source.image)
@@ -694,7 +711,8 @@ class EmbeddedAirbyteAdapter:
             )
             dest_proc = await self.runner.spawn(
                 request.destination.image,
-                ["write", "--config", str(destination_config), "--catalog", str(catalog_path)],
+                ["write", "--config", str(destination_config),
+                 "--catalog", str(destination_catalog_path)],
                 container_name=job.destination_container,
                 interactive=True,
             )
@@ -724,12 +742,15 @@ class EmbeddedAirbyteAdapter:
                             job.stream_stats[key] = stat
                         stat.records_emitted += 1
                         stat.bytes_emitted += size
-                        dest_proc.stdin.write(message.raw + b"\n")
+                        # Counted under the name the source used, because that
+                        # is what the pipeline's stream rows are keyed by, and
+                        # forwarded under the name the destination expects.
+                        dest_proc.stdin.write(naming.map_message(message) + b"\n")
                         if job.records % 2000 == 0:
                             await dest_proc.stdin.drain()
                             emit(f"[source] {job.records} records forwarded")
                     elif message.type == ap.TYPE_STATE:
-                        dest_proc.stdin.write(message.raw + b"\n")
+                        dest_proc.stdin.write(naming.map_message(message) + b"\n")
                         await dest_proc.stdin.drain()
                         emit("[source] checkpoint state emitted")
                     else:
@@ -759,7 +780,11 @@ class EmbeddedAirbyteAdapter:
                     if message.type == ap.TYPE_STATE:
                         # The destination confirming a checkpoint is the only
                         # state we are allowed to persist.
-                        payload = ap.state_payload(message)
+                        # Stored in the source's terms, always. The
+                        # destination echoes back the names it was given, and a
+                        # prefixed cursor handed to the next run would name a
+                        # stream the source has never emitted.
+                        payload = naming.revert_state(ap.state_payload(message))
                         if payload is not None:
                             existing = job.state if isinstance(job.state, list) else []
                             job.state = _merge_state(existing, payload)

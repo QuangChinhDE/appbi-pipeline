@@ -698,7 +698,6 @@ const vi: Catalog = {
     'Bảng ở đích sẽ mang đúng tên mà nguồn phát ra. Muốn tách hai pipeline ghi cùng một kho, hãy cho mỗi cái một schema riêng ở phần Đích.',
   'pipelines.namingInertValue': 'Pipeline này đang lưu tiền tố “{value}” từ trước, hiện không có tác dụng.',
   'pipelines.namingClear': 'Xoá tiền tố',
-  'pipelines.namingCleared': 'Đã xoá tiền tố không dùng đến.',
   'pipelines.configVersion': 'Phiên bản cấu hình',
   'pipelines.lastRunFailed': 'Lần chạy gần nhất thất bại.',
 
@@ -2460,7 +2459,6 @@ const en: Catalog = {
     'Destination tables keep the names the source emits. To separate two pipelines sharing one warehouse, give each its own schema on the destination.',
   'pipelines.namingInertValue': 'This pipeline still stores the prefix “{value}”, which currently has no effect.',
   'pipelines.namingClear': 'Remove prefix',
-  'pipelines.namingCleared': 'Removed the unused prefix.',
   "pipelines.settings.overlap": "When the previous run is still going",
   "pipelines.settings.overlapHelp": "Skip the new run, or queue it behind the current one.",
   "pipelines.settings.dangerZone": "Danger zone",

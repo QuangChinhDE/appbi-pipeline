@@ -136,22 +136,170 @@ def stream_schema_hash(stream: DiscoveredStream) -> str:
     return stream.schema_hash
 
 
+#: What Airbyte substitutes in a custom namespace format. Kept identical so a
+#: format written against Airbyte's documentation behaves the same here.
+SOURCE_NAMESPACE_TOKEN = "${SOURCE_NAMESPACE}"
+
+
+@dataclass(frozen=True, slots=True)
+class StreamNaming:
+    """How a stream is named at the destination, versus at the source.
+
+    Airbyte does this in the platform, not in a connector: `NamespacingMapper`
+    sits in the replication worker, rewrites the catalog handed to the
+    destination, rewrites the stream descriptor on every record passing
+    through, and reverts state messages on the way back so what is persisted
+    is still in the source's terms. This is the same job in the same place --
+    the source never learns the destination's names, and the cursor saved at
+    the end stays resumable against a source that has never heard of a prefix.
+    """
+
+    prefix: str | None = None
+    namespace_format: str | None = None
+
+    @property
+    def active(self) -> bool:
+        return bool(self.prefix) or bool(self.namespace_format)
+
+    def name_at_destination(self, name: str) -> str:
+        return f"{self.prefix}{name}" if self.prefix else name
+
+    def namespace_at_destination(self, namespace: str | None) -> str | None:
+        """A format of `${SOURCE_NAMESPACE}` reproduces the source namespace,
+        which is Airbyte's default behaviour spelled out."""
+        if not self.namespace_format:
+            return namespace
+        resolved = self.namespace_format.replace(SOURCE_NAMESPACE_TOKEN, namespace or "")
+        # An empty result means the format asked for a namespace the source did
+        # not supply. Falling back to the source's own is what Airbyte does;
+        # sending "" would have the destination create a nameless schema.
+        return resolved or namespace
+
+    def map_message(self, message: "AirbyteMessage") -> bytes:
+        """Rewrite a RECORD or per-stream STATE for the destination.
+
+        Returns the original bytes when there is nothing to change, so a sync
+        without a prefix still forwards without re-serialising every record.
+        """
+        if not self.active:
+            return message.raw
+        if message.type == TYPE_RECORD:
+            record = message.payload.get("record")
+            if not isinstance(record, dict):
+                return message.raw
+            mapped = dict(message.payload)
+            record = dict(record)
+            record["stream"] = self.name_at_destination(str(record.get("stream", "")))
+            namespace = self.namespace_at_destination(record.get("namespace"))
+            if namespace is not None:
+                record["namespace"] = namespace
+            mapped["record"] = record
+            return _dump(mapped)
+        if message.type == TYPE_STATE:
+            state = message.payload.get("state")
+            if not isinstance(state, dict):
+                return message.raw
+            mapped = _rename_descriptors(state, self._to_destination)
+            if mapped is None:
+                return message.raw
+            return _dump({**message.payload, "state": mapped})
+        return message.raw
+
+    def revert_state(self, state: Any) -> Any:
+        """Undo `map_message` on state coming back from the destination.
+
+        Takes the state object itself -- what is handed back to the source via
+        `--state` on the next run, and what is stored on the pipeline.
+
+        Persisting the destination's names would hand the next run a cursor for
+        a stream its source never emitted: the source would ignore it and
+        silently re-read its whole history, and `_incremental_only` would no
+        longer recognise the stream it belongs to. That class of mistake has
+        already emptied a destination once here, so it is undone at the edge
+        rather than tolerated downstream.
+        """
+        if not self.active or not isinstance(state, dict):
+            return state
+        mapped = _rename_descriptors(state, self._to_source)
+        return mapped if mapped is not None else state
+
+    # -- descriptor rewriting, both directions ----------------------------
+    def _to_destination(self, descriptor: dict[str, Any]) -> dict[str, Any]:
+        out = dict(descriptor)
+        out["name"] = self.name_at_destination(str(descriptor.get("name", "")))
+        namespace = self.namespace_at_destination(descriptor.get("namespace"))
+        if namespace is not None:
+            out["namespace"] = namespace
+        return out
+
+    def _to_source(self, descriptor: dict[str, Any]) -> dict[str, Any]:
+        out = dict(descriptor)
+        name = str(descriptor.get("name", ""))
+        if self.prefix and name.startswith(self.prefix):
+            out["name"] = name[len(self.prefix):]
+        return out
+
+
+def _dump(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, separators=(",", ":")).encode()
+
+
+def _rename_descriptors(state: dict[str, Any], rename) -> dict[str, Any] | None:
+    """Apply `rename` to every stream descriptor one state object carries.
+
+    Both shapes are covered: a STREAM state names one stream, a GLOBAL state
+    carries a list of them under `stream_states`. A legacy blob names nothing,
+    and returning None leaves the caller forwarding the original bytes.
+    """
+    changed = False
+    new_state = dict(state)
+
+    stream = state.get("stream")
+    if isinstance(stream, dict) and isinstance(stream.get("stream_descriptor"), dict):
+        new_stream = dict(stream)
+        new_stream["stream_descriptor"] = rename(stream["stream_descriptor"])
+        new_state["stream"] = new_stream
+        changed = True
+
+    glob = state.get("global")
+    if isinstance(glob, dict) and isinstance(glob.get("stream_states"), list):
+        new_global = dict(glob)
+        new_global["stream_states"] = [
+            {**entry, "stream_descriptor": rename(entry["stream_descriptor"])}
+            if isinstance(entry, dict) and isinstance(entry.get("stream_descriptor"), dict)
+            else entry
+            for entry in glob["stream_states"]
+        ]
+        new_state["global"] = new_global
+        changed = True
+
+    if not changed:
+        return None
+    return new_state
+
+
 def build_configured_catalog(
-    streams: list[ConfiguredStream], *, generation_id: int = 1, sync_id: int = 1
+    streams: list[ConfiguredStream], *, generation_id: int = 1, sync_id: int = 1,
+    naming: StreamNaming | None = None,
 ) -> dict[str, Any]:
     """ConfiguredAirbyteCatalog -- handed to both `read` and `write`.
+
+    Built twice per sync when `naming` renames anything: the source is given
+    the names it discovered, the destination the names its tables should have.
+    Sharing one catalog between the two is why a prefix could not be honoured.
 
     `generation_id` / `minimum_generation_id` / `sync_id` implement the Airbyte
     refresh protocol. A destination that overwrites is told to drop everything
     below the current generation; an appending one keeps every generation
     (minimum 0). Recent destination connectors refuse to start without these.
     """
+    naming = naming or StreamNaming()
     configured: list[dict[str, Any]] = []
     for stream in streams:
         truncating = stream.destination_sync_mode == "overwrite"
         entry: dict[str, Any] = {
             "stream": {
-                "name": stream.name,
+                "name": naming.name_at_destination(stream.name),
                 "json_schema": stream.json_schema or {"type": "object"},
                 "supported_sync_modes": sorted({stream.sync_mode, "full_refresh"}),
             },
@@ -161,8 +309,9 @@ def build_configured_catalog(
             "minimum_generation_id": generation_id if truncating else 0,
             "sync_id": sync_id,
         }
-        if stream.namespace:
-            entry["stream"]["namespace"] = stream.namespace
+        namespace = naming.namespace_at_destination(stream.namespace)
+        if namespace:
+            entry["stream"]["namespace"] = namespace
         if stream.cursor_field:
             entry["cursor_field"] = stream.cursor_field
             entry["stream"]["default_cursor_field"] = stream.cursor_field

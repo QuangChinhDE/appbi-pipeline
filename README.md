@@ -279,20 +279,34 @@ bằng một khoảng ISO-8601: `PT10M` là mười phút.
 #### Hai pipeline trên cùng một kho dữ liệu
 
 Nếu hai pipeline có stream **trùng tên** — Base Service và Base Workflow đều có
-stream `stage`, Base Service và Base Request đều có `group` — thì trên
-`AIRBYTE_EMBEDDED` chúng sẽ ghi vào **cùng một bảng** và phá bảng tạm
-(`<tên>_airbyte_tmp`) của nhau khi hai lần chạy trùng thời điểm.
+stream `stage`, Base Service và Base Request đều có `group` — thì mặc định
+chúng ghi vào **cùng một bảng** và phá bảng tạm (`<tên>_airbyte_tmp`) của nhau
+khi hai lần chạy trùng thời điểm.
 
-**Cách tách: cho mỗi pipeline một Đích riêng, với `schema` khác nhau.** Ví dụ
-một Đích trỏ `schema=base_service`, một Đích trỏ `schema=base_workflow`, cùng
-một database.
+Có hai cách tách, dùng cách nào cũng được:
 
-`stream_prefix` **không dùng được** ở chế độ `AIRBYTE_EMBEDDED` và sản phẩm sẽ
-từ chối khi bạn đặt nó: engine này đưa cùng một catalog cho cả Nguồn và Đích rồi
-chuyển bản ghi qua nguyên vẹn, nên tên stream ở đích không thể khác tên Nguồn
-phát ra. Ở `AIRBYTE_API` thì nó hoạt động bình thường. Từ chối thẳng còn hơn
-nhận rồi bỏ qua — lưu mà không áp dụng chính là cách hai pipeline ghi đè lên
-nhau trong im lặng.
+| Cách | Đặt ở đâu | Kết quả |
+|---|---|---|
+| **Tiền tố bảng** (`stream_prefix`) | Pipeline → Cài đặt → Cấu hình nâng cao | `service_stage` và `workflow_stage` trong cùng một schema |
+| **Schema riêng** | Đích dữ liệu → `schema` | `base_service.stage` và `base_workflow.stage` |
+
+**Tiền tố hoạt động ở cả hai engine.** Airbyte làm việc này ở tầng nền
+(`NamespacingMapper` trong replication worker, không phải trong connector), và
+`AIRBYTE_EMBEDDED` làm đúng như vậy: dựng **hai catalog** cho mỗi lần chạy —
+Nguồn nhận tên nó đã phát hiện, Đích nhận tên mà bảng cần mang — rồi đổi tên
+stream trên từng bản ghi đi qua.
+
+Con trỏ tăng dần (`state`) luôn được lưu theo **tên của Nguồn**: Đích trả về
+tên đã gắn tiền tố, và phần hoàn nguyên cắt nó đi trước khi ghi. Nếu không,
+lần chạy sau sẽ đưa cho Nguồn một con trỏ mang tên stream mà nó chưa từng
+phát ra.
+
+`namespace_format` cũng hoạt động, với `${SOURCE_NAMESPACE}` là chỗ thay thế
+namespace của Nguồn — giống hệt cú pháp của Airbyte.
+
+> Trước đây `stream_prefix` bị lưu rồi **bỏ qua trong im lặng** ở chế độ
+> `AIRBYTE_EMBEDDED`. Base Service và Base Workflow đã được đặt tiền tố đúng để
+> khỏi đụng nhau, rồi vẫn ghi chung một bảng: 4 lần hỏng trong 36 lần chạy.
 
 #### Ví dụ: VM 2 CPU / 4 GB RAM
 

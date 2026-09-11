@@ -298,36 +298,20 @@ def _reject_unsupported_naming(
 ) -> None:
     """Refuse a rename the engine in use cannot perform.
 
-    `stream_prefix` and `namespace_format` are honoured by the Airbyte API
-    adapter and by sql_direct. The embedded runner ignores both: it hands the
-    same configured catalog to the source and the destination and forwards
-    records between them untouched, so a destination stream cannot be named
-    anything other than what the source emitted.
+    Nothing refuses today: the embedded runner learned to rename, so every
+    engine honours both fields. The check stays because the capability it
+    reads is a deployment property -- an engine added later that cannot rename
+    should refuse here, and be reported through `supports_destination_naming`
+    so the form stops drawing the boxes, rather than being discovered one
+    failed save at a time.
 
-    Storing the value and ignoring it was the worst of the three options. Two
-    pipelines whose sources both expose a stream called `stage` -- Base Service
-    and Base Workflow do -- were given prefixes precisely so they would not
-    collide, then wrote into the same table anyway. When their scheduled runs
-    overlapped they corrupted each other's `stage_airbyte_tmp` staging table
-    and the run failed with something that reads like a source problem.
-    Measured: four failures in thirty-six runs.
-
-    Refusing is honest until the embedded runner can rename. Until then the way
-    to separate two pipelines on one warehouse is a schema each, set on the
-    destination.
+    Only a *change* is ever refused. The settings form submits every field it
+    holds, so a pipeline already carrying a prefix posts it back on a save that
+    only changed the schedule; refusing the value rather than the change locked
+    those pipelines out of all editing.
     """
     if settings.supports_destination_naming:
         return
-    # Only a *change* is refused, and the reason is what the settings form
-    # sends. It submits every field it knows, so a pipeline that already
-    # carries a prefix -- created before this guard existed -- posts that
-    # prefix back on every save. Refusing the value rather than the change
-    # made those pipelines uneditable: choosing a schedule was answered with a
-    # message about `stream_prefix`, which is neither what the person did nor
-    # something they can act on from that screen.
-    #
-    # The stored value is already inert at sync time. Leaving it alone costs
-    # nothing; refusing to save around it strands the pipeline.
     unsupported = [
         label
         for label, value, current in (
@@ -339,11 +323,10 @@ def _reject_unsupported_naming(
     if not unsupported:
         return
     raise ValidationError(
-        f"Engine đang chạy (AIRBYTE_EMBEDDED) chưa đổi được tên stream ở đích, "
-        f"nên {' và '.join(unsupported)} sẽ không có tác dụng. Đặt vào đây thì "
-        "hai pipeline có stream trùng tên vẫn ghi chung một bảng và phá bảng "
-        "tạm của nhau. Hãy để trống, và tách hai pipeline bằng cách cho mỗi cái "
-        "một schema riêng ở Đích.",
+        f"Engine đang chạy ({settings.engine_type}) chưa đổi được tên stream ở "
+        f"đích, nên {' và '.join(unsupported)} sẽ không có tác dụng. Hãy để "
+        "trống, và tách hai pipeline bằng cách cho mỗi cái một schema riêng ở "
+        "Đích.",
         details={"unsupported_fields": unsupported, "engine_type": settings.engine_type},
     )
 

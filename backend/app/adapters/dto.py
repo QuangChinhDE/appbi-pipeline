@@ -192,6 +192,12 @@ class EngineSyncRequest:
     destination_config: dict[str, Any]
     streams: list[ConfiguredStream]
     state: dict[str, Any] | list[Any] | None = None
+    # How the destination's tables are named, when that differs from the
+    # source's. Carried on the sync rather than only on the connection because
+    # the embedded engine has no stored connection to read it back from -- it
+    # builds both catalogs per run.
+    namespace_format: str | None = None
+    stream_prefix: str | None = None
     # Airbyte refresh protocol: destinations use these to decide what prior data
     # to keep versus truncate.
     generation_id: int = 1
