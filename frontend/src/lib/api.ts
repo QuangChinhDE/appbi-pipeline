@@ -391,6 +391,8 @@ function actorApi(base: 'sources' | 'destinations') {
     test: (id: string) => post<ActorTestResult>(`/${base}/${id}/test`),
     enable: (id: string) => post<ActorDetail>(`/${base}/${id}/enable`),
     disable: (id: string) => post<ActorDetail>(`/${base}/${id}/disable`),
+    duplicate: (id: string, name?: string) =>
+      post<ActorDetail>(`/${base}/${id}/duplicate`, name ? { name } : {}),
     remove: (id: string, force = false) => del<void>(`/${base}/${id}`, { force }),
     pipelines: (id: string) =>
       get<{ id: string; name: string; status: string; next_run_at: string | null }[]>(

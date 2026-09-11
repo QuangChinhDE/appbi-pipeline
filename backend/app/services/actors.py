@@ -11,6 +11,7 @@ import hmac
 import json
 import logging
 import time
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -329,6 +330,103 @@ async def test_payload(
     return result, token
 
 
+#: A trailing " (3)" that this product added when copying, not part of a name
+#: somebody chose. Matched only at the very end, so "Kho (Hà Nội) 2024" keeps
+#: every character it has.
+_COPY_SUFFIX = re.compile(r"\s*\((\d+)\)\s*$")
+
+#: Same bound as `ActorCreate.name`, so a long name plus a suffix cannot be
+#: rejected by validation after the user has already pressed the button.
+_NAME_LIMIT = 200
+
+
+def next_copy_name(base: str, taken: set[str]) -> str:
+    """`Kho dữ liệu` beside an existing one becomes `Kho dữ liệu (1)`.
+
+    Copying a copy continues the sequence rather than nesting it: duplicating
+    `Kho dữ liệu (1)` gives `(2)`, not `Kho dữ liệu (1) (1)`.
+
+    `taken` is compared case-insensitively because the uniqueness check in the
+    database is, so returning a name that differs only in case would produce a
+    clash error from a name this function had just declared free.
+    """
+    lowered = {name.strip().lower() for name in taken}
+    stem = (_COPY_SUFFIX.sub("", base) or base).strip() or base
+    stem = stem[:_NAME_LIMIT].strip()
+
+    if stem.lower() not in lowered:
+        return stem
+    index = 1
+    while True:
+        suffix = f" ({index})"
+        candidate = f"{stem[:_NAME_LIMIT - len(suffix)].strip()}{suffix}"
+        if candidate.lower() not in lowered:
+            return candidate
+        index += 1
+
+
+async def _names_in_use(session: AsyncSession, ctx: RequestContext, kind: ActorKind) -> set[str]:
+    rows = await session.scalars(
+        select(kind.model.name).where(
+            kind.model.workspace_id == ctx.workspace_id,
+            kind.model.deleted_at.is_(None),
+        )
+    )
+    return set(rows.all())
+
+
+async def duplicate(
+    session: AsyncSession, ctx: RequestContext, kind: ActorKind,
+    actor_id: uuid.UUID, *, name: str | None = None,
+) -> Any:
+    """Copy a source or destination, credentials and all.
+
+    Goes through `create` rather than cloning the row: a connection is not just
+    a database record, it is an engine resource and a secret, and the create
+    saga is what keeps those three in step. The copy therefore gets its own
+    engine resource and its own encrypted secret -- deleting either connection
+    later cannot take the other's credentials with it.
+
+    Credentials are read and handed back in as plain configuration, which
+    `create` splits and encrypts exactly as it would a form submission. There
+    is no path here that returns a secret to the caller.
+
+    Whether the copy is connection-checked before saving follows the same
+    workspace setting as the wizard. Copying a connection that is currently
+    broken therefore fails the same way creating it by hand would, rather than
+    quietly producing a second broken connection.
+    """
+    ctx.require(kind.module, Action.VIEW)
+    ctx.require(kind.module, Action.CREATE)
+    ctx.require(kind.module, Action.MANAGE_CREDENTIALS)
+
+    # Imported here rather than at module scope: everything else in this
+    # service is duck-typed on the payload, and `create` stays that way.
+    from app.schemas.domain import ActorCreate
+
+    original = await get(session, ctx, kind, actor_id)
+    secrets = (
+        await secret_store.read(session, original.secret_ref)
+        if original.secret_ref else {}
+    )
+    chosen = (name or "").strip() or next_copy_name(
+        original.name, await _names_in_use(session, ctx, kind)
+    )
+    copy = await create(session, ctx, kind, ActorCreate(
+        name=chosen,
+        connector_key=original.connector_key,
+        description=original.description,
+        configuration=catalog.merge_configuration(original.configuration_json or {}, secrets),
+        test_before_save=False,
+    ))
+    await audit.record(
+        session, ctx, f"{kind.audit_prefix}.duplicated",
+        resource_type=kind.side, resource_id=copy.id, resource_name=copy.name,
+        after={"copied_from": str(original.id), "copied_from_name": original.name},
+    )
+    return copy
+
+
 async def create(
     session: AsyncSession, ctx: RequestContext, kind: ActorKind, payload
 ) -> Any:
@@ -492,13 +590,17 @@ async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
         )
 
     # Omitted credentials mean "unchanged"; a present-but-masked value is also
-    # treated as unchanged so re-submitting the loaded form is safe.
-    incoming = dict(payload.credentials or {})
-    incoming.update(inline_secrets)
-    incoming = {k: v for k, v in incoming.items() if v not in ("", "********")}
+    # treated as unchanged so re-submitting the loaded form is safe. Both
+    # readings have to hold at any depth -- Google Sheets keeps every secret
+    # under one `credentials` key, so filtering and merging only the top level
+    # let a resubmitted mask overwrite a real key, and let re-entering one
+    # OAuth field drop the two beside it.
+    incoming = catalog.strip_unchanged_secrets(
+        {**(payload.credentials or {}), **inline_secrets}
+    )
 
     stored = await secret_store.read(session, actor.secret_ref) if actor.secret_ref else {}
-    secrets = {**stored, **incoming}
+    secrets = catalog.apply_secret_updates(stored, incoming)
     merged = catalog.apply_spec_defaults(
         connector.spec_schema, catalog.merge_configuration(config, secrets)
     )
@@ -770,6 +872,10 @@ def available_actions(ctx: RequestContext, kind: ActorKind, actor) -> list[str]:
         actions.append("DISABLE" if actor.status is ResourceStatus.ACTIVE else "ENABLE")
     if ctx.can(kind.module, Action.MANAGE_CREDENTIALS):
         actions.append("UPDATE_CREDENTIALS")
+        # Copying carries the credentials across, so it takes the same
+        # authority as changing them -- not merely the right to create.
+        if ctx.can(kind.module, Action.CREATE):
+            actions.append("DUPLICATE")
     if ctx.can(kind.module, Action.DELETE):
         actions.append("DELETE")
     if kind.side == "SOURCE" and ctx.can(Module.SOURCES, Action.OPERATE):

@@ -217,6 +217,13 @@ class ConnectorDetail(ConnectorView):
 # ── sources / destinations ─────────────────────────────────────────────────
 
 
+class ActorDuplicate(BaseModel):
+    """Copying a connection. The name is optional -- left out, the server picks
+    the next free `... (n)`, which is what the button does."""
+
+    name: str | None = Field(default=None, max_length=200)
+
+
 class ActorCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     connector_key: str

@@ -70,6 +70,23 @@ function typeOf(schema: JsonSchema): string {
   return raw ?? (schema.oneOf ? 'oneOf' : 'string');
 }
 
+/**
+ * The path this field's value lives at in the configuration, as the API names
+ * it: `credentials.service_account_info`. `path` carries a `cfg-` prefix for
+ * DOM ids, which is stripped here rather than changing what ids look like.
+ */
+function configPath(path: string | undefined): string {
+  return (path ?? '').replace(/^cfg-/, '');
+}
+
+function isSecretStored(
+  props: FieldProps & { secretsConfigured?: Record<string, boolean> },
+): boolean {
+  const { name, path, secretsConfigured } = props;
+  if (!secretsConfigured) return false;
+  return Boolean(secretsConfigured[configPath(path)] ?? secretsConfigured[name]);
+}
+
 function SecretField({ name, schema, value, onChange, required, error, secretConfigured, path }: FieldProps) {
   const { t } = useI18n();
   const [reveal, setReveal] = React.useState(false);
@@ -247,7 +264,10 @@ export function SchemaField(props: FieldProps & { secretsConfigured?: Record<str
   const { name, schema, value, onChange, required, error, path, secretsConfigured } = props;
 
   if (schema.airbyte_secret) {
-    return <SecretField {...props} secretConfigured={secretsConfigured?.[name]} />;
+    // Looked up by dotted path, not by leaf name. Google Sheets keeps every
+    // secret inside `credentials`, so `service_account_info` matched nothing
+    // and drew an empty box next to a database that held the key.
+    return <SecretField {...props} secretConfigured={isSecretStored(props)} />;
   }
   if (schema.oneOf?.length) {
     return <OneOfField {...props} />;

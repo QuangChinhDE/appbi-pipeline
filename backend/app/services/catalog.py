@@ -474,6 +474,143 @@ def _split_node(spec: dict, value):
     return value, None, False
 
 
+#: What `describe` reports for a credential that exists. The form shows dots
+#: for it and sends it back unchanged, so it has to be recognised on the way in
+#: as "not a new value" -- see `strip_unchanged_secrets`.
+SECRET_MASK = "********"
+
+
+def secret_paths(spec: dict) -> list[str]:
+    """Every place the spec says a credential can go, as a dotted path.
+
+    Driven by the spec rather than by a stored value, because the form needs to
+    know before anything is stored. Branches of a `oneOf` all contribute: the
+    caller pairs this with what is actually recorded.
+
+    Ordered and de-duplicated so two branches declaring the same field name do
+    not report it twice.
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def walk(node: dict, prefix: str) -> None:
+        for branch in _spec_branches(node or {}):
+            for key, prop in (branch.get("properties") or {}).items():
+                if not isinstance(prop, dict):
+                    continue
+                path = f"{prefix}.{key}" if prefix else key
+                if _marked_secret(prop):
+                    if path not in seen:
+                        seen.add(path)
+                        found.append(path)
+                    continue
+                walk(prop, path)
+                items = prop.get("items")
+                if isinstance(items, dict):
+                    walk(items, path)
+
+    walk(spec or {}, "")
+    return found
+
+
+def flatten_secret_paths(payload: Any, prefix: str = "") -> list[str]:
+    """The dotted path of every leaf a stored credential payload actually has.
+
+    Recorded beside the ciphertext so the form can be told which fields exist
+    without anything being decrypted. Recording only the top-level keys is what
+    left `credentials.service_account_info` looking empty in the UI while the
+    database held it.
+    """
+    if isinstance(payload, dict):
+        out: list[str] = []
+        for key, value in payload.items():
+            path = f"{prefix}.{key}" if prefix else key
+            deeper = flatten_secret_paths(value, path)
+            out.extend(deeper or [path])
+        return sorted(out)
+    return []
+
+
+def configured_secret_fields(spec: dict, recorded: list[str] | None) -> dict[str, str]:
+    """Which spec-declared secret paths this actor has a value for.
+
+    `recorded` is what the secret record names. A record written before paths
+    were stored names the root key only, so a root match counts: showing dots
+    for a field that is stored one level down beats showing an empty box, and
+    the next save records the exact path.
+    """
+    names = set(recorded or [])
+    if not names:
+        return {}
+    fields: dict[str, str] = {}
+    for path in secret_paths(spec):
+        if path in names or path.split(".", 1)[0] in names:
+            fields[path] = SECRET_MASK
+    return fields
+
+
+def strip_unchanged_secrets(incoming: dict) -> dict:
+    """Drop leaves the form did not actually change, at any depth.
+
+    A loaded form shows the mask and sends it straight back; an untouched box
+    sends the empty string. Neither is a new credential. Filtering only the top
+    level meant a nested mask read as a real value and overwrote the stored key
+    with eight asterisks.
+
+    A branch left empty by the filter disappears with it -- otherwise the
+    caller sees `{"credentials": {}}`, believes a credential was submitted, and
+    runs a connection check for nothing.
+    """
+    cleaned = _strip_node(incoming)
+    return {} if cleaned is _UNCHANGED else cleaned
+
+
+def _strip_node(node: Any) -> Any:
+    """The recursive half. Returns the sentinel for "nothing left here", which
+    the public wrapper turns back into an empty dict at the top."""
+    if isinstance(node, dict):
+        out = {}
+        for key, value in node.items():
+            child = _strip_node(value)
+            if child is _UNCHANGED:
+                continue
+            out[key] = child
+        return out or _UNCHANGED
+    if isinstance(node, str) and node in ("", SECRET_MASK):
+        return _UNCHANGED
+    return node
+
+
+class _Unchanged:
+    """Distinct from None, which a connector may legitimately store."""
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<unchanged>"
+
+
+_UNCHANGED = _Unchanged()
+
+
+def apply_secret_updates(stored: dict, incoming: dict) -> dict:
+    """Overlay submitted credentials on stored ones, leaf by leaf.
+
+    `{**stored, **incoming}` replaces a whole branch. Google Sheets keeps every
+    secret under one `credentials` key, so re-entering one OAuth field would
+    have dropped the other two -- and the failure only shows up on the next
+    sync, as an authentication error against credentials that were complete an
+    hour earlier.
+    """
+    if not isinstance(stored, dict) or not isinstance(incoming, dict):
+        return incoming
+    merged = dict(stored)
+    for key, value in incoming.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = apply_secret_updates(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def split_configuration(spec: dict, payload: dict) -> tuple[dict, dict]:
     """Split a submitted form into (non-secret config, secret payload).
 

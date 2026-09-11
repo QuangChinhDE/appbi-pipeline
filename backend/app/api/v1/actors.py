@@ -22,7 +22,8 @@ from app.models.engine import ConnectorDefinition
 from app.models.identity import User
 from app.schemas.common import Paginated, PageInfo
 from app.schemas.domain import (
-    ActorCreate, ActorDetail, ActorTestRequest, ActorTestResult, ActorUpdate, ActorView,
+    ActorCreate, ActorDetail, ActorDuplicate, ActorTestRequest, ActorTestResult,
+    ActorUpdate, ActorView,
 )
 from app.services import actors as actor_service, catalog
 
@@ -121,6 +122,18 @@ def build_router(kind, *, prefix: str, tag: str) -> APIRouter:
         await session.refresh(actor)
         return await _detail(session, ctx, actor)
 
+    @router.post("/{actor_id}/duplicate", response_model=ActorDetail, status_code=201)
+    async def duplicate(
+        actor_id: uuid.UUID, session: SessionDep, ctx: CtxDep,
+        payload: ActorDuplicate | None = None,
+    ) -> ActorDetail:
+        copy = await actor_service.duplicate(
+            session, ctx, kind, actor_id, name=payload.name if payload else None
+        )
+        await session.commit()
+        await session.refresh(copy)
+        return await _detail(session, ctx, copy)
+
     @router.post("/{actor_id}/test", response_model=ActorTestResult)
     async def test_existing(
         actor_id: uuid.UUID, session: SessionDep, ctx: CtxDep
@@ -184,6 +197,13 @@ def build_router(kind, *, prefix: str, tag: str) -> APIRouter:
         usage_map = await actor_service.pipeline_usage(session, ctx.workspace_id, kind)
         owner = await actor_service.owner_of(session, actor.created_by)
         credentials = await secret_store.describe(session, actor.secret_ref)
+        # Reported per spec-declared path. `describe` names what the record
+        # holds; the spec says where the form draws a box for it, and the two
+        # have to be matched or a stored nested key looks like an empty field.
+        if connector is not None:
+            credentials["fields"] = catalog.configured_secret_fields(
+                connector.spec_schema or {}, list(credentials.get("fields") or {})
+            )
         last_discovered = (
             await actor_service.last_discovery(session, actor.id)
             if kind.side == "SOURCE" else None

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  CheckCircle2, GitBranch, Power, RefreshCw, Save, Trash2, Wand2,
+  CheckCircle2, Copy, GitBranch, Power, RefreshCw, Save, Trash2, Wand2,
 } from 'lucide-react';
 
 import { ApiError, destinationApi, sourceApi } from '@/lib/api';
@@ -95,6 +95,19 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
       invalidate();
       toastSuccess(t('sources.schemaRefreshed'),
         t('sources.streamCount', { n: snapshot.stream_count }));
+    },
+    onError: (caught) => setFailure(fromApiError(caught, actor?.name)),
+  });
+
+  // The copy carries the credentials across, so it is created by the server
+  // from what is already stored -- nothing secret is read into the browser to
+  // be sent back. The server also picks the name, which is why none is passed.
+  const duplicate = useMutation({
+    mutationFn: () => api.duplicate(actorId),
+    onSuccess: (copy) => {
+      invalidate();
+      toastSuccess(t('actor.duplicated'), copy.name);
+      router.push(`${basePath}/${copy.id}`);
     },
     onError: (caught) => setFailure(fromApiError(caught, actor?.name)),
   });
@@ -198,6 +211,16 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
                 leadingIcon={<Power className="h-3.5 w-3.5" />}
               >
                 {actor.status === 'ACTIVE' ? t('common.disable') : t('common.enable')}
+              </Button>
+            )}
+            {actions.includes('DUPLICATE') && (
+              <Button
+                variant="ghost"
+                loading={duplicate.isPending}
+                onClick={() => duplicate.mutate()}
+                leadingIcon={<Copy className="h-3.5 w-3.5" />}
+              >
+                {t('actor.duplicate')}
               </Button>
             )}
             {actions.includes('DELETE') && (

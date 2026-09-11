@@ -32,6 +32,20 @@ logger = logging.getLogger(__name__)
 MASK = "********"
 
 
+def _field_names(payload: dict[str, Any]) -> list[str]:
+    """The dotted path of every leaf, so the form can be told which fields are
+    stored without anything being decrypted.
+
+    Top-level keys alone were not enough: Google Sheets keeps every secret
+    inside `credentials`, so a stored service-account key was reported as
+    `credentials` and the box for `credentials.service_account_info` matched
+    nothing and rendered empty beside a database that held the key.
+    """
+    from app.services.catalog import flatten_secret_paths  # local: avoids a cycle
+
+    return flatten_secret_paths(payload)
+
+
 def build_kek(raw: str) -> Fernet:
     """Turn key material into a Fernet, applying the same policy as _kek().
 
@@ -117,7 +131,7 @@ class EncryptedDbSecretStore:
             if existing is not None:
                 existing.wrapped_data_key = wrapped.decode()
                 existing.ciphertext = ciphertext.decode()
-                existing.field_names = sorted(payload.keys())
+                existing.field_names = _field_names(payload)
                 existing.rotated_at = utcnow()
                 existing.version += 1
                 await session.flush()
@@ -131,7 +145,7 @@ class EncryptedDbSecretStore:
                 provider=self.provider,
                 wrapped_data_key=wrapped.decode(),
                 ciphertext=ciphertext.decode(),
-                field_names=sorted(payload.keys()),
+                field_names=_field_names(payload),
                 rotated_at=utcnow(),
             )
         )
