@@ -107,7 +107,10 @@ class KiotVietConnector:
     app: str
     title: str
     streams: tuple[Stream, ...]
+    #: English, matching what an Airbyte image supplies and what the UI
+    #: falls back to. `summary_vi` is optional beside it.
     summary: str = ""
+    summary_vi: str = ""
     docs_url: str = ""
 
     @property

@@ -48,6 +48,7 @@ def catalogue_entries() -> list[dict[str, Any]]:
             "connector_type": "SOURCE",
             "category": "Zalo",
             "description": connector.summary,
+            "description_vi": connector.summary_vi,
             "icon": connector.connector_key,
             "icon_url": "",
             "documentation_url": connector.docs_url,

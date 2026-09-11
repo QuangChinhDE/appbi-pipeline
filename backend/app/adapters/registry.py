@@ -56,6 +56,7 @@ def bundled_connectors() -> list[ConnectorMetadata]:
             spec_schema=entry["spec_schema"],
             category=entry.get("category", "Database"),
             description=entry.get("description"),
+            description_vi=entry.get("description_vi") or None,
             icon=entry.get("icon"),
             icon_url=entry.get("icon_url") or None,
             documentation_url=entry.get("documentation_url") or None,

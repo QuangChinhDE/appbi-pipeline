@@ -70,6 +70,7 @@ async def seed_catalog(session: AsyncSession) -> SeedOutcome:
                     connector_type=ConnectorType(metadata.connector_type),
                     category=metadata.category,
                     description=metadata.description,
+                    description_vi=metadata.description_vi,
                     icon=metadata.icon,
                     icon_url=metadata.icon_url,
                     documentation_url=metadata.documentation_url,
@@ -101,6 +102,7 @@ async def seed_catalog(session: AsyncSession) -> SeedOutcome:
             existing.display_name = metadata.display_name
             existing.category = metadata.category
             existing.description = metadata.description
+            existing.description_vi = metadata.description_vi
             existing.icon = metadata.icon
             existing.icon_url = metadata.icon_url
             existing.documentation_url = metadata.documentation_url

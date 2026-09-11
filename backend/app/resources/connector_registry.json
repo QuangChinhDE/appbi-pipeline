@@ -11,7 +11,7 @@
    "icon": "bigquery",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-bigquery/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/bigquery",
-   "description": "Đọc bảng từ Google BigQuery bằng service account; hỗ trợ full refresh và incremental theo cursor.",
+   "description": "Reads tables from Google BigQuery with a service account; supports full refresh and cursor-based incremental.",
    "docker_repository": "airbyte/source-bigquery",
    "version": "0.4.5",
    "release_stage": "alpha",
@@ -48,7 +48,8 @@
     ],
     "title": "BigQuery Source Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc bảng từ Google BigQuery bằng service account; hỗ trợ full refresh và incremental theo cursor."
   },
   {
    "connector_key": "destination-bigquery",
@@ -58,7 +59,7 @@
    "icon": "bigquery",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/destination-bigquery/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/destinations/bigquery",
-   "description": "Ghi dữ liệu vào Google BigQuery; dataset phải cùng location khai trong cấu hình.",
+   "description": "Writes into Google BigQuery; the dataset must be in the location named in the configuration.",
    "docker_repository": "airbyte/destination-bigquery",
    "version": "2.4.19",
    "release_stage": "generally_available",
@@ -328,7 +329,8 @@
     ],
     "title": "Bigquery Specification",
     "type": "object"
-   }
+   },
+   "description_vi": "Ghi dữ liệu vào Google BigQuery; dataset phải cùng location khai trong cấu hình."
   },
   {
    "connector_key": "source-google-sheets",
@@ -338,7 +340,7 @@
    "icon": "google-sheets",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-google-sheets/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/google-sheets",
-   "description": "Đọc từng sheet trong Google Sheets thành một bảng; dùng service account hoặc đăng nhập Google (OAuth).",
+   "description": "Reads each sheet in a Google Sheets file as one table; authenticate with a service account or by signing in with Google.",
    "docker_repository": "airbyte/source-google-sheets",
    "version": "0.12.35",
    "release_stage": "generally_available",
@@ -525,7 +527,8 @@
     ],
     "title": "Google Sheets Source Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc từng sheet trong Google Sheets thành một bảng; dùng service account hoặc đăng nhập Google (OAuth)."
   },
   {
    "connector_key": "source-mssql",
@@ -535,7 +538,7 @@
    "icon": "mssql",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-mssql/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/mssql",
-   "description": "Đọc bảng từ Microsoft SQL Server; hỗ trợ full refresh và incremental theo cursor.",
+   "description": "Reads tables from Microsoft SQL Server; supports full refresh and cursor-based incremental.",
    "docker_repository": "airbyte/source-mssql",
    "version": "5.0.0",
    "release_stage": "alpha",
@@ -982,7 +985,8 @@
     ],
     "title": "MSSQL Source Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc bảng từ Microsoft SQL Server; hỗ trợ full refresh và incremental theo cursor."
   },
   {
    "connector_key": "source-postgres",
@@ -992,7 +996,7 @@
    "icon": "postgres",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-postgres/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/postgres",
-   "description": "Đọc bảng từ PostgreSQL; hỗ trợ full refresh và incremental theo cursor.",
+   "description": "Reads tables from PostgreSQL; supports full refresh and cursor-based incremental.",
    "docker_repository": "airbyte/source-postgres",
    "version": "3.8.5",
    "release_stage": "generally_available",
@@ -1576,7 +1580,8 @@
     ],
     "title": "Postgres Source Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc bảng từ PostgreSQL; hỗ trợ full refresh và incremental theo cursor."
   },
   {
    "connector_key": "destination-postgres",
@@ -1586,7 +1591,7 @@
    "icon": "postgres",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/destination-postgres/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/destinations/postgres",
-   "description": "Ghi dữ liệu vào PostgreSQL; bảng đích do connector tự tạo và quản lý.",
+   "description": "Writes into PostgreSQL; the connector creates and manages the destination tables itself.",
    "docker_repository": "airbyte/destination-postgres",
    "version": "2.0.10",
    "release_stage": "generally_available",
@@ -2031,7 +2036,8 @@
     ],
     "title": "Postgres Destination Specification",
     "type": "object"
-   }
+   },
+   "description_vi": "Ghi dữ liệu vào PostgreSQL; bảng đích do connector tự tạo và quản lý."
   },
   {
    "connector_key": "source-faker",
@@ -2041,7 +2047,7 @@
    "icon": "faker",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-faker/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/faker",
-   "description": "Nguồn dữ liệu mẫu sinh bởi connector, dùng để kiểm thử pipeline mà không cần hệ thống ngoài.",
+   "description": "Sample data generated by the connector, for trying a pipeline out without connecting to anything real.",
    "docker_repository": "airbyte/source-faker",
    "version": "7.2.1",
    "release_stage": "beta",
@@ -2097,7 +2103,8 @@
     "required": [],
     "title": "Faker Source Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Nguồn dữ liệu mẫu sinh bởi connector, dùng để kiểm thử pipeline mà không cần hệ thống ngoài."
   },
   {
    "connector_key": "source-bing-ads",
@@ -2107,7 +2114,7 @@
    "icon": "bing-ads",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-bing-ads/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/bing-ads",
-   "description": "Đọc chiến dịch và báo cáo hiệu quả từ Microsoft Advertising (Bing Ads).",
+   "description": "Reads campaigns and performance reports from Microsoft Advertising (Bing Ads).",
    "docker_repository": "airbyte/source-bing-ads",
    "version": "3.0.7",
    "release_stage": "generally_available",
@@ -2333,7 +2340,8 @@
     ],
     "title": "Bing Ads Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc chiến dịch và báo cáo hiệu quả từ Microsoft Advertising (Bing Ads)."
   },
   {
    "connector_key": "source-facebook-marketing",
@@ -2343,7 +2351,7 @@
    "icon": "facebook-marketing",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-facebook-marketing/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/facebook-marketing",
-   "description": "Đọc chiến dịch, ad set, quảng cáo và số liệu insights từ Facebook Marketing API theo từng tài khoản quảng cáo.",
+   "description": "Reads campaigns, ad sets, adverts and insights from the Facebook Marketing API, per ad account.",
    "docker_repository": "airbyte/source-facebook-marketing",
    "version": "6.0.2",
    "release_stage": "generally_available",
@@ -3083,7 +3091,8 @@
     ],
     "title": "Source Facebook Marketing",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc chiến dịch, ad set, quảng cáo và số liệu insights từ Facebook Marketing API theo từng tài khoản quảng cáo."
   },
   {
    "connector_key": "source-google-ads",
@@ -3093,7 +3102,7 @@
    "icon": "google-ads",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-google-ads/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/google-ads",
-   "description": "Đọc chiến dịch, nhóm quảng cáo, từ khoá và báo cáo hiệu quả từ Google Ads; cần developer token và customer ID.",
+   "description": "Reads campaigns, ad groups, keywords and performance reports from Google Ads; needs a developer token.",
    "docker_repository": "airbyte/source-google-ads",
    "version": "6.1.0",
    "release_stage": "generally_available",
@@ -3270,7 +3279,8 @@
     ],
     "title": "Google Ads Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc chiến dịch, nhóm quảng cáo, từ khoá và báo cáo hiệu quả từ Google Ads; cần developer token và customer ID."
   },
   {
    "connector_key": "destination-google-sheets",
@@ -3280,7 +3290,7 @@
    "icon": "google-sheets",
    "icon_url": "",
    "documentation_url": "https://docs.airbyte.com/integrations/destinations/google-sheets",
-   "description": "Ghi dữ liệu ra Google Sheets; phù hợp báo cáo nhỏ, không phải kho dữ liệu.",
+   "description": "Writes out to Google Sheets; suitable for small reports, not for a warehouse.",
    "docker_repository": "airbyte/destination-google-sheets",
    "version": "0.3.5",
    "release_stage": "alpha",
@@ -3379,7 +3389,8 @@
     ],
     "title": "Destination Google Sheets",
     "type": "object"
-   }
+   },
+   "description_vi": "Ghi dữ liệu ra Google Sheets; phù hợp báo cáo nhỏ, không phải kho dữ liệu."
   },
   {
    "connector_key": "destination-mssql",
@@ -3389,7 +3400,7 @@
    "icon": "mssql",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/destination-mssql/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/destinations/mssql",
-   "description": "Ghi dữ liệu vào Microsoft SQL Server. Hiện chỉ ghi bảng raw dạng JSON trong schema `airbyte_internal`; connector chưa dựng bảng đã định kiểu trên nền tảng này.",
+   "description": "Writes into Microsoft SQL Server. Currently writes raw JSON tables in the airbyte_internal schema only.",
    "docker_repository": "airbyte/destination-mssql",
    "version": "2.2.20",
    "release_stage": "generally_available",
@@ -3785,7 +3796,8 @@
     ],
     "title": "MSSQL Destination Specification",
     "type": "object"
-   }
+   },
+   "description_vi": "Ghi dữ liệu vào Microsoft SQL Server. Hiện chỉ ghi bảng raw dạng JSON trong schema `airbyte_internal`; connector chưa dựng bảng đã định kiểu trên nền tảng này."
   },
   {
    "connector_key": "source-tiktok-marketing",
@@ -3795,7 +3807,7 @@
    "icon": "tiktok-marketing",
    "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-tiktok-marketing/latest/icon.svg",
    "documentation_url": "https://docs.airbyte.com/integrations/sources/tiktok-marketing",
-   "description": "Đọc chiến dịch, nhóm quảng cáo và số liệu báo cáo từ TikTok Marketing API.",
+   "description": "Reads campaigns, ad groups and reporting figures from the TikTok Marketing API.",
    "docker_repository": "airbyte/source-tiktok-marketing",
    "version": "5.1.11",
    "release_stage": "generally_available",
@@ -3936,7 +3948,8 @@
     },
     "title": "TikTok Marketing Source Spec",
     "type": "object"
-   }
+   },
+   "description_vi": "Đọc chiến dịch, nhóm quảng cáo và số liệu báo cáo từ TikTok Marketing API."
   }
  ]
 }

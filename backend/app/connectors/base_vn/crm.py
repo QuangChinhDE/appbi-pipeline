@@ -136,8 +136,9 @@ CRM = BaseConnector(
     # and ships as `source-base-crm-leads`. The key stays `source-base-crm`:
     # renaming it would orphan every source already built on it.
     title="Base CRM - Deals",
-    summary="Pipeline bán hàng, deal, khách hàng và liên hệ theo từng dịch "
-            "vụ. Phần Lead nằm ở connector Base CRM - Leads.",
+    summary="Sales pipelines, deals, accounts and contacts, per service. Leads live in the Base CRM - Leads connector.",
+    summary_vi="Pipeline bán hàng, deal, khách hàng và liên hệ theo từng dịch "
+                "vụ. Phần Lead nằm ở connector Base CRM - Leads.",
     url_base="https://apis.{domain}/sales/v1/",
     docs_url="https://basecrm-standard.apidocs.rework.site/",
     token_field="access_token",
@@ -147,8 +148,13 @@ CRM = BaseConnector(
     config=(
         ConfigField(
             name="password",
-            title="Mật khẩu tài khoản",
+            title="Account password",
+            title_vi="Mật khẩu tài khoản",
             description=(
+                "Base CRM wants both the token and the account password on "
+                "every call. This is a second secret, not a login step."
+            ),
+            description_vi=(
                 "Base CRM yêu cầu cả token lẫn mật khẩu tài khoản trong mỗi "
                 "lần gọi. Đây là bí mật thứ hai, không phải bước đăng nhập."
             ),

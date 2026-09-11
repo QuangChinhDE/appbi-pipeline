@@ -260,8 +260,12 @@ class ConfigField:
     """A per-workspace setting beyond the token."""
 
     name: str
+    #: English, because that is what an Airbyte spec carries and what the form
+    #: falls back to. `*_vi` is optional beside it.
     title: str
     description: str = ""
+    title_vi: str = ""
+    description_vi: str = ""
     required: bool = False
     kind: Literal["string", "integer"] = "string"
     secret: bool = False
@@ -318,7 +322,10 @@ class BaseConnector:
     #: `{domain}` is substituted from config at request time.
     url_base: str
     streams: tuple[Stream, ...]
+    #: English, matching what an Airbyte image supplies and what the UI falls
+    #: back to. `summary_vi` is optional beside it.
     summary: str = ""
+    summary_vi: str = ""
     docs_url: str = ""
     config: tuple[ConfigField, ...] = ()
     #: The request field the token travels in. Every application on
@@ -706,16 +713,29 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
     that pointed somewhere else entirely. The host belongs to the connector,
     which ships with the product; the token belongs to the workspace.
     """
-    # Vietnamese, because the product is. English help beside Vietnamese
-    # labels was the single most jarring thing about the first version of this
-    # form — the reader has to switch language mid-field to find out what to
-    # type. No backticks either: the form renders help as plain text, so
+    # Both languages travel in the spec. The form reads `title_vi` /
+    # `description_vi` when the reader has chosen Vietnamese and falls back to
+    # `title` / `description`, which is what an Airbyte image supplies and is
+    # therefore English.
+    #
+    # This used to be Vietnamese only, and the result was a form in two
+    # languages at once: the chrome followed the setting, the fields did not,
+    # so an English reader had to switch language mid-field to find out what
+    # to type.
+    #
+    # No backticks in either language: the form renders help as plain text, so
     # markdown arrives on screen as punctuation.
     properties: dict[str, Any] = {
         connector.token_field: {
             "type": "string",
             "title": "Access token",
+            "title_vi": "Access token",
             "description": (
+                f"The API token for {connector.title}, found in that "
+                "application's admin area in Base. Each application has its "
+                "own: a Workflow token cannot read HRM."
+            ),
+            "description_vi": (
                 f"Token API của {connector.title}, lấy trong phần quản trị "
                 "của Base. Mỗi ứng dụng một token riêng: token của Workflow "
                 "không đọc được HRM."
@@ -728,7 +748,8 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
 
     properties["domain"] = {
         "type": "string",
-        "title": "Tên miền Base",
+        "title": "Base domain",
+        "title_vi": "Tên miền Base",
         # An enum, so the form renders a dropdown rather than a free-text box.
         # These are two separate installations with separate accounts, and a
         # token from one is refused by the other with a message that reads
@@ -738,6 +759,13 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
         "enum": list(connector.domains),
         "default": connector.domains[0],
         "description": (
+            "Which Base installation this account lives on. base.vn is the "
+            "main one; base.com.vn is a separate installation with separate "
+            "accounts. A token from one is refused by the other, and that "
+            "refusal reads exactly like an expired token — so if a token you "
+            "know is correct is still refused, check this field first."
+        ),
+        "description_vi": (
             "Tài khoản này nằm trên bản Base nào. base.vn là bản chính; "
             "base.com.vn là một bản cài riêng, tài khoản tách biệt. Token của "
             "bản này bị bản kia từ chối, và báo lỗi trông y hệt token hết hạn "
@@ -749,8 +777,14 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
     if any(s.incremental for s in connector.streams):
         properties["updated_from"] = {
             "type": "string",
-            "title": "Chỉ lấy bản ghi thay đổi từ",
+            "title": "Only read records changed since",
+            "title_vi": "Chỉ lấy bản ghi thay đổi từ",
             "description": (
+                "A moment in epoch seconds. Leave it at 0 to read everything "
+                "on the first sync; later syncs continue from where the last "
+                "one stopped."
+            ),
+            "description_vi": (
                 "Thời điểm dạng epoch seconds. Để 0 để lần đồng bộ đầu lấy "
                 "toàn bộ; các lần sau tự tiếp tục từ chỗ lần trước dừng."
             ),
@@ -760,8 +794,21 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
         }
         properties["lookback_window"] = {
             "type": "string",
-            "title": "Đọc lùi lại mỗi lần đồng bộ",
+            "title": "Re-read this far back each sync",
+            "title_vi": "Đọc lùi lại mỗi lần đồng bộ",
             "description": (
+                "How far to overlap, as an ISO-8601 duration: PT10M is ten "
+                "minutes, PT1H is one hour. PT0S turns it off. "
+                "Use it when records go missing even though they were edited: "
+                "the sync window runs from the last mark to now, so a record "
+                "whose update time falls before that mark but which arrives "
+                "late — clock skew between Base's servers and this host is "
+                "enough — is never read again. "
+                "Only turn it on where the destination writes with Append + "
+                "deduplicate: with plain Append the overlap is written a "
+                "second time as a duplicate row."
+            ),
+            "description_vi": (
                 "Khoảng thời gian đọc chồng lại, dạng ISO-8601: PT10M là mười "
                 "phút, PT1H là một giờ. Để PT0S là tắt. "
                 "Dùng khi thấy bản ghi bị thiếu dù đã sửa: cửa sổ đồng bộ chạy "
@@ -784,8 +831,19 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
     # connector's source and carry that patch across every update.
     properties["page_size"] = {
         "type": "string",
-        "title": "Số bản ghi mỗi lần gọi",
+        "title": "Records per request",
+        "title_vi": "Số bản ghi mỗi lần gọi",
         "description": (
+            "Leave it empty to use the connector's own default (500). Lower it "
+            "when a sync is killed for running out of memory: one page is held "
+            "whole in memory before it is written out, so the larger the "
+            "records the smaller the page has to be. "
+            "Measured: a Base Work ticket averages about 326 KB, so a page of "
+            "500 is about 163 MB — at 100 the memory drops roughly fivefold "
+            "and the number of API calls rises fivefold. It only affects "
+            "streams whose page size the connector controls."
+        ),
+        "description_vi": (
             "Để trống là dùng mặc định của connector (500). Hạ xuống khi đồng "
             "bộ bị dừng vì hết bộ nhớ: một trang được giữ nguyên trong bộ nhớ "
             "trước khi ghi ra, nên bản ghi càng to thì trang càng phải nhỏ. "
@@ -805,6 +863,12 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
             "description": extra.description,
             "order": index,
         }
+        # Only when the connector supplied one. An absent Vietnamese label
+        # falls back to the English, which reads better than an empty field.
+        if extra.title_vi:
+            properties[extra.name]["title_vi"] = extra.title_vi
+        if extra.description_vi:
+            properties[extra.name]["description_vi"] = extra.description_vi
         if extra.secret:
             properties[extra.name]["airbyte_secret"] = True
         if extra.default is not None:

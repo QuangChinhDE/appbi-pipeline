@@ -103,3 +103,20 @@ export function supportLevelKey(level: string): string {
   if (level === 'workspace') return 'connectors.supportWorkspace';
   return 'connectors.supportCommunity';
 }
+
+
+/**
+ * A connector's one-line description in the reader's language.
+ *
+ * Connectors this product defines carry both; an Airbyte image carries only
+ * the English, and falls through to it. Translating a connector's own
+ * documentation is not something this product should invent.
+ */
+export function connectorDescription(
+  connector: { description?: string | null; description_vi?: string | null },
+  locale: string,
+): string {
+  if (locale === 'vi' && connector.description_vi) return connector.description_vi;
+  return connector.description ?? '';
+}
+

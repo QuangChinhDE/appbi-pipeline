@@ -68,8 +68,9 @@ _CREATED = Incremental(field="createdDate")
 KIOTVIET = KiotVietConnector(
     app="kiotviet",
     title="KiotViet",
-    summary="Hàng hóa, đơn hàng, hóa đơn, khách hàng và tồn kho từ KiotViet "
-            "Retail qua Public API.",
+    summary="Products, orders, invoices, customers and stock from KiotViet Retail through the Public API.",
+    summary_vi="Hàng hóa, đơn hàng, hóa đơn, khách hàng và tồn kho từ KiotViet "
+                "Retail qua Public API.",
     docs_url="https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/"
              "retail-ket-noi-api/public-api/",
     streams=(

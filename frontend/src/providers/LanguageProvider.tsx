@@ -20,8 +20,19 @@ interface I18nValue {
 const I18nContext = React.createContext<I18nValue | null>(null);
 const STORAGE_KEY = 'appbi.integration.locale';
 
+/**
+ * English until somebody chooses otherwise.
+ *
+ * This was Vietnamese, which made every deployment Vietnamese by default and
+ * every screen a mix: the chrome followed the setting while anything the
+ * server produced -- connector field labels, error messages -- stayed in one
+ * language regardless. English is the safer default for a product that ships
+ * to people whose language we do not know.
+ */
+const DEFAULT_LOCALE: Locale = 'en';
+
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = React.useState<Locale>('vi');
+  const [locale, setLocaleState] = React.useState<Locale>(DEFAULT_LOCALE);
 
   React.useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -59,12 +70,12 @@ export function useI18n(): I18nValue {
     // Rendering outside the provider (e.g. an error boundary) should degrade,
     // not crash the page.
     return {
-      locale: 'vi',
+      locale: DEFAULT_LOCALE,
       setLocale: () => {},
-      t: (key, vars) => translate('vi', key, vars),
+      t: (key, vars) => translate(DEFAULT_LOCALE, key, vars),
       tf: (keys, fallback, vars) => {
         for (const key of keys) {
-          const translated = translate('vi', key, vars);
+          const translated = translate(DEFAULT_LOCALE, key, vars);
           if (translated !== key) return translated;
         }
         return fallback;

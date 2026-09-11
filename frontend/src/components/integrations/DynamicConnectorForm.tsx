@@ -469,8 +469,47 @@ export function validateAgainstSpec(
   return errors;
 }
 
+/**
+ * Resolve a connector spec into one language.
+ *
+ * Connectors this product defines carry both: `title` and `description` hold
+ * the English, `title_vi` and `description_vi` the Vietnamese. An Airbyte
+ * image carries only the English pair, so it passes through untouched --
+ * which is the intended behaviour, since translating a connector's own
+ * documentation is not something this product should invent.
+ *
+ * Done once, on the way in, rather than at each of the eighteen places a
+ * label or a help line is read. Missing the eighteenth is exactly how a form
+ * ends up half translated.
+ */
+export function localizeSpec(spec: JsonSchema, locale: string): JsonSchema {
+  if (locale === 'en') return spec;
+
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(walk);
+    if (!node || typeof node !== 'object') return node;
+
+    const source = node as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(source)) {
+      // The localised variants are consumed here, not passed on: leaving them
+      // in would put `title_vi` beside `title` in anything that enumerates
+      // the schema's own keys.
+      if (key.endsWith(`_${locale}`)) continue;
+      out[key] = walk(value);
+    }
+    for (const field of ['title', 'description', 'examples'] as const) {
+      const localised = source[`${field}_${locale}`];
+      if (localised !== undefined) out[field] = localised;
+    }
+    return out;
+  };
+
+  return walk(spec) as JsonSchema;
+}
+
 export function DynamicConnectorForm({
-  spec, values, onChange, errors, secretsConfigured,
+  spec: rawSpec, values, onChange, errors, secretsConfigured,
 }: {
   spec: JsonSchema;
   values: FormValues;
@@ -478,8 +517,9 @@ export function DynamicConnectorForm({
   errors?: Record<string, string>;
   secretsConfigured?: Record<string, boolean>;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const spec = React.useMemo(() => localizeSpec(rawSpec, locale), [rawSpec, locale]);
 
   const entries = Object.entries(spec.properties ?? {});
   const basic = entries.filter(([, prop]) => !prop.airbyte_advanced).sort(

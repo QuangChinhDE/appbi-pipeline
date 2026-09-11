@@ -88,6 +88,10 @@ class ConnectorDefinition(Base, TimestampMixin):
     )
     category: Mapped[str] = mapped_column(String(64), default="Database", nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The same sentence in Vietnamese, when the connector supplies one. Null
+    #: for every Airbyte image, which is correct: translating a connector's own
+    #: documentation is not something this product should invent.
+    description_vi: Mapped[str | None] = mapped_column(Text, nullable=True)
     icon: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Upstream logo and docs. Both are display-only; a missing value degrades to
     # the built-in icon and no link rather than blocking the connector.

@@ -178,6 +178,9 @@ class ConnectorView(ORMModel):
     connector_type: str
     category: str
     description: str | None = None
+    #: Present only for connectors this product defines. The UI shows it when
+    #: the reader has chosen Vietnamese and falls back to `description`.
+    description_vi: str | None = None
     icon: str | None = None
     icon_url: str | None = None
     documentation_url: str | None = None

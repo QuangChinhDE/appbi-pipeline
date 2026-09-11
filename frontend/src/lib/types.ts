@@ -114,6 +114,8 @@ export interface EngineCapabilities {
 
 export interface Connector {
   connector_key: string;
+  /** Set only by connectors this product defines; absent for Airbyte images. */
+  description_vi?: string | null;
   display_name: string;
   connector_type: 'SOURCE' | 'DESTINATION';
   category: string;

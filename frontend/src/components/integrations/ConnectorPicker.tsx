@@ -6,7 +6,7 @@ import { Ban, Search } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/Feedback';
 import type { Connector } from '@/lib/types';
-import { supportLevelKey } from '@/lib/format';
+import { connectorDescription, supportLevelKey } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/providers/LanguageProvider';
 import { CertificationBadge } from './Badges';
@@ -27,7 +27,7 @@ export function ConnectorPicker({
   value: string | null;
   onChange: (connectorKey: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [query, setQuery] = React.useState('');
   const [category, setCategory] = React.useState<string>('');
   const [limit, setLimit] = React.useState(INITIAL_LIMIT);
@@ -92,7 +92,7 @@ export function ConnectorPicker({
           {/* The chosen connector stays on screen even when a later search
               excludes it, so the step cannot silently lose the selection. */}
           {selectedOffList && (
-            <ConnectorCard connector={selectedOffList} selected onChange={onChange} t={t} />
+            <ConnectorCard connector={selectedOffList} selected onChange={onChange} t={t} locale={locale} />
           )}
 
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -103,6 +103,7 @@ export function ConnectorPicker({
                 selected={value === connector.connector_key}
                 onChange={onChange}
                 t={t}
+                locale={locale}
               />
             ))}
           </div>
@@ -131,19 +132,20 @@ export function ConnectorPicker({
 }
 
 function ConnectorCard({
-  connector, selected, onChange, t,
+  connector, selected, onChange, t, locale,
 }: {
   connector: Connector;
   selected: boolean;
   onChange: (connectorKey: string) => void;
   t: (key: string, vars?: Record<string, string>) => string;
+  locale: string;
 }) {
   const blocked = !connector.selectable;
   // Most of the catalogue ships without hand-written copy, so the secondary line
   // states what is actually known rather than leaving a blank gap.
   const subtitle = blocked
     ? (connector.disabled_reason ?? t('wizard.connectorBlocked'))
-    : connector.description
+    : connectorDescription(connector, locale)
       || `${connector.category} · ${t(supportLevelKey(connector.support_level))}`;
 
   return (

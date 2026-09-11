@@ -37,6 +37,9 @@ class ConnectorMetadata:
     spec_schema: dict[str, Any]
     category: str = "Database"
     description: str | None = None
+    #: The same sentence in Vietnamese, for connectors this product defines.
+    #: None for every Airbyte image, which carries English only.
+    description_vi: str | None = None
     icon: str | None = None
     icon_url: str | None = None
     documentation_url: str | None = None

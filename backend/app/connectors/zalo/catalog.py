@@ -48,8 +48,9 @@ from ._shared import Stream, ZaloConnector
 ZALO_ADS = ZaloConnector(
     app="zalo-ads",
     title="Zalo Ads",
-    summary="Chiến dịch, quảng cáo và số liệu báo cáo từ Zalo Ads theo từng "
-            "tài khoản quảng cáo.",
+    summary="Campaigns, adverts and reporting figures from Zalo Ads, per advertising account.",
+    summary_vi="Chiến dịch, quảng cáo và số liệu báo cáo từ Zalo Ads theo từng "
+                "tài khoản quảng cáo.",
     docs_url="https://ads.zalo.me/",
     config=(
         {

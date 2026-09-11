@@ -26,7 +26,9 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    locale: Mapped[str] = mapped_column(String(8), default="vi", nullable=False)
+    # Matches the frontend default. An account created without a preference
+    # gets English rather than a language the person may not read.
+    locale: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_login_count: Mapped[int] = mapped_column(default=0, nullable=False)
     # Set when an account is created from a one-time bootstrap secret. The

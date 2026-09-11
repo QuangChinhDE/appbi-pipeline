@@ -24,6 +24,8 @@ import { BookOpen, ExternalLink, KeyRound, Layers } from 'lucide-react';
 
 import type { ConnectorDetail, JsonSchema } from '@/lib/types';
 import { useI18n } from '@/providers/LanguageProvider';
+import { connectorDescription } from '@/lib/format';
+import { localizeSpec } from './DynamicConnectorForm';
 
 /** Connector descriptions ship raw HTML and markdown; show neither. */
 function plain(text: string | null | undefined): string {
@@ -50,18 +52,22 @@ function Section({
 }
 
 export function ConnectorDocs({ connector }: { connector: ConnectorDetail }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const properties = React.useMemo(() => {
+    // Resolved to one language first, exactly as the form does. This panel
+    // sits beside the form, so a field named in English here and in
+    // Vietnamese there is the worst of both.
+    const localized = localizeSpec(connector.spec_schema ?? {}, locale);
     const entries = Object.entries(
-      (connector.spec_schema?.properties ?? {}) as Record<string, JsonSchema>,
+      (localized.properties ?? {}) as Record<string, JsonSchema>,
     );
     // The same order the form uses, so the reader's eye can move sideways
     // between a field and its explanation.
     return entries.sort(
       (a, b) => (a[1].order ?? 999) - (b[1].order ?? 999),
     );
-  }, [connector.spec_schema]);
+  }, [connector.spec_schema, locale]);
 
   const required = new Set<string>(
     (connector.spec_schema?.required as string[] | undefined) ?? [],
@@ -88,7 +94,7 @@ export function ConnectorDocs({ connector }: { connector: ConnectorDetail }) {
           {t('docs.title')}
         </p>
         <p className="mt-0.5 text-tiny text-text-tertiary">
-          {plain(connector.description) || connector.display_name}
+          {plain(connectorDescription(connector, locale)) || connector.display_name}
         </p>
       </header>
 

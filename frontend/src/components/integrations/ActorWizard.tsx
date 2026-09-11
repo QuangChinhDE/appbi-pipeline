@@ -391,7 +391,7 @@ export function ActorWizard({ kind }: { kind: Kind }) {
                     value={name}
                     invalid={Boolean(errors.__name)}
                     placeholder={connector.data?.display_name
-                      ? `${connector.data.display_name} ${isSource ? '(nguồn)' : '(đích)'}`
+                      ? `${connector.data.display_name} ${t(isSource ? 'wizard.nameSuffixSource' : 'wizard.nameSuffixDestination')}`
                       : (isSource ? 'Production Postgres' : 'Analytics Warehouse')}
                     onChange={(event) => setName(event.target.value)}
                   />

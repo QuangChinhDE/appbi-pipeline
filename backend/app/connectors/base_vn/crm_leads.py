@@ -123,8 +123,9 @@ _INC_FEED = Incremental(param="start_time", end_param="end_time",
 CRM_LEADS = BaseConnector(
     app="crm-leads",
     title="Base CRM - Leads",
-    summary="Lead theo từng dịch vụ, kèm dòng hoạt động của mỗi lead. "
-            "Dùng token và mật khẩu riêng, không dùng chung với Base CRM - Deals.",
+    summary="Leads per service, with each lead's activity feed. Uses its own token and password, not shared with Base CRM - Deals.",
+    summary_vi="Lead theo từng dịch vụ, kèm dòng hoạt động của mỗi lead. "
+                "Dùng token và mật khẩu riêng, không dùng chung với Base CRM - Deals.",
     url_base="https://apis.{domain}/leads/",
     docs_url="https://basecrm-standard.apidocs.rework.site/",
     token_field="access_token",
@@ -135,8 +136,15 @@ CRM_LEADS = BaseConnector(
     config=(
         ConfigField(
             name="password",
-            title="Mật khẩu tài khoản",
+            title="Account password",
+            title_vi="Mật khẩu tài khoản",
             description=(
+                "Base CRM Leads wants both the token and the account password "
+                "on every call. This is a second secret, not a login step, and "
+                "it is a pair of its own — a Base CRM - Deals token is refused "
+                "here."
+            ),
+            description_vi=(
                 "Base CRM Leads yêu cầu cả token lẫn mật khẩu tài khoản trong "
                 "mỗi lần gọi. Đây là bí mật thứ hai, không phải bước đăng nhập, "
                 "và là cặp riêng của Leads — token của Base CRM - Deals bị từ "
