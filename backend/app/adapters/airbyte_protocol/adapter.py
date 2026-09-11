@@ -393,10 +393,14 @@ class EmbeddedAirbyteAdapter:
             connector.declarative_manifest,
             ap.page_size_from_config(configuration, settings.connector_default_page_size),
         )
-        # The knob itself is not a connector field; passing it through would
-        # have the CDK reject an unexpected property on some specs.
-        forwarded = {k: v for k, v in configuration.items()
-                     if k != ap.PAGE_SIZE_CONFIG_KEY}
+        # Parent ids a workspace named, turned into the requests that will
+        # actually be made. Empty leaves the connector reading everything.
+        manifest = ap.with_scoped_partitions(manifest, configuration)
+        # Neither knob is a connector field; passing them through would have
+        # the CDK reject a property the spec it validates against never
+        # declared at runtime.
+        consumed = {ap.PAGE_SIZE_CONFIG_KEY, *ap.scoped_config_keys(manifest)}
+        forwarded = {k: v for k, v in configuration.items() if k not in consumed}
         return {**forwarded, self.MANIFEST_CONFIG_KEY: manifest}
 
     async def test_declarative_read(

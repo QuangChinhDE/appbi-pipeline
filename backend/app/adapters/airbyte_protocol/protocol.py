@@ -8,6 +8,7 @@ drive genuine `airbyte/source-*` and `airbyte/destination-*` images.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from dataclasses import dataclass
@@ -393,6 +394,89 @@ def page_size_from_config(configuration: dict[str, Any], fallback: int = 0) -> i
     except (TypeError, ValueError):
         return fallback
     return value if value > 0 else fallback
+
+
+def scoped_config_keys(manifest: dict[str, Any] | None) -> set[str]:
+    """Config keys that select parents rather than being sent to the source.
+
+    They are consumed when the manifest is built and must not be forwarded, or
+    a connector validating its own config rejects a property it never declared
+    at runtime.
+    """
+    scopes = ((manifest or {}).get("metadata") or {}).get("appbi_scopes") or {}
+    return {entry.get("config_key") for entry in scopes.values() if entry.get("config_key")}
+
+
+def with_scoped_partitions(
+    manifest: dict[str, Any] | None, configuration: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Narrow a stream to the parent ids a workspace named.
+
+    Base's largest tables are read one parent at a time -- every ticket belongs
+    to a service desk, every task to a project -- and reading all of them is
+    one request per parent, every sync. A workspace that cares about two desks
+    out of forty can say so, and this is where that takes effect: the
+    substream router that walks every parent is replaced by a list of the ids
+    that were named.
+
+    Not a filter applied after reading. The ids go into the request, so the
+    requests that are not wanted are never made.
+
+    An empty or absent list changes nothing, which is the default and the
+    behaviour every existing source keeps.
+    """
+    scopes = ((manifest or {}).get("metadata") or {}).get("appbi_scopes") or {}
+    if not manifest or not scopes:
+        return manifest
+
+    chosen = {
+        name: values
+        for name, entry in scopes.items()
+        if (values := _scope_values(configuration.get(entry.get("config_key"))))
+    }
+    if not chosen:
+        return manifest
+
+    out = copy.deepcopy(manifest)
+    streams = (out.get("definitions") or {}).get("streams") or {}
+    for name, values in chosen.items():
+        stream = streams.get(name)
+        if not isinstance(stream, dict):
+            continue
+        retriever = stream.get("retriever")
+        if not isinstance(retriever, dict):
+            continue
+        retriever["partition_router"] = {
+            "type": "ListPartitionRouter",
+            "values": values,
+            # The same name the substream router used, so the request body
+            # template that reads it needs no change.
+            "cursor_field": "parent_id",
+        }
+        # A stream with no parent -- `job` -- has no template to read it, so
+        # the request field is added here rather than being compiled in
+        # unconditionally, where it would send an empty value on every
+        # unscoped sync.
+        field = (scopes.get(name) or {}).get("field")
+        requester = retriever.get("requester")
+        if field and isinstance(requester, dict):
+            body = requester.setdefault("request_body_data", {})
+            if isinstance(body, dict):
+                body[field] = "{{ stream_partition.parent_id }}"
+    return out
+
+
+def _scope_values(raw: Any) -> list[str]:
+    """Read leniently: the form sends an array of strings, but a hand-written
+    config may hold one string, and a value somebody left blank is not a
+    choice."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.split(",")]
+    if not isinstance(raw, (list, tuple)):
+        return []
+    return [str(value).strip() for value in raw if str(value).strip()]
 
 
 def parse_spec(payload: dict[str, Any]) -> dict[str, Any]:

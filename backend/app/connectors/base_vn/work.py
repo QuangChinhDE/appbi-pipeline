@@ -8,7 +8,7 @@ all.
 
 from __future__ import annotations
 
-from ._shared import BaseConnector, Incremental, Parent, Stream
+from ._shared import BaseConnector, Incremental, Parent, Scope, Stream
 
 # ── WeWork ───────────────────────────────────────────────────────────────────
 #
@@ -63,6 +63,26 @@ WEWORK = BaseConnector(
         Stream(
             name="task", path="task/project", collection=("tasks",),
             parent=Parent(stream="project", inject="id"),
+            # Same shape as `ticket`, same measurement: `task/project` without
+            # a project answers "Invalid data", so all projects means one
+            # request per project. Tasks are the largest table here, so
+            # narrowing this is the single biggest lever a workspace has.
+            scope=Scope(
+                config_key="project_ids",
+                field="id",
+                title="Only these projects",
+                title_vi="Chỉ những dự án này",
+                description=(
+                    "Leave it empty to read tasks from every project. Add a "
+                    "project id to read only that one — the ids are in the "
+                    "`project` table this connector also syncs."
+                ),
+                description_vi=(
+                    "Để trống là lấy công việc của tất cả dự án. Thêm id dự "
+                    "án nào thì chỉ lấy dự án đó — id nằm trong bảng "
+                    "`project` mà chính connector này cũng đồng bộ."
+                ),
+            ),
             # Incremental on a substream: Airbyte keeps the cursor per
             # partition, so each project advances on its own high-water mark
             # rather than sharing one. Worth it here because tasks are the
@@ -141,6 +161,28 @@ SERVICE = BaseConnector(
         Stream(
             name="ticket", path="ticket/get.all", collection=("tickets",),
             parent=Parent(stream="service", inject="service_id"),
+            # Left empty this reads every service desk, which is what the
+            # parent router above does. Measured: `ticket/get.all` without a
+            # `service_id` answers INVALID_SERVICE_ID, so "all" cannot be one
+            # unfiltered call -- it is one call per desk either way. Naming
+            # two desks out of forty therefore replaces forty requests with
+            # two, and the memory that came with them.
+            scope=Scope(
+                config_key="service_ids",
+                field="service_id",
+                title="Only these service desks",
+                title_vi="Chỉ những hàng dịch vụ này",
+                description=(
+                    "Leave it empty to read tickets from every service desk. "
+                    "Add the id of a desk to read only that one — the ids are "
+                    "in the `service` table this connector also syncs."
+                ),
+                description_vi=(
+                    "Để trống là lấy ticket của tất cả hàng dịch vụ. Thêm id "
+                    "của hàng nào thì chỉ lấy hàng đó — id nằm trong bảng "
+                    "`service` mà chính connector này cũng đồng bộ."
+                ),
+            ),
             primary_key=("id",),
             # Per-service cursor, as the old manifest had. `last_update_from`
             # rather than `updated_from`: Service is the one application that

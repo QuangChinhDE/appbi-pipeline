@@ -86,6 +86,39 @@ _SCHEMA_REGISTRY: dict[str, dict[str, JsonSchema]] = _load_schemas()
 
 
 @dataclass(frozen=True)
+class Scope:
+    """Lets a workspace narrow a stream to a few parents instead of all of them.
+
+    Base's largest tables are read one parent at a time: every ticket belongs
+    to a service desk, every task to a project. Reading them all is the right
+    default and it is also the expensive one -- one request per parent, every
+    sync, whether or not anybody looks at the result.
+
+    A workspace that only cares about two service desks out of forty should be
+    able to say so. Left empty this changes nothing.
+
+    Measured against a live tenant before this was built, because the obvious
+    design does not work: `ticket/get.all` without `service_id` answers
+    INVALID_SERVICE_ID, and `task/project` without a project answers
+    "Invalid data". So "all" cannot be one unfiltered call for those two -- it
+    stays one call per parent. `jobs/get` is the exception: it already reads
+    every workflow in one call, and accepts `workflow_id` to narrow it.
+    """
+
+    #: The config key holding the chosen ids, e.g. `service_ids`.
+    config_key: str
+    #: The request field each id travels in, e.g. `service_id`. For a stream
+    #: that already has a parent this is the same field the substream router
+    #: injects, so narrowing is a straight swap of one router for another.
+    field: str
+    title: str
+    title_vi: str
+    description: str = ""
+    description_vi: str = ""
+    examples: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Parent:
     """This stream is read once per record of another stream.
 
@@ -212,6 +245,8 @@ class Stream:
     primary_key: tuple[str, ...] = ("id",)
     incremental: Incremental | None = None
     parent: Parent | None = None
+    #: Offered to the workspace as "read all of these, or only the ids I name".
+    scope: Scope | None = None
     paginate: bool = True
     page_size: int = DEFAULT_PAGE_SIZE
     #: Base's APIs do not agree on the page parameter. Most use `page`; the
@@ -856,7 +891,27 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
         "order": 4,
     }
 
-    for index, extra in enumerate(connector.config, start=5):
+    # One per stream that can be narrowed. An array rather than a
+    # comma-separated string: the form renders it as chips, and a list of ids
+    # typed into one box is exactly where a stray space or a full-width comma
+    # goes unnoticed until a sync reads nothing.
+    for offset, stream in enumerate(s for s in connector.streams if s.scope):
+        scope = stream.scope
+        properties[scope.config_key] = {
+            "type": "array",
+            "items": {"type": "string"},
+            "title": scope.title,
+            "title_vi": scope.title_vi,
+            "description": scope.description,
+            "description_vi": scope.description_vi,
+            "default": [],
+            "order": 5 + offset,
+        }
+        if scope.examples:
+            properties[scope.config_key]["examples"] = list(scope.examples)
+
+    scope_count = sum(1 for s in connector.streams if s.scope)
+    for index, extra in enumerate(connector.config, start=5 + scope_count):
         properties[extra.name] = {
             "type": extra.kind,
             "title": extra.title,
@@ -886,6 +941,22 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
     }
 
 
+def _scopes(connector: BaseConnector) -> dict[str, dict[str, str]]:
+    """Which config key narrows which stream, and through which request field.
+
+    Travels in the manifest so the engine can apply it without knowing
+    anything about Base: the same mechanism works for any declarative
+    connector that grows the same option.
+    """
+    return {
+        stream.name: {
+            "config_key": stream.scope.config_key,
+            "field": stream.scope.field,
+        }
+        for stream in connector.streams if stream.scope
+    }
+
+
 def compile_manifest(connector: BaseConnector) -> dict[str, Any]:
     """The Airbyte declarative manifest for one Base application.
 
@@ -912,6 +983,11 @@ def compile_manifest(connector: BaseConnector) -> dict[str, Any]:
         "streams": [{"$ref": f"#/definitions/streams/{name}"} for name in streams],
         # Only where a cap has actually been observed; see `rate_limit`.
         **({"api_budget": _api_budget(connector)} if connector.rate_limit else {}),
+        # Read by the engine before a sync, which swaps the partition router
+        # for the ids a workspace named. Kept under `metadata`, which the
+        # Airbyte schema carries as free-form and the CDK ignores.
+        **({"metadata": {"appbi_scopes": _scopes(connector)}}
+           if any(s.scope for s in connector.streams) else {}),
         "spec": {
             "type": "Spec",
             "connection_specification": connection_specification(connector),

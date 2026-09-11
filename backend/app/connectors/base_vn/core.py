@@ -8,7 +8,7 @@ measurement here, not an assumption from the old YAML.
 
 from __future__ import annotations
 
-from ._shared import BaseConnector, Incremental, Parent, Stream
+from ._shared import BaseConnector, Incremental, Parent, Scope, Stream
 
 # ── Account ──────────────────────────────────────────────────────────────────
 # Two endpoints, and the probe confirmed there are only two: `user/get`,
@@ -59,6 +59,26 @@ WORKFLOW = BaseConnector(
         Stream(
             name="job", path="jobs/get", collection=("jobs",),
             page_field="page_id",
+            # The one stream of the three where "all" really is one call:
+            # `jobs/get` with no `workflow_id` returns jobs across every
+            # workflow, and with one returns only that workflow's. Both
+            # verified against a live tenant.
+            scope=Scope(
+                config_key="workflow_ids",
+                field="workflow_id",
+                title="Only these workflows",
+                title_vi="Chỉ những quy trình này",
+                description=(
+                    "Leave it empty to read jobs from every workflow. Add a "
+                    "workflow id to read only that one — the ids are in the "
+                    "`workflow` table this connector also syncs."
+                ),
+                description_vi=(
+                    "Để trống là lấy job của tất cả quy trình. Thêm id quy "
+                    "trình nào thì chỉ lấy quy trình đó — id nằm trong bảng "
+                    "`workflow` mà chính connector này cũng đồng bộ."
+                ),
+            ),
             incremental=Incremental(),
             fields={"name": "string", "workflow_id": "string",
                     "stage_id": "string"},

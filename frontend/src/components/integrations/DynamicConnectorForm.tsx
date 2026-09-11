@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, X } from 'lucide-react';
 
-import { Button, IconButton } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import {
   Checkbox, FieldError, FieldHelp, Input, Label, Select, Textarea,
 } from '@/components/ui/Input';
@@ -134,45 +134,94 @@ function SecretField({ name, schema, value, onChange, required, error, secretCon
   );
 }
 
-function ArrayField({ name, schema, value, onChange, required, path }: FieldProps) {
+/**
+ * A list of short values, entered as chips.
+ *
+ * This was a column of text boxes with an "add" button, which is fine for two
+ * or three long strings and wrong for a list of ids: adding the fourth service
+ * desk meant a click, then a field, then a click. Typing them separated by
+ * commas into one box is worse still -- a stray space or a full-width comma
+ * pasted from a spreadsheet goes unnoticed until a sync quietly reads nothing.
+ *
+ * So: type, press Enter, it becomes a chip you can see and remove on its own.
+ * Pasting a comma-separated list splits it, which is what somebody arriving
+ * from a spreadsheet will do first.
+ */
+function ArrayField({ name, schema, value, onChange, required, path, error }: FieldProps) {
   const { t } = useI18n();
   const items = Array.isArray(value) ? (value as string[]) : [];
-  const update = (next: string[]) => onChange(next);
+  const [draft, setDraft] = React.useState('');
+
+  const commit = (raw: string) => {
+    // Split on comma and whitespace, so a paste from a spreadsheet column and
+    // a paste from a comma-separated list both arrive as separate chips.
+    const parts = raw.split(/[,;\s]+/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    // Duplicates are silently ignored rather than refused: adding an id twice
+    // is a slip, not a decision, and a validation error for it would be noise.
+    const next = [...items];
+    for (const part of parts) if (!next.includes(part)) next.push(part);
+    onChange(next);
+    setDraft('');
+  };
+
+  const remove = (index: number) => onChange(items.filter((_, i) => i !== index));
+
   return (
     <div>
-      <Label htmlFor={`${path}-0`} required={required}>{schema.title ?? name}</Label>
-      <div className="space-y-1.5">
+      <Label htmlFor={path} required={required}>{schema.title ?? name}</Label>
+      <div
+        className={cn(
+          'flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border bg-surface-1 px-2 py-1.5',
+          error
+            ? 'border-[rgb(var(--danger))]'
+            : 'border-[rgb(var(--border-strong))] focus-within:border-brand',
+        )}
+        // Clicking the empty space beside the chips should put the cursor in
+        // the box, which is what the whole control looks like it is.
+        onClick={() => document.getElementById(path ?? '')?.focus()}
+      >
         {items.map((item, index) => (
-          <div key={index} className="flex items-center gap-1.5">
-            <Input
-              id={`${path}-${index}`}
-              aria-label={`${schema.title ?? name} ${index + 1}`}
-              value={item}
-              onChange={(event) => {
-                const next = [...items];
-                next[index] = event.target.value;
-                update(next);
-              }}
-            />
-            <IconButton
-              aria-label={t('common.removeRow')}
-              size="sm"
-              variant="ghost"
-              onClick={() => update(items.filter((_, i) => i !== index))}
+          <span
+            key={`${item}-${index}`}
+            className="inline-flex items-center gap-1 rounded bg-surface-3 py-0.5 pl-2 pr-1 text-caption text-text-primary"
+          >
+            <span className="font-mono">{item}</span>
+            <button
+              type="button"
+              aria-label={t('common.removeValue', { value: item })}
+              className="text-text-tertiary hover:text-text-primary"
+              onClick={(event) => { event.stopPropagation(); remove(index); }}
             >
-              <X className="h-3.5 w-3.5" />
-            </IconButton>
-          </div>
+              <X className="h-3 w-3" />
+            </button>
+          </span>
         ))}
-        <Button
-          size="xs"
-          variant="subtle"
-          leadingIcon={<Plus className="h-3 w-3" />}
-          onClick={() => update([...items, ''])}
-        >
-          {t('common.addValue')}
-        </Button>
+        <input
+          id={path}
+          aria-label={schema.title ?? name}
+          value={draft}
+          placeholder={items.length === 0 ? t('common.chipPlaceholder') : ''}
+          className="min-w-[8rem] flex-1 bg-transparent text-caption text-text-primary outline-none placeholder:text-text-tertiary"
+          onChange={(event) => {
+            // A pasted list is committed immediately rather than sitting in
+            // the box looking like one value.
+            if (/[,;]/.test(event.target.value)) commit(event.target.value);
+            else setDraft(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === 'Tab') {
+              if (draft.trim()) { event.preventDefault(); commit(draft); }
+            } else if (event.key === 'Backspace' && draft === '' && items.length > 0) {
+              remove(items.length - 1);
+            }
+          }}
+          // Typed but not committed is still meant. Losing it on blur is the
+          // classic way a chip editor eats the last value somebody entered.
+          onBlur={() => commit(draft)}
+        />
       </div>
+      <FieldError>{error}</FieldError>
       <FieldHelp>{plainText(schema.description)}</FieldHelp>
     </div>
   );
