@@ -1187,7 +1187,10 @@ function WelcomePane({
       <div>
         <p className="text-small text-text-secondary">
           {projectName ? (
-            <>{t('tfw.dbtProject')}<span className="font-mono">{projectName}</span></>
+            // The space is its own expression: JSX drops whitespace
+            // between an expression and a tag, so the label and the
+            // name ran together as `dbt projectrevenue_from_sql`.
+            <>{t('tfw.dbtProject')}{' '}<span className="font-mono">{projectName}</span></>
           ) : t('tfw.dbtProject')}
         </p>
         <p className="mt-1 text-caption text-text-tertiary">

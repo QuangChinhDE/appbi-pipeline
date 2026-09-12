@@ -461,10 +461,15 @@ export default function NewTransformPage() {
               </Field>
             )}
 
-            {source === 'NEW' && (
+            {/* The SQL importer needs this too, and more than a scaffold
+                does: it is where a table named without a schema is taken to
+                live, and what the generated _sources.yml will declare. */}
+            {(source === 'NEW' || source === 'SQL') && (
               <Field
                 label={t('tfnew.sourceSchema')}
-                hint={t('tfnew.sourceSchemaHint')}
+                hint={source === 'SQL'
+                  ? t('tfnew.sourceSchemaSqlHint')
+                  : t('tfnew.sourceSchemaHint')}
               >
                 <Input
                   value={sourceSchema} onChange={(event) => setSourceSchema(event.target.value)}

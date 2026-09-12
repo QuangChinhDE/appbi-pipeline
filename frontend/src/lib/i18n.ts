@@ -2059,6 +2059,7 @@ const vi: Catalog = {
   'tfsql.imported': 'Đã nhập {n} model. Đang build thử.',
   'tfsql.renamed': '{n} model bị đổi tên vì dự án đã có tên đó.',
   'tfsql.back': 'Quay lại chọn file',
+  'tfnew.sourceSchemaSqlHint': 'Nơi bảng không ghi schema được hiểu là nằm ở đó. Đây cũng là thứ sẽ được khai báo trong file sources sinh ra.',
 };
 
 const en: Catalog = {
@@ -4085,6 +4086,7 @@ const en: Catalog = {
   'tfsql.imported': 'Imported {n} models. Building them now.',
   'tfsql.renamed': '{n} were renamed because the project already had those names.',
   'tfsql.back': 'Back to the files',
+  'tfnew.sourceSchemaSqlHint': 'Where a table named without a schema is taken to live. It is also what the generated sources file will declare.',
 };
 
 export const CATALOGS: Record<Locale, Catalog> = { vi, en };
