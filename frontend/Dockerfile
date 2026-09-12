@@ -18,10 +18,6 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 # Next inlines NEXT_PUBLIC_* at build time, so these are ARGs and not runtime
 # variables. Empty by default: with nothing supplied, no credential exists
 # anywhere in the built bundle -- not rendered, and not present to be read.
-ARG NEXT_PUBLIC_DEMO_EMAIL=
-ENV NEXT_PUBLIC_DEMO_EMAIL=$NEXT_PUBLIC_DEMO_EMAIL
-ARG NEXT_PUBLIC_DEMO_PASSWORD=
-ENV NEXT_PUBLIC_DEMO_PASSWORD=$NEXT_PUBLIC_DEMO_PASSWORD
 RUN npm run build
 
 # ---- run ----

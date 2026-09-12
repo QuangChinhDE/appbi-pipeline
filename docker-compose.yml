@@ -100,6 +100,13 @@ x-backend-env: &backend-env
   # The demo source and warehouse. They make a fresh checkout explorable and
   # are two connections nobody created on a customer's machine.
   SEED_DEMO_DATA: ${SEED_DEMO_DATA:-1}
+  # Who the administrator is. Absent from this list these two existed in the
+  # settings and could not be set: .env could name an administrator and the
+  # deployment would seed the built-in one regardless -- which is how a
+  # published password stayed live on installs that thought they had changed
+  # it. Empty password means "leave whatever is already there alone".
+  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@appbi.local}
+  SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
   # --- automatic retry ---
   # A transient source failure is retried without a person pressing a button.
   # 0 turns it off entirely; the wait doubles from the base and stops at the
@@ -282,8 +289,6 @@ services:
         # default, and empty means the credential is not in the built bundle
         # at all -- a production image must never carry one, least of all for
         # an account production does not create.
-        NEXT_PUBLIC_DEMO_EMAIL: ${NEXT_PUBLIC_DEMO_EMAIL:-}
-        NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-}
     container_name: appbi-pipeline-frontend
     mem_limit: ${FRONTEND_MEMORY_LIMIT:-512m}
     environment:

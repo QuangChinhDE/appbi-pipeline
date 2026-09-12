@@ -162,15 +162,28 @@ hơn nhiều vì Docker dùng lại cache.
 > (`API_PORT`, `PROXY_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`) rồi chạy lại.
 > Chưa có gì được build nên không mất thời gian.
 
-Xong thì mở **http://localhost:8080** và đăng nhập:
+Xong thì mở **http://localhost:8080** và đăng nhập bằng tài khoản
+`admin@appbi.local`.
 
-```
-admin@appbi.local  /  Admin@123456
+**Mật khẩu do `run.sh` sinh riêng cho máy bạn và in ra một lần, ngay cuối lần
+chạy đầu tiên.** Chép lại ngay. Sau đó nó nằm trong `.env`:
+
+```bash
+grep SEED_ADMIN_PASSWORD .env
 ```
 
-> Mật khẩu mặc định là `Admin@123456`. **Đổi nó trước khi dùng cho việc thật** —
-> đặt `SEED_ADMIN_PASSWORD` trong `.env` rồi chạy `./run.sh --clean`, hoặc đổi
-> trong giao diện sau khi đăng nhập.
+> Trước đây mật khẩu là `Admin@123456`, ghi sẵn trong `.env.example` và **in
+> thẳng lên trang đăng nhập** cùng bốn tài khoản khác dùng chung nó. Ai mở được
+> trang đó là có một tài khoản quản trị. Giao diện giờ không hiển thị bất kỳ
+> thông tin đăng nhập nào, dưới bất kỳ cấu hình nào.
+
+Muốn đổi mật khẩu thì sửa `SEED_ADMIN_PASSWORD` trong `.env` rồi chạy lại
+`./run.sh` — cơ sở dữ liệu được cập nhật theo. Đổi `SEED_ADMIN_EMAIL` thì tài
+khoản hiện có được **đổi tên**, không sinh ra tài khoản thứ hai.
+
+> Nghĩa là `.env` thắng mật khẩu bạn đổi trong giao diện. Đó là cái giá để
+> "quên mật khẩu quản trị" xử lý được mà không cần mở cơ sở dữ liệu — và là lý
+> do file đó chỉ nên đọc được bởi người vận hành.
 
 ### Chọn cấu hình phù hợp với máy của bạn
 
@@ -476,18 +489,20 @@ Cần Transform thì bật lại sau.
 <details>
 <summary><b>Quên mật khẩu đăng nhập</b></summary>
 
-Mật khẩu nằm trong `.env`:
-
-Mặc định là `Admin@123456` cho tài khoản `admin@appbi.local`. Nếu đã đổi bằng
-`SEED_ADMIN_PASSWORD`:
+Mật khẩu nằm trong `.env`, không ở đâu khác:
 
 ```bash
 grep SEED_ADMIN_PASSWORD .env
 ```
 
-Ba tài khoản demo còn lại — `dataadmin@`, `operator@`, `analyst@` — luôn dùng
-`Admin@123456` và **không** đổi theo `SEED_ADMIN_PASSWORD`. Trước khi dùng thật,
-hãy xoá chúng hoặc đổi mật khẩu trong giao diện.
+Không đọc được file đó, hoặc muốn đặt một mật khẩu khác: sửa dòng đó rồi chạy
+lại `./run.sh`. Cơ sở dữ liệu được cập nhật theo ngay lần khởi động kế tiếp —
+không cần mở cơ sở dữ liệu, không cần `--clean`.
+
+Năm tài khoản demo còn lại — `dataadmin@`, `connectordev@`, `operator@`,
+`analyst@`, `auditor@` — dùng **cùng mật khẩu đó** và cũng đổi theo. Trước kia
+chúng mang một mật khẩu ghi cứng trong mã nguồn, nên mọi bản cài đều giống
+nhau. Dùng cho việc thật thì hãy xoá chúng.
 </details>
 
 <details>

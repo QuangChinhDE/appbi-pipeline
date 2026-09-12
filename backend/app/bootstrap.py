@@ -20,7 +20,7 @@ from app.core.logging import configure_logging, log_event
 from app.core.permissions import OrgRole, Role
 from email_validator import EmailNotValidError, validate_email
 
-from app.core.security import hash_password, password_problems
+from app.core.security import hash_password, password_problems, verify_password
 from app.models import (  # noqa: F401 - import registers every table
     AlertRule, AuditEvent, BuilderProject, ConnectorDefinition, Destination, EngineInstance,
     EngineMapping,
@@ -334,20 +334,81 @@ async def _ensure_org_membership(session, organization, user, role: OrgRole) -> 
         ))
 
 
+async def _reconcile_admin(session) -> User:
+    """Make the administrator account match what .env says, every start.
+
+    Creating it once and never looking again meant .env could name an
+    administrator and be ignored: editing SEED_ADMIN_PASSWORD changed nothing,
+    so an install that thought it had replaced the published default was still
+    running on it. Reported exactly that way.
+
+    Three cases, in order:
+
+    * the named account exists  -- the password is brought into line with .env,
+      and left alone when .env names none.
+    * no account has that email, but a platform administrator exists -- that one
+      is renamed. Otherwise changing the email silently produces a second
+      administrator and leaves the first, with its old password, signed-in-able.
+    * neither -- the account is created.
+
+    .env therefore wins over a password changed in the web UI. That is the
+    trade: it is what makes a forgotten administrator password recoverable
+    without a database console, and it is why that file belongs to the people
+    who run the deployment.
+    """
+    email = settings.seed_admin_email.strip().lower()
+    desired = settings.seed_admin_password
+
+    admin = await session.scalar(select(User).where(User.email == email))
+    if admin is None:
+        # Exactly one platform admin, and its email no longer matches: the
+        # operator renamed the account rather than asking for a second one.
+        existing = list((await session.scalars(
+            select(User).where(User.is_platform_admin.is_(True))
+        )).all())
+        if len(existing) == 1:
+            admin = existing[0]
+            log_event(logger, logging.INFO, "bootstrap.admin_renamed",
+                      previous=admin.email, current=email)
+            admin.email = email
+        else:
+            admin = User(
+                email=email,
+                full_name="Platform Admin",
+                password_hash=hash_password(desired or _generated_password()),
+                is_platform_admin=True,
+            )
+            session.add(admin)
+            await session.flush()
+            log_event(logger, logging.INFO, "bootstrap.admin_created", email=email)
+            return admin
+
+    admin.is_platform_admin = True
+    if desired and not verify_password(desired, admin.password_hash):
+        admin.password_hash = hash_password(desired)
+        # Said out loud, because it overrides a password somebody may have set
+        # in the UI. The password itself is never logged.
+        log_event(logger, logging.WARNING, "bootstrap.admin_password_reset",
+                  email=email, reason="SEED_ADMIN_PASSWORD differs from the stored one")
+    await session.flush()
+    return admin
+
+
+def _generated_password() -> str:
+    """A password for an account created with none named.
+
+    `./run.sh` normally writes one into .env before anything starts, so this is
+    the path for somebody running the containers directly. Unguessable and
+    unrecorded is the safe failure: the account exists, nobody can sign in to
+    it, and naming a password in .env fixes that on the next start.
+    """
+    import secrets
+    return secrets.token_urlsafe(24)
+
+
 async def _seed_demo(session, engine_instance) -> None:
     """What a first look at the product needs, and what production may not have."""
-    admin = await session.scalar(
-        select(User).where(User.email == settings.seed_admin_email.lower())
-    )
-    if admin is None:
-        admin = User(
-            email=settings.seed_admin_email.lower(),
-            full_name="Platform Admin",
-            password_hash=hash_password(settings.seed_admin_password),
-            is_platform_admin=True,
-        )
-        session.add(admin)
-        await session.flush()
+    admin = await _reconcile_admin(session)
 
     organization = await _ensure_organization(session)
     # The seeded admin runs the organisation, which is what makes the second
@@ -379,18 +440,27 @@ async def _seed_demo(session, engine_instance) -> None:
     # in as. Three of the six were seeded before, which left CONNECTOR_DEV and
     # AUDITOR -- the two whose whole purpose is to hold *less* than the others
     # -- impossible to look at without creating an account by hand first.
-    for email, name, role, password in (
-        ("dataadmin@appbi.local", "Data Admin", Role.DATA_ADMIN, "Admin@123456"),
-        ("connectordev@appbi.local", "Connector Dev", Role.CONNECTOR_DEV, "Admin@123456"),
-        ("operator@appbi.local", "Operator", Role.OPERATOR, "Admin@123456"),
-        ("analyst@appbi.local", "Analyst", Role.ANALYST, "Admin@123456"),
-        ("auditor@appbi.local", "Auditor", Role.AUDITOR, "Admin@123456"),
+    # They share the administrator's password rather than a literal. A
+    # password written in the source is a password every install has, and
+    # "Admin@123456" was in this list five times.
+    role_password = settings.seed_admin_password or _generated_password()
+    for email, name, role in (
+        ("dataadmin@appbi.local", "Data Admin", Role.DATA_ADMIN),
+        ("connectordev@appbi.local", "Connector Dev", Role.CONNECTOR_DEV),
+        ("operator@appbi.local", "Operator", Role.OPERATOR),
+        ("analyst@appbi.local", "Analyst", Role.ANALYST),
+        ("auditor@appbi.local", "Auditor", Role.AUDITOR),
     ):
         user = await session.scalar(select(User).where(User.email == email))
         if user is None:
-            user = User(email=email, full_name=name, password_hash=hash_password(password))
+            user = User(email=email, full_name=name,
+                        password_hash=hash_password(role_password))
             session.add(user)
             await session.flush()
+        elif settings.seed_admin_password and not verify_password(
+                settings.seed_admin_password, user.password_hash):
+            # Same rule as the administrator: .env is what these accounts are.
+            user.password_hash = hash_password(role_password)
         exists = await session.scalar(
             select(Membership).where(
                 Membership.workspace_id == workspace.id, Membership.user_id == user.id
@@ -443,10 +513,15 @@ async def _bootstrap_admin(session, engine_instance) -> None:
             "privileged account with a guessable password is worse than a "
             "deployment that will not start."
         )
-    if password == settings.seed_admin_password:
+    # There is no published default to compare against any more; what is
+    # refused now is reuse. The seed password belongs to the demo accounts and
+    # is written in .env in plain text, so it is not a secret this account
+    # should share.
+    if settings.seed_admin_password and password == settings.seed_admin_password:
         raise BootstrapRefused(
-            "BOOTSTRAP_ADMIN_PASSWORD is the demo password from this "
-            "repository. Generate one with "
+            "BOOTSTRAP_ADMIN_PASSWORD is the same as SEED_ADMIN_PASSWORD, "
+            "which is stored in plain text in .env and shared by the demo "
+            "accounts. Generate a separate one with "
             "python -c 'import secrets;print(secrets.token_urlsafe(24))'"
         )
     # The same policy a user would face. Refusing only the one known demo

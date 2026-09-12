@@ -102,8 +102,6 @@ const vi: Catalog = {
   'login.email': 'Email',
   'login.password': 'Mật khẩu',
   'login.submit': 'Đăng nhập',
-  'login.demoHint': 'Tài khoản mặc định',
-  'login.otherRoles': 'Các vai trò khác: dataadmin@ · operator@ · analyst@ (cùng mật khẩu)',
 
   // ── đổi mật khẩu bắt buộc ────────────────────────────────────────────────
   'password.title': 'Đặt mật khẩu mới',
@@ -1356,8 +1354,6 @@ const en: Catalog = {
   'login.email': 'Email',
   'login.password': 'Password',
   'login.submit': 'Sign in',
-  'login.demoHint': 'Default account',
-  'login.otherRoles': 'Other roles: dataadmin@ · operator@ · analyst@ (same password)',
 
   'password.title': 'Set a new password',
   'password.subtitle': 'This account is using a temporary password. Choose your own to continue.',

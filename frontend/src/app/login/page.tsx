@@ -17,21 +17,21 @@ export default function LoginPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
 
-  // The demo credential comes from the build environment, and is not written
-  // down here at all.
+  // No credential reaches this page, from anywhere.
   //
-  // It used to be a hard-coded literal, so a production build advertised an
-  // account and password on its sign-in page -- for an account production
-  // never creates. Guarding the render with a flag is not enough on its own:
-  // Next strips the branch but the string literal still ships inside the
-  // bundle, where anyone can read it. Sourcing the values from env means that
-  // with the variables unset there is nothing to strip and nothing to find.
-  const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL ?? '';
-  const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD ?? '';
-  const demo = demoEmail !== '' && demoPassword !== '';
-
-  const [email, setEmail] = React.useState(demoEmail);
-  const [password, setPassword] = React.useState(demoPassword);
+  // It used to read NEXT_PUBLIC_DEMO_EMAIL / _PASSWORD and, when they were
+  // set, prefill both boxes and print the pair underneath -- along with a line
+  // naming three more accounts that shared the password. `.env.example` shipped
+  // those variables filled in, so every install that followed the documented
+  // path served a working platform-admin credential to anyone who could reach
+  // the sign-in page.
+  //
+  // The guard was real and worked; the default defeated it. So the mechanism
+  // is gone rather than re-defaulted: the seeded password is printed once by
+  // ./run.sh, in the terminal of the person installing it, and lives in their
+  // .env. A web page is the wrong place for it under any flag.
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
 
@@ -98,19 +98,6 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        {demo && (
-          <div className="mt-4 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 px-3.5 py-2.5">
-            <p className="text-tiny uppercase tracking-[0.08em] text-text-quaternary">
-              {t('login.demoHint')}
-            </p>
-            <p className="mt-1 font-mono text-tiny text-text-secondary">
-              {demoEmail} / {demoPassword}
-            </p>
-            <p className="mt-0.5 text-tiny text-text-quaternary">
-              {t('login.otherRoles')}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

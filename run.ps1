@@ -127,6 +127,30 @@ function New-RandomKey {
     return [Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_')
 }
 
+# A password is typed by a person, so it is shorter than a key and avoids the
+# characters that get lost across a copy and paste.
+function New-RandomPassword {
+    $raw = (New-RandomKey) -replace '[=+/_-]', ''
+    return $raw.Substring(0, [Math]::Min(20, $raw.Length))
+}
+
+# The administrator's password, generated per deployment rather than shipped.
+#
+# It used to be `Admin@123456`, written in .env.example, seeded by every
+# install, and printed on the sign-in page beside four other accounts that
+# shared it. Anybody who could open that page had a platform administrator.
+$script:AdminPasswordGenerated = ''
+function Set-AdminPasswordIfUnset {
+    $current = Get-EnvValue 'SEED_ADMIN_PASSWORD'
+    $unset = ($current -eq '') -or ($current -like 'REPLACE_ME*') -or
+             ($current -like '*change-me*') -or ($current -like '*changeme*')
+    if (-not $unset) { return }
+    $generated = New-RandomPassword
+    Set-EnvValue 'SEED_ADMIN_PASSWORD' $generated
+    $script:AdminPasswordGenerated = $generated
+    Write-Ok 'generated SEED_ADMIN_PASSWORD'
+}
+
 function Set-SecretIfUnset {
     param([string]$Key)
     $current = Get-EnvValue $Key
@@ -158,6 +182,7 @@ if (Test-Path .env.example) {
     }
 }
 
+Set-AdminPasswordIfUnset
 Set-SecretIfUnset 'SECRET_ENCRYPTION_KEY'
 Set-SecretIfUnset 'JWT_SECRET'
 
@@ -324,12 +349,25 @@ if ((Get-HttpStatus "http://127.0.0.1:$proxyPort/") -ne 0) {
 Write-Step 'Running'
 Invoke-Compose ps --format 'table {{.Name}}\t{{.Service}}\t{{.Status}}'
 
-$demoEmail = Get-EnvValue 'NEXT_PUBLIC_DEMO_EMAIL' ''
+$adminEmail = Get-EnvValue 'SEED_ADMIN_EMAIL'
+if (-not $adminEmail) { $adminEmail = 'admin@appbi.local' }
 Write-Host ''
 Write-Info "web UI    http://localhost:$proxyPort"
 Write-Info "API       http://localhost:$apiPort"
 Write-Info "engine    $engineType"
-if ($demoEmail) { Write-Info "sign in   $demoEmail" }
+Write-Info "sign in   $adminEmail"
+if ($script:AdminPasswordGenerated) {
+    # Printed once, on the run that created it, and never again -- and never
+    # in the web UI. After this it lives in .env, which is gitignored.
+    Write-Host ''
+    Write-Info 'mat khau quan tri vua duoc sinh cho ban cai nay:'
+    Write-Info "    $($script:AdminPasswordGenerated)"
+    Write-Info 'luu lai ngay. Lan chay sau se khong in nua; no nam trong .env'
+    Write-Info 'o khoa SEED_ADMIN_PASSWORD. Doi gia tri do roi chay lai run.ps1'
+    Write-Info 'thi mat khau trong co so du lieu doi theo.'
+} else {
+    Write-Info 'mat khau   xem SEED_ADMIN_PASSWORD trong .env'
+}
 Write-Host ''
 Write-Info '.\run.ps1 -Status      what is running'
 Write-Info '.\run.ps1 -Logs api    follow a service'

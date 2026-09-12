@@ -322,7 +322,14 @@ class Settings(BaseSettings):
     # `seed_demo_data` is what decides. It was declared and never read, so
     # production manifests set it to false and got the demo accounts anyway.
     seed_admin_email: str = "admin@appbi.local"
-    seed_admin_password: str = "Admin@123456"
+    #: Empty means "do not touch the password that is already there".
+    #:
+    #: This was "Admin@123456" -- a working credential, published in this
+    #: repository, seeded by every install, and printed on the sign-in page.
+    #: A default that is also a valid password is a default nobody changes,
+    #: because nothing ever asks them to. `./run.sh` now generates one per
+    #: deployment and writes it into .env.
+    seed_admin_password: str = ""
     seed_demo_data: bool = True
 
     # The production path: a one-time secret supplied by the deployment, used
