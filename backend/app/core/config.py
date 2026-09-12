@@ -220,6 +220,12 @@ class Settings(BaseSettings):
     openai_model_planner: str = "gpt-5-mini"
     openai_model_agent: str = "gpt-5-mini"
     openai_model_vision: str = "gpt-5-mini"
+    #: The Transform SQL importer asks a narrower question than the
+    #: connector Builder does -- is this staging or marts, what should it
+    #: be called -- so it gets its own setting and a deployment can point
+    #: it somewhere cheaper. It must be a model that supports structured
+    #: outputs; the importer falls back to conventional defaults if not.
+    openai_model_sql_import: str = "gpt-5-mini"
     openai_timeout_seconds: float = 90.0
     builder_ai_source_max_bytes: int = 10 * 1024 * 1024
     builder_ai_crawl_max_pages: int = 30
