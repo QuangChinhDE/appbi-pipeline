@@ -28,6 +28,7 @@ import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { transformApi } from '@/lib/api';
+import { FilePicker } from '@/components/ui/FilePicker';
 import { SqlImportBrief } from '@/components/transforms/SqlImportBrief';
 import { SqlImportReview } from '@/components/transforms/SqlImportReview';
 import { decisionOf, readAll } from '@/components/transforms/SqlImportDialog';
@@ -385,22 +386,18 @@ export default function NewTransformPage() {
               <SqlImportBrief />
               <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
                 <Field label={t('tfnew.sqlFiles')} hint={t('tfnew.sqlFilesHint')}>
-                  <input
-                    type="file"
+                  <FilePicker
                     accept=".sql,text/plain"
                     multiple
-                    onChange={async (event) => {
+                    chosen={sqlFiles.length
+                      ? t('tfnew.sqlChosen', { n: sqlFiles.length })
+                      : null}
+                    onChoose={async (list) => {
                       setAnalysis(null);
-                      setSqlFiles(await readAll(event.target.files));
+                      setSqlFiles(await readAll(list));
                     }}
-                    className="block w-full text-caption text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-caption file:text-text-primary hover:file:bg-surface-3"
                   />
                 </Field>
-                {sqlFiles.length > 0 && (
-                  <p className="mt-2 text-tiny text-text-tertiary">
-                    {t('tfnew.sqlChosen', { n: sqlFiles.length })}
-                  </p>
-                )}
               </div>
               </div>
             )}
@@ -408,18 +405,14 @@ export default function NewTransformPage() {
             {source === 'UPLOAD' && (
               <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
                 <Field label={t('tfnew.zipFile')}>
-                  <input
-                    type="file"
+                  <FilePicker
                     accept=".zip"
-                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                    className="block w-full text-caption text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-caption file:text-text-primary hover:file:bg-surface-3"
+                    chosen={file
+                      ? `${file.name} · ${Math.round(file.size / 1024)} KB`
+                      : null}
+                    onChoose={(list) => setFile(list?.[0] ?? null)}
                   />
                 </Field>
-                {file && (
-                  <p className="mt-1.5 text-tiny text-text-tertiary">
-                    {file.name} · {Math.round(file.size / 1024)} KB
-                  </p>
-                )}
               </div>
             )}
           </div>

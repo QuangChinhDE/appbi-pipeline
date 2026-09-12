@@ -292,3 +292,78 @@ class WhenTheProviderIsNotThere(unittest.IsolatedAsyncioTestCase):
         assert calls["n"] == 2
         assert len(renamed) == planner.BATCH_SIZE
         assert len(decisions) == planner.BATCH_SIZE * 2
+
+
+class OnlyAskWhatIsOpen(unittest.IsolatedAsyncioTestCase):
+    """A file written to the brief has already answered both questions.
+
+    `CREATE TABLE <name> AS` under a line of comment says what the model is
+    called and what one row of it is. Asking a provider anyway spends
+    somebody's tokens to be told what the file already says -- so a conforming
+    upload makes no request at all, which is the point of publishing the brief.
+    """
+
+    def setUp(self):
+        from app.core.config import settings
+
+        self._key = settings.openai_api_key
+        self._client = planner.OpenAIBuilderClient
+        settings.openai_api_key = "sk-test"
+        self.calls = []
+
+        outer = self
+
+        class Counting:
+            def __init__(self, *_a, **_k):
+                pass
+
+            async def structured(self, **kwargs):
+                outer.calls.append(kwargs["prompt"])
+                return ImportSuggestions(models=[])
+
+        planner.OpenAIBuilderClient = Counting
+
+    def tearDown(self):
+        from app.core.config import settings
+
+        settings.openai_api_key = self._key
+        planner.OpenAIBuilderClient = self._client
+
+    async def test_a_conforming_upload_asks_nothing(self):
+        graph = _graph({
+            "a.sql": "-- One row per order.\nCREATE TABLE stg_orders AS "
+                     "SELECT id FROM raw.o",
+            "b.sql": "-- One row per day.\nCREATE TABLE daily AS "
+                     "SELECT id FROM stg_orders",
+        })
+        await planner.suggest(graph, {}, actor_id="u")
+        assert self.calls == []
+
+    async def test_a_query_with_no_create_is_asked_about(self):
+        """Its name came from the filename, which nobody chose as a name."""
+        graph = _graph({"03_report_v2.sql": "-- One row per order.\nSELECT id FROM raw.o"})
+        await planner.suggest(graph, {}, actor_id="u")
+        assert len(self.calls) == 1
+
+    async def test_a_query_with_no_comment_is_asked_about(self):
+        graph = _graph({"a.sql": "CREATE TABLE stg_orders AS SELECT id FROM raw.o"})
+        await planner.suggest(graph, {}, actor_id="u")
+        assert len(self.calls) == 1
+
+    async def test_a_meaningless_name_is_asked_about_even_with_a_comment(self):
+        graph = _graph({
+            "a.sql": "-- One row per order.\nCREATE TABLE query1 AS SELECT id FROM raw.o",
+        })
+        await planner.suggest(graph, {}, actor_id="u")
+        assert len(self.calls) == 1
+
+    async def test_only_the_ones_that_need_it_are_sent(self):
+        graph = _graph({
+            "good.sql": "-- One row per order.\nCREATE TABLE stg_orders AS "
+                        "SELECT id FROM raw.o",
+            "bare.sql": "SELECT id FROM raw.p",
+        })
+        await planner.suggest(graph, {}, actor_id="u")
+        assert len(self.calls) == 1
+        assert "bare.sql" in self.calls[0]
+        assert "good.sql" not in self.calls[0]

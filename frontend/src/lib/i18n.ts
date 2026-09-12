@@ -2065,6 +2065,9 @@ const vi: Catalog = {
   'tfsql.briefCopy': 'Sao chép hướng dẫn',
   'tfsql.briefShow': 'Xem thử',
   'tfsql.briefHide': 'Ẩn đi',
+  'common.chooseFile': 'Chọn một tệp',
+  'common.chooseFiles': 'Chọn tệp',
+  'common.noFileChosen': 'Chưa chọn tệp nào',
 };
 
 const en: Catalog = {
@@ -4097,6 +4100,9 @@ const en: Catalog = {
   'tfsql.briefCopy': 'Copy the brief',
   'tfsql.briefShow': 'Read it',
   'tfsql.briefHide': 'Hide',
+  'common.chooseFile': 'Choose a file',
+  'common.chooseFiles': 'Choose files',
+  'common.noFileChosen': 'Nothing chosen yet',
 };
 
 export const CATALOGS: Record<Locale, Catalog> = { vi, en };

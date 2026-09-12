@@ -11,9 +11,10 @@
 
 import * as React from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { FileCode2, Upload } from 'lucide-react';
+import { FileCode2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
+import { FilePicker } from '@/components/ui/FilePicker';
 import { Modal } from '@/components/ui/Modal';
 import { SqlImportBrief } from '@/components/transforms/SqlImportBrief';
 import { SqlImportReview } from '@/components/transforms/SqlImportReview';
@@ -84,19 +85,12 @@ export function SqlImportDialog({
         {analysis === null ? (
           <div className="space-y-3">
           <SqlImportBrief />
-          <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-[rgb(var(--border-line))] px-4 py-8 text-center hover:bg-surface-2">
-            <Upload className="h-5 w-5 text-text-quaternary" />
-            <span className="text-caption text-text-secondary">{t('tfsql.choose')}</span>
-            {files.length > 0 && (
-              <span className="text-tiny text-text-tertiary">
-                {t('tfnew.sqlChosen', { n: files.length })}
-              </span>
-            )}
-            <input
-              type="file" accept=".sql,text/plain" multiple className="hidden"
-              onChange={(event) => choose(event.target.files)}
-            />
-          </label>
+          <FilePicker
+            accept=".sql,text/plain"
+            multiple
+            chosen={files.length ? t('tfnew.sqlChosen', { n: files.length }) : null}
+            onChoose={choose}
+          />
           </div>
         ) : (
           <SqlImportReview

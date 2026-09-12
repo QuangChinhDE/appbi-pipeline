@@ -170,6 +170,27 @@ def _fallback(graph: Graph) -> dict[str, ModelDecision]:
     return out
 
 
+#: Names that carry no meaning, whatever a parser thinks of them. A file
+#: called `query1.sql` produces a model called `query1`, and that is worth
+#: asking about however valid an identifier it is.
+_MEANINGLESS = re.compile(
+    r"^(?:query|tmp|temp|test|untitled|new|final|report|output|result|data|"
+    r"model|sql|copy|draft)[_-]?\d*$"
+)
+
+
+def _needs_an_opinion(candidate: Candidate) -> bool:
+    """Whether a model would gain anything from being asked about.
+
+    Two questions are open per candidate: what to call it, and what one row
+    of it is. A query that says `CREATE TABLE stg_orders AS` under a line of
+    comment has answered both itself, and is left alone.
+    """
+    named = bool(candidate.creates) and not _MEANINGLESS.match(candidate.name)
+    described = bool(candidate.statement.leading_comment.strip())
+    return not (named and described)
+
+
 def _trim(body: str) -> str:
     """The head of a query, which is the part the questions are about."""
     text = body.strip()
@@ -303,7 +324,21 @@ async def suggest(
     if not graph.candidates or not settings.openai_api_key.strip():
         return decisions, []
 
-    ordered = graph.order
+    # Only ask about what is actually open. A file written to the brief --
+    # `CREATE TABLE <name> AS` with a line of comment above it -- has already
+    # answered both questions a model would be asked, and asking anyway spends
+    # somebody's tokens to be told what the file says.
+    #
+    # A conforming upload therefore makes no request at all, which is the
+    # point of publishing the brief in the first place.
+    ordered = [candidate for candidate in graph.order if _needs_an_opinion(candidate)]
+    if not ordered:
+        log_event(
+            logger, logging.INFO, "transform.sql_import.no_question",
+            project_id=project_id, candidates=len(graph.candidates),
+        )
+        return decisions, []
+
     batches = [
         ordered[index:index + BATCH_SIZE]
         for index in range(0, len(ordered), BATCH_SIZE)
