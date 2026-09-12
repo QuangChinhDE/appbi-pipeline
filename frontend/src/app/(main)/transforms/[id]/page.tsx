@@ -36,6 +36,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { CommandBar, type ParsedCommand } from '@/components/transforms/CommandBar';
 import { ScheduleDialog } from '@/components/transforms/ScheduleDialog';
+import { ReleasesDialog } from '@/components/transforms/ReleasesDialog';
 import { describeSchedule } from '@/lib/format';
 import { useI18n } from '@/providers/LanguageProvider';
 import { GenerateModelDialog } from '@/components/transforms/GenerateModelDialog';
@@ -81,6 +82,7 @@ export default function TransformWorkbenchPage() {
   const [outputTab, setOutputTab] = React.useState<OutputTab>('problems');
   const [inspectorId, setInspectorId] = React.useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = React.useState(false);
+  const [releasesOpen, setReleasesOpen] = React.useState(false);
   const { t } = useI18n();
 
   // ── editor state ────────────────────────────────────────────────────────
@@ -772,6 +774,7 @@ export default function TransformWorkbenchPage() {
           transformApi.activateRelease(projectId, releaseId)
             .then(() => { invalidate(); toastSuccess('Đã đưa vào chạy thật.'); })
             .catch(toastError)}
+        onViewRelease={() => setReleasesOpen(true)}
       />
 
       {/* body */}
@@ -1045,6 +1048,15 @@ export default function TransformWorkbenchPage() {
         pending={createFile.isPending}
         onClose={() => setNewFileOpen(false)}
         onCreate={(path, template) => createFile.mutate({ path, template })}
+      />
+
+      <ReleasesDialog
+        projectId={projectId}
+        releases={releases.data ?? []}
+        open={releasesOpen}
+        onClose={() => setReleasesOpen(false)}
+        canOperate={canOperate}
+        canEdit={canEdit}
       />
 
       {detail && (

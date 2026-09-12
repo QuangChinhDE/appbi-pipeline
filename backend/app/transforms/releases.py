@@ -373,14 +373,23 @@ async def _activate(
 ) -> None:
     """Make a release live, unless something newer already is.
 
-    The guard is the reason this is a function and not two assignments.  A
-    verification that completes late must not overwrite a newer live release,
-    and comparing activation sequences is what decides -- not the order the jobs
-    finished in, which is not something either job can observe.
+    The guard exists for one case: a verification that finishes late must not
+    overwrite a newer live release. Comparing activation sequences is what
+    decides that -- not the order the jobs happened to finish in, which is not
+    something either job can observe.
+
+    It does not apply to `reason="manual"`. Somebody choosing an older release
+    is asking for exactly what the guard refuses -- that is what rolling back
+    is -- and the guard made it impossible: the endpoint answered 200, marked
+    the older release RETIRED, wrote "Release N went live while this one was
+    being checked" against a release nobody was checking, and left production
+    on the broken version. A silent no-op on a deliberate action, at the
+    moment somebody most needs it to work.
     """
     current = await active(session, project)
     if (
-        current is not None
+        reason != "manual"
+        and current is not None
         and current.id != release.id
         and current.activation_sequence > release.activation_sequence
     ):
@@ -396,7 +405,30 @@ async def _activate(
 
     release.status = "ACTIVE"
     release.activated_at = utcnow()
+    # Cleared on the way in. A release that was superseded carries the
+    # explanation for why, and keeping it after somebody deliberately brought
+    # it back would leave the live release displaying an error about itself.
+    release.verification_error = None
+    # Ahead of whatever is live, so a verification still running against an
+    # older release cannot come back and overwrite this choice.
+    release.activation_sequence = _next_activation_sequence(current, release)
     project.active_release_id = release.id
+
+
+def _next_activation_sequence(
+    current: TransformRelease | None, release: TransformRelease
+) -> int:
+    """One past the highest sequence in play.
+
+    Without this a rollback is undone by the next late verification: the
+    restored release keeps its original, lower sequence, and the guard above
+    reads it as the stale one.
+    """
+    highest = max(
+        release.activation_sequence or 0,
+        (current.activation_sequence or 0) if current is not None else 0,
+    )
+    return highest + 1
 
 
 async def restore(
