@@ -182,6 +182,9 @@ class ProjectPermissions(BaseModel):
     can_edit: bool = False
     can_operate: bool = False
     can_delete: bool = False
+    #: `--full-refresh`, which discards materialised history. Its own
+    #: permission, and only OWNER holds it.
+    can_reset: bool = False
 
 
 class ProjectDetail(ProjectView):

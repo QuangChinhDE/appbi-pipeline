@@ -626,6 +626,8 @@ export interface TransformDetail extends Transform {
     can_edit: boolean;
     can_operate: boolean;
     can_delete: boolean;
+    /** `--full-refresh`. Its own permission, held by OWNER alone. */
+    can_reset: boolean;
   };
 }
 

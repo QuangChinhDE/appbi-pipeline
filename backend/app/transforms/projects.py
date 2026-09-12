@@ -507,6 +507,12 @@ async def detail(
             "can_edit": ctx.can(Module.TRANSFORMS, Action.EDIT),
             "can_operate": ctx.can(Module.TRANSFORMS, Action.OPERATE),
             "can_delete": ctx.can(Module.TRANSFORMS, Action.DELETE),
+            # `--full-refresh` rebuilds every incremental model from scratch
+            # and discards the materialised history, which is why it is its
+            # own permission and only OWNER holds it. The editor offered the
+            # checkbox to everyone and the command answered 403, which reads
+            # as a broken product rather than a withheld privilege.
+            "can_reset": ctx.can(Module.TRANSFORMS, Action.RESET),
         },
     }
 
