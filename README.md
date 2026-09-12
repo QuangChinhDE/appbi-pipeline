@@ -51,7 +51,7 @@ AppBI làm phần gom ấy thành một sản phẩm có giao diện:
 - **Chạy theo lịch.** Mỗi giờ, mỗi ngày, hay bấm chạy ngay. Lần sau chỉ lấy phần
   thay đổi chứ không tải lại từ đầu.
 - **Biết chuyện gì đang xảy ra.** Mỗi lần chạy có lịch sử, số dòng, thời gian và
-  lý do khi hỏng — bằng tiếng Việt, kèm việc cần làm tiếp.
+  lý do khi hỏng — bằng ngôn ngữ bạn đang chọn, kèm việc cần làm tiếp.
 - **Biến dữ liệu thô thành thứ đọc được.** Dữ liệu vừa về thường chưa dùng ngay
   được: tên cột khó hiểu, cần join, cần tính toán. Transform lo phần đó.
 
@@ -613,7 +613,11 @@ hôm nay.
 "Thông tin đăng nhập không còn hợp lệ" kèm nút mở đúng chỗ để sửa, chứ không phải
 một dòng lỗi kỹ thuật.
 
-Sản phẩm dùng tiếng Việt, có thể chuyển sang tiếng Anh.
+**Ngôn ngữ.** Giao diện mặc định tiếng Anh, chuyển sang tiếng Việt trong phần
+tài khoản. Lỗi cũng đổi theo: mỗi lỗi mang một mã ổn định, và câu chữ được chọn
+lúc **đọc** chứ không phải lúc xảy ra — nên một lần chạy hỏng từ tháng trước vẫn
+hiện đúng ngôn ngữ bạn đang dùng. Log do Airbyte sinh ra thì giữ nguyên: đó là
+lời của engine, không phải của sản phẩm.
 
 ---
 
@@ -702,6 +706,9 @@ không giấu dbt sau một lớp trừu tượng nào.
 
 ### Bắt đầu nhanh
 
+Có bốn cách vào: dự án dbt mới, nối repository GitHub đã có, tải lên file ZIP,
+hoặc **ném thẳng các file SQL bạn đang chạy** (xem mục dưới).
+
 1. **Transform → Dự án mới** — chọn "Tạo dự án dbt mới", chọn kho dữ liệu, đặt
    tên. Xong là có một dự án dbt chuẩn kèm model mẫu.
 2. **Bấm nút 🪄 "Tạo model từ bảng"** — chọn một bảng trong kho, tick những cột
@@ -713,6 +720,28 @@ không giấu dbt sau một lớp trừu tượng nào.
 Chưa biết dbt cũng dùng được: bước 2 là một biểu mẫu, và thứ nó tạo ra là tệp
 dbt bình thường mà bạn sửa tay lúc nào cũng được.
 
+### Đã có sẵn SQL? Ném thẳng vào
+
+**Transform → Dự án mới → Bắt đầu từ file SQL**, hoặc **Nhập file SQL…** trong
+một dự án đã có.
+
+Tải lên những query bạn đang chạy. AppBI đọc chúng bằng parser, tìm ra query nào
+đọc query nào, đổi tên bảng thành `ref()` / `source()`, xếp vào staging /
+intermediate / marts, rồi **build thử một lần** để chắc chắn chạy được — trước
+khi ghi, bạn xem lại bảng đề xuất và sửa tên hay tầng nếu muốn.
+
+**Query của bạn không bị viết lại.** Chỉ tên bảng đổi. Căn lề, comment, chuỗi ký
+tự, cú pháp riêng của BigQuery — còn nguyên từng byte. Câu lệnh không thể thành
+model dbt (`INSERT`, `UPDATE`, `DELETE`, `MERGE`) bị bỏ qua kèm lý do, phần còn
+lại vẫn nhập bình thường.
+
+Nhờ ChatGPT viết SQL hộ? Bấm **"Sao chép hướng dẫn"** ngay cạnh chỗ chọn file và
+dán vào đó trước. File viết theo hướng dẫn nhập vào sạch tới mức AppBI **không
+cần gọi AI lần nào** — nó chỉ hỏi model khi tên hoặc mô tả còn bỏ ngỏ.
+
+Không có `OPENAI_API_KEY` thì tính năng vẫn chạy: tên lấy từ chính câu
+`CREATE TABLE`, tầng suy từ đồ thị phụ thuộc.
+
 ### Những gì có sẵn
 
 - **Trình soạn thảo** có gợi ý `ref()` / `source()`, báo lỗi ngay khi lưu
@@ -720,6 +749,7 @@ dbt bình thường mà bạn sửa tay lúc nào cũng được.
 - **Sơ đồ phụ thuộc** — model nào phụ thuộc model nào
 - **Kết nối GitHub** — kéo về, sửa, commit, đẩy lên; hai chiều
 - **Lịch chạy** và **bản phát hành** — bản nháp và bản đang chạy thật tách bạch
+- **Nhập SQL có sẵn** — biến một thư mục `.sql` thành dự án dbt, có build thử
 
 ### Không cần Transform?
 
@@ -810,6 +840,16 @@ Chạy thử tại chỗ bằng MinIO thì thêm `docker-compose.storage.yml` v�
 - Dự án dbt do người dùng viết chạy trong tiến trình riêng, **không nhận được**
   biến môi trường của AppBI — không thấy `DATABASE_URL`, khoá mã hoá hay khoá API
   nào.
+
+**Không bao giờ commit bí mật.** Kho này công khai. `.gitignore` đã chặn sẵn
+`.env` và mọi biến thể của nó, khoá service-account của Google, `credentials/`,
+`secrets/`, và các tệp evidence sinh ra khi chạy — nhưng một `git add -f` thì
+vượt qua tất cả. Token API, khoá riêng và mật khẩu không thuộc về kho mã, kể cả
+trong tài liệu và kể cả đã bị xoá ở commit sau: git giữ lại mọi phiên bản cũ, và
+thứ đã công khai thì phải coi là đã lộ — cách sửa duy nhất là xoay khoá, không
+phải viết lại lịch sử.
+
+Muốn minh hoạ một token trong tài liệu thì cắt ngắn, như `2329~PaOq…`.
 
 **Trước khi dùng cho việc thật, nhớ:**
 
