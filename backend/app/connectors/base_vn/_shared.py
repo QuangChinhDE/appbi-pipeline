@@ -176,6 +176,22 @@ class Incremental:
 
     field: str = "last_update"
     param: str = "updated_from"
+    #: Drop records at or below the cursor after they arrive, as well as asking
+    #: the server for them.
+    #:
+    #: For an endpoint that filters properly this is pure waste, so it is off
+    #: by default and set only where the server was measured not to. Two were:
+    #: `ticket/get.all` and `jobs/get` round the filter down to the start of
+    #: its day in +07, so a cursor of 14:41 is read as 00:00 and every sync
+    #: re-reads the whole of today until midnight. Reported from a customer
+    #: deployment as the same ~136 tickets arriving hourly for four hours while
+    #: nothing had changed.
+    #:
+    #: It does not save a request or a byte -- the day still crosses the wire.
+    #: What it saves is writing those rows to the destination every hour, and
+    #: on a plain Append destination that is the difference between a correct
+    #: table and one that grows by a day of duplicates every hour.
+    client_side: bool = False
     #: Epoch seconds is what Base emits and accepts. Kept configurable because
     #: two of the newer applications use ISO-8601.
     fmt: str = "%s"
@@ -616,6 +632,9 @@ def _incremental(inc: Incremental) -> dict[str, Any]:
         "cursor_datetime_formats": [inc.fmt, "%s", "%Y-%m-%dT%H:%M:%SZ"],
         "cursor_granularity": "PT1S",
         "step": "P1000Y",
+        # Only where the server was measured to filter badly; see
+        # `Incremental.client_side`.
+        **({"is_client_side_incremental": True} if inc.client_side else {}),
         # Interpolated rather than baked, so an operator who sees records going
         # missing can widen the overlap on one source without a code change.
         "lookback_window": (

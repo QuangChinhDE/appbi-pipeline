@@ -63,6 +63,11 @@ WORKFLOW = BaseConnector(
             # `jobs/get` with no `workflow_id` returns jobs across every
             # workflow, and with one returns only that workflow's. Both
             # verified against a live tenant.
+            #
+            # Its `updated_from` is rounded to the day the same way
+            # `ticket/get.all` is, measured the same way, so it filters the
+            # overlap out on this side too. `workflows/get` on the same host
+            # does honour the second, which is why only this one is marked.
             scope=Scope(
                 config_key="workflow_ids",
                 field="workflow_id",
@@ -79,7 +84,7 @@ WORKFLOW = BaseConnector(
                     "`workflow` mà chính connector này cũng đồng bộ."
                 ),
             ),
-            incremental=Incremental(),
+            incremental=Incremental(client_side=True),
             fields={"name": "string", "workflow_id": "string",
                     "stage_id": "string"},
             note="Jobs are the fact table here; everything else is a dimension.",

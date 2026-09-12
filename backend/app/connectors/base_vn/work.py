@@ -184,10 +184,22 @@ SERVICE = BaseConnector(
                 ),
             ),
             primary_key=("id",),
-            # Per-service cursor, as the old manifest had. `last_update_from`
-            # rather than `updated_from`: Service is the one application that
-            # spells the filter differently, and it was verified working.
-            incremental=Incremental(field="last_update", param="last_update_from"),
+            # `last_update_from` rather than `updated_from`: Service is the
+            # one application that spells the filter differently.
+            #
+            # The server rounds that filter down to the start of its day in
+            # +07. Measured against a live tenant: with max(last_update) at
+            # 2026-09-09 14:41:52 +07, every threshold up to 23:59:59 that day
+            # returned the same eight records, and 00:00:00 the next day
+            # returned none. So a cursor saved mid-afternoon reads as midnight,
+            # and each sync re-reads everything updated today.
+            #
+            # A customer deployment saw the consequence: the same ~136 tickets
+            # arriving hourly for four hours while nothing had changed. The
+            # comment here used to say "verified working", which it was -- the
+            # filter is applied, just not to the second.
+            incremental=Incremental(field="last_update", param="last_update_from",
+                                    client_side=True),
             fields={"name": "string", "service_id": "string",
                     "stage_id": "string", "status": "string"},
             # Measured on two live tenants: a ticket averages ~326 KB, so a
