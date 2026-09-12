@@ -28,6 +28,7 @@ import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { transformApi } from '@/lib/api';
+import { SqlImportBrief } from '@/components/transforms/SqlImportBrief';
 import { SqlImportReview } from '@/components/transforms/SqlImportReview';
 import { decisionOf, readAll } from '@/components/transforms/SqlImportDialog';
 import { qk } from '@/lib/queryKeys';
@@ -380,6 +381,8 @@ export default function NewTransformPage() {
             )}
 
             {source === 'SQL' && (
+              <div className="space-y-2.5">
+              <SqlImportBrief />
               <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
                 <Field label={t('tfnew.sqlFiles')} hint={t('tfnew.sqlFilesHint')}>
                   <input
@@ -398,6 +401,7 @@ export default function NewTransformPage() {
                     {t('tfnew.sqlChosen', { n: sqlFiles.length })}
                   </p>
                 )}
+              </div>
               </div>
             )}
 

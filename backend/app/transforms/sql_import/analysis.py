@@ -88,6 +88,10 @@ class Statement:
     #: The SELECT list includes a `*`, so the real column set depends on a
     #: table this parser has not seen. Nothing may be asserted about it.
     selects_star: bool = False
+    #: Comment lines written above the statement. They sit outside the body --
+    #: which starts at the SELECT -- so without keeping them here they are
+    #: dropped, and they are usually the one line saying what the model is for.
+    leading_comment: str = ""
     #: Why this statement cannot become a model, when it cannot.
     problem: str | None = None
 
@@ -173,6 +177,19 @@ def _name_run(tokens: list[Token], index: int) -> tuple[int, str, int, int] | No
     ):
         last = tokens[position + 1]
         position += 2
+    # `FROM generate_series(1, 10)` and `FROM my_udf(3)` read a function, not
+    # a table, and pointing dbt at one produces a source declaration for
+    # something that does not exist. A parser cannot tell those from the
+    # archaic `FROM tbl (c1, c2)` column-alias form -- sqlglot gives both the
+    # same shape -- so this guesses, and guesses toward the common case.
+    #
+    # The cost of being wrong the other way is small and quiet: a table in
+    # that old form keeps its literal name instead of becoming a source. The
+    # cost of being wrong this way is a build that fails looking for a table
+    # nobody has. `FROM tbl AS t(c1, c2)` is unaffected -- the parenthesis
+    # follows the alias there, not the name.
+    if position < len(tokens) and tokens[position].token_type == TokenType.L_PAREN:
+        return None
     return position, "", first.start, last.end + 1
 
 
@@ -299,9 +316,26 @@ def parse_file(name: str, text: str, *, dialect: str) -> ParsedFile:
             index=index, kind=kind, creates=creates,
             body_start=body_start, body_end=body_end,
             refs=tuple(refs), columns=columns, selects_star=star,
+            leading_comment=_leading_comment(text[start:body_start]),
             problem=problem or body_problem,
         ))
     return parsed
+
+
+def _leading_comment(prefix: str) -> str:
+    """The `--` lines above a statement, joined into one sentence.
+
+    `-- One row per order.` written above `CREATE TABLE ... AS` is the author
+    saying what the model is. The body begins at the SELECT, so the line falls
+    outside it and would simply be lost -- the quietest kind of loss, because
+    the file that comes out still looks complete.
+    """
+    kept = []
+    for line in prefix.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("--"):
+            kept.append(stripped.lstrip("-").strip())
+    return " ".join(part for part in kept if part)[:300]
 
 
 def _statement_bounds(tokens: list[Token], length: int) -> list[tuple[int, int]]:

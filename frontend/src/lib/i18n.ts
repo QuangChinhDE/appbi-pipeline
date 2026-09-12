@@ -2060,6 +2060,11 @@ const vi: Catalog = {
   'tfsql.renamed': '{n} model bị đổi tên vì dự án đã có tên đó.',
   'tfsql.back': 'Quay lại chọn file',
   'tfnew.sourceSchemaSqlHint': 'Nơi bảng không ghi schema được hiểu là nằm ở đó. Đây cũng là thứ sẽ được khai báo trong file sources sinh ra.',
+  'tfsql.briefTitle': 'Định nhờ AI viết hộ SQL?',
+  'tfsql.briefBody': 'Đưa nó bản hướng dẫn này trước. Nó nói rõ cách đặt tên model và cách cho query này trỏ sang query kia, để file nhập vào sạch thay vì phải đoán lại sau.',
+  'tfsql.briefCopy': 'Sao chép hướng dẫn',
+  'tfsql.briefShow': 'Xem thử',
+  'tfsql.briefHide': 'Ẩn đi',
 };
 
 const en: Catalog = {
@@ -4087,6 +4092,11 @@ const en: Catalog = {
   'tfsql.renamed': '{n} were renamed because the project already had those names.',
   'tfsql.back': 'Back to the files',
   'tfnew.sourceSchemaSqlHint': 'Where a table named without a schema is taken to live. It is also what the generated sources file will declare.',
+  'tfsql.briefTitle': 'Asking an assistant to write the SQL?',
+  'tfsql.briefBody': 'Give it this brief first. It says how to name a model and how to point one query at another, so the files import cleanly instead of being guessed at afterwards.',
+  'tfsql.briefCopy': 'Copy the brief',
+  'tfsql.briefShow': 'Read it',
+  'tfsql.briefHide': 'Hide',
 };
 
 export const CATALOGS: Record<Locale, Catalog> = { vi, en };

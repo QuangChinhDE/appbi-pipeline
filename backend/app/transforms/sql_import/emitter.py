@@ -205,7 +205,12 @@ def _header(candidate: Candidate, decision: ModelDecision) -> str:
         "table names",
         "-- were changed, so dbt can work out what has to be built first.",
     ]
-    described = _comment_safe(decision.description)
+    # What the author wrote above their query outranks anything a model says
+    # about it: they know what the thing is for, and the sentence was already
+    # there. A suggested description is only used when there was no comment.
+    described = _comment_safe(
+        candidate.statement.leading_comment or decision.description
+    )
     if described:
         lines.insert(1, f"-- {described}")
     return "\n".join(lines)

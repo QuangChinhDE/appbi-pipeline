@@ -160,6 +160,12 @@ def _fallback(graph: Graph) -> dict[str, ModelDecision]:
             name=candidate.name,
             layer=layer,
             materialized=default_materialization(layer),
+            # A comment written above the query is already a description, and
+            # a better one than anything that could be generated: the person
+            # who wrote it knew what the model was for. It also means a
+            # project imported with no provider configured still arrives
+            # documented.
+            description=candidate.statement.leading_comment,
         )
     return out
 

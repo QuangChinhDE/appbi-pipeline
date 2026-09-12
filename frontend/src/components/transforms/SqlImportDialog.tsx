@@ -15,6 +15,7 @@ import { FileCode2, Upload } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { SqlImportBrief } from '@/components/transforms/SqlImportBrief';
 import { SqlImportReview } from '@/components/transforms/SqlImportReview';
 import { transformApi } from '@/lib/api';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
@@ -81,6 +82,8 @@ export function SqlImportDialog({
     >
       <div className="space-y-4">
         {analysis === null ? (
+          <div className="space-y-3">
+          <SqlImportBrief />
           <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-[rgb(var(--border-line))] px-4 py-8 text-center hover:bg-surface-2">
             <Upload className="h-5 w-5 text-text-quaternary" />
             <span className="text-caption text-text-secondary">{t('tfsql.choose')}</span>
@@ -94,6 +97,7 @@ export function SqlImportDialog({
               onChange={(event) => choose(event.target.files)}
             />
           </label>
+          </div>
         ) : (
           <SqlImportReview
             analysis={analysis}
