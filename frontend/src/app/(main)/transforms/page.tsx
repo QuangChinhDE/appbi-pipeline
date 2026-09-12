@@ -26,6 +26,7 @@ import { formatRelative } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
 import type { Transform } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 function healthVariant(status: string): BadgeVariant {
   switch (status) {
@@ -36,16 +37,19 @@ function healthVariant(status: string): BadgeVariant {
   }
 }
 
-function healthLabel(status: string): string {
+// A plain function, not a component: it takes `t` rather than calling the
+// hook, which React only allows inside a component or another hook.
+function healthLabel(status: string, t: (key: string) => string): string {
   switch (status) {
-    case 'HEALTHY': return 'Bình thường';
-    case 'WARNING': return 'Có cảnh báo';
-    case 'ERROR': return 'Đang lỗi';
-    default: return 'Chưa chạy';
+    case 'HEALTHY': return t('tf.list.healthy');
+    case 'WARNING': return t('tf.list.warning');
+    case 'ERROR': return t('tf.list.failing');
+    default: return t('tf.list.neverRun');
   }
 }
 
 export default function TransformsPage() {
+  const { t } = useI18n();
   const workspaceId = useWorkspaceId();
   const { can } = usePermissions();
 
@@ -71,12 +75,12 @@ export default function TransformsPage() {
     const unpublished = projects.filter((item) => item.has_unpublished_changes).length;
     const broken = projects.filter((item) => item.parse_status === 'ERROR').length;
     return [
-      { label: 'Dự án', value: data?.page.total ?? projects.length },
+      { label: t('tf.list.projects'), value: data?.page.total ?? projects.length },
       ...(unpublished
-        ? [{ label: 'Chưa xuất bản', value: unpublished, tone: 'warning' as const }]
+        ? [{ label: t('tf.list.unpublished'), value: unpublished, tone: 'warning' as const }]
         : []),
       ...(broken
-        ? [{ label: 'Đang lỗi', value: broken, tone: 'danger' as const }]
+        ? [{ label: t('tf.list.failing'), value: broken, tone: 'danger' as const }]
         : []),
     ];
   }, [projects, data?.page.total]);
@@ -84,17 +88,15 @@ export default function TransformsPage() {
   return (
     <PageListLayout
       title="Transform"
-      description="Mỗi Transform là một dự án dbt thật: tệp dự án là bản gốc, dbt là thứ chạy nó."
+      description={t('tf.list.intro')}
       overview={<ModuleOverview stats={stats} />}
       searchValue={search}
       onSearchChange={setSearch}
-      searchPlaceholder="Tìm theo tên dự án"
+      searchPlaceholder={t('tf.list.search')}
       action={
         can('transforms', 'create') ? (
           <Link href="/transforms/new">
-            <Button variant="primary" leadingIcon={<Plus className="h-4 w-4" />}>
-              Dự án mới
-            </Button>
+            <Button variant="primary" leadingIcon={<Plus className="h-4 w-4" />}>{t('tf.list.new')}</Button>
           </Link>
         ) : undefined
       }
@@ -104,8 +106,8 @@ export default function TransformsPage() {
       ) : error ? (
         <ErrorState
           title={isPermissionDenied(error)
-            ? 'Bạn không có quyền xem mục này'
-            : 'Không tải được danh sách'}
+            ? t('tf.list.forbidden')
+            : t('tf.list.loadFailed')}
           message={(error as Error).message}
           error={error}
           onRetry={() => refetch()}
@@ -113,16 +115,16 @@ export default function TransformsPage() {
       ) : projects.length === 0 ? (
         <EmptyState
           icon={Package}
-          title={debounced ? 'Không có dự án nào khớp' : 'Chưa có dự án Transform nào'}
+          title={debounced ? t('tf.list.noMatch') : t('tf.list.empty')}
           description={
             debounced
-              ? 'Thử một từ khoá khác.'
-              : 'Tạo một dự án dbt mới, hoặc kết nối tới repository đã có.'
+              ? t('tf.list.tryAnother')
+              : t('tf.list.emptyHint')
           }
           action={
             !debounced && can('transforms', 'create') ? (
               <Link href="/transforms/new">
-                <Button variant="primary">Dự án mới</Button>
+                <Button variant="primary">{t('tf.list.new')}</Button>
               </Link>
             ) : undefined
           }
@@ -139,6 +141,7 @@ export default function TransformsPage() {
 }
 
 function ProjectRow({ project }: { project: Transform }) {
+  const { t, locale } = useI18n();
   return (
     <li>
       <Link
@@ -161,7 +164,7 @@ function ProjectRow({ project }: { project: Transform }) {
             {/* A project that will not parse is broken in a way that no other
                 badge conveys: nothing can run until it is fixed. */}
             {project.parse_status === 'ERROR' && (
-              <Badge variant="danger" size="xs">không parse được</Badge>
+              <Badge variant="danger" size="xs">{t('tf.list.parseFailed')}</Badge>
             )}
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-tiny text-text-tertiary">
@@ -180,37 +183,37 @@ function ProjectRow({ project }: { project: Transform }) {
                 <GitBranch className="h-3 w-3" />
                 {project.git.branch}
                 {project.git.behind && (
-                  <span className="text-warning">· có commit mới</span>
+                  <span className="text-warning">{t('tf.list.behind')}</span>
                 )}
               </span>
             )}
-            <span>{project.file_count} tệp</span>
+            <span>{t('tf.list.fileCount', { n: project.file_count })}</span>
           </p>
         </div>
 
         {project.has_unpublished_changes && (
           <Badge variant="warning" size="xs" className="shrink-0">
-            <CircleDot className="h-2.5 w-2.5" /> chưa xuất bản
+            <CircleDot className="h-2.5 w-2.5" /> {t('tf.list.unpublished')}
           </Badge>
         )}
 
         {project.active_release ? (
           <span className="hidden shrink-0 text-tiny text-text-tertiary sm:block">
-            bản {project.active_release.release_number}
+            {t('tf.list.releaseShort', { n: project.active_release.release_number })}
           </span>
         ) : (
           <span className="hidden shrink-0 text-tiny text-text-quaternary sm:block">
-            chưa xuất bản
+            {t('tf.list.unpublished')}
           </span>
         )}
 
         <div className="hidden w-28 shrink-0 text-right md:block">
           <Badge variant={healthVariant(project.health_status)} size="sm">
-            {healthLabel(project.health_status)}
+            {healthLabel(project.health_status, t)}
           </Badge>
           {project.last_success_at && (
             <p className="mt-0.5 text-tiny text-text-quaternary">
-              {formatRelative(project.last_success_at)}
+              {formatRelative(project.last_success_at, locale)}
             </p>
           )}
         </div>

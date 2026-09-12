@@ -31,32 +31,35 @@ import { transformApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import type { RepositoryInspectResult } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 type Source = 'NEW' | 'GIT' | 'UPLOAD';
 
-const SOURCES: { id: Source; title: string; description: string; icon: typeof FilePlus2 }[] = [
+// Keys, not text: this list is built at module load, where no hook exists.
+// It is translated where it is rendered instead.
+const SOURCES: { id: Source; titleKey: string; descriptionKey: string; icon: typeof FilePlus2 }[] = [
   {
     id: 'NEW',
-    title: 'Tạo dự án dbt mới',
-    description: 'Bắt đầu từ một dự án dbt chuẩn, có sẵn model và test mẫu.',
+    titleKey: 'tfnew.sourceNew',
+    descriptionKey: 'tfnew.sourceNewHint',
     icon: FilePlus2,
   },
   {
     id: 'GIT',
-    title: 'Kết nối repository đã có',
-    description:
-      'Lấy nguyên dự án dbt từ GitHub. Không chuyển đổi gì — vẫn là dự án đó.',
+    titleKey: 'tfnew.sourceGit',
+    descriptionKey: 'tfnew.sourceGitHint',
     icon: FolderGit2,
   },
   {
     id: 'UPLOAD',
-    title: 'Tải lên dự án dbt',
-    description: 'Nhận tệp ZIP chứa dbt_project.yml và các thư mục của nó.',
+    titleKey: 'tfnew.sourceUpload',
+    descriptionKey: 'tfnew.sourceUploadHint',
     icon: PackageOpen,
   },
 ];
 
 export default function NewTransformPage() {
+  const { t } = useI18n();
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
@@ -105,7 +108,7 @@ export default function NewTransformPage() {
       if (result.dbt_project_name && !name) setName(result.dbt_project_name);
       if (result.branch && !branch) setBranch(result.branch);
       if (result.detected_root && !subdirectory) setSubdirectory(result.detected_root);
-      toastSuccess(`Đã tìm thấy dự án dbt với ${result.model_count} model.`);
+      toastSuccess(t('tfnew.inspected', { n: result.model_count }));
     },
     onError: (error) => { setInspection(null); toastError(error); },
   });
@@ -127,7 +130,7 @@ export default function NewTransformPage() {
         );
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error?.message ?? 'Không tải lên được.');
+          throw new Error(payload?.error?.message ?? t('tfnew.uploadFailed'));
         }
         return response.json();
       }
@@ -150,7 +153,7 @@ export default function NewTransformPage() {
     },
     onSuccess: (project: { id: string }) => {
       queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
-      toastSuccess('Đã tạo dự án. Đang đọc dự án bằng dbt…');
+      toastSuccess(t('tfnew.created'));
       router.push(`/transforms/${project.id}`);
     },
     onError: (error) => toastError(error),
@@ -178,9 +181,9 @@ export default function NewTransformPage() {
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Transform
         </Link>
-        <h1 className="text-h3 font-strong text-text-primary">Dự án Transform mới</h1>
+        <h1 className="text-h3 font-strong text-text-primary">{t('tfnew.title')}</h1>
         <ol className="mt-3 flex items-center gap-2">
-          {['Nguồn dự án', 'Kho dữ liệu', 'Thiết lập'].map((label, index) => (
+          {[t('tfnew.stepSource'), t('tfnew.stepWarehouse'), t('tfnew.stepSetup')].map((label, index) => (
             <li key={label} className="flex items-center gap-2">
               <span
                 className={cn(
@@ -229,8 +232,8 @@ export default function NewTransformPage() {
                 >
                   <item.icon className="h-5 w-5 shrink-0 text-brand" />
                   <div>
-                    <p className="text-small font-emphasis text-text-primary">{item.title}</p>
-                    <p className="mt-1 text-caption text-text-tertiary">{item.description}</p>
+                    <p className="text-small font-emphasis text-text-primary">{t(item.titleKey)}</p>
+                    <p className="mt-1 text-caption text-text-tertiary">{t(item.descriptionKey)}</p>
                   </div>
                 </button>
               ))}
@@ -238,7 +241,7 @@ export default function NewTransformPage() {
 
             {source === 'GIT' && (
               <div className="space-y-2.5 rounded-lg border border-[rgb(var(--border-line))] p-3">
-                <Field label="Địa chỉ repository">
+                <Field label={t('tfnew.repoUrl')}>
                   <Input
                     value={repoUrl}
                     onChange={(event) => { setRepoUrl(event.target.value); setInspection(null); }}
@@ -246,10 +249,10 @@ export default function NewTransformPage() {
                   />
                 </Field>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Nhánh" hint="Bỏ trống để dùng nhánh mặc định">
+                  <Field label={t('tfnew.branch')} hint={t('tfnew.branchHint')}>
                     <Input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="main" />
                   </Field>
-                  <Field label="Thư mục con" hint="Nếu dbt_project.yml nằm trong thư mục con">
+                  <Field label={t('tfnew.subdirectory')} hint={t('tfnew.subdirectoryHint')}>
                     <Input
                       value={subdirectory}
                       onChange={(event) => setSubdirectory(event.target.value)}
@@ -257,7 +260,7 @@ export default function NewTransformPage() {
                     />
                   </Field>
                 </div>
-                <Field label="Access token" hint="Cần cho repo riêng tư, và để commit ngược lên">
+                <Field label="Access token" hint={t('tfnew.tokenHint')}>
                   <Input
                     type="password" value={token}
                     onChange={(event) => setToken(event.target.value)}
@@ -273,19 +276,19 @@ export default function NewTransformPage() {
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <Search className="h-3.5 w-3.5" />}
                 >
-                  Kiểm tra repository
+                  {t('tfnew.inspect')}
                 </Button>
 
                 {inspection && (
                   <div className="space-y-2 rounded-md bg-surface-2 p-2.5">
                     <p className="text-caption font-emphasis text-text-primary">
-                      Đã tìm thấy dự án dbt
+                      {t('tfnew.inspectFound')}
                     </p>
                     <dl className="space-y-0.5 text-tiny">
-                      <Pair label="Tên dự án dbt" value={inspection.dbt_project_name ?? '—'} />
-                      <Pair label="Thư mục" value={inspection.detected_root || '/'} />
-                      <Pair label="Số model" value={String(inspection.model_count)} />
-                      <Pair label="Tổng số tệp" value={String(inspection.file_count)} />
+                      <Pair label={t('tfnew.dbtProjectName')} value={inspection.dbt_project_name ?? '—'} />
+                      <Pair label={t('tfnew.folder')} value={inspection.detected_root || '/'} />
+                      <Pair label={t('tfnew.modelCount')} value={String(inspection.model_count)} />
+                      <Pair label={t('tfnew.fileCount')} value={String(inspection.file_count)} />
                       {inspection.packages.length > 0 && (
                         <Pair label="Package" value={inspection.packages.join(', ')} />
                       )}
@@ -310,7 +313,7 @@ export default function NewTransformPage() {
                         onChange={(event) => setAutoPull(event.target.checked)}
                         className="h-3.5 w-3.5 accent-[rgb(var(--brand))]"
                       />
-                      Tự động lấy commit mới
+                      {t('tfnew.autoPull')}
                     </label>
                   </div>
                 )}
@@ -319,7 +322,7 @@ export default function NewTransformPage() {
 
             {source === 'UPLOAD' && (
               <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
-                <Field label="Tệp ZIP dự án dbt">
+                <Field label={t('tfnew.zipFile')}>
                   <input
                     type="file"
                     accept=".zip"
@@ -354,19 +357,19 @@ export default function NewTransformPage() {
              the window stayed empty. */
           <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
             <div className="space-y-3">
-            <Field label="Tên dự án">
+            <Field label={t('tfnew.name')}>
               <Input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Phân tích bán hàng"
+                placeholder={t('tfnew.namePlaceholder')}
                 autoFocus
               />
             </Field>
 
             {source === 'NEW' && (
               <Field
-                label="Tên dbt project"
-                hint="Tên trong dbt_project.yml. Chỉ chữ thường, số và gạch dưới."
+                label={t('tfnew.dbtName')}
+                hint={t('tfnew.dbtNameHint')}
               >
                 <Input
                   value={dbtProjectName}
@@ -379,8 +382,8 @@ export default function NewTransformPage() {
 
             {source === 'NEW' && (
               <Field
-                label="Schema dữ liệu nguồn"
-                hint="Nơi dữ liệu thô đang nằm, dùng cho source mẫu"
+                label={t('tfnew.sourceSchema')}
+                hint={t('tfnew.sourceSchemaHint')}
               >
                 <Input
                   value={sourceSchema} onChange={(event) => setSourceSchema(event.target.value)}
@@ -391,13 +394,13 @@ export default function NewTransformPage() {
             </div>
 
             <div className="space-y-3">
-              <Field label="Schema khi phát triển" hint="Nơi bản nháp ghi kết quả">
+              <Field label={t('tfnew.devSchema')} hint={t('tfnew.devSchemaHint')}>
                 <Input
                   value={devSchema} onChange={(event) => setDevSchema(event.target.value)}
                   placeholder="analytics_dev" className="font-mono"
                 />
               </Field>
-              <Field label="Schema chạy thật" hint="Nơi bản đã xuất bản ghi kết quả">
+              <Field label={t('tfnew.prodSchema')} hint={t('tfnew.prodSchemaHint')}>
                 <Input
                   value={prodSchema} onChange={(event) => setProdSchema(event.target.value)}
                   placeholder="analytics" className="font-mono"
@@ -415,9 +418,9 @@ export default function NewTransformPage() {
                 className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
               />
               <span className="text-caption text-text-secondary">
-                Mỗi người một schema riêng khi phát triển
+                {t('tfnew.perUser')}
                 <span className="block text-tiny text-text-tertiary">
-                  Để hai người cùng sửa một dự án không ghi đè bảng của nhau.
+                  {t('tfnew.perUserHint')}
                 </span>
               </span>
             </label>
@@ -430,9 +433,9 @@ export default function NewTransformPage() {
                   className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
                 />
                 <span className="text-caption text-text-secondary">
-                  Tạo kèm model và test mẫu
+                  {t('tfnew.withExamples')}
                   <span className="block text-tiny text-text-tertiary">
-                    Một staging model, một mart, và YAML đi kèm — để có thứ chạy thử ngay.
+                    {t('tfnew.withExamplesHint')}
                   </span>
                 </span>
               </label>
@@ -447,7 +450,7 @@ export default function NewTransformPage() {
           variant="ghost"
           onClick={() => (step === 1 ? router.push('/transforms') : setStep(step - 1))}
         >
-          {step === 1 ? 'Huỷ' : 'Quay lại'}
+          {step === 1 ? t('tfnew.cancel') : t('tfnew.back')}
         </Button>
         {step < 3 ? (
           <Button
@@ -456,7 +459,7 @@ export default function NewTransformPage() {
             onClick={() => setStep(step + 1)}
             trailingIcon={<ArrowRight className="h-4 w-4" />}
           >
-            Tiếp tục
+            {t('tfnew.continue')}
           </Button>
         ) : (
           <Button
@@ -465,7 +468,7 @@ export default function NewTransformPage() {
             loading={create.isPending}
             onClick={() => create.mutate()}
           >
-            Tạo dự án
+            {t('tfnew.create')}
           </Button>
         )}
       </div>

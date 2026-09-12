@@ -14,6 +14,7 @@ import { MoreHorizontal, X } from 'lucide-react';
 
 import { Menu } from '@/components/ui/Menu';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 export interface OpenTab {
   path: string;
@@ -32,6 +33,7 @@ interface EditorTabsProps {
 export function EditorTabs({
   tabs, activePath, onSelect, onClose, onCloseOthers, onCloseAll,
 }: EditorTabsProps) {
+  const { t } = useI18n();
   const strip = React.useRef<HTMLDivElement>(null);
 
   // Keep the active tab visible when it changes from outside -- clicking a
@@ -79,14 +81,14 @@ export function EditorTabs({
               {tab.dirty && (
                 <span
                   className="h-1.5 w-1.5 rounded-full bg-brand"
-                  aria-label="Chưa lưu"
+                  aria-label={t('tf.tab.unsaved')}
                 />
               )}
             </button>
             <button
               type="button"
               onClick={(event) => { event.stopPropagation(); onClose(tab.path); }}
-              aria-label={`Đóng ${name}`}
+              aria-label={t('tf.tabs.close', { name })}
               className={cn(
                 'rounded-sm p-0.5 transition-opacity',
                 'hover:bg-surface-3',
@@ -101,15 +103,15 @@ export function EditorTabs({
 
       <div className="ml-auto flex shrink-0 items-center px-2">
         <Menu
-          label="Tác vụ tab"
+          label={t('tf.tab.actions')}
           items={[
             {
               id: 'close-others',
-              label: 'Đóng các tab khác',
+              label: t('tf.tab.closeOthers'),
               disabled: !activePath || tabs.length < 2,
               onSelect: () => activePath && onCloseOthers(activePath),
             },
-            { id: 'close-all', label: 'Đóng tất cả', onSelect: onCloseAll },
+            { id: 'close-all', label: t('tf.tab.closeAll'), onSelect: onCloseAll },
           ]}
           trigger={
             <span className="rounded-sm p-1 text-text-tertiary hover:bg-surface-2">

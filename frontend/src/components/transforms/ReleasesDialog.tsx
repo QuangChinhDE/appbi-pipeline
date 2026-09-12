@@ -42,7 +42,7 @@ export function ReleasesDialog({
   canOperate: boolean;
   canEdit: boolean;
 }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const [confirmRestore, setConfirmRestore] = React.useState<TransformRelease | null>(null);
 
@@ -52,7 +52,7 @@ export function ReleasesDialog({
     mutationFn: (releaseId: string) => transformApi.activateRelease(projectId, releaseId),
     onSuccess: () => {
       refresh();
-      toastSuccess('Đã đổi bản đang chạy thật');
+      toastSuccess(t('tfrel.activated'));
     },
     onError: toastError,
   });
@@ -62,8 +62,8 @@ export function ReleasesDialog({
     onSuccess: () => {
       refresh();
       setConfirmRestore(null);
-      toastSuccess('Đã đưa bản đó vào trình soạn thảo',
-        'Bản đang chạy thật chưa đổi. Xuất bản nếu muốn nó chạy.');
+      toastSuccess(t('tfrel.restored'),
+        t('tfrel.restoredHint'));
       onClose();
     },
     onError: (caught) => { setConfirmRestore(null); toastError(caught); },
@@ -73,11 +73,11 @@ export function ReleasesDialog({
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title="Các bản đã xuất bản">
+      <Modal open={open} onClose={onClose} title={t('tfrel.title')}>
         {ordered.length === 0 ? (
           <EmptyState
-            title="Chưa xuất bản lần nào"
-            description="Xuất bản một bản để lịch chạy tự động có thứ để chạy."
+            title={t('tfrel.empty')}
+            description={t('tfrel.emptyHint')}
           />
         ) : (
           <div className="space-y-2">
@@ -88,35 +88,41 @@ export function ReleasesDialog({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-caption font-strong text-text-primary">
-                    Bản {release.release_number}
+                    {t('tfrel.version', { n: release.release_number })}
                   </span>
                   {release.is_active && (
                     <Badge variant="success" size="xs">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />Đang chạy thật
+                      <CheckCircle2 className="mr-1 h-3 w-3" />{t('tfrel.live')}
                     </Badge>
                   )}
                   {release.status === 'VERIFYING' && (
                     <Badge variant="neutral" size="xs">
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />Đang kiểm tra
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />{t('tfrel.verifying')}
                     </Badge>
                   )}
                   {release.status === 'FAILED' && (
                     <Badge variant="danger" size="xs">
-                      <AlertTriangle className="mr-1 h-3 w-3" />Build hỏng
+                      <AlertTriangle className="mr-1 h-3 w-3" />{t('tfrel.buildFailed')}
                     </Badge>
                   )}
                   <span className="ml-auto text-tiny text-text-tertiary">
                     {release.activated_at
-                      ? `Chạy thật từ ${formatDateTime(release.activated_at, locale)}`
+                      ? t('tfrel.liveSince', {
+                        at: formatDateTime(release.activated_at, locale),
+                      })
                       : release.verified_at
-                        ? `Kiểm tra xong ${formatDateTime(release.verified_at, locale)}`
+                        ? t('tfrel.verifiedAt', {
+                          at: formatDateTime(release.verified_at, locale),
+                        })
                         : ''}
                   </span>
                 </div>
 
                 <p className="mt-1 text-tiny text-text-tertiary">
-                  {release.file_count} tệp
-                  {release.revision_number ? ` · bản nháp ${release.revision_number}` : ''}
+                  {t('tfrel.fileCount', { n: release.file_count })}
+                  {release.revision_number
+                    ? t('tfrel.fromDraft', { n: release.revision_number })
+                    : ''}
                   {release.dbt_version ? ` · dbt ${release.dbt_version}` : ''}
                   {release.environment_name ? ` · ${release.environment_name}` : ''}
                 </p>
@@ -140,7 +146,7 @@ export function ReleasesDialog({
                       onClick={() => activate.mutate(release.id)}
                       leadingIcon={<Upload className="h-3 w-3" />}
                     >
-                      Cho bản này chạy thật
+                      {t('tfrel.activate')}
                     </Button>
                   )}
                   {canEdit && (
@@ -149,7 +155,7 @@ export function ReleasesDialog({
                       onClick={() => setConfirmRestore(release)}
                       leadingIcon={<RotateCcw className="h-3 w-3" />}
                     >
-                      Mở lại trong trình soạn thảo
+                      {t('tfrel.restore')}
                     </Button>
                   )}
                 </div>
@@ -165,13 +171,11 @@ export function ReleasesDialog({
         open={confirmRestore !== null}
         onClose={() => setConfirmRestore(null)}
         onConfirm={() => confirmRestore && restore.mutate(confirmRestore.id)}
-        title={`Mở lại bản ${confirmRestore?.release_number ?? ''} trong trình soạn thảo?`}
-        message={
-          'Toàn bộ tệp trong trình soạn thảo sẽ bị thay bằng tệp của bản đó. '
-          + 'Thay đổi chưa xuất bản sẽ mất. Bản đang chạy thật không đổi — '
-          + 'muốn nó đổi thì xuất bản lại sau khi xem xong.'
-        }
-        confirmLabel="Mở lại"
+        title={t('tfrel.restoreTitle', {
+          n: confirmRestore?.release_number ?? '',
+        })}
+        message={t('tfrel.restoreWarning')}
+        confirmLabel={t('tfrel.confirmRestore')}
         loading={restore.isPending}
       />
     </>

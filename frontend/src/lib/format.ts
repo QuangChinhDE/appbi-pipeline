@@ -1,8 +1,15 @@
-/** Display formatting. Storage is always UTC; rendering follows the locale. */
+/**
+ * Display formatting. Storage is always UTC; rendering follows the locale.
+ *
+ * `locale` is required rather than defaulted. A default is a language chosen
+ * where the caller is not looking, and it read Vietnamese out of an English
+ * page for every call site that forgot to pass one. Required, the compiler
+ * finds them instead of a person noticing `36 phut truoc` in a screenshot.
+ */
 
 export type Locale = 'vi' | 'en';
 
-export function formatDateTime(value: string | null | undefined, locale: Locale = 'vi'): string {
+export function formatDateTime(value: string | null | undefined, locale: Locale): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
@@ -12,7 +19,7 @@ export function formatDateTime(value: string | null | undefined, locale: Locale 
   }).format(date);
 }
 
-export function formatTime(value: string | null | undefined, locale: Locale = 'vi'): string {
+export function formatTime(value: string | null | undefined, locale: Locale): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
@@ -26,7 +33,7 @@ const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3600], ['minute', 60], ['second', 1],
 ];
 
-export function formatRelative(value: string | null | undefined, locale: Locale = 'vi'): string {
+export function formatRelative(value: string | null | undefined, locale: Locale): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';

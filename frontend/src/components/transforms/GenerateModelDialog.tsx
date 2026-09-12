@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * "Tạo model từ bảng" -- the form that writes somebody's first dbt model.
+ * t('tf.gen.title') -- the form that writes somebody's first dbt model.
  *
  * The hard part of a dbt project is not running it, it is writing the first
  * file: a staging model is a `select` over a `source()`, the source has to be
@@ -26,6 +26,7 @@ import { Modal } from '@/components/ui/Modal';
 import { transformApi } from '@/lib/api';
 import type { GenerateColumn, WarehouseColumn } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 interface GenerateModelDialogProps {
   open: boolean;
@@ -47,6 +48,7 @@ function suggestModelName(table: string): string {
 export function GenerateModelDialog({
   open, onClose, projectId, connectionId, defaultSchema, revisionId, onGenerated,
 }: GenerateModelDialogProps) {
+  const { t } = useI18n();
   const [schema, setSchema] = React.useState<string | null>(defaultSchema ?? null);
   const [table, setTable] = React.useState<string | null>(null);
   const [modelName, setModelName] = React.useState('');
@@ -128,18 +130,18 @@ export function GenerateModelDialog({
     <Modal
       open={open}
       onClose={onClose}
-      title="Tạo model từ bảng"
-      description="Chọn một bảng trong kho dữ liệu. AppBI viết ra tệp dbt tương ứng, và bạn sửa lại bất cứ lúc nào."
+      title={t('tf.gen.title')}
+      description={t('tf.gen.intro')}
       size="lg"
       footer={(
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-tiny text-text-tertiary">
             {ready
-              ? `Sẽ tạo models/staging/${modelName}.sql với ${chosen.length} cột`
-              : 'Chọn bảng và ít nhất một cột'}
+              ? t('tf.gen.willCreate', { name: modelName, n: chosen.length })
+              : t('tf.gen.needSelection')}
           </p>
           <div className="flex shrink-0 gap-2">
-            <Button variant="secondary" onClick={onClose}>Huỷ</Button>
+            <Button variant="secondary" onClick={onClose}>{t('tf.gen.cancel')}</Button>
             <Button
               disabled={!ready || generate.isPending}
               onClick={() => {
@@ -153,12 +155,12 @@ export function GenerateModelDialog({
                     onClose();
                   },
                   onError: (cause: unknown) => setError(
-                    cause instanceof Error ? cause.message : 'Không tạo được model.',
+                    cause instanceof Error ? cause.message : t('tf.gen.failed'),
                   ),
                 });
               }}
             >
-              {generate.isPending ? 'Đang tạo…' : 'Tạo model'}
+              {generate.isPending ? t('tf.gen.creating') : t('tf.gen.create')}
             </Button>
           </div>
         </div>
@@ -181,7 +183,7 @@ export function GenerateModelDialog({
             onChange={(next) => { setSchema(next); setTable(null); setColumns([]); }}
           />
           <Picker
-            label="Bảng"
+            label={t('tf.gen.table')}
             icon={<Table2 className="h-3.5 w-3.5" />}
             loading={tables.isFetching}
             value={table}
@@ -197,7 +199,7 @@ export function GenerateModelDialog({
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="mb-1 block text-tiny uppercase tracking-wide text-text-quaternary">
-              Tên model
+              {t('tf.gen.modelName')}
             </span>
             <Input
               value={modelName}
@@ -208,7 +210,7 @@ export function GenerateModelDialog({
           </label>
           <div>
             <span className="mb-1 block text-tiny uppercase tracking-wide text-text-quaternary">
-              Cách lưu kết quả
+              {t('tf.gen.materialisation')}
             </span>
             <div className="flex gap-1.5">
               {(['view', 'table'] as const).map((option) => (
@@ -223,7 +225,7 @@ export function GenerateModelDialog({
                       : 'border-[rgb(var(--border-line))] text-text-secondary hover:bg-surface-2',
                   )}
                 >
-                  {option === 'view' ? 'View (luôn mới)' : 'Table (đọc nhanh)'}
+                  {option === 'view' ? t('tf.gen.view') : t('tf.gen.materialised')}
                 </button>
               ))}
             </div>
@@ -233,7 +235,8 @@ export function GenerateModelDialog({
         <div>
           <div className="mb-1 flex items-baseline justify-between">
             <span className="text-tiny uppercase tracking-wide text-text-quaternary">
-              Cột {columns.length > 0 && `(${chosen.length}/${columns.length})`}
+              {t('tf.gen.columns')}{' '}
+              {columns.length > 0 && `(${chosen.length}/${columns.length})`}
             </span>
             {columns.length > 0 && (
               <button
@@ -243,7 +246,7 @@ export function GenerateModelDialog({
                   columns.map((column) => ({ ...column, selected: !allSelected })),
                 )}
               >
-                {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                {allSelected ? t('tf.gen.selectNone') : t('tf.gen.selectAll')}
               </button>
             )}
           </div>
@@ -252,23 +255,23 @@ export function GenerateModelDialog({
             {columnQuery.isFetching ? (
               <p className="flex items-center justify-center gap-2 py-8 text-caption text-text-tertiary">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Đang đọc cột…
+                {t('tf.gen.loadingColumns')}
               </p>
             ) : columns.length === 0 ? (
               <p className="py-8 text-center text-caption text-text-tertiary">
-                Chọn một bảng để xem các cột.
+                {t('tf.gen.pickTable')}
               </p>
             ) : (
               <table className="w-full text-caption">
                 <thead className="sticky top-0 bg-surface-2 text-tiny text-text-tertiary">
                   <tr>
                     <th className="w-8 px-2 py-1.5" />
-                    <th className="px-2 py-1.5 text-left font-normal">Cột</th>
-                    <th className="px-2 py-1.5 text-left font-normal">Đổi tên thành</th>
-                    <th className="w-16 px-2 py-1.5 font-normal" title="Giá trị không trùng nhau">
+                    <th className="px-2 py-1.5 text-left font-normal">{t('tf.gen.columns')}</th>
+                    <th className="px-2 py-1.5 text-left font-normal">{t('tf.gen.renameTo')}</th>
+                    <th className="w-16 px-2 py-1.5 font-normal" title={t('tf.gen.unique')}>
                       unique
                     </th>
-                    <th className="w-16 px-2 py-1.5 font-normal" title="Giá trị không được rỗng">
+                    <th className="w-16 px-2 py-1.5 font-normal" title={t('tf.gen.notNull')}>
                       not_null
                     </th>
                   </tr>
@@ -289,7 +292,7 @@ export function GenerateModelDialog({
                           onChange={(event) => setColumn(column.name, {
                             selected: event.target.checked,
                           })}
-                          aria-label={`Chọn cột ${column.name}`}
+                          aria-label={t('tf.gen.selectColumn', { name: column.name })}
                         />
                       </td>
                       <td className="px-2 py-1 font-mono text-text-secondary">
@@ -302,7 +305,7 @@ export function GenerateModelDialog({
                           onChange={(event) => setColumn(column.name, {
                             alias: event.target.value,
                           })}
-                          placeholder="giữ nguyên"
+                          placeholder={t('tf.gen.keepName')}
                           className={cn(
                             'h-6 w-full rounded-sm bg-surface-2 px-1.5 font-mono text-caption',
                             'text-text-primary placeholder:text-text-quaternary',
@@ -346,6 +349,7 @@ function Picker({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <label className="block">
       <span className="mb-1 flex items-center gap-1 text-tiny uppercase tracking-wide text-text-quaternary">
@@ -362,7 +366,7 @@ function Picker({
           'focus:outline-none focus:ring-1 focus:ring-brand/40',
         )}
       >
-        <option value="">{loading ? 'Đang tải…' : `Chọn ${label.toLowerCase()}`}</option>
+        <option value="">{loading ? t('tf.gen.loading') : t('tf.gen.choose', { label: label.toLowerCase() })}</option>
         {options.map((option) => (
           <option key={option} value={option}>{option}</option>
         ))}

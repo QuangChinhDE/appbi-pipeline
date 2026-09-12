@@ -22,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/Badge';
 import type { ResourceFacets, ResourceSummary } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 /** dbt's resource types, in the order a person thinks about them. */
 const TYPE_ORDER = [
@@ -114,6 +115,7 @@ export function ResourceTree({
   loading,
   truncated,
 }: ResourceTreeProps) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set());
   const [showFilters, setShowFilters] = React.useState(false);
 
@@ -155,7 +157,7 @@ export function ResourceTree({
               value={filters.search}
               onChange={(event) =>
                 onFiltersChange({ ...filters, search: event.target.value })}
-              placeholder="Tìm resource"
+              placeholder={t('tf.res.search')}
               className={cn(
                 'h-7 w-full rounded-sm bg-surface-2 pl-7 pr-2 text-caption',
                 'text-text-primary placeholder:text-text-quaternary',
@@ -173,7 +175,7 @@ export function ResourceTree({
                 : 'text-text-tertiary hover:bg-surface-2',
             )}
           >
-            Lọc
+            {t('tf.res.filter')}
             {activeFilterCount > 0 && (
               <Badge variant="brand" size="xs">{activeFilterCount}</Badge>
             )}
@@ -183,7 +185,7 @@ export function ResourceTree({
         {showFilters && facets && (
           <div className="mt-2 space-y-2">
             <FacetRow
-              label="Loại"
+              label={t('tf.res.kind')}
               options={facets.resource_types}
               selected={filters.resourceTypes}
               onToggle={(value) => {
@@ -235,7 +237,7 @@ export function ResourceTree({
                 onClick={() => onFiltersChange({ ...EMPTY_FILTERS, search: filters.search })}
                 className="flex items-center gap-1 text-tiny text-text-tertiary hover:text-text-primary"
               >
-                <X className="h-3 w-3" /> Bỏ hết bộ lọc
+                <X className="h-3 w-3" /> {t('tf.res.clearFilters')}
               </button>
             )}
           </div>
@@ -244,12 +246,12 @@ export function ResourceTree({
 
       <div className="flex-1 overflow-auto py-1">
         {loading && resources.length === 0 ? (
-          <p className="px-3 py-6 text-center text-caption text-text-tertiary">Đang đọc…</p>
+          <p className="px-3 py-6 text-center text-caption text-text-tertiary">{t('tf.res.loading')}</p>
         ) : grouped.length === 0 ? (
           <p className="px-3 py-6 text-center text-caption text-text-tertiary">
             {filters.search || activeFilterCount
-              ? 'Không có resource nào khớp.'
-              : 'Chưa có resource nào. Hãy parse dự án.'}
+              ? t('tf.res.noMatch')
+              : t('tf.res.none')}
           </p>
         ) : (
           grouped.map(([type, items]) => {
@@ -293,7 +295,7 @@ export function ResourceTree({
                     {!item.enabled && (
                       <CircleSlash
                         className="h-3 w-3 shrink-0 text-text-quaternary"
-                        aria-label="Đang tắt"
+                        aria-label={t('tf.res.disabled')}
                       />
                     )}
                     {item.materialized && item.resource_type === 'model' && (
@@ -310,7 +312,7 @@ export function ResourceTree({
 
         {truncated && (
           <p className="px-3 py-2 text-tiny text-text-tertiary">
-            Đang hiển thị {resources.length} trong {total}. Hãy lọc để thu hẹp.
+            {t('tf.res.truncated', { n: resources.length, total })}
           </p>
         )}
       </div>
@@ -333,12 +335,12 @@ export function ResourceTree({
           {filters.includePackages ? (
             <>
               <EyeOff className="h-3 w-3" />
-              Chỉ hiện resource của dự án
+              {t('tf.res.projectOnly')}
             </>
           ) : (
             <>
               <Eye className="h-3 w-3" />
-              Hiện cả resource từ package dbt
+              {t('tf.res.includePackages')}
             </>
           )}
         </button>

@@ -44,7 +44,7 @@ export function ScheduleDialog({
   onClose: () => void;
   canEdit: boolean;
 }) {
-  const { locale } = useI18n();
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
 
   const [schedule, setSchedule] = React.useState<ScheduleConfig>(() => ({
@@ -100,7 +100,7 @@ export function ScheduleDialog({
       // id]` here left the header showing the previous schedule after a save
       // that had already been written -- the save looked like it had failed.
       queryClient.invalidateQueries({ queryKey: ['workspace'] });
-      toastSuccess('Đã lưu lịch chạy');
+      toastSuccess(t('tfsch.saved'));
       onClose();
     },
     onError: (caught) => toastError(caught),
@@ -113,18 +113,18 @@ export function ScheduleDialog({
   const nothingPublished = !project.active_release;
 
   return (
-    <Modal open={open} onClose={onClose} title="Lịch chạy tự động">
+    <Modal open={open} onClose={onClose} title={t('tfsch.title')}>
       <div className="space-y-4">
         <p className="text-caption text-text-tertiary">
-          Lịch chạy <strong className="text-text-secondary">bản đã xuất bản</strong>, không
-          phải bản nháp trong trình soạn thảo.
+          {t('tfsch.introPrefix')}{' '}
+          <strong className="text-text-secondary">{t('tfsch.publishedVersion')}</strong>
+          {t('tfsch.introSuffix')}
         </p>
 
         {nothingPublished && schedule.type !== 'MANUAL' && (
           <div className="rounded-md border border-[rgb(var(--warning))] bg-warning-subtle px-3 py-2">
             <p className="text-caption text-text-primary">
-              Dự án này chưa xuất bản bản nào, nên lịch sẽ không có gì để chạy.
-              Xuất bản trước, hoặc đặt lịch rồi xuất bản sau.
+              {t('tfsch.nothingPublished')}
             </p>
           </div>
         )}
@@ -134,7 +134,7 @@ export function ScheduleDialog({
         {schedule.type !== 'MANUAL' && (
           <div className="space-y-3 border-t border-[rgb(var(--border-line))] pt-4">
             <div>
-              <Label htmlFor="tf-command">Lệnh dbt sẽ chạy</Label>
+              <Label htmlFor="tf-command">{t('tfsch.command')}</Label>
               <Select
                 id="tf-command"
                 value={command}
@@ -147,48 +147,60 @@ export function ScheduleDialog({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="tf-selector">Chỉ chạy (--select)</Label>
+                <Label htmlFor="tf-selector">{t('tfsch.selector')}</Label>
                 <Input
                   id="tf-selector"
                   value={selector}
-                  placeholder="để trống là toàn bộ"
+                  placeholder={t('tfsch.selectorPlaceholder')}
                   onChange={(event) => setSelector(event.target.value)}
                 />
               </div>
               <div>
-                <Label htmlFor="tf-exclude">Bỏ qua (--exclude)</Label>
+                <Label htmlFor="tf-exclude">{t('tfsch.exclude')}</Label>
                 <Input
                   id="tf-exclude"
                   value={exclude}
-                  placeholder="để trống là không bỏ gì"
+                  placeholder={t('tfsch.excludePlaceholder')}
                   onChange={(event) => setExclude(event.target.value)}
                 />
               </div>
             </div>
-            <Checkbox
-              checked={fullRefresh}
-              onChange={setFullRefresh}
-              label="Chạy lại từ đầu (--full-refresh)"
-            />
+            {/* Its own permission, held by OWNER alone: it rebuilds every
+                incremental model and throws away the materialised history.
+                Offering the box to somebody the command will refuse is the
+                same fault as a form field the API always rejects. */}
+            {project.permissions.can_reset ? (
+              <Checkbox
+                checked={fullRefresh}
+                onChange={setFullRefresh}
+                label={t('tfsch.fullRefresh')}
+              />
+            ) : (
+              <p className="text-tiny text-text-tertiary">
+                {t('tfsch.fullRefreshDenied')}
+              </p>
+            )}
           </div>
         )}
 
         {project.next_run_at && schedule.type !== 'MANUAL' && (
           <p className="flex items-center gap-1.5 text-caption text-text-tertiary">
             <Clock className="h-3.5 w-3.5" />
-            Lần chạy kế tiếp đang đặt: {formatDateTime(project.next_run_at, locale)}
+            {t('tfsch.nextRun', {
+              at: formatDateTime(project.next_run_at, locale),
+            })}
           </p>
         )}
 
         <div className="flex justify-end gap-2 border-t border-[rgb(var(--border-line))] pt-4">
-          <Button variant="ghost" onClick={onClose}>Huỷ</Button>
+          <Button variant="ghost" onClick={onClose}>{t('tfsch.cancel')}</Button>
           <Button
             variant="primary"
             disabled={!canEdit}
             loading={save.isPending}
             onClick={() => save.mutate()}
           >
-            Lưu lịch
+            {t('tfsch.save')}
           </Button>
         </div>
       </div>

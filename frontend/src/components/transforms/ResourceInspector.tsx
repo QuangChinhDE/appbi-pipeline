@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { ResourceDetail } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 /**
  * Config keys the Config tab renders as fields.
@@ -71,14 +72,15 @@ export function ResourceInspector({
   resource, loading, onClose, onOpenFile, onSelectResource, pipelineName,
   ownPackage,
 }: ResourceInspectorProps) {
+  const { t } = useI18n();
   const [tab, setTab] = React.useState<InspectorTab>('overview');
 
   React.useEffect(() => { setTab('overview'); }, [resource?.unique_id]);
 
   if (loading) {
     return (
-      <Drawer onClose={onClose} title="Đang đọc…">
-        <p className="p-4 text-caption text-text-tertiary">Đang đọc resource…</p>
+      <Drawer onClose={onClose} title={t('tf.insp.loading')}>
+        <p className="p-4 text-caption text-text-tertiary">{t('tf.insp.loadingResource')}</p>
       </Drawer>
     );
   }
@@ -157,7 +159,7 @@ export function ResourceInspector({
                 <div>
                   <Badge variant="brand" size="sm">{resource.materialized}</Badge>
                   <p className="mt-1 text-tiny text-text-tertiary">
-                    Cách dbt tạo resource này trong kho dữ liệu.
+                    {t('tf.insp.materializedHint')}
                   </p>
                 </div>
               </Field>
@@ -182,8 +184,8 @@ export function ResourceInspector({
             )}
             {!resource.enabled && (
               <div className="rounded-md bg-warning/10 p-2 text-caption text-warning">
-                Resource này đang bị tắt (<code>enabled: false</code>), nên dbt
-                không build nó.
+                {t('tf.insp.disabledBefore')}<code>enabled: false</code>
+                {t('tf.insp.disabledAfter')}
               </div>
             )}
 
@@ -201,8 +203,9 @@ export function ResourceInspector({
                   </Badge>
                   {resource.freshness.age_seconds !== null && (
                     <span className="ml-2 text-tiny text-text-tertiary">
-                      dữ liệu mới nhất cách đây{' '}
-                      {Math.round(resource.freshness.age_seconds / 60)} phút
+                      {t('tf.insp.freshnessAge', {
+                        n: Math.round(resource.freshness.age_seconds / 60),
+                      })}
                     </span>
                   )}
                   {resource.freshness.message && (
@@ -216,21 +219,23 @@ export function ResourceInspector({
                 integration value the blueprint asks for -- without changing what
                 the source means to dbt. */}
             {pipelineName && (
-              <Field label="Nguồn dữ liệu">
+              <Field label={t('tf.insp.source')}>
                 <div className="flex items-center gap-1.5 rounded-md bg-success/10 px-2 py-1.5">
                   <Database className="h-3.5 w-3.5 text-success" />
                   <span className="text-caption text-text-secondary">
-                    Do Pipeline <strong className="font-emphasis">{pipelineName}</strong> nạp
+                    {t('tf.insp.loadedByPrefix')}{' '}
+                    <strong className="font-emphasis">{pipelineName}</strong>{' '}
+                    {t('tf.insp.loadedBySuffix')}
                   </span>
                 </div>
               </Field>
             )}
 
             {resource.warehouse && (
-              <Field label="Trong kho dữ liệu">
+              <Field label={t('tf.insp.inWarehouse')}>
                 <dl className="space-y-0.5 text-caption">
                   {resource.warehouse.type && (
-                    <Pair label="Kiểu" value={resource.warehouse.type} />
+                    <Pair label={t('tf.insp.type')} value={resource.warehouse.type} />
                   )}
                   {Object.entries(resource.warehouse.stats).map(([key, stat]) => (
                     <Pair key={key} label={stat.label} value={String(stat.value)} />
@@ -240,7 +245,7 @@ export function ResourceInspector({
             )}
 
             {resource.last_result && (
-              <Field label="Lần chạy gần nhất">
+              <Field label={t('tf.insp.lastRun')}>
                 <div className="flex items-center gap-2">
                   <Badge
                     variant={
@@ -258,7 +263,7 @@ export function ResourceInspector({
                   )}
                   {resource.last_result.rows_affected !== null && (
                     <span className="text-tiny text-text-tertiary">
-                      {resource.last_result.rows_affected} dòng
+                      {t('tf.insp.rows', { n: resource.last_result.rows_affected })}
                     </span>
                   )}
                 </div>
@@ -267,10 +272,10 @@ export function ResourceInspector({
 
             {(resource.parents.length > 0 || resource.children.length > 0) && (
               <div className="grid grid-cols-2 gap-3">
-                <Field label={`Phụ thuộc (${resource.parents.length})`}>
+                <Field label={t('tf.insp.parents', { n: resource.parents.length })}>
                   <RelatedList ids={resource.parents} onSelect={onSelectResource} />
                 </Field>
-                <Field label={`Được dùng bởi (${resource.children.length})`}>
+                <Field label={t('tf.insp.children', { n: resource.children.length })}>
                   <RelatedList ids={resource.children} onSelect={onSelectResource} />
                 </Field>
               </div>
@@ -283,7 +288,7 @@ export function ResourceInspector({
             {structured.length > 0 && (
               <div>
                 <p className="mb-1.5 text-tiny uppercase tracking-wide text-text-quaternary">
-                  Cấu hình
+                  {t('tf.insp.config')}
                 </p>
                 <dl className="space-y-1">
                   {structured.map(([key, value]) => (
@@ -297,14 +302,13 @@ export function ResourceInspector({
               <div>
                 <p className="mb-1.5 flex items-center gap-1 text-tiny uppercase tracking-wide text-text-quaternary">
                   <Braces className="h-3 w-3" />
-                  Cấu hình khác
+                  {t('tf.insp.otherConfig')}
                 </p>
                 {/* Displayed, not hidden. This is the round-trip promise made
                     visible: AppBI does not understand these keys, and it also
                     does not touch them. */}
                 <p className="mb-1.5 text-tiny text-text-tertiary">
-                  Giao diện chưa có form cho những mục này, nhưng chúng vẫn được
-                  giữ nguyên. Sửa trực tiếp trong tệp nếu cần.
+                  {t('tf.insp.otherConfigHint')}
                 </p>
                 <dl className="space-y-1 rounded-md bg-surface-2 p-2">
                   {unknown.map(([key, value]) => (
@@ -320,7 +324,7 @@ export function ResourceInspector({
                 onClick={() => onOpenFile(resource.path!)}
                 leadingIcon={<ExternalLink className="h-3.5 w-3.5" />}
               >
-                Sửa trong tệp
+                {t('tf.insp.editInFile')}
               </Button>
             )}
           </div>
@@ -329,16 +333,16 @@ export function ResourceInspector({
         {tab === 'columns' && (
           resource.columns.length === 0 ? (
             <p className="text-caption text-text-tertiary">
-              Chưa có cột nào. Kiểu dữ liệu thật xuất hiện sau khi chạy
+              {t('tf.insp.noColumns')}
               <span className="font-mono"> docs generate</span>.
             </p>
           ) : (
             <table className="w-full text-caption">
               <thead>
                 <tr className="text-left text-text-tertiary">
-                  <th className="pb-1 font-emphasis">Cột</th>
-                  <th className="pb-1 font-emphasis">Kiểu</th>
-                  <th className="pb-1 font-emphasis">Mô tả</th>
+                  <th className="pb-1 font-emphasis">{t('tf.insp.columns')}</th>
+                  <th className="pb-1 font-emphasis">{t('tf.insp.type')}</th>
+                  <th className="pb-1 font-emphasis">{t('tf.insp.description')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -350,12 +354,12 @@ export function ResourceInspector({
                           documents a column the warehouse no longer has. */}
                       {!column.in_warehouse && column.documented && (
                         <Badge variant="warning" size="xs" className="ml-1">
-                          không còn
+                          {t('tf.insp.gone')}
                         </Badge>
                       )}
                       {column.in_warehouse && !column.documented && (
                         <Badge variant="subtle" size="xs" className="ml-1">
-                          chưa mô tả
+                          {t('tf.insp.undocumented')}
                         </Badge>
                       )}
                     </td>
@@ -375,7 +379,7 @@ export function ResourceInspector({
         {tab === 'tests' && (
           resource.tests.length === 0 ? (
             <p className="text-caption text-text-tertiary">
-              Chưa có test nào cho resource này.
+              {t('tf.insp.noTests')}
             </p>
           ) : (
             <ul className="space-y-1">
@@ -394,7 +398,7 @@ export function ResourceInspector({
                       onClick={() => onOpenFile(test.path!)}
                       className="ml-auto shrink-0 text-tiny text-brand hover:underline"
                     >
-                      mở
+                      {t('tf.insp.open')}
                     </button>
                   )}
                 </li>
@@ -417,9 +421,9 @@ export function ResourceInspector({
               <div className="flex items-start gap-1.5 text-caption text-text-tertiary">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <p className="min-w-0">
-                  Chưa có mô tả. Thêm{' '}
+                  {t('tf.insp.noDocsBefore')}{' '}
                   <code className="font-mono text-text-secondary">description</code>{' '}
-                  vào tệp YAML của resource này.
+                  {t('tf.insp.noDocsAfter')}
                 </p>
               </div>
             )}
@@ -429,7 +433,7 @@ export function ResourceInspector({
                 onClick={() => onOpenFile(resource.patch_path!)}
                 leadingIcon={<Columns3 className="h-3.5 w-3.5" />}
               >
-                Sửa tài liệu
+                {t('tf.insp.editDocs')}
               </Button>
             )}
           </div>
@@ -448,8 +452,9 @@ function renderValue(value: unknown): string {
 function RelatedList({
   ids, onSelect,
 }: { ids: string[]; onSelect: (uniqueId: string) => void }) {
+  const { t } = useI18n();
   if (ids.length === 0) {
-    return <span className="text-tiny text-text-quaternary">Không có</span>;
+    return <span className="text-tiny text-text-quaternary">{t('tf.insp.none')}</span>;
   }
   return (
     <ul className="space-y-0.5">
@@ -466,7 +471,9 @@ function RelatedList({
         </li>
       ))}
       {ids.length > 12 && (
-        <li className="text-tiny text-text-quaternary">và {ids.length - 12} nữa</li>
+        <li className="text-tiny text-text-quaternary">
+          {t('tf.insp.andMore', { n: ids.length - 12 })}
+        </li>
       )}
     </ul>
   );
@@ -476,11 +483,12 @@ function RelatedList({
 function FilePath({
   path, editable, onOpenFile,
 }: { path: string; editable: boolean; onOpenFile: (path: string) => void }) {
+  const { t } = useI18n();
   if (!editable) {
     return (
       <span
         className="flex items-start gap-1 font-mono text-caption text-text-tertiary"
-        title="Tệp này thuộc package đã cài, không nằm trong dự án nên không mở được."
+        title={t('tf.insp.fromPackage')}
       >
         <FileCode className="mt-0.5 h-3 w-3 shrink-0" />
         <span className="min-w-0 break-all">{path}</span>
@@ -536,10 +544,11 @@ function Drawer({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <aside
       className="flex h-full w-full flex-col border-l border-[rgb(var(--border-line))] bg-surface-1"
-      aria-label={`Chi tiết ${title}`}
+      aria-label={t('tf.insp.detailOf', { title })}
     >
       <div className="flex shrink-0 items-start gap-2 border-b border-[rgb(var(--border-line))] px-3 py-2">
         <div className="min-w-0 flex-1">
@@ -548,7 +557,7 @@ function Drawer({
           </p>
           {subtitle && <p className="text-tiny text-text-tertiary">{subtitle}</p>}
         </div>
-        <Button variant="ghost" size="xs" onClick={onClose} aria-label="Đóng">
+        <Button variant="ghost" size="xs" onClick={onClose} aria-label={t('tf.insp.close')}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>

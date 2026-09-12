@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { PublishPlan, TransformRelease } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 interface PublishBarProps {
   hasUnpublishedChanges: boolean;
@@ -51,6 +52,7 @@ export function PublishBar({
   onActivate,
   onViewRelease,
 }: PublishBarProps) {
+  const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [notes, setNotes] = React.useState('');
   const [activate, setActivate] = React.useState(true);
@@ -71,14 +73,14 @@ export function PublishBar({
           <>
             <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
             <span className="text-caption text-text-secondary">
-              Đang kiểm tra bản {verifying.release_number} trước khi cho chạy thật
+              {t('tf.pub.verifying', { n: verifying.release_number })}
             </span>
           </>
         ) : failed ? (
           <>
             <AlertTriangle className="h-3.5 w-3.5 text-danger" />
             <span className="text-caption text-text-secondary">
-              Bản {failed.release_number} không build được
+              {t('tf.pub.buildFailed', { n: failed.release_number })}
             </span>
             <span className="truncate text-tiny text-text-tertiary">
               {failed.verification_error}
@@ -88,21 +90,21 @@ export function PublishBar({
           <>
             <CircleDot className="h-3.5 w-3.5 shrink-0 text-warning" />
             <span className="min-w-0 truncate text-caption text-text-secondary">
-              Bản nháp có thay đổi chưa xuất bản
+              {t('tf.pub.dirty')}
             </span>
           </>
         ) : activeRelease ? (
           <>
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
             <span className="min-w-0 truncate text-caption text-text-secondary">
-              Bản nháp trùng với bản {activeRelease.release_number} đang chạy
+              {t('tf.pub.clean', { n: activeRelease.release_number })}
             </span>
           </>
         ) : (
           <>
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" />
             <span className="min-w-0 truncate text-caption text-text-secondary">
-              Chưa xuất bản lần nào — lịch chạy tự động chưa có gì để chạy
+              {t('tf.pub.never')}
             </span>
           </>
         )}
@@ -117,7 +119,7 @@ export function PublishBar({
               className="flex shrink-0 items-center gap-1 whitespace-nowrap text-tiny text-text-tertiary hover:text-text-primary"
             >
               <GitCommitVertical className="h-3 w-3 shrink-0" />
-              Đang chạy: bản {activeRelease.release_number}
+              {t('tf.pub.live', { n: activeRelease.release_number })}
             </button>
           )}
           {canOperate && (
@@ -127,7 +129,7 @@ export function PublishBar({
               onClick={open}
               disabled={!hasUnpublishedChanges || publishing || Boolean(verifying)}
             >
-              Xuất bản
+              {t('tf.pub.publish')}
             </Button>
           )}
         </div>
@@ -136,23 +138,23 @@ export function PublishBar({
       <Modal
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        title="Xuất bản phiên bản này"
+        title={t('tf.pub.title')}
         size="lg"
       >
         <div className="space-y-4">
           <p className="text-caption text-text-secondary">
-            Xuất bản sẽ đóng băng toàn bộ tệp của dự án ở trạng thái hiện tại.
-            Sau đó AppBI build thử đúng bản đó; chỉ khi build thành công nó mới
-            được đưa vào chạy thật.
+            {t('tf.pub.explain')}
           </p>
 
           {planLoading ? (
-            <p className="text-caption text-text-tertiary">Đang so sánh…</p>
+            <p className="text-caption text-text-tertiary">{t('tf.pub.comparing')}</p>
           ) : plan ? (
             <>
               {plan.affected_resources.length > 0 && (
                 <Section
-                  title={`Resource thay đổi (${plan.affected_resources.length})`}
+                  title={t('tf.pub.changedResources', {
+                    n: plan.affected_resources.length,
+                  })}
                 >
                   <div className="flex flex-wrap gap-1">
                     {plan.affected_resources.slice(0, 30).map((item) => (
@@ -166,8 +168,10 @@ export function PublishBar({
 
               {plan.downstream_resources.length > 0 && (
                 <Section
-                  title={`Sẽ build lại theo (${plan.downstream_resources.length})`}
-                  hint="Những resource này không đổi code, nhưng phụ thuộc vào phần đã đổi."
+                  title={t('tf.pub.rebuildDownstream', {
+                    n: plan.downstream_resources.length,
+                  })}
+                  hint={t('tf.pub.downstream')}
                 >
                   <div className="flex flex-wrap gap-1">
                     {plan.downstream_resources.slice(0, 30).map((item) => (
@@ -177,14 +181,16 @@ export function PublishBar({
                     ))}
                     {plan.downstream_resources.length > 30 && (
                       <span className="text-tiny text-text-quaternary">
-                        và {plan.downstream_resources.length - 30} nữa
+                        {t('tf.pub.andMore', {
+                          n: plan.downstream_resources.length - 30,
+                        })}
                       </span>
                     )}
                   </div>
                 </Section>
               )}
 
-              <Section title={`Tệp thay đổi (${plan.files.length})`}>
+              <Section title={t('tf.pub.changedFiles', { n: plan.files.length })}>
                 <ul className="max-h-48 space-y-0.5 overflow-auto">
                   {plan.files.map((file) => (
                     <li key={file.path} className="flex items-center gap-2 font-mono text-tiny">
@@ -203,7 +209,7 @@ export function PublishBar({
               </Section>
 
               <div className="flex items-center gap-2 rounded-md bg-surface-2 px-2 py-1.5 font-mono text-tiny text-text-tertiary">
-                <span>{plan.live_hash?.slice(0, 12) ?? 'chưa có'}</span>
+                <span>{plan.live_hash?.slice(0, 12) ?? t('tf.pub.none')}</span>
                 <ArrowRight className="h-3 w-3" />
                 <span className="text-text-primary">{plan.draft_hash.slice(0, 12)}</span>
               </div>
@@ -212,13 +218,13 @@ export function PublishBar({
 
           <label className="block">
             <span className="mb-1 block text-caption text-text-secondary">
-              Ghi chú (tuỳ chọn)
+              {t('tf.pub.notes')}
             </span>
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={2}
-              placeholder="Có gì thay đổi trong bản này?"
+              placeholder={t('tf.pub.notesPlaceholder')}
               className={cn(
                 'w-full rounded-md border border-[rgb(var(--border-line))] bg-surface-0',
                 'px-2 py-1.5 text-caption text-text-primary',
@@ -235,23 +241,23 @@ export function PublishBar({
               className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
             />
             <span className="text-caption text-text-secondary">
-              Đưa vào chạy thật ngay khi kiểm tra xong
+              {t('tf.pub.activateNow')}
               <span className="block text-tiny text-text-tertiary">
-                Bỏ chọn nếu muốn tự bấm sau khi xem kết quả kiểm tra.
+                {t('tf.pub.activateHint')}
               </span>
             </span>
           </label>
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>
-              Huỷ
+              {t('tf.pub.cancel')}
             </Button>
             <Button
               variant="primary"
               loading={publishing}
               onClick={() => { onPublish(notes, activate); setDialogOpen(false); setNotes(''); }}
             >
-              Xuất bản
+              {t('tf.pub.publish')}
             </Button>
           </div>
         </div>

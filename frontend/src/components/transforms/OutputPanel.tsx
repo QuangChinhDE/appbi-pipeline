@@ -29,6 +29,7 @@ import type {
   TransformLogPage, TransformProblem,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 export type OutputTab = 'preview' | 'results' | 'problems' | 'compiled' | 'logs';
 
@@ -173,6 +174,7 @@ export function OutputPanel({
 
 /** `dbt show` returns rows; column order is the query's own, not alphabetical. */
 function PreviewTab({ preview, loading }: { preview: PreviewResult | null; loading?: boolean }) {
+  const { t } = useI18n();
   const rows = React.useMemo<Record<string, unknown>[]>(() => {
     if (!preview) return [];
     if (Array.isArray(preview.data)) return preview.data as Record<string, unknown>[];
@@ -207,16 +209,16 @@ function PreviewTab({ preview, loading }: { preview: PreviewResult | null; loadi
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <Empty>Đang chạy preview…</Empty>;
+  if (loading) return <Empty>{t('tf.out.previewRunning')}</Empty>;
   if (!preview || rows.length === 0) {
-    return <Empty>Chưa có preview. Mở một model rồi bấm Preview.</Empty>;
+    return <Empty>{t('tf.out.noPreview')}</Empty>;
   }
 
   return (
     <div>
       <div className="flex items-center justify-between border-b border-[rgb(var(--border-line))] px-3 py-1.5">
         <span className="text-tiny text-text-tertiary">
-          {rows.length} dòng · {columns.length} cột
+          {t('tf.out.rowsCols', { rows: rows.length, cols: columns.length })}
         </span>
         <Button variant="ghost" size="xs" onClick={downloadCsv} leadingIcon={<Download className="h-3 w-3" />}>
           CSV
@@ -273,9 +275,10 @@ function ResultsTab({
   onOpenResource: (uniqueId: string) => void;
   loading?: boolean;
 }) {
-  if (loading && !invocation) return <Empty>Đang chạy…</Empty>;
+  const { t } = useI18n();
+  if (loading && !invocation) return <Empty>{t('tf.out.running')}</Empty>;
   if (!invocation || invocation.nodes.length === 0) {
-    return <Empty>Chưa có kết quả. Hãy chạy Build hoặc Test.</Empty>;
+    return <Empty>{t('tf.out.noResults')}</Empty>;
   }
 
   return (
@@ -284,10 +287,10 @@ function ResultsTab({
         <tr className="text-left text-text-secondary">
           <th className="w-8 px-3 py-1.5" />
           <th className="px-2 py-1.5 font-emphasis">Resource</th>
-          <th className="px-2 py-1.5 font-emphasis">Loại</th>
-          <th className="px-2 py-1.5 font-emphasis">Thời gian</th>
-          <th className="px-2 py-1.5 font-emphasis">Dòng</th>
-          <th className="px-2 py-1.5 font-emphasis">Dữ liệu</th>
+          <th className="px-2 py-1.5 font-emphasis">{t('tf.out.kind')}</th>
+          <th className="px-2 py-1.5 font-emphasis">{t('tf.out.duration')}</th>
+          <th className="px-2 py-1.5 font-emphasis">{t('tf.out.rows')}</th>
+          <th className="px-2 py-1.5 font-emphasis">{t('tf.out.bytes')}</th>
           <th className="px-2 py-1.5 font-emphasis">Relation</th>
         </tr>
       </thead>
@@ -343,12 +346,13 @@ function ProblemsTab({
   parseStatus: string;
   onOpen: (problem: TransformProblem) => void;
 }) {
+  const { t } = useI18n();
   if (problems.length === 0) {
     return (
       <Empty>
         {parseStatus === 'OK'
-          ? 'Không có vấn đề nào. Dự án parse sạch.'
-          : 'Chưa có thông tin. Lưu một tệp để dbt parse lại.'}
+          ? t('tf.out.noProblems')
+          : t('tf.out.noParse')}
       </Empty>
     );
   }
@@ -389,17 +393,18 @@ function ProblemsTab({
 }
 
 function CompiledTab({ compiled }: { compiled: CompiledCode | null }) {
+  const { t } = useI18n();
   if (!compiled?.compiled_code) {
     return (
       <Empty>
-        Chưa có SQL đã biên dịch. Mở một model rồi bấm Compile.
+        {t('tf.out.noCompiled')}
       </Empty>
     );
   }
   return (
     <div>
       <p className="border-b border-[rgb(var(--border-line))] px-3 py-1.5 text-tiny text-text-tertiary">
-        Đây là câu SQL dbt gửi tới kho dữ liệu — Jinja đã được thay thế hết.
+        {t('tf.out.compiledHint')}
       </p>
       <pre className="overflow-x-auto p-3 font-mono text-tiny leading-relaxed text-text-secondary">
         {compiled.compiled_code}
@@ -409,6 +414,7 @@ function CompiledTab({ compiled }: { compiled: CompiledCode | null }) {
 }
 
 function LogsTab({ logs }: { logs: TransformLogPage | null }) {
+  const { t } = useI18n();
   const bottom = React.useRef<HTMLDivElement>(null);
   const [follow, setFollow] = React.useState(true);
 
@@ -417,7 +423,7 @@ function LogsTab({ logs }: { logs: TransformLogPage | null }) {
   }, [logs, follow]);
 
   if (!logs || logs.lines.length === 0) {
-    return <Empty>Chưa có log. Log xuất hiện ngay khi dbt bắt đầu chạy.</Empty>;
+    return <Empty>{t('tf.out.noLogs')}</Empty>;
   }
 
   return (
@@ -425,7 +431,7 @@ function LogsTab({ logs }: { logs: TransformLogPage | null }) {
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[rgb(var(--border-line))] bg-surface-1 px-3 py-1.5">
         <span className="flex items-center gap-1.5 text-tiny text-text-tertiary">
           <ScrollText className="h-3 w-3" />
-          {logs.total_lines} dòng
+          {t('tf.out.lineCount', { n: logs.total_lines })}
         </span>
         <label className="flex items-center gap-1.5 text-tiny text-text-tertiary">
           <input
@@ -434,7 +440,7 @@ function LogsTab({ logs }: { logs: TransformLogPage | null }) {
             onChange={(event) => setFollow(event.target.checked)}
             className="h-3 w-3 accent-[rgb(var(--brand))]"
           />
-          Theo dõi
+          {t('tf.out.follow')}
         </label>
       </div>
       <pre className="whitespace-pre-wrap p-3 font-mono text-tiny leading-relaxed text-text-secondary">

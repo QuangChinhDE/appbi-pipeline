@@ -29,6 +29,7 @@ import { formatRelative } from '@/lib/format';
 import { qk } from '@/lib/queryKeys';
 import type { TransformInvocation } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 const ACTIVE = ['QUEUED', 'STARTING', 'RUNNING', 'CANCEL_REQUESTED'];
 
@@ -39,22 +40,25 @@ function statusVariant(status: string): BadgeVariant {
   return 'danger';
 }
 
-function statusLabel(status: string): string {
+// A plain function, not a component: it takes `t` rather than calling the
+// hook, which React only allows inside a component or another hook.
+function statusLabel(status: string, t: (key: string) => string): string {
   switch (status) {
-    case 'SUCCEEDED': return 'Thành công';
-    case 'FAILED': return 'Thất bại';
-    case 'FAILED_TO_START': return 'Không khởi động được';
-    case 'CANCELLED': return 'Đã huỷ';
-    case 'TIMED_OUT': return 'Quá giờ';
-    case 'QUEUED': return 'Đang chờ';
-    case 'STARTING': return 'Đang khởi động';
-    case 'RUNNING': return 'Đang chạy';
-    case 'CANCEL_REQUESTED': return 'Đang huỷ';
+    case 'SUCCEEDED': return t('tfrun.succeeded');
+    case 'FAILED': return t('tfrun.failed');
+    case 'FAILED_TO_START': return t('tfrun.failedToStart');
+    case 'CANCELLED': return t('tfrun.cancelled');
+    case 'TIMED_OUT': return t('tfrun.timedOut');
+    case 'QUEUED': return t('tfrun.queued');
+    case 'STARTING': return t('tfrun.starting');
+    case 'RUNNING': return t('tfrun.running');
+    case 'CANCEL_REQUESTED': return t('tfrun.cancelling');
     default: return status;
   }
 }
 
 export default function TransformRunsPage() {
+  const { t } = useI18n();
   const { id: projectId } = useParams<{ id: string }>();
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
@@ -89,7 +93,7 @@ export default function TransformRunsPage() {
     mutationFn: (invocationId: string) => transformApi.retry(invocationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
-      toastSuccess('Đã xếp hàng chạy lại đúng phiên bản đó.');
+      toastSuccess(t('tfrun.requeued'));
     },
     onError: (error) => toastError(error),
   });
@@ -106,25 +110,24 @@ export default function TransformRunsPage() {
           <ArrowLeft className="h-3.5 w-3.5" />
           {project.data?.name ?? 'Transform'}
         </Link>
-        <h1 className="text-h3 font-strong text-text-primary">Lịch sử chạy</h1>
+        <h1 className="text-h3 font-strong text-text-primary">{t('tfrun.title')}</h1>
         <p className="mt-1 text-caption text-text-tertiary">
-          Mỗi lần chạy đều ghi rõ nó đã thực thi đúng phiên bản nào, nên có thể
-          chạy lại y hệt.
+          {t('tfrun.intro')}
         </p>
       </header>
 
       <div className="mb-3 flex shrink-0 flex-wrap gap-2">
         <Select value={command} onChange={(event) => setCommand(event.target.value)}>
-          <option value="">Mọi lệnh</option>
+          <option value="">{t('tfrun.allCommands')}</option>
           {['build', 'run', 'test', 'compile', 'parse', 'show', 'seed', 'snapshot',
             'source-freshness', 'docs-generate', 'deps'].map((item) => (
             <option key={item} value={item}>dbt {item}</option>
           ))}
         </Select>
         <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">Mọi trạng thái</option>
+          <option value="">{t('tfrun.allStatuses')}</option>
           {['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'RUNNING', 'QUEUED'].map((item) => (
-            <option key={item} value={item}>{statusLabel(item)}</option>
+            <option key={item} value={item}>{statusLabel(item, t)}</option>
           ))}
         </Select>
         {(project.data?.environments ?? []).length > 1 && (
@@ -132,7 +135,7 @@ export default function TransformRunsPage() {
             value={environmentId}
             onChange={(event) => setEnvironmentId(event.target.value)}
           >
-            <option value="">Mọi môi trường</option>
+            <option value="">{t('tfrun.allEnvironments')}</option>
             {(project.data?.environments ?? []).map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
@@ -145,15 +148,15 @@ export default function TransformRunsPage() {
           <TableSkeleton rows={6} columns={5} />
         ) : runs.error ? (
           <ErrorState
-            title="Không tải được lịch sử chạy"
+            title={t('tfrun.loadFailed')}
             message={(runs.error as Error).message}
             onRetry={() => runs.refetch()}
           />
         ) : items.length === 0 ? (
           <EmptyState
             icon={Clock}
-            title="Chưa có lần chạy nào"
-            description="Chạy Build hoặc Preview trong trình soạn thảo để bắt đầu."
+            title={t('tfrun.empty')}
+            description={t('tfrun.emptyHint')}
           />
         ) : (
           <ul className="space-y-1">
@@ -183,6 +186,7 @@ function RunRow({
   onRetry: () => void;
   retrying: boolean;
 }) {
+  const { t, locale } = useI18n();
   const workspaceId = useWorkspaceId();
   const detail = useQuery({
     queryKey: qk.transformInvocation(workspaceId, run.id),
@@ -203,7 +207,7 @@ function RunRow({
 
         <Badge variant={statusVariant(run.status)} size="sm" className="shrink-0">
           {ACTIVE.includes(run.status) && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-          {statusLabel(run.status)}
+          {statusLabel(run.status, t)}
         </Badge>
 
         <div className="min-w-0 flex-1">
@@ -217,12 +221,12 @@ function RunRow({
             {/* The identity of the code that ran. Without this a production
                 failure cannot be reproduced. */}
             {run.release_number !== null ? (
-              <span>bản đã xuất bản {run.release_number}</span>
+              <span>{t('tfrun.releaseN', { n: run.release_number })}</span>
             ) : (
-              <span>phiên bản nháp {run.revision_number}</span>
+              <span>{t('tfrun.revisionN', { n: run.revision_number ?? '' })}</span>
             )}
-            <span>{run.trigger_type === 'SCHEDULE' ? 'theo lịch' : 'thủ công'}</span>
-            {run.created_at && <span>{formatRelative(run.created_at)}</span>}
+            <span>{run.trigger_type === 'SCHEDULE' ? t('tfrun.bySchedule') : t('tfrun.byHand')}</span>
+            {run.created_at && <span>{formatRelative(run.created_at, locale)}</span>}
           </p>
         </div>
 
@@ -262,23 +266,23 @@ function RunRow({
           )}
 
           <dl className="mb-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-tiny sm:grid-cols-4">
-            <Pair label="Phiên bản" value={`#${run.revision_number ?? '—'}`} />
-            <Pair label="Bản xuất bản" value={run.release_number ? `#${run.release_number}` : '—'} />
-            <Pair label="Môi trường" value={run.environment_name ?? '—'} />
+            <Pair label={t('tfrun.revision')} value={`#${run.revision_number ?? '—'}`} />
+            <Pair label={t('tfrun.release')} value={run.release_number ? `#${run.release_number}` : '—'} />
+            <Pair label={t('tfrun.environment')} value={run.environment_name ?? '—'} />
             <Pair label="dbt run id" value={run.dbt_invocation_id?.slice(0, 8) ?? '—'} />
           </dl>
 
           {detail.isLoading ? (
-            <p className="text-caption text-text-tertiary">Đang đọc chi tiết…</p>
+            <p className="text-caption text-text-tertiary">{t('tfrun.loadingDetail')}</p>
           ) : (detail.data?.nodes.length ?? 0) > 0 ? (
             <div className="max-h-64 overflow-auto rounded-md border border-[rgb(var(--border-line))]">
               <table className="w-full text-caption">
                 <thead className="sticky top-0 bg-surface-2 text-left text-text-secondary">
                   <tr>
                     <th className="px-2 py-1 font-emphasis">Resource</th>
-                    <th className="px-2 py-1 font-emphasis">Trạng thái</th>
-                    <th className="px-2 py-1 font-emphasis">Thời gian</th>
-                    <th className="px-2 py-1 font-emphasis">Thông báo</th>
+                    <th className="px-2 py-1 font-emphasis">{t('tfrun.status')}</th>
+                    <th className="px-2 py-1 font-emphasis">{t('tfrun.duration')}</th>
+                    <th className="px-2 py-1 font-emphasis">{t('tfrun.message')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -313,7 +317,7 @@ function RunRow({
               onClick={onRetry} loading={retrying}
               leadingIcon={<RotateCcw className="h-3 w-3" />}
             >
-              Chạy lại đúng phiên bản này
+              {t('tfrun.retrySame')}
             </Button>
           )}
         </div>

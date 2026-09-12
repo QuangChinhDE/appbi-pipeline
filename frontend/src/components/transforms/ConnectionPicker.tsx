@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { ApiError, transformApi } from '@/lib/api';
 import type { TransformSystem, WarehouseConnection } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 interface ConnectionPickerProps {
   systems: TransformSystem[];
@@ -35,6 +36,7 @@ interface ConnectionPickerProps {
 export function ConnectionPicker({
   systems, connections, value, onChange, onCreated, disabled,
 }: ConnectionPickerProps) {
+  const { t } = useI18n();
   const [system, setSystem] = React.useState<string | null>(
     systems.length === 1 ? systems[0].connector_key : null,
   );
@@ -49,7 +51,7 @@ export function ConnectionPicker({
     <div className="space-y-3">
       <div>
         <p className="mb-1.5 text-caption font-emphasis text-text-primary">
-          Kho dữ liệu
+          {t('tf.conn.warehouse')}
         </p>
         {/* Cards, not pills: this is the step where somebody chooses which
             warehouse their project runs on, and two small chips adrift in a
@@ -87,19 +89,19 @@ export function ConnectionPicker({
       {system && !creating && (
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="text-caption font-emphasis text-text-primary">Kết nối</p>
+            <p className="text-caption font-emphasis text-text-primary">{t('tf.conn.connect')}</p>
             <Button
               variant="ghost" size="xs" disabled={disabled}
               onClick={() => setCreating(true)}
               leadingIcon={<Plus className="h-3 w-3" />}
             >
-              Kết nối mới
+              {t('tf.conn.new')}
             </Button>
           </div>
 
           {available.length === 0 ? (
             <p className="rounded-md bg-surface-2 px-3 py-3 text-caption text-text-tertiary">
-              Chưa có kết nối nào tới hệ thống này. Hãy tạo một kết nối mới.
+              {t('tf.conn.emptyHint')}
             </p>
           ) : (
             <ul className="space-y-1">
@@ -128,12 +130,12 @@ export function ConnectionPicker({
                       )}
                     </div>
                     {connection.is_default && (
-                      <Badge variant="subtle" size="xs">có sẵn</Badge>
+                      <Badge variant="subtle" size="xs">{t('tf.conn.existing')}</Badge>
                     )}
                     {connection.verification_status === 'FAILED' && (
                       <CircleAlert
                         className="h-3.5 w-3.5 shrink-0 text-danger"
-                        aria-label="Kết nối không dùng được"
+                        aria-label={t('tf.conn.unusable')}
                       />
                     )}
                     {value === connection.id && (
@@ -169,6 +171,7 @@ function NewConnectionForm({
   onCancel: () => void;
   onCreated: (connection: WarehouseConnection) => void;
 }) {
+  const { t } = useI18n();
   const [method, setMethod] = React.useState(system.auth_methods[0]);
   const [saving, setSaving] = React.useState(false);
   const [fields, setFields] = React.useState<Record<string, string>>({});
@@ -197,11 +200,11 @@ function NewConnectionForm({
         password: fields.password,
         ssl_mode: fields.ssl_mode,
       });
-      toast.success(`Đã kiểm tra và lưu kết nối “${created.name}”.`);
+      toast.success(t('tf.conn.savedToast', { name: created.name }));
       onCreated(created);
     } catch (error) {
       toast.error(
-        error instanceof ApiError ? error.message : 'Không lưu được kết nối.',
+        error instanceof ApiError ? error.message : t('tf.conn.saveFailed'),
       );
     } finally {
       setSaving(false);
@@ -216,7 +219,7 @@ function NewConnectionForm({
       className="space-y-2.5 rounded-md border border-[rgb(var(--border-line))] p-3"
     >
       <p className="text-caption font-emphasis text-text-primary">
-        Kết nối {system.label} mới
+        {t('tf.conn.newFor', { system: system.label })}
       </p>
 
       {system.auth_methods.length > 1 && (
@@ -233,17 +236,17 @@ function NewConnectionForm({
                   : 'bg-surface-2 text-text-secondary hover:bg-surface-3',
               )}
             >
-              {item === 'service_account' ? 'Khoá dịch vụ'
-                : item === 'oauth' ? 'Đăng nhập Google' : 'Mật khẩu'}
+              {item === 'service_account' ? t('tf.conn.serviceKey')
+                : item === 'oauth' ? t('tf.conn.googleSignIn') : t('tf.conn.password')}
             </button>
           ))}
         </div>
       )}
 
-      <Field label="Tên gợi nhớ">
+      <Field label={t('tf.conn.label')}>
         <Input
           value={fields.name ?? ''} onChange={set('name')}
-          placeholder="Kho phân tích" required size="sm"
+          placeholder={t('tf.conn.analyticsWarehouse')} required size="sm"
         />
       </Field>
 
@@ -255,7 +258,7 @@ function NewConnectionForm({
               placeholder="my-gcp-project" size="sm"
             />
           </Field>
-          <Field label="Vị trí dataset" hint="Ví dụ: asia-southeast1">
+          <Field label={t('tf.conn.datasetLocation')} hint={t('tf.conn.locationExample')}>
             <Input
               value={fields.dataset_location ?? ''} onChange={set('dataset_location')}
               placeholder="US" size="sm"
@@ -298,10 +301,10 @@ function NewConnectionForm({
             <Input value={fields.database ?? ''} onChange={set('database')} size="sm" required />
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Tài khoản">
+            <Field label={t('tf.conn.account')}>
               <Input value={fields.username ?? ''} onChange={set('username')} size="sm" required />
             </Field>
-            <Field label="Mật khẩu">
+            <Field label={t('tf.conn.password')}>
               <Input
                 type="password" value={fields.password ?? ''} onChange={set('password')}
                 size="sm" required
@@ -313,7 +316,7 @@ function NewConnectionForm({
 
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
-          Huỷ
+          {t('tf.conn.cancel')}
         </Button>
         <Button
           variant="primary" size="sm" type="submit" loading={saving}
@@ -321,7 +324,7 @@ function NewConnectionForm({
             ? <Loader2 className="h-3 w-3 animate-spin" />
             : <RefreshCw className="h-3 w-3" />}
         >
-          Kiểm tra &amp; lưu
+          {t('tf.conn.testSave')}
         </Button>
       </div>
     </form>

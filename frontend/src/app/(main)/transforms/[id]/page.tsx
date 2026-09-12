@@ -315,7 +315,7 @@ export default function TransformWorkbenchPage() {
       }),
     onSuccess: (result) => {
       afterSave(result.saved_paths, result.revision_id, result.parse_invocation_id);
-      toastSuccess('Đã lưu.');
+      toastSuccess(t('tfw.saved'));
     },
     onError: (error, path) => {
       if (error instanceof ApiError && error.code === 'TRANSFORM_REVISION_STALE') {
@@ -338,7 +338,7 @@ export default function TransformWorkbenchPage() {
     onSuccess: (result) => {
       if (!result) return;
       afterSave(result.saved_paths, result.revision_id, result.parse_invocation_id);
-      toastSuccess(`Đã lưu ${result.saved_paths.length} tệp.`);
+      toastSuccess(t('tfw.savedN', { n: result.saved_paths.length }));
     },
     onError: (error) => toastError(error),
   });
@@ -367,7 +367,7 @@ export default function TransformWorkbenchPage() {
       const path = result.saved_paths[0];
       if (path) void openFile(path);
       setNewFileOpen(false);
-      toastSuccess('Đã tạo tệp.');
+      toastSuccess(t('tfw.fileCreated'));
     },
     onError: (error) => toastError(error),
   });
@@ -382,7 +382,7 @@ export default function TransformWorkbenchPage() {
       if (activePath === path) setActivePath(null);
       invalidate(qk.transformFiles(workspaceId, projectId));
       if (result.parse_invocation_id) setInvocationId(result.parse_invocation_id);
-      toastSuccess('Đã xoá tệp.');
+      toastSuccess(t('tfw.fileDeleted'));
     },
     onError: (error) => toastError(error),
   });
@@ -464,7 +464,7 @@ export default function TransformWorkbenchPage() {
       setOutputTab('results');
       invalidate();
       toastSuccess(
-        `Đã xuất bản bản ${result.release.release_number}. Đang build thử để xác nhận.`,
+        t('tfw.published', { n: result.release.release_number }),
       );
     },
     onError: (error) => toastError(error),
@@ -480,7 +480,9 @@ export default function TransformWorkbenchPage() {
       setTabs([]);
       setActivePath(null);
       toastSuccess(
-        result.changed ? `Đã lấy về ${result.files_changed} tệp thay đổi.` : 'Không có gì mới.',
+        result.changed
+          ? t('tfw.pulled', { n: result.files_changed })
+          : t('tfw.nothingNew'),
       );
     },
     onError: (error) => toastError(error),
@@ -491,7 +493,9 @@ export default function TransformWorkbenchPage() {
       transformApi.gitCommit(projectId, input),
     onSuccess: (result) => {
       invalidate();
-      toastSuccess(`Đã commit ${result.files_committed} tệp lên ${result.branch}.`);
+      toastSuccess(t('tfw.committed', {
+        n: result.files_committed, branch: result.branch,
+      }));
     },
     onError: (error) => toastError(error),
   });
@@ -504,7 +508,7 @@ export default function TransformWorkbenchPage() {
     onSuccess: (result) => {
       invalidate();
       setBuffers({}); setBaseline({}); setTabs([]); setActivePath(null);
-      toastSuccess(`Đã chuyển sang nhánh ${result.branch}.`);
+      toastSuccess(t('tfw.switchedBranch', { branch: result.branch }));
     },
     onError: (error) => toastError(error),
   });
@@ -534,13 +538,13 @@ export default function TransformWorkbenchPage() {
   }, [tabs]);
 
   if (project.isLoading) {
-    return <div className="flex h-full items-center justify-center"><Spinner label="Đang mở dự án…" /></div>;
+    return <div className="flex h-full items-center justify-center"><Spinner label={t('tfw.opening')} /></div>;
   }
   if (project.error || !detail) {
     return (
       <div className="p-6">
         <ErrorState
-          title="Không mở được dự án"
+          title={t('tfw.openFailed')}
           message={(project.error as Error | null)?.message}
           onRetry={() => project.refetch()}
         />
@@ -564,7 +568,7 @@ export default function TransformWorkbenchPage() {
         <Link
           href="/transforms"
           className="shrink-0 rounded-sm p-1 text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
-          aria-label="Về danh sách"
+          aria-label={t('tfw.backToList')}
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -610,7 +614,7 @@ export default function TransformWorkbenchPage() {
             leadingIcon={<CalendarClock className="h-3.5 w-3.5" />}
           >
             {detail.schedule_type === 'MANUAL'
-              ? 'Lịch chạy'
+              ? t('tfw.schedule')
               : describeSchedule({
                   type: detail.schedule_type,
                   interval_seconds: detail.schedule_config?.interval_seconds ?? null,
@@ -626,7 +630,7 @@ export default function TransformWorkbenchPage() {
               loading={saveAll.isPending}
               leadingIcon={<Save className="h-3.5 w-3.5" />}
             >
-              Lưu tất cả{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+              {t('tfw.saveAll')}{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
             </Button>
           )}
           <Button
@@ -643,55 +647,55 @@ export default function TransformWorkbenchPage() {
             label="Build"
             items={[
               {
-                id: 'build-this', label: 'Build resource này',
-                description: 'dbt build --select <tên>',
+                id: 'build-this', label: t('tfw.buildThis'),
+                description: t('tfw.cmdBuildThis'),
                 disabled: !activeResource,
                 onSelect: () => saveThenRun({
                   command: 'build', selector: selectorFor(activeResource),
                 }),
               },
               {
-                id: 'build-parents', label: 'Build cùng nguồn phía trên',
-                description: 'dbt build --select +<tên>',
+                id: 'build-parents', label: t('tfw.buildUpstream'),
+                description: t('tfw.cmdBuildUpstream'),
                 disabled: !activeResource,
                 onSelect: () => saveThenRun({
                   command: 'build', selector: `+${selectorFor(activeResource)}`,
                 }),
               },
               {
-                id: 'build-children', label: 'Build cùng phần phía dưới',
-                description: 'dbt build --select <tên>+',
+                id: 'build-children', label: t('tfw.buildDownstream'),
+                description: t('tfw.cmdBuildDownstream'),
                 disabled: !activeResource,
                 onSelect: () => saveThenRun({
                   command: 'build', selector: `${selectorFor(activeResource)}+`,
                 }),
               },
               {
-                id: 'run-only', label: 'Chỉ chạy, không test',
-                description: 'dbt run --select <tên>',
+                id: 'run-only', label: t('tfw.runOnly'),
+                description: t('tfw.cmdRunOnly'),
                 disabled: !activeResource,
                 onSelect: () => saveThenRun({
                   command: 'run', selector: selectorFor(activeResource),
                 }),
               },
               {
-                id: 'test-only', label: 'Chỉ chạy test',
-                description: 'dbt test --select <tên>',
+                id: 'test-only', label: t('tfw.testOnly'),
+                description: t('tfw.cmdTestOnly'),
                 disabled: !activeResource,
                 onSelect: () => saveThenRun({
                   command: 'test', selector: selectorFor(activeResource),
                 }),
               },
               {
-                id: 'full-refresh', label: 'Build lại từ đầu',
-                description: 'Xây lại cả model incremental',
+                id: 'full-refresh', label: t('tfw.fullRefresh'),
+                description: t('tfw.fullRefreshHint'),
                 disabled: !activeResource,
                 onSelect: () => saveThenRun({
                   command: 'build', selector: selectorFor(activeResource), fullRefresh: true,
                 }),
               },
               {
-                id: 'build-all', label: 'Build toàn bộ dự án',
+                id: 'build-all', label: t('tfw.buildAll'),
                 description: 'dbt build',
                 onSelect: () => saveThenRun({ command: 'build' }),
               },
@@ -708,37 +712,37 @@ export default function TransformWorkbenchPage() {
             }
           />
           <Menu
-            label="Tác vụ dự án"
+            label={t('tfw.projectActions')}
             items={[
               {
-                id: 'lineage', label: centreView === 'lineage' ? 'Xem trình soạn thảo' : 'Xem sơ đồ phụ thuộc',
+                id: 'lineage', label: centreView === 'lineage' ? t('tfw.showEditor') : t('tfw.showLineage'),
                 onSelect: () => setCentreView(centreView === 'lineage' ? 'editor' : 'lineage'),
               },
               {
-                id: 'docs', label: 'Tài liệu dự án',
+                id: 'docs', label: t('tfw.docs'),
                 onSelect: () => router.push(`/transforms/${projectId}/docs`),
               },
               {
-                id: 'runs', label: 'Lịch sử chạy',
+                id: 'runs', label: t('tfw.runHistory'),
                 onSelect: () => router.push(`/transforms/${projectId}/runs`),
               },
               {
-                id: 'freshness', label: 'Kiểm tra độ mới của source',
+                id: 'freshness', label: t('tfw.freshness'),
                 description: 'dbt source freshness',
                 onSelect: () => run.mutate({ command: 'source-freshness' }),
               },
               {
-                id: 'deps', label: 'Cài package',
+                id: 'deps', label: t('tfw.deps'),
                 description: 'dbt deps',
                 onSelect: () => run.mutate({ command: 'deps' }),
               },
               {
                 id: 'docs-generate', label: 'Sinh catalog',
-                description: 'dbt docs generate — lấy kiểu dữ liệu thật từ kho',
+                description: t('tfw.docsGenerateHint'),
                 onSelect: () => run.mutate({ command: 'docs-generate' }),
               },
               {
-                id: 'export', label: 'Tải dự án về',
+                id: 'export', label: t('tfw.download'),
                 onSelect: () => window.open(transformApi.exportUrl(projectId), '_blank'),
               },
             ]}
@@ -751,7 +755,7 @@ export default function TransformWorkbenchPage() {
                   'text-text-tertiary transition-colors',
                   'hover:bg-surface-2 hover:text-text-primary',
                 )}
-                title="Tác vụ dự án"
+                title={t('tfw.projectActions')}
               >
                 <Settings2 className="h-4 w-4" />
               </span>
@@ -772,7 +776,7 @@ export default function TransformWorkbenchPage() {
         onPublish={(notes, activate) => publish.mutate({ notes, activate })}
         onActivate={(releaseId) =>
           transformApi.activateRelease(projectId, releaseId)
-            .then(() => { invalidate(); toastSuccess('Đã đưa vào chạy thật.'); })
+            .then(() => { invalidate(); toastSuccess(t('tfw.activated')); })
             .catch(toastError)}
         onViewRelease={() => setReleasesOpen(true)}
       />
@@ -821,11 +825,11 @@ export default function TransformWorkbenchPage() {
                 onCreate={(parent) => { setNewFileParent(parent); setNewFileOpen(true); }}
                 onGenerate={canEdit ? () => setGenerateOpen(true) : undefined}
                 onRename={(path) => {
-                  const next = window.prompt('Tên mới', path);
+                  const next = window.prompt(t('tfw.newName'), path);
                   if (next && next !== path) moveFile.mutate({ from: path, to: next });
                 }}
                 onDuplicate={(path) => {
-                  const next = window.prompt('Tên bản sao', path.replace(/(\.[^.]+)$/, '_copy$1'));
+                  const next = window.prompt(t('tfw.copyName'), path.replace(/(\.[^.]+)$/, '_copy$1'));
                   if (next) {
                     transformApi.fileContent(projectId, path)
                       .then((content) => transformApi.createFile(projectId, {
@@ -837,7 +841,7 @@ export default function TransformWorkbenchPage() {
                   }
                 }}
                 onDelete={(path) => {
-                  if (window.confirm(`Xoá ${path}?`)) deleteFile.mutate(path);
+                  if (window.confirm(t('tfw.confirmDelete', { path }))) deleteFile.mutate(path);
                 }}
                 canEdit={canEdit}
               />
@@ -887,7 +891,7 @@ export default function TransformWorkbenchPage() {
           onChange={setExplorerWidth}
           min={180}
           max={480}
-          label="Thay đổi bề rộng cột trái"
+          label={t('tfw.resizeExplorer')}
         />
 
         {/* centre */}
@@ -915,7 +919,8 @@ export default function TransformWorkbenchPage() {
                 onSelect={(path) => { setActivePath(path); setErrorLine(null); }}
                 onClose={(path) => {
                   const tab = tabs.find((item) => item.path === path);
-                  if (tab?.dirty && !window.confirm(`${path} chưa lưu. Đóng và bỏ thay đổi?`)) {
+                  if (tab?.dirty
+                    && !window.confirm(t('tfw.confirmCloseDirty', { path }))) {
                     return;
                   }
                   setTabs((current) => current.filter((item) => item.path !== path));
@@ -929,7 +934,7 @@ export default function TransformWorkbenchPage() {
                   setActivePath(path);
                 }}
                 onCloseAll={() => {
-                  if (dirtyCount > 0 && !window.confirm('Có tệp chưa lưu. Đóng tất cả?')) return;
+                  if (dirtyCount > 0 && !window.confirm(t('tfw.confirmCloseAll'))) return;
                   setTabs([]); setActivePath(null);
                 }}
               />
@@ -968,7 +973,7 @@ export default function TransformWorkbenchPage() {
             onChange={setOutputHeight}
             min={100}
             max={560}
-            label="Thay đổi chiều cao khung kết quả"
+            label={t('tfw.resizeOutput')}
           />
 
           <div style={{ height: outputHeight }} className="shrink-0">
@@ -1071,23 +1076,22 @@ export default function TransformWorkbenchPage() {
       <Modal
         open={Boolean(conflict)}
         onClose={() => setConflict(null)}
-        title="Tệp đã bị người khác thay đổi"
+        title={t('tfw.conflict')}
         size="lg"
       >
         <div className="space-y-3">
           <p className="text-caption text-text-secondary">
-            Trong lúc bạn đang sửa, có người khác đã lưu tệp này. Hãy so sánh
-            rồi chọn cách xử lý — AppBI không tự quyết định thay bạn.
+            {t('tfw.conflictBody')}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="mb-1 text-tiny uppercase text-text-quaternary">Bản của bạn</p>
+              <p className="mb-1 text-tiny uppercase text-text-quaternary">{t('tfw.yourVersion')}</p>
               <pre className="max-h-64 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-tiny text-text-secondary">
                 {conflict?.mine}
               </pre>
             </div>
             <div>
-              <p className="mb-1 text-tiny uppercase text-text-quaternary">Bản trên máy chủ</p>
+              <p className="mb-1 text-tiny uppercase text-text-quaternary">{t('tfw.serverVersion')}</p>
               <pre className="max-h-64 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-tiny text-text-secondary">
                 {conflict?.server}
               </pre>
@@ -1108,7 +1112,7 @@ export default function TransformWorkbenchPage() {
                 invalidate(qk.transform(workspaceId, projectId));
               }}
             >
-              Lấy bản trên máy chủ
+              {t('tfw.takeServer')}
             </Button>
             <Button
               variant="primary"
@@ -1118,7 +1122,7 @@ export default function TransformWorkbenchPage() {
                 if (activePath) save.mutate(activePath);
               }}
             >
-              Giữ bản của tôi và ghi đè
+              {t('tfw.keepMine')}
             </Button>
           </div>
         </div>
@@ -1128,24 +1132,25 @@ export default function TransformWorkbenchPage() {
 }
 
 function ParseBadge({ status, error }: { status: string; error: string | null }) {
+  const { t } = useI18n();
   if (status === 'OK') {
     return <Badge variant="success" size="xs">Parse ✓</Badge>;
   }
   if (status === 'ERROR') {
     return (
       <Badge variant="danger" size="xs" title={error ?? undefined}>
-        <TriangleAlert className="h-2.5 w-2.5" /> Dự án có lỗi
+        <TriangleAlert className="h-2.5 w-2.5" /> {t('tfw.parseError')}
       </Badge>
     );
   }
   if (status === 'PENDING') {
     return (
       <Badge variant="subtle" size="xs">
-        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Đang đọc
+        <Loader2 className="h-2.5 w-2.5 animate-spin" /> {t('tfw.parsing')}
       </Badge>
     );
   }
-  return <Badge variant="subtle" size="xs">Chưa đọc</Badge>;
+  return <Badge variant="subtle" size="xs">{t('tfw.notParsed')}</Badge>;
 }
 
 function WelcomePane({
@@ -1156,17 +1161,18 @@ function WelcomePane({
   parseError: string | null;
   onOpenProblems: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
       <FileCode className="h-8 w-8 text-text-quaternary" />
       <div>
         <p className="text-small text-text-secondary">
           {projectName ? (
-            <>Dự án dbt <span className="font-mono">{projectName}</span></>
-          ) : 'Dự án dbt'}
+            <>{t('tfw.dbtProject')}<span className="font-mono">{projectName}</span></>
+          ) : t('tfw.dbtProject')}
         </p>
         <p className="mt-1 text-caption text-text-tertiary">
-          Chọn một tệp ở cột trái để bắt đầu.
+          {t('tfw.pickFile')}
         </p>
       </div>
       {parseStatus === 'ERROR' && parseError && (
@@ -1176,7 +1182,7 @@ function WelcomePane({
           className="max-w-md rounded-md bg-danger/10 px-3 py-2 text-left text-caption text-danger hover:bg-danger/15"
         >
           <span className="flex items-center gap-1.5 font-emphasis">
-            <TriangleAlert className="h-3.5 w-3.5" /> dbt chưa đọc được dự án
+            <TriangleAlert className="h-3.5 w-3.5" /> {t('tfw.parseFailedTitle')}
           </span>
           <span className="mt-1 block whitespace-pre-wrap text-tiny">{parseError}</span>
         </button>
@@ -1195,6 +1201,7 @@ function NewFileDialog({
   onClose: () => void;
   onCreate: (path: string, template?: string) => void;
 }) {
+  const { t } = useI18n();
   const [path, setPath] = React.useState('');
   const [template, setTemplate] = React.useState<string | null>(null);
 
@@ -1203,10 +1210,10 @@ function NewFileDialog({
   }, [open, parent]);
 
   return (
-    <Modal open={open} onClose={onClose} title="Tệp mới">
+    <Modal open={open} onClose={onClose} title={t('tfw.newFile')}>
       <div className="space-y-3">
         <label className="block">
-          <span className="mb-1 block text-caption text-text-secondary">Đường dẫn</span>
+          <span className="mb-1 block text-caption text-text-secondary">{t('tfw.path')}</span>
           <Input
             value={path}
             onChange={(event) => setPath(event.target.value)}
@@ -1217,7 +1224,7 @@ function NewFileDialog({
         </label>
 
         <div>
-          <p className="mb-1.5 text-caption text-text-secondary">Bắt đầu từ mẫu</p>
+          <p className="mb-1.5 text-caption text-text-secondary">{t('tfw.fromTemplate')}</p>
           <div className="grid grid-cols-2 gap-1.5">
             {templates.map((item) => (
               <button
@@ -1242,14 +1249,14 @@ function NewFileDialog({
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Huỷ</Button>
+          <Button variant="ghost" onClick={onClose}>{t('tfw.cancel')}</Button>
           <Button
             variant="primary"
             loading={pending}
             disabled={!path.trim()}
             onClick={() => onCreate(path.trim(), template ?? undefined)}
           >
-            Tạo
+            {t('tfw.create')}
           </Button>
         </div>
       </div>

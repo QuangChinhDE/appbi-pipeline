@@ -21,21 +21,24 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { DbtCommand, ResourceSummary } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 /** Commands offered by name, with a one-line description of what dbt does. */
-const COMMANDS: { command: DbtCommand; hint: string; writes: boolean }[] = [
-  { command: 'build', hint: 'Chạy model rồi test, theo đúng thứ tự phụ thuộc', writes: true },
-  { command: 'run', hint: 'Chỉ chạy model, không test', writes: true },
-  { command: 'test', hint: 'Chỉ chạy test', writes: true },
-  { command: 'compile', hint: 'Dịch Jinja thành SQL, không chạm kho dữ liệu', writes: false },
-  { command: 'show', hint: 'Xem thử kết quả của một model', writes: false },
-  { command: 'seed', hint: 'Nạp các tệp CSV trong seeds/', writes: true },
-  { command: 'snapshot', hint: 'Chạy snapshot', writes: true },
-  { command: 'source-freshness', hint: 'Kiểm tra độ mới của source', writes: false },
-  { command: 'docs-generate', hint: 'Sinh catalog và tài liệu', writes: false },
-  { command: 'parse', hint: 'Đọc lại dự án', writes: false },
-  { command: 'deps', hint: 'Cài package trong packages.yml', writes: false },
-  { command: 'ls', hint: 'Liệt kê resource khớp selector', writes: false },
+// The key, not the text: this list is built once at module load, where no
+// hook exists. It is translated where it is rendered instead.
+const COMMANDS: { command: DbtCommand; hintKey: string; writes: boolean }[] = [
+  { command: 'build', hintKey: 'tf.cmd.build', writes: true },
+  { command: 'run', hintKey: 'tf.cmd.run', writes: true },
+  { command: 'test', hintKey: 'tf.cmd.test', writes: true },
+  { command: 'compile', hintKey: 'tf.cmd.compile', writes: false },
+  { command: 'show', hintKey: 'tf.cmd.show', writes: false },
+  { command: 'seed', hintKey: 'tf.cmd.seed', writes: true },
+  { command: 'snapshot', hintKey: 'tf.cmd.snapshot', writes: true },
+  { command: 'source-freshness', hintKey: 'tf.cmd.freshness', writes: false },
+  { command: 'docs-generate', hintKey: 'tf.cmd.docs', writes: false },
+  { command: 'parse', hintKey: 'tf.cmd.parse', writes: false },
+  { command: 'deps', hintKey: 'tf.cmd.deps', writes: false },
+  { command: 'ls', hintKey: 'tf.cmd.ls', writes: false },
 ];
 
 const COMMAND_NAMES = COMMANDS.map((item) => item.command);
@@ -117,6 +120,7 @@ export function CommandBar({
   onRun, running, onCancel, resources, history, environmentName,
   environmentProtected, disabled,
 }: CommandBarProps) {
+  const { t } = useI18n();
   const [value, setValue] = React.useState('');
   const [open, setOpen] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -136,9 +140,9 @@ export function CommandBar({
         .filter((item) => item.command.startsWith(prefix))
         .map((item) => ({
           label: `dbt ${item.command}`,
-          detail: item.hint,
+          detail: t(item.hintKey),
           apply: `dbt ${item.command} `,
-          badge: item.writes ? 'ghi' : 'đọc',
+          badge: item.writes ? 'ghi' : t('tf.cmd.readOnly'),
         }));
     }
 
@@ -197,7 +201,7 @@ export function CommandBar({
           ) : (
             <>
               <p className="flex items-center gap-1.5 px-3 py-1.5 text-tiny uppercase tracking-wide text-text-quaternary">
-                <History className="h-3 w-3" /> Gần đây
+                <History className="h-3 w-3" /> {t('tf.cmd.recent')}
               </p>
               {history.slice(0, 8).map((item, index) => (
                 <button
@@ -246,7 +250,7 @@ export function CommandBar({
             size="xs"
             className="shrink-0"
             title={environmentProtected
-              ? 'Môi trường production — lệnh ghi cần quyền vận hành'
+              ? t('tf.cmd.productionNote')
               : undefined}
           >
             {environmentName}
@@ -262,7 +266,7 @@ export function CommandBar({
 
         {running ? (
           <Button variant="secondary" size="xs" onClick={onCancel}>
-            Dừng
+            {t('tf.cmd.stop')}
           </Button>
         ) : (
           <Button
@@ -271,14 +275,14 @@ export function CommandBar({
             disabled={!parsed || disabled}
             leadingIcon={<Play className="h-3 w-3" />}
           >
-            Chạy
+            {t('tf.cmd.runButton')}
           </Button>
         )}
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
           className="shrink-0 rounded-sm p-1 text-text-tertiary hover:bg-surface-2"
-          aria-label="Lịch sử lệnh"
+          aria-label={t('tf.cmd.history')}
         >
           <ChevronUp className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
         </button>

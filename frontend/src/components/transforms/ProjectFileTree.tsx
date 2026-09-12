@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { Menu } from '@/components/ui/Menu';
 import type { FileNode } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 /** Folders a dbt project always shows first, in dbt's own conventional order. */
 const ORDER = [
@@ -147,6 +148,7 @@ export function ProjectFileTree({
   onGenerate,
   canEdit,
 }: ProjectFileTreeProps) {
+  const { t } = useI18n();
   const [query, setQuery] = React.useState('');
   const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set());
   // Simple by default: a first-time user should see their models, not five
@@ -232,7 +234,7 @@ export function ProjectFileTree({
             {dirty ? (
               <span
                 className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-brand"
-                title="Chưa lưu"
+                title={t('tf.file.unsaved')}
               />
             ) : git ? (
               <span
@@ -243,7 +245,8 @@ export function ProjectFileTree({
                   git === 'D' && 'text-danger',
                 )}
                 title={
-                  git === 'A' ? 'Thêm mới' : git === 'M' ? 'Đã sửa' : 'Đã xoá'
+                  git === 'A' ? t('tf.file.added')
+                    : git === 'M' ? t('tf.file.modified') : t('tf.file.deleted')
                 }
               >
                 {git}
@@ -253,23 +256,23 @@ export function ProjectFileTree({
             {canEdit && (
               <Menu
                 align="start"
-                label={`Tác vụ cho ${node.name}`}
+                label={t('tf.file.actionsFor', { name: node.name })}
                 items={[
                   ...(node.type === 'directory'
                     ? [{
-                        id: 'new', label: 'Tệp mới…',
+                        id: 'new', label: t('tf.file.newIn'),
                         onSelect: () => onCreate(node.path),
                       }]
                     : []),
-                  { id: 'rename', label: 'Đổi tên…', onSelect: () => onRename(node.path) },
+                  { id: 'rename', label: t('tf.file.rename'), onSelect: () => onRename(node.path) },
                   ...(node.type === 'file'
                     ? [{
-                        id: 'duplicate', label: 'Nhân bản',
+                        id: 'duplicate', label: t('tf.file.duplicate'),
                         onSelect: () => onDuplicate(node.path),
                       }]
                     : []),
                   {
-                    id: 'delete', label: 'Xoá', destructive: true,
+                    id: 'delete', label: t('tf.file.delete'), destructive: true,
                     onSelect: () => onDelete(node.path),
                   },
                 ]}
@@ -302,7 +305,7 @@ export function ProjectFileTree({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm tệp"
+            placeholder={t('tf.file.search')}
             className={cn(
               'h-7 w-full rounded-sm bg-surface-2 pl-7 pr-2 text-caption',
               'text-text-primary placeholder:text-text-quaternary',
@@ -315,8 +318,8 @@ export function ProjectFileTree({
             variant="ghost"
             size="xs"
             onClick={onGenerate}
-            aria-label="Tạo model từ bảng"
-            title="Tạo model từ bảng trong kho dữ liệu"
+            aria-label={t('tf.file.fromTable')}
+            title={t('tf.file.fromTableHint')}
           >
             <Wand2 className="h-3.5 w-3.5" />
           </Button>
@@ -326,18 +329,18 @@ export function ProjectFileTree({
             variant="ghost"
             size="xs"
             onClick={() => onCreate('')}
-            aria-label="Tệp mới"
-            title="Tệp mới"
+            aria-label={t('tf.file.new')}
+            title={t('tf.file.new')}
           >
             <Plus className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
 
-      <div className="flex-1 overflow-auto py-1" role="tree" aria-label="Tệp dự án">
+      <div className="flex-1 overflow-auto py-1" role="tree" aria-label={t('tf.file.projectFiles')}>
         {visible.length === 0 ? (
           <p className="px-3 py-6 text-center text-caption text-text-tertiary">
-            {query ? 'Không có tệp nào khớp.' : 'Dự án chưa có tệp nào.'}
+            {query ? t('tf.file.noMatch') : t('tf.file.empty')}
           </p>
         ) : (
           renderNodes(visible, 0)
@@ -359,12 +362,12 @@ export function ProjectFileTree({
           {simple ? (
             <>
               <Eye className="h-3 w-3" />
-              Hiện {hidden} tệp cấu hình
+              {t('tf.file.showConfig', { n: hidden })}
             </>
           ) : (
             <>
               <EyeOff className="h-3 w-3" />
-              Ẩn tệp cấu hình
+              {t('tf.file.hideConfig')}
             </>
           )}
         </button>

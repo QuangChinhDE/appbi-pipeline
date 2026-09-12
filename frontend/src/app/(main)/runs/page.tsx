@@ -72,7 +72,7 @@ export default function RunsPage() {
       filters={<>
         <Select size="sm" className="w-40" value={runType} aria-label="Run type"
                 onChange={(event) => { setRunType(event.target.value); setPage(0); }}>
-          <option value="">{locale === 'vi' ? 'Tất cả loại' : 'All types'}</option>
+          <option value="">{t('runs.allTypes')}</option>
           <option value="PIPELINE">Pipeline</option>
           <option value="TRANSFORM">Transform</option>
         </Select>
@@ -105,7 +105,7 @@ export default function RunsPage() {
         </Select>
         {(pipelineId || transformId) && (
           <Link href="/runs" className="text-caption text-brand hover:underline">
-            {locale === 'vi' ? 'Xóa bộ lọc tài nguyên' : 'Clear resource filter'}
+            {t('runs.clearResourceFilter')}
           </Link>
         )}
       </>}
@@ -124,13 +124,13 @@ export default function RunsPage() {
               <thead>
                 <tr className="border-b border-[rgb(var(--border-line))] text-tiny uppercase tracking-[0.08em] text-text-quaternary">
                   <th scope="col" className="px-4 py-2.5 font-emphasis">Run</th>
-                  <th scope="col" className="px-3 py-2.5 font-emphasis">{locale === 'vi' ? 'Loại' : 'Type'}</th>
-                  <th scope="col" className="px-3 py-2.5 font-emphasis">{locale === 'vi' ? 'Tài nguyên' : 'Resource'}</th>
+                  <th scope="col" className="px-3 py-2.5 font-emphasis">{t('runs.colType')}</th>
+                  <th scope="col" className="px-3 py-2.5 font-emphasis">{t('runs.colResource')}</th>
                   <th scope="col" className="px-3 py-2.5 font-emphasis">{t('common.status')}</th>
                   <th scope="col" className="px-3 py-2.5 font-emphasis">{t('runs.trigger')}</th>
                   <th scope="col" className="px-3 py-2.5 font-emphasis">{t('runs.started')}</th>
                   <th scope="col" className="px-3 py-2.5 font-emphasis">{t('runs.duration')}</th>
-                  <th scope="col" className="px-3 py-2.5 font-emphasis">{locale === 'vi' ? 'Công việc' : 'Work done'}</th>
+                  <th scope="col" className="px-3 py-2.5 font-emphasis">{t('runs.colWork')}</th>
                   <th scope="col" className="px-4 py-2.5 font-emphasis">{t('runs.error')}</th>
                 </tr>
               </thead>
@@ -177,12 +177,12 @@ export default function RunsPage() {
                     <td className="px-3 py-2.5 text-caption tabular-nums text-text-secondary">{formatDuration(run.duration_seconds)}</td>
                     <td className="px-3 py-2.5 text-caption tabular-nums text-text-secondary">
                       {run.run_type === 'TRANSFORM' ? <>
-                        {formatNumber(run.models_built)} {locale === 'vi' ? 'model' : 'models'}
+                        {formatNumber(run.models_built)} {t('runs.models')}
                         <span className="block text-tiny text-text-quaternary">
                           {formatNumber((run.tests_passed ?? 0) + (run.tests_failed ?? 0) + (run.tests_warned ?? 0))} tests
                         </span>
                       </> : <>
-                        {formatNumber(run.records_synced)} {locale === 'vi' ? 'bản ghi' : 'records'}
+                        {formatNumber(run.records_synced)} {t('runs.recordsInline')}
                         <span className="block text-tiny text-text-quaternary">{formatBytes(run.bytes_synced)}</span>
                       </>}
                     </td>

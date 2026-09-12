@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { LineageNode, TransformLineage } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/providers/LanguageProvider';
 
 const NODE_WIDTH = 168;
 const NODE_HEIGHT = 46;
@@ -117,6 +118,7 @@ interface LineageViewProps {
 export function LineageView({
   graph, focusId, onSelect, onOpenFile, onShowFull, showingFull, loading, className,
 }: LineageViewProps) {
+  const { t } = useI18n();
   const [zoom, setZoom] = React.useState(1);
   const { nodes, width, height } = React.useMemo(() => layout(graph), [graph]);
   const positions = React.useMemo(
@@ -125,12 +127,12 @@ export function LineageView({
   );
 
   if (loading) {
-    return <Centered className={className}>Đang dựng sơ đồ…</Centered>;
+    return <Centered className={className}>{t('tf.lineage.building')}</Centered>;
   }
   if (nodes.length === 0) {
     return (
       <Centered className={className}>
-        Chưa có sơ đồ. Dự án cần parse thành công trước.
+        {t('tf.lineage.empty')}
       </Centered>
     );
   }
@@ -139,7 +141,7 @@ export function LineageView({
     <div className={cn('relative flex h-full flex-col', className)}>
       <div className="flex items-center gap-1.5 border-b border-[rgb(var(--border-line))] px-2 py-1.5">
         <Badge variant={graph.scope === 'RELEASE' ? 'brand' : 'subtle'} size="xs">
-          {graph.scope === 'RELEASE' ? 'Bản đang chạy' : 'Bản nháp'}
+          {graph.scope === 'RELEASE' ? t('tf.lineage.live') : t('tf.lineage.draft')}
         </Badge>
         <span className="text-tiny text-text-tertiary">
           {nodes.length}
@@ -149,7 +151,7 @@ export function LineageView({
           <Button
             variant="ghost" size="xs"
             onClick={() => setZoom((value) => Math.max(0.4, value - 0.15))}
-            aria-label="Thu nhỏ"
+            aria-label={t('tf.lineage.zoomOut')}
           >
             <ZoomOut className="h-3.5 w-3.5" />
           </Button>
@@ -159,7 +161,7 @@ export function LineageView({
           <Button
             variant="ghost" size="xs"
             onClick={() => setZoom((value) => Math.min(2, value + 0.15))}
-            aria-label="Phóng to"
+            aria-label={t('tf.lineage.zoomIn')}
           >
             <ZoomIn className="h-3.5 w-3.5" />
           </Button>
@@ -169,7 +171,7 @@ export function LineageView({
               ? <Minimize2 className="h-3.5 w-3.5" />
               : <Maximize2 className="h-3.5 w-3.5" />}
           >
-            {showingFull ? 'Thu về lân cận' : 'Toàn bộ sơ đồ'}
+            {showingFull ? t('tf.lineage.focus') : t('tf.lineage.showAll')}
           </Button>
         </div>
       </div>
@@ -258,7 +260,7 @@ export function LineageView({
                     cx={NODE_WIDTH - 10} cy={12} r={3}
                     fill="rgb(var(--success))"
                   >
-                    <title>Do Pipeline của AppBI nạp</title>
+                    <title>{t('tf.lineage.loadedByPipeline')}</title>
                   </circle>
                 )}
               </g>
@@ -271,7 +273,7 @@ export function LineageView({
         <div className="flex items-center gap-2 border-t border-[rgb(var(--border-line))] px-3 py-1.5">
           <Target className="h-3 w-3 text-text-quaternary" />
           <span className="text-tiny text-text-tertiary">
-            Đang hiển thị vùng lân cận. Sơ đồ đầy đủ có {graph.total_nodes} resource.
+            {t('tf.lineage.truncated', { n: graph.total_nodes })}
           </span>
         </div>
       )}
