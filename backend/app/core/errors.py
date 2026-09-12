@@ -36,7 +36,7 @@ class AppError(Exception):
     status_code = 400
     code = "BAD_REQUEST"
     category = ErrorCategory.VALIDATION
-    message = "Yêu cầu không hợp lệ."
+    message = "The request is not valid."
 
     def __init__(
         self,
@@ -82,73 +82,73 @@ class ValidationError(AppError):
     status_code = 422
     code = "VALIDATION_FAILED"
     category = ErrorCategory.VALIDATION
-    message = "Dữ liệu nhập không hợp lệ."
+    message = "The information given is not valid."
 
 
 class NotFoundError(AppError):
     status_code = 404
     code = "RESOURCE_NOT_FOUND"
     category = ErrorCategory.NOT_FOUND
-    message = "Không tìm thấy tài nguyên."
+    message = "That was not found."
 
 
 class UnauthorizedError(AppError):
     status_code = 401
     code = "UNAUTHENTICATED"
     category = ErrorCategory.AUTHENTICATION
-    message = "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."
+    message = "The session is not valid, or it has expired."
 
 
 class ForbiddenError(AppError):
     status_code = 403
     code = "PERMISSION_DENIED"
     category = ErrorCategory.PERMISSION
-    message = "Bạn không có quyền thực hiện thao tác này."
+    message = "Your account is not allowed to do that."
 
 
 class ConflictError(AppError):
     status_code = 409
     code = "RESOURCE_CONFLICT"
     category = ErrorCategory.CONFLICT
-    message = "Trạng thái tài nguyên đã thay đổi."
+    message = "Something changed while you were working on it."
 
 
 class ResourceInUseError(ConflictError):
     code = "RESOURCE_IN_USE"
-    message = "Tài nguyên đang được sử dụng."
+    message = "Something else is using it."
 
 
 class ResourceModifiedError(ConflictError):
     code = "RESOURCE_MODIFIED"
-    message = "Tài nguyên đã bị thay đổi bởi người khác. Vui lòng tải lại."
+    message = "Somebody else changed this. Load it again."
 
 
 class QuotaExceededError(AppError):
     status_code = 429
     code = "QUOTA_EXCEEDED"
     category = ErrorCategory.QUOTA
-    message = "Đã đạt giới hạn số lượng đồng bộ đang chạy."
+    message = "As many syncs are running as are allowed at once."
 
 
 class RateLimitedError(AppError):
     status_code = 429
     code = "RATE_LIMITED"
     category = ErrorCategory.RATE_LIMIT
-    message = "Bạn thao tác quá nhanh. Vui lòng thử lại sau."
+    message = "That was too quick. Try again in a moment."
 
 
 class EngineUnavailableError(AppError):
     status_code = 503
     code = "ENGINE_UNAVAILABLE"
     category = ErrorCategory.ENGINE
-    message = "Dịch vụ đồng bộ đang tạm gián đoạn."
+    message = "The sync service is unavailable at the moment."
 
 
 class EngineOperationError(AppError):
     status_code = 502
     code = "ENGINE_OPERATION_FAILED"
     category = ErrorCategory.ENGINE
-    message = "Engine không thực hiện được thao tác này."
+    message = "The engine could not carry that out."
 
 
 class EngineResourceGoneError(EngineOperationError):
@@ -172,59 +172,64 @@ class EngineResourceGoneError(EngineOperationError):
 ERROR_UX_MATRIX: dict[str, tuple[int, ErrorCategory, str, str | None]] = {
     "SOURCE_AUTHENTICATION_FAILED": (
         400, ErrorCategory.AUTHENTICATION,
-        "Không thể xác thực với nguồn dữ liệu.", "UPDATE_CREDENTIALS"),
+        "The source would not accept the credentials.", "UPDATE_CREDENTIALS"),
     "SOURCE_NETWORK_UNREACHABLE": (
         400, ErrorCategory.NETWORK,
-        "Không thể kết nối tới máy chủ nguồn.", "CHECK_NETWORK"),
+        "The source server could not be reached.", "CHECK_NETWORK"),
     "SOURCE_PERMISSION_DENIED": (
         400, ErrorCategory.PERMISSION,
-        "Tài khoản không có đủ quyền trên nguồn dữ liệu.", "GRANT_PERMISSION"),
+        "The account does not have enough permission on the source.",
+        "GRANT_PERMISSION"),
     "SOURCE_CONFIGURATION_INVALID": (
         400, ErrorCategory.CONFIGURATION,
-        "Cấu hình nguồn dữ liệu không hợp lệ.", "OPEN_CONFIGURATION"),
+        "The source configuration is not valid.", "OPEN_CONFIGURATION"),
     "DESTINATION_AUTHENTICATION_FAILED": (
         400, ErrorCategory.AUTHENTICATION,
-        "Không thể xác thực với đích dữ liệu.", "UPDATE_CREDENTIALS"),
+        "The destination would not accept the credentials.",
+        "UPDATE_CREDENTIALS"),
     "DESTINATION_PERMISSION_DENIED": (
         400, ErrorCategory.PERMISSION,
-        "Không thể ghi vào đích dữ liệu.", "UPDATE_DESTINATION"),
+        "Nothing could be written to the destination.", "UPDATE_DESTINATION"),
     "SCHEMA_DISCOVERY_TIMEOUT": (
         504, ErrorCategory.TIMEOUT,
-        "Quá thời gian đọc cấu trúc dữ liệu.", "RETRY_DISCOVERY"),
+        "Reading the data structure took too long.", "RETRY_DISCOVERY"),
     "PIPELINE_NO_STREAM_SELECTED": (
         422, ErrorCategory.VALIDATION,
-        "Chưa chọn dữ liệu để đồng bộ.", "SELECT_DATA"),
+        "No data has been chosen to sync.", "SELECT_DATA"),
     "PIPELINE_CURSOR_INVALID": (
         422, ErrorCategory.VALIDATION,
-        "Cursor không hợp lệ cho chế độ incremental.", "EDIT_SYNC_SETTINGS"),
+        "That cursor does not work for incremental mode.",
+        "EDIT_SYNC_SETTINGS"),
     "PIPELINE_PRIMARY_KEY_REQUIRED": (
         422, ErrorCategory.VALIDATION,
-        "Chế độ dedupe cần primary key.", "EDIT_SYNC_SETTINGS"),
+        "Dedupe mode needs a primary key.", "EDIT_SYNC_SETTINGS"),
     "PIPELINE_ALREADY_RUNNING": (
         409, ErrorCategory.CONFLICT,
-        "Pipeline đang chạy.", "VIEW_ACTIVE_RUN"),
+        "The pipeline is already running.", "VIEW_ACTIVE_RUN"),
     "PIPELINE_PAUSED": (
         409, ErrorCategory.CONFLICT,
-        "Pipeline đang tạm dừng. Hãy tiếp tục lịch chạy trước khi đồng bộ.", "RESUME_PIPELINE"),
+        "The pipeline is paused. Resume its schedule before syncing.",
+        "RESUME_PIPELINE"),
     "PIPELINE_NEEDS_REVIEW": (
         409, ErrorCategory.SCHEMA,
-        "Cấu trúc nguồn đã thay đổi và cần bạn xác nhận.", "REVIEW_SCHEMA"),
+        "The source structure changed and needs your confirmation.",
+        "REVIEW_SCHEMA"),
     "RESOURCE_IN_USE": (
         409, ErrorCategory.CONFLICT,
-        "Tài nguyên đang được sử dụng.", "VIEW_DEPENDENCIES"),
+        "Something else is using it.", "VIEW_DEPENDENCIES"),
     "CONNECTOR_IMAGE_UNAVAILABLE": (
         503, ErrorCategory.ENGINE,
-        "Không tải được connector từ registry.", "CONTACT_ADMIN"),
+        "The connector could not be fetched from the registry.", "CONTACT_ADMIN"),
     "ENGINE_UNAVAILABLE": (
         503, ErrorCategory.ENGINE,
-        "Dịch vụ đồng bộ đang tạm gián đoạn.", "RETRY_LATER"),
+        "The sync service is unavailable at the moment.", "RETRY_LATER"),
 }
 
 
 def error_from_matrix(code: str, **kwargs: Any) -> AppError:
     """Build an AppError straight from the UX matrix so wording stays uniform."""
     status, category, message, action = ERROR_UX_MATRIX.get(
-        code, (400, ErrorCategory.UNKNOWN, "Đã xảy ra lỗi.", None)
+        code, (400, ErrorCategory.UNKNOWN, "Something went wrong.", None)
     )
     remediation = kwargs.pop("remediation", None)
     resource_id = kwargs.pop("resource_id", None)

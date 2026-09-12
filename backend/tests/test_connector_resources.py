@@ -103,7 +103,7 @@ def test_sigkill_without_a_ceiling_says_so(monkeypatch) -> None:
     setting that is not set. With no ceiling it was the operating system."""
     monkeypatch.setattr(settings, "connector_memory_limit", "", raising=False)
     text = _exit_without_explanation("DESTINATION", 137)
-    assert "Chưa đặt CONNECTOR_MEMORY_LIMIT" in text
+    assert "CONNECTOR_MEMORY_LIMIT is not set" in text
 
 
 def test_other_exit_codes_are_not_blamed_on_memory() -> None:
@@ -119,7 +119,7 @@ def test_the_explanation_classifies_as_a_memory_failure(monkeypatch) -> None:
     failure = classify(_exit_without_explanation("SOURCE", 137), side="SOURCE")
     assert failure.code == "CONNECTOR_OUT_OF_MEMORY"
     assert failure.remediation_action == "INCREASE_CONNECTOR_MEMORY"
-    assert "bộ nhớ" in failure.summary
+    assert "memory" in failure.summary
 
 
 @pytest.mark.parametrize("text", [
@@ -252,7 +252,7 @@ def test_a_mid_sync_disconnect_says_to_try_again() -> None:
     failure = classify("Connection lost", side="SOURCE")
     assert failure.code == "CONNECTOR_STREAM_INTERRUPTED"
     assert failure.remediation_action == "RETRY_LATER"
-    assert "tạm" in failure.summary
+    assert "temporary" in failure.summary
 
 
 def test_a_dropped_stream_is_not_reported_as_a_network_problem() -> None:
@@ -279,7 +279,7 @@ def test_a_destination_staging_clash_is_not_a_source_schema_change() -> None:
     )
     assert failure.code == "DESTINATION_STAGING_CONFLICT"
     assert failure.remediation_action != "REDISCOVER_SCHEMA"
-    assert "đích" in failure.summary
+    assert "destination" in failure.summary
 
 
 def test_a_real_source_schema_change_is_still_recognised() -> None:

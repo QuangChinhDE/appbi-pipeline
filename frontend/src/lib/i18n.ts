@@ -1671,6 +1671,49 @@ const vi: Catalog = {
   'run.preparingResults': 'Đang chuẩn bị kết quả.',
   'run.noResults': 'Lần chạy này không có kết quả nào.',
   'runs.recordsInline': 'bản ghi',
+  'errorCode.BAD_REQUEST': 'Yêu cầu không hợp lệ.',
+  'errorCode.VALIDATION_FAILED': 'Dữ liệu nhập không hợp lệ.',
+  'errorCode.RESOURCE_NOT_FOUND': 'Không tìm thấy tài nguyên.',
+  'errorCode.UNAUTHENTICATED': 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+  'errorCode.PERMISSION_DENIED': 'Bạn không có quyền thực hiện thao tác này.',
+  'errorCode.RESOURCE_CONFLICT': 'Trạng thái tài nguyên đã thay đổi.',
+  'errorCode.RESOURCE_IN_USE': 'Tài nguyên đang được sử dụng.',
+  'errorCode.RESOURCE_MODIFIED': 'Tài nguyên đã bị thay đổi bởi người khác. Vui lòng tải lại.',
+  'errorCode.QUOTA_EXCEEDED': 'Đã đạt giới hạn số lượng đồng bộ đang chạy.',
+  'errorCode.RATE_LIMITED': 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
+  'errorCode.ENGINE_UNAVAILABLE': 'Dịch vụ đồng bộ đang tạm gián đoạn.',
+  'errorCode.ENGINE_OPERATION_FAILED': 'Engine không thực hiện được thao tác này.',
+  'errorCode.SOURCE_AUTHENTICATION_FAILED': 'Không thể xác thực với nguồn dữ liệu.',
+  'errorCode.SOURCE_NETWORK_UNREACHABLE': 'Không thể kết nối tới máy chủ nguồn.',
+  'errorCode.SOURCE_PERMISSION_DENIED': 'Tài khoản không có đủ quyền trên nguồn dữ liệu.',
+  'errorCode.SOURCE_CONFIGURATION_INVALID': 'Cấu hình nguồn dữ liệu không hợp lệ.',
+  'errorCode.DESTINATION_AUTHENTICATION_FAILED': 'Không thể xác thực với đích dữ liệu.',
+  'errorCode.DESTINATION_PERMISSION_DENIED': 'Không thể ghi vào đích dữ liệu.',
+  'errorCode.SCHEMA_DISCOVERY_TIMEOUT': 'Quá thời gian đọc cấu trúc dữ liệu.',
+  'errorCode.PIPELINE_NO_STREAM_SELECTED': 'Chưa chọn dữ liệu để đồng bộ.',
+  'errorCode.PIPELINE_CURSOR_INVALID': 'Cursor không hợp lệ cho chế độ incremental.',
+  'errorCode.PIPELINE_PRIMARY_KEY_REQUIRED': 'Chế độ dedupe cần primary key.',
+  'errorCode.PIPELINE_ALREADY_RUNNING': 'Pipeline đang chạy.',
+  'errorCode.PIPELINE_PAUSED': 'Pipeline đang tạm dừng. Hãy tiếp tục lịch chạy trước khi đồng bộ.',
+  'errorCode.PIPELINE_NEEDS_REVIEW': 'Cấu trúc nguồn đã thay đổi và cần bạn xác nhận.',
+  'errorCode.CONNECTOR_IMAGE_UNAVAILABLE': 'Không tải được connector từ registry.',
+  'errorCode.UNKNOWN_ERROR': 'Đã xảy ra lỗi.',
+  'errorCode.DESTINATION_STAGING_CONFLICT': 'Lỗi ở bảng tạm của đích, không phải ở nguồn. Thường gặp khi hai pipeline ghi hai stream trùng tên vào cùng một schema — đặt tiền tố khác nhau, hoặc cho mỗi pipeline một schema riêng.',
+  'errorCode.CONNECTOR_STREAM_INTERRUPTED': 'Kết nối giữa connector và engine bị đứt giữa chừng. Thường là tạm thời — chạy lại là được; nếu lặp lại nhiều lần thì xem log kỹ thuật.',
+  'errorCode.CONNECTOR_OUT_OF_MEMORY': 'Connector bị dừng vì dùng quá bộ nhớ cho phép. Hãy giảm MAX_CONCURRENT_RUNS_GLOBAL hoặc tăng CONNECTOR_MEMORY_LIMIT.',
+  'errorCode.ENGINE_JOB_NOT_FOUND': 'Không tìm thấy tiến trình đồng bộ trên engine.',
+  'errorSummary.AUTHENTICATION': 'Thông tin đăng nhập không còn hợp lệ.',
+  'errorSummary.NETWORK': 'Không thể kết nối tới máy chủ.',
+  'errorSummary.PERMISSION': 'Tài khoản không có đủ quyền.',
+  'errorSummary.RATE_LIMIT': 'Nguồn dữ liệu đang giới hạn tần suất truy cập.',
+  'errorSummary.SCHEMA': 'Cấu trúc dữ liệu nguồn đã thay đổi.',
+  'errorSummary.DESTINATION_WRITE': 'Không ghi được dữ liệu vào đích.',
+  'errorSummary.CONFIGURATION': 'Cấu hình kết nối không hợp lệ.',
+  'errorSummary.SOURCE_READ': 'Không đọc được dữ liệu từ nguồn.',
+  'errorSummary.TIMEOUT': 'Thao tác vượt quá thời gian cho phép.',
+  'errorSummary.CANCELLED': 'Lần chạy đã bị hủy.',
+  'errorSummary.ENGINE': 'Engine đồng bộ gặp sự cố nội bộ.',
+  'errorSummary.UNKNOWN': 'Đồng bộ thất bại vì lỗi chưa phân loại.',
 };
 
 const en: Catalog = {
@@ -3309,6 +3352,49 @@ const en: Catalog = {
   'run.preparingResults': 'Preparing results.',
   'run.noResults': 'This run produced no results.',
   'runs.recordsInline': 'records',
+  'errorCode.BAD_REQUEST': 'The request is not valid.',
+  'errorCode.VALIDATION_FAILED': 'The information given is not valid.',
+  'errorCode.RESOURCE_NOT_FOUND': 'That was not found.',
+  'errorCode.UNAUTHENTICATED': 'The session is not valid, or it has expired.',
+  'errorCode.PERMISSION_DENIED': 'Your account is not allowed to do that.',
+  'errorCode.RESOURCE_CONFLICT': 'Something changed while you were working on it.',
+  'errorCode.RESOURCE_IN_USE': 'Something else is using it.',
+  'errorCode.RESOURCE_MODIFIED': 'Somebody else changed this. Load it again.',
+  'errorCode.QUOTA_EXCEEDED': 'As many syncs are running as are allowed at once.',
+  'errorCode.RATE_LIMITED': 'That was too quick. Try again in a moment.',
+  'errorCode.ENGINE_UNAVAILABLE': 'The sync service is unavailable at the moment.',
+  'errorCode.ENGINE_OPERATION_FAILED': 'The engine could not carry that out.',
+  'errorCode.SOURCE_AUTHENTICATION_FAILED': 'The source would not accept the credentials.',
+  'errorCode.SOURCE_NETWORK_UNREACHABLE': 'The source server could not be reached.',
+  'errorCode.SOURCE_PERMISSION_DENIED': 'The account does not have enough permission on the source.',
+  'errorCode.SOURCE_CONFIGURATION_INVALID': 'The source configuration is not valid.',
+  'errorCode.DESTINATION_AUTHENTICATION_FAILED': 'The destination would not accept the credentials.',
+  'errorCode.DESTINATION_PERMISSION_DENIED': 'Nothing could be written to the destination.',
+  'errorCode.SCHEMA_DISCOVERY_TIMEOUT': 'Reading the data structure took too long.',
+  'errorCode.PIPELINE_NO_STREAM_SELECTED': 'No data has been chosen to sync.',
+  'errorCode.PIPELINE_CURSOR_INVALID': 'That cursor does not work for incremental mode.',
+  'errorCode.PIPELINE_PRIMARY_KEY_REQUIRED': 'Dedupe mode needs a primary key.',
+  'errorCode.PIPELINE_ALREADY_RUNNING': 'The pipeline is already running.',
+  'errorCode.PIPELINE_PAUSED': 'The pipeline is paused. Resume its schedule before syncing.',
+  'errorCode.PIPELINE_NEEDS_REVIEW': 'The source structure changed and needs your confirmation.',
+  'errorCode.CONNECTOR_IMAGE_UNAVAILABLE': 'The connector could not be fetched from the registry.',
+  'errorCode.UNKNOWN_ERROR': 'Something went wrong.',
+  'errorCode.DESTINATION_STAGING_CONFLICT': "The fault is in the destination's staging table, not at the source. It usually means two pipelines write identically-named streams into one schema — give them different prefixes, or a schema each.",
+  'errorCode.CONNECTOR_STREAM_INTERRUPTED': 'The connection between the connector and the engine broke part-way through. It is usually temporary — running it again is enough; if it keeps happening, read the technical log.',
+  'errorCode.CONNECTOR_OUT_OF_MEMORY': 'The connector was stopped for using more memory than it is allowed. Lower MAX_CONCURRENT_RUNS_GLOBAL, or raise CONNECTOR_MEMORY_LIMIT.',
+  'errorCode.ENGINE_JOB_NOT_FOUND': 'The engine has no record of this sync.',
+  'errorSummary.AUTHENTICATION': 'The credentials are no longer valid.',
+  'errorSummary.NETWORK': 'The server could not be reached.',
+  'errorSummary.PERMISSION': 'The account does not have enough permission.',
+  'errorSummary.RATE_LIMIT': 'The source is rate-limiting these requests.',
+  'errorSummary.SCHEMA': 'The structure of the source data changed.',
+  'errorSummary.DESTINATION_WRITE': 'The data could not be written to the destination.',
+  'errorSummary.CONFIGURATION': 'The connection configuration is not valid.',
+  'errorSummary.SOURCE_READ': 'The data could not be read from the source.',
+  'errorSummary.TIMEOUT': 'The operation took longer than it is allowed to.',
+  'errorSummary.CANCELLED': 'The run was cancelled.',
+  'errorSummary.ENGINE': 'The sync engine hit an internal problem.',
+  'errorSummary.UNKNOWN': 'The sync failed, and the reason has not been classified.',
 };
 
 export const CATALOGS: Record<Locale, Catalog> = { vi, en };
@@ -3330,6 +3416,28 @@ export function translate(
   const raw = CATALOGS[locale][key] ?? CATALOGS.vi[key] ?? key;
   if (!vars) return raw;
   return raw.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
+}
+
+/**
+ * An error in the reader's language, by its code.
+ *
+ * A failure's message is written when the failure happens, which is long
+ * before anybody reads it and in nobody's particular language -- a worker
+ * has no request, so it cannot know. The code is the part that is stable, so
+ * the code is what gets translated here, and the sentence the server sent is
+ * the fallback for a code the catalog does not know yet. That fallback is
+ * also what a log or an API client sees, which is why the backend writes it
+ * in one language rather than the author's.
+ */
+export function translateError(
+  locale: Locale,
+  code: string | null | undefined,
+  fallback: string,
+): string {
+  if (!code) return fallback;
+  const key = `errorCode.${code}`;
+  const translated = translate(locale, key);
+  return translated === key ? fallback : translated;
 }
 
 /** Keys present in `vi` but missing from `en`; used by the i18n coverage test. */

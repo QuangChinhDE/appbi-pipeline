@@ -456,7 +456,7 @@ class SqlDirectAdapter:
                 ref=ref, status=RunStatus.FAILED_TO_START, raw_status="UNTRACKED",
                 failure=EngineFailure(
                     code="ENGINE_JOB_LOST", category=ErrorCategory.ENGINE,
-                    summary="Không tìm thấy tiến trình đồng bộ trên engine.",
+                    summary="The engine has no record of this sync.",
                     remediation_action="RETRY_RUN",
                     fingerprint=fingerprint("sql-direct job lost"),
                 ))

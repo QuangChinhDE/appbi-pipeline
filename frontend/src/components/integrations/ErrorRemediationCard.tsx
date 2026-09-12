@@ -5,6 +5,7 @@ import { AlertOctagon, Check, ChevronDown, Copy } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { ApiError } from '@/lib/api';
+import { translateError } from '@/lib/i18n';
 import { useI18n } from '@/providers/LanguageProvider';
 import { cn } from '@/lib/utils';
 
@@ -53,7 +54,7 @@ export function ErrorRemediationCard({
   className?: string;
   compact?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [open, setOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
@@ -93,7 +94,8 @@ export function ErrorRemediationCard({
               {t('error.whatHappened')}
             </p>
             <p className="text-caption font-emphasis leading-relaxed text-text-primary">
-              {error.message || t('common.unknownError')}
+              {translateError(locale, error.code, error.message)
+                || t('common.unknownError')}
             </p>
           </div>
 

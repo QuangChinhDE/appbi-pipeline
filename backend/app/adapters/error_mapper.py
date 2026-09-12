@@ -123,35 +123,36 @@ _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
 
 _COMPILED = [(re.compile(pat, re.IGNORECASE), cat, code, action) for pat, cat, code, action in _PATTERNS]
 
-_VI_SUMMARY: dict[ErrorCategory, str] = {
-    ErrorCategory.AUTHENTICATION: "Thông tin đăng nhập không còn hợp lệ.",
-    ErrorCategory.PERMISSION: "Tài khoản không có đủ quyền.",
-    ErrorCategory.NETWORK: "Không thể kết nối tới máy chủ.",
-    ErrorCategory.RATE_LIMIT: "Nguồn dữ liệu đang giới hạn tần suất truy cập.",
-    ErrorCategory.SCHEMA: "Cấu trúc dữ liệu nguồn đã thay đổi.",
-    ErrorCategory.DESTINATION_WRITE: "Không ghi được dữ liệu vào đích.",
-    ErrorCategory.CONFIGURATION: "Cấu hình kết nối không hợp lệ.",
-    ErrorCategory.SOURCE_READ: "Không đọc được dữ liệu từ nguồn.",
-    ErrorCategory.TIMEOUT: "Thao tác vượt quá thời gian cho phép.",
-    ErrorCategory.CANCELLED: "Lần chạy đã bị hủy.",
-    ErrorCategory.ENGINE: "Engine đồng bộ gặp sự cố nội bộ.",
-    ErrorCategory.UNKNOWN: "Đồng bộ thất bại vì lỗi chưa phân loại.",
+_CATEGORY_SUMMARY: dict[ErrorCategory, str] = {
+    ErrorCategory.AUTHENTICATION: "The credentials are no longer valid.",
+    ErrorCategory.PERMISSION: "The account does not have enough permission.",
+    ErrorCategory.NETWORK: "The server could not be reached.",
+    ErrorCategory.RATE_LIMIT: "The source is rate-limiting these requests.",
+    ErrorCategory.SCHEMA: "The structure of the source data changed.",
+    ErrorCategory.DESTINATION_WRITE: "The data could not be written to the destination.",
+    ErrorCategory.CONFIGURATION: "The connection configuration is not valid.",
+    ErrorCategory.SOURCE_READ: "The data could not be read from the source.",
+    ErrorCategory.TIMEOUT: "The operation took longer than it is allowed to.",
+    ErrorCategory.CANCELLED: "The run was cancelled.",
+    ErrorCategory.ENGINE: "The sync engine hit an internal problem.",
+    ErrorCategory.UNKNOWN: "The sync failed, and the reason has not been classified.",
 }
 
-#: Where the category's sentence is too vague to act on. "Engine gặp sự cố nội
-#: bộ" sends somebody to read logs; naming memory sends them to the one setting
-#: that fixes it.
+#: Where the category's sentence is too vague to act on. "The engine hit an
+#: internal problem" sends somebody to read logs; naming memory sends them to
+#: the one setting that fixes it.
 _CODE_SUMMARY: dict[str, str] = {
     "DESTINATION_STAGING_CONFLICT":
-        "Lỗi ở bảng tạm của đích, không phải ở nguồn. Thường gặp khi hai "
-        "pipeline ghi hai stream trùng tên vào cùng một schema — đặt tiền tố "
-        "khác nhau, hoặc cho mỗi pipeline một schema riêng.",
+        "The fault is in the destination's staging table, not at the source. "
+        "It usually means two pipelines write identically-named streams into "
+        "one schema -- give them different prefixes, or a schema each.",
     "CONNECTOR_STREAM_INTERRUPTED":
-        "Kết nối giữa connector và engine bị đứt giữa chừng. Thường là tạm "
-        "thời — chạy lại là được; nếu lặp lại nhiều lần thì xem log kỹ thuật.",
+        "The connection between the connector and the engine broke part-way "
+        "through. It is usually temporary -- running it again is enough; if "
+        "it keeps happening, read the technical log.",
     "CONNECTOR_OUT_OF_MEMORY":
-        "Connector bị dừng vì dùng quá bộ nhớ cho phép. Hãy giảm "
-        "MAX_CONCURRENT_RUNS_GLOBAL hoặc tăng CONNECTOR_MEMORY_LIMIT.",
+        "The connector was stopped for using more memory than it is allowed. "
+        "Lower MAX_CONCURRENT_RUNS_GLOBAL, or raise CONNECTOR_MEMORY_LIMIT.",
 }
 
 
@@ -178,7 +179,7 @@ def classify(
                 code=code,
                 category=category,
                 summary=_CODE_SUMMARY.get(
-                    code, _VI_SUMMARY.get(category, _VI_SUMMARY[ErrorCategory.UNKNOWN])
+                    code, _CATEGORY_SUMMARY.get(category, _CATEGORY_SUMMARY[ErrorCategory.UNKNOWN])
                 ),
                 technical_message=text[:4000] or None,
                 remediation_action=action,
@@ -187,7 +188,7 @@ def classify(
     return EngineFailure(
         code="UNKNOWN_ENGINE_FAILURE",
         category=default_category,
-        summary=_VI_SUMMARY.get(default_category, _VI_SUMMARY[ErrorCategory.UNKNOWN]),
+        summary=_CATEGORY_SUMMARY.get(default_category, _CATEGORY_SUMMARY[ErrorCategory.UNKNOWN]),
         technical_message=text[:4000] or None,
         remediation_action="VIEW_TECHNICAL_DETAILS",
         fingerprint=fingerprint(text or "unknown"),

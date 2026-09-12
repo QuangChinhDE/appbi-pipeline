@@ -121,15 +121,15 @@ def _exit_without_explanation(side: str, exit_code: int | None) -> str:
         return f"{side.lower()} connector exited with code {exit_code}"
     limit = (settings.connector_memory_limit or "").strip()
     ceiling = (
-        f"Hạn mức đang đặt: CONNECTOR_MEMORY_LIMIT={limit}."
+        f"The limit in force: CONNECTOR_MEMORY_LIMIT={limit}."
         if limit else
-        "Chưa đặt CONNECTOR_MEMORY_LIMIT, nên container không có trần và hệ "
-        "điều hành là thứ đã dừng nó."
+        "CONNECTOR_MEMORY_LIMIT is not set, so the container has no ceiling "
+        "and the operating system is what stopped it."
     )
     return (
-        f"{who} connector bị kill (exit 137) mà không kịp báo lỗi — killed for "
-        f"exceeding its memory. {ceiling} Giảm MAX_CONCURRENT_RUNS_GLOBAL, hoặc "
-        "tăng hạn mức nếu máy còn RAM."
+        f"{who} connector was killed (exit 137) without reporting an error -- "
+        f"killed for exceeding its memory. {ceiling} Lower "
+        "MAX_CONCURRENT_RUNS_GLOBAL, or raise the limit if the host has the RAM."
     )
 
 
@@ -600,7 +600,7 @@ class EmbeddedAirbyteAdapter:
                                    failure=EngineFailure(
                                        code="ENGINE_JOB_LOST",
                                        category=ErrorCategory.ENGINE,
-                                       summary="Không tìm thấy tiến trình đồng bộ trên engine.",
+                                       summary="The engine has no record of this sync.",
                                        remediation_action="RETRY_RUN",
                                        fingerprint=fingerprint("engine job lost"),
                                    ))
