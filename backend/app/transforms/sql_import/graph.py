@@ -253,9 +253,29 @@ def _cycle(candidates: list[Candidate]) -> list[str]:
 
 
 def default_layer(candidate: Candidate) -> str:
-    """staging when it only reads the warehouse, marts when it reads models.
+    """Which layer a query belongs in, decided rather than guessed.
 
-    The convention dbt's own documentation opens with, and a defensible answer
-    when nobody has said otherwise.
+    dbt's own convention, and it is a function of two facts the parse already
+    establishes -- what a query reads, and whether anything reads it:
+
+        reads no models                         staging
+        reads models, and nothing reads it      marts
+        reads models, and another model reads   intermediate
+
+    Deterministic, so it is computed here rather than asked of a model. A rule
+    with no judgement in it is exactly where a small model occasionally says
+    something silly for no benefit, and having it decided also shortens the
+    prompt for the questions that do need judgement.
     """
-    return "marts" if candidate.depends_on else "staging"
+    if not candidate.depends_on:
+        return "staging"
+    return "marts" if candidate.is_leaf else "intermediate"
+
+
+def default_materialization(layer: str) -> str:
+    """A view unless the model is what somebody reads.
+
+    Cheap to rebuild and always current; a mart is the one worth the storage
+    because it is read repeatedly and often by a dashboard.
+    """
+    return "table" if layer == "marts" else "view"

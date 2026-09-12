@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, ArrowRight, CircleAlert, FilePlus2, FolderGit2, Loader2,
+  ArrowLeft, ArrowRight, CircleAlert, FileCode2, FilePlus2, FolderGit2, Loader2,
   PackageOpen, Search,
 } from 'lucide-react';
 
@@ -28,12 +28,16 @@ import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { transformApi } from '@/lib/api';
+import { SqlImportReview } from '@/components/transforms/SqlImportReview';
+import { decisionOf, readAll } from '@/components/transforms/SqlImportDialog';
 import { qk } from '@/lib/queryKeys';
-import type { RepositoryInspectResult } from '@/lib/types';
+import type {
+  RepositoryInspectResult, SqlImportAnalysis, SqlImportFile,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/providers/LanguageProvider';
 
-type Source = 'NEW' | 'GIT' | 'UPLOAD';
+type Source = 'NEW' | 'GIT' | 'UPLOAD' | 'SQL';
 
 // Keys, not text: this list is built at module load, where no hook exists.
 // It is translated where it is rendered instead.
@@ -56,6 +60,12 @@ const SOURCES: { id: Source; titleKey: string; descriptionKey: string; icon: typ
     descriptionKey: 'tfnew.sourceUploadHint',
     icon: PackageOpen,
   },
+  {
+    id: 'SQL',
+    titleKey: 'tfnew.sourceSql',
+    descriptionKey: 'tfnew.sourceSqlHint',
+    icon: FileCode2,
+  },
 ];
 
 export default function NewTransformPage() {
@@ -66,6 +76,11 @@ export default function NewTransformPage() {
 
   const [step, setStep] = React.useState(1);
   const [source, setSource] = React.useState<Source>('NEW');
+  // The SQL option's own state. `analysis` doubles as the step-4 gate: it is
+  // null until the queries have been read, and holding it here rather than on
+  // the server is what lets the import stay stateless.
+  const [sqlFiles, setSqlFiles] = React.useState<SqlImportFile[]>([]);
+  const [analysis, setAnalysis] = React.useState<SqlImportAnalysis | null>(null);
   const [connectionId, setConnectionId] = React.useState<string | null>(null);
 
   const [name, setName] = React.useState('');
@@ -113,6 +128,40 @@ export default function NewTransformPage() {
     onError: (error) => { setInspection(null); toastError(error); },
   });
 
+  const analyse = useMutation({
+    mutationFn: async () => transformApi.analyseSqlImport({
+      files: sqlFiles,
+      connection_id: connectionId ?? undefined,
+      source_schema: sourceSchema || undefined,
+    }),
+    onSuccess: (result) => { setAnalysis(result); setStep(4); },
+    onError: (error) => toastError(error),
+  });
+
+  const importSql = useMutation({
+    mutationFn: async () => transformApi.applySqlImport({
+      files: sqlFiles,
+      decisions: (analysis?.candidates ?? []).map(decisionOf),
+      name,
+      connection_id: connectionId!,
+      development_schema: devSchema || undefined,
+      production_schema: prodSchema || undefined,
+      source_schema: sourceSchema || undefined,
+      verify: true,
+    }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
+      toastSuccess(
+        t('tfsql.imported', { n: result.written_paths.length }),
+        result.renamed.length
+          ? t('tfsql.renamed', { n: result.renamed.length })
+          : undefined,
+      );
+      router.push(`/transforms/${result.project_id}`);
+    },
+    onError: (error) => toastError(error),
+  });
+
   const create = useMutation({
     mutationFn: async () => {
       if (source === 'UPLOAD') {
@@ -134,6 +183,7 @@ export default function NewTransformPage() {
         }
         return response.json();
       }
+      if (source === 'SQL') throw new Error('unreachable: SQL has its own path');
       return transformApi.create({
         name,
         connection_id: connectionId!,
@@ -163,10 +213,16 @@ export default function NewTransformPage() {
     step === 1
       ? (source === 'NEW'
         || (source === 'GIT' && Boolean(inspection))
-        || (source === 'UPLOAD' && Boolean(file)))
+        || (source === 'UPLOAD' && Boolean(file))
+        || (source === 'SQL' && sqlFiles.length > 0))
       : step === 2
         ? Boolean(connectionId)
-        : Boolean(name.trim());
+        : step === 3
+          ? Boolean(name.trim())
+          // Step 4 is the review, and a loop is the one thing that cannot be
+          // fixed by renaming something in it.
+          : Boolean(analysis && analysis.candidates.length > 0
+            && analysis.cycle.length === 0);
 
   return (
     // Not `h-full` with a `flex-1` body: that stretched the form to the full
@@ -183,7 +239,10 @@ export default function NewTransformPage() {
         </Link>
         <h1 className="text-h3 font-strong text-text-primary">{t('tfnew.title')}</h1>
         <ol className="mt-3 flex items-center gap-2">
-          {[t('tfnew.stepSource'), t('tfnew.stepWarehouse'), t('tfnew.stepSetup')].map((label, index) => (
+          {[
+            t('tfnew.stepSource'), t('tfnew.stepWarehouse'), t('tfnew.stepSetup'),
+            ...(source === 'SQL' ? [t('tfnew.stepReview')] : []),
+          ].map((label, index) => (
             <li key={label} className="flex items-center gap-2">
               <span
                 className={cn(
@@ -320,6 +379,28 @@ export default function NewTransformPage() {
               </div>
             )}
 
+            {source === 'SQL' && (
+              <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
+                <Field label={t('tfnew.sqlFiles')} hint={t('tfnew.sqlFilesHint')}>
+                  <input
+                    type="file"
+                    accept=".sql,text/plain"
+                    multiple
+                    onChange={async (event) => {
+                      setAnalysis(null);
+                      setSqlFiles(await readAll(event.target.files));
+                    }}
+                    className="block w-full text-caption text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-caption file:text-text-primary hover:file:bg-surface-3"
+                  />
+                </Field>
+                {sqlFiles.length > 0 && (
+                  <p className="mt-2 text-tiny text-text-tertiary">
+                    {t('tfnew.sqlChosen', { n: sqlFiles.length })}
+                  </p>
+                )}
+              </div>
+            )}
+
             {source === 'UPLOAD' && (
               <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
                 <Field label={t('tfnew.zipFile')}>
@@ -445,6 +526,15 @@ export default function NewTransformPage() {
         )}
       </div>
 
+        {step === 4 && analysis && (
+          <div className="space-y-3">
+            <SqlImportReview
+              analysis={analysis}
+              onChange={(candidates) => setAnalysis({ ...analysis, candidates })}
+            />
+          </div>
+        )}
+
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[rgb(var(--border-line))] py-3">
         <Button
           variant="ghost"
@@ -460,6 +550,27 @@ export default function NewTransformPage() {
             trailingIcon={<ArrowRight className="h-4 w-4" />}
           >
             {t('tfnew.continue')}
+          </Button>
+        ) : source === 'SQL' && step === 3 ? (
+          // The extra step: read the queries, then show what they become. A
+          // conversion nobody looked at is a project nobody trusts.
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            loading={analyse.isPending}
+            onClick={() => analyse.mutate()}
+            trailingIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            {analyse.isPending ? t('tfnew.analysing') : t('tfnew.analyse')}
+          </Button>
+        ) : source === 'SQL' ? (
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            loading={importSql.isPending}
+            onClick={() => importSql.mutate()}
+          >
+            {importSql.isPending ? t('tfsql.applying') : t('tfnew.createAndBuild')}
           </Button>
         ) : (
           <Button

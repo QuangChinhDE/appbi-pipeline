@@ -13,8 +13,6 @@ them changes what the query computes.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 LAYERS = ("staging", "intermediate", "marts")
@@ -51,20 +49,10 @@ class ModelSuggestion(StrictModel):
             "unusable or actively misleading."
         ),
     )
-    layer: Literal["staging", "intermediate", "marts"] = Field(
-        description=(
-            "staging for a query that only reads the warehouse and mostly "
-            "renames and casts; marts for one built for people to read; "
-            "intermediate for a step that exists to be used by another model."
-        ),
-    )
-    materialized: Literal["view", "table", "incremental", "ephemeral"] = Field(
-        description=(
-            "view unless the query is expensive or read often. Do not choose "
-            "incremental: it needs a unique key and a filter this conversion "
-            "has no way to verify."
-        ),
-    )
+    # Which layer a model belongs in, and how it is stored, are not here on
+    # purpose. Both follow from what a query reads and what reads it, which
+    # the parse already knows, so both are decided rather than asked. A field
+    # a model cannot answer is a field it cannot answer wrongly.
     description: str = Field(
         description=(
             "One sentence saying what a row of this model is. Empty if the "

@@ -79,8 +79,24 @@ class Statement:
     body_start: int
     body_end: int
     refs: tuple[TableRef, ...] = ()
+    #: The names this statement's SELECT list produces. Used to check that a
+    #: proposed test names a column that will actually be there -- a test on a
+    #: column that is not breaks `dbt build` for a reason that has nothing to
+    #: do with the data, which is the worst way to fail the report somebody is
+    #: waiting for.
+    columns: tuple[str, ...] = ()
+    #: The SELECT list includes a `*`, so the real column set depends on a
+    #: table this parser has not seen. Nothing may be asserted about it.
+    selects_star: bool = False
     #: Why this statement cannot become a model, when it cannot.
     problem: str | None = None
+
+    @property
+    def testable_columns(self) -> frozenset[str]:
+        """Columns a test may name. Empty when the query selects `*`."""
+        return frozenset() if self.selects_star else frozenset(
+            name.casefold() for name in self.columns
+        )
 
     @property
     def usable(self) -> bool:
@@ -209,6 +225,24 @@ def _body_span(
     return start, end, "It creates something without a query behind it."
 
 
+def _output_columns(statement: exp.Expression) -> tuple[tuple[str, ...], bool]:
+    """The names the SELECT list produces, and whether it includes a `*`.
+
+    A `*` means the real column set lives in a table this parser has not been
+    shown, so nothing can be asserted about it. Saying so is the point: it is
+    what stops a test being proposed for a column that may not exist.
+    """
+    target = statement.expression if isinstance(statement, exp.Create) else statement
+    if target is None:
+        return (), False
+    try:
+        names = list(target.named_selects)
+    except Exception:  # a shape sqlglot cannot describe that way
+        return (), True
+    star = any(name == "*" for name in names)
+    return tuple(name for name in names if name and name != "*"), star
+
+
 def _kind(statement: exp.Expression) -> tuple[str, tuple[str, ...] | None, str | None]:
     if isinstance(statement, exp.Select) or isinstance(statement, exp.Union):
         return "SELECT", None, None
@@ -260,10 +294,12 @@ def parse_file(name: str, text: str, *, dialect: str) -> ParsedFile:
         body_start, body_end, body_problem = _body_span(text, own, statement, start, end)
         refs = _find_refs(text, _statement_tokens(tokens, body_start, body_end),
                           _cte_names(statement))
+        columns, star = _output_columns(statement)
         parsed.statements.append(Statement(
             index=index, kind=kind, creates=creates,
             body_start=body_start, body_end=body_end,
-            refs=tuple(refs), problem=problem or body_problem,
+            refs=tuple(refs), columns=columns, selects_star=star,
+            problem=problem or body_problem,
         ))
     return parsed
 

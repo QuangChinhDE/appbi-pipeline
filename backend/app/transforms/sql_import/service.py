@@ -74,6 +74,37 @@ class Analysis:
     notes: list[str] = field(default_factory=list)
 
 
+def normalise(uploaded: list[tuple[str, str]]) -> dict[str, str]:
+    """Name-to-text, with the two ways a list becomes a lossy dict closed.
+
+    Two files can arrive with the same name -- from different folders, or
+    because somebody picked the same file twice -- and a dict keyed by name
+    would keep the last one and lose the other without saying so. The second
+    is renamed instead, which is visible in the review.
+
+    A leading byte-order mark is dropped. Editors on Windows add one, it is
+    not SQL, and sqlglot reads it as part of the first token: the whole file
+    then fails to parse for a reason nobody can see.
+    """
+    out: dict[str, str] = {}
+    for name, content in uploaded:
+        clean = (name or "query.sql").strip() or "query.sql"
+        if clean in out:
+            stem, dot, extension = clean.rpartition(".")
+            index = 2
+            while True:
+                candidate = (
+                    f"{stem} ({index}){dot}{extension}" if dot
+                    else f"{clean} ({index})"
+                )
+                if candidate not in out:
+                    clean = candidate
+                    break
+                index += 1
+        out[clean] = (content or "").lstrip("﻿")
+    return out
+
+
 def check_upload(files: dict[str, str]) -> None:
     """Refuse an upload that is not what this feature is for."""
     if not files:

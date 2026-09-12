@@ -83,7 +83,7 @@ x-backend-env: &backend-env
   OPENAI_MODEL_PLANNER: ${OPENAI_MODEL_PLANNER:-gpt-5-mini}
   OPENAI_MODEL_AGENT: ${OPENAI_MODEL_AGENT:-gpt-5-mini}
   OPENAI_MODEL_VISION: ${OPENAI_MODEL_VISION:-gpt-5-mini}
-  OPENAI_MODEL_SQL_IMPORT: ${OPENAI_MODEL_SQL_IMPORT:-gpt-5-mini}
+  OPENAI_MODEL_SQL_IMPORT: ${OPENAI_MODEL_SQL_IMPORT:-}
   # --- launch scope ---
   # Which of the 654 bundled connectors this deployment offers. Absent from
   # this list, the settings existed and could not be set: every deployment got

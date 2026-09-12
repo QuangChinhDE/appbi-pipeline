@@ -156,3 +156,52 @@ class Documentation(unittest.TestCase):
 def out_body(emitted, path: str) -> str:
     assert path in emitted.files, sorted(emitted.files)
     return emitted.files[path]
+
+
+class NothingThatLooksLikeJinja(unittest.TestCase):
+    """dbt reads a model twice and refuses it if the readings disagree.
+
+    The first read is a fast static scan of the raw text to find dependencies;
+    the second is the real Jinja render. The scan does not know a comment is a
+    comment. So a header that explained the conversion by naming `ref()` was
+    read as a ref with no arguments, and every model with a genuine dependency
+    failed to compile with "unable to infer all dependencies".
+
+    It cost one end-to-end run to find and would never have shown up in a unit
+    test of the emitter, because the file it produced looked perfect.
+    """
+
+    def test_the_header_names_no_jinja_function(self):
+        graph, decisions, texts = _prepared({"s.sql": "SELECT 1 AS x"})
+        body = out_body(emit(graph, decisions, texts=texts), "models/staging/s.sql")
+        header = body.split("{{ config")[0]
+        for token in ("ref(", "source(", "config(", "{{", "}}"):
+            assert token not in header, f"{token!r} in the header"
+
+    def test_a_description_cannot_smuggle_jinja_into_a_comment(self):
+        """The description may have been written by a model, and a model will
+        happily explain itself using the words it was told about."""
+        graph, decisions, texts = _prepared({"s.sql": "SELECT 1 AS x"})
+        for decision in decisions.values():
+            decision.description = "Joins {{ ref('other') }} using source(x)."
+        body = out_body(emit(graph, decisions, texts=texts), "models/staging/s.sql")
+        header = body.split("{{ config")[0]
+        assert "ref(" not in header and "{{" not in header
+        assert "Joins" in header
+
+    def test_a_filename_cannot_either(self):
+        graph, decisions, texts = _prepared({"ref(evil).sql": "SELECT 1 AS x"})
+        emitted = emit(graph, decisions, texts=texts)
+        header = next(iter(emitted.files.values())).split("{{ config")[0]
+        assert "ref(" not in header
+
+    def test_the_only_jinja_in_the_file_is_the_conversion_and_the_config(self):
+        graph, decisions, texts = _prepared({
+            "stg.sql": "CREATE TABLE stg_orders AS SELECT id FROM raw.orders",
+            "mart.sql": "SELECT id FROM stg_orders",
+        })
+        body = out_body(
+            emit(graph, decisions, texts=texts), "models/marts/mart.sql",
+        )
+        assert body.count("ref(") == 1
+        assert body.count("config(") == 1

@@ -19,7 +19,9 @@ import type {
   CompiledCode, Completions, DocEntry, FileContent, FileTemplate, FileTree,
   GitBranch, GitCommitResult, GitDiff, GitPullResult, GitStatus,
   InvocationRequest, PublishPlan, PublishResult, RepositoryInspectResult,
-  ResourceDetail, ResourceFacets, ResourcePage, SaveResult, Transform,
+  ResourceDetail, ResourceFacets, ResourcePage, SaveResult,
+  SqlImportAnalysis, SqlImportDecision, SqlImportFile, SqlImportResult,
+  Transform,
   TransformDetail, TransformEnvironment, TransformInvocation,
   TransformInvocationDetail, TransformLineage, TransformLogPage,
   TransformProblems, TransformRelease, TransformSearch, TransformSystem,
@@ -637,6 +639,27 @@ export const transformApi = {
   inspectRepository: (body: {
     repo_url: string; branch?: string; subdirectory?: string; token?: string;
   }) => post<RepositoryInspectResult>('/transforms/inspect-repository', body),
+
+  // Importing existing SQL. Two calls with no state between them: the first
+  // says what the upload would become, the second does it -- and works every
+  // structural fact out again from the same SQL rather than trusting this.
+  analyseSqlImport: (body: {
+    files: SqlImportFile[];
+    project_id?: string;
+    connection_id?: string;
+    source_schema?: string;
+  }) => post<SqlImportAnalysis>('/transforms/sql-import/analyse', body),
+  applySqlImport: (body: {
+    files: SqlImportFile[];
+    decisions: SqlImportDecision[];
+    project_id?: string;
+    name?: string;
+    connection_id?: string;
+    development_schema?: string;
+    production_schema?: string;
+    source_schema?: string;
+    verify?: boolean;
+  }) => post<SqlImportResult>('/transforms/sql-import/apply', body),
   gitStatus: (id: string, checkRemote = false) =>
     get<GitStatus>(`/transforms/${id}/git/status`,
       checkRemote ? { check_remote: true } : undefined),

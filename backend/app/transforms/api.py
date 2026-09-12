@@ -34,8 +34,10 @@ from app.transforms import (
     projects as project_service, releases as release_service,
     resources as resource_service, scaffold,
 )
+from app.transforms.sql_import import service as sql_import_service
 from app.transforms.models import (
-    TransformArtifactBundle, TransformEnvironment, TransformInvocation,
+    TransformArtifactBundle, TransformConnection, TransformEnvironment,
+    TransformInvocation,
     TransformProject, TransformProjectRevision, TransformRelease,
     TransformResourceIndex,
 )
@@ -50,6 +52,8 @@ from app.transforms.schemas import (
     LogPage, ProblemsView, ProjectCreate, ProjectDetail, ProjectUpdate, ProjectView,
     PublishPlanView, PublishResult, ReleaseCreate, ReleaseView, RepositoryInspectRequest,
     RepositoryInspectResult, ResourceDetail, ResourcePageView, SaveResult, SearchView,
+    SqlImportAnalyseRequest, SqlImportAnalysis, SqlImportApplyRequest,
+    SqlImportCandidateView, SqlImportResult,
     SystemView, TemplateView,
 )
 from app.transforms.storage import object_store
@@ -879,6 +883,161 @@ def _save_result(
         file_count=revision.file_count,
         saved_paths=paths,
         parse_invocation_id=parse.id if parse else None,
+    )
+
+
+# ── SQL import ────────────────────────────────────────────────────────────
+#
+# Two calls, no state between them. The first says what the upload would
+# become; the second does it, working every structural fact out again from the
+# same SQL rather than trusting what came back.
+
+
+def _dialect_of(connection: TransformConnection | None) -> str:
+    key = (connection.connector_key or "") if connection else ""
+    return "bigquery" if "bigquery" in key.casefold() else "postgres"
+
+
+async def _import_target(
+    session: SessionDep, ctx: CtxDep,
+    project_id: uuid.UUID | None, connection_id: uuid.UUID | None,
+) -> tuple[TransformProject | None, TransformConnection | None]:
+    """The project being imported into, and the connection to read SQL as."""
+    project = None
+    if project_id is not None:
+        project = await project_service.get(session, ctx, project_id)
+    if connection_id is not None:
+        connection = await connection_service.get(
+            session, ctx.workspace_id, connection_id,
+        )
+    elif project is not None:
+        environment = await environment_service.resolve(session, project, None)
+        connection = await session.get(
+            TransformConnection, environment.connection_id,
+        ) if environment and environment.connection_id else None
+    else:
+        connection = None
+    return project, connection
+
+
+@router.post("/sql-import/analyse", response_model=SqlImportAnalysis)
+async def analyse_sql_import(
+    payload: SqlImportAnalyseRequest, session: SessionDep, ctx: CtxDep,
+):
+    """Say what these queries would become, without writing anything."""
+    ctx.require(
+        Module.TRANSFORMS,
+        Action.EDIT if payload.project_id else Action.CREATE,
+    )
+    project, connection = await _import_target(
+        session, ctx, payload.project_id, payload.connection_id,
+    )
+    existing_yml = None
+    if project is not None:
+        existing_yml, _paths = await sql_import_service.existing_sources(
+            session, project,
+        )
+    analysis = await sql_import_service.analyse(
+        sql_import_service.normalise([(f.name, f.content) for f in payload.files]),
+        adapter=_dialect_of(connection),
+        source_schema=payload.source_schema,
+        existing_sources_yml=existing_yml,
+        actor_id=str(ctx.user_id or "system"),
+        project_id=str(project.id) if project else None,
+    )
+    return SqlImportAnalysis(
+        candidates=[
+            SqlImportCandidateView(**vars(candidate))
+            for candidate in analysis.candidates
+        ],
+        skipped=analysis.skipped, sources=analysis.sources,
+        cycle=analysis.cycle, notes=analysis.notes,
+        ai_used=bool(settings.openai_api_key.strip()),
+    )
+
+
+@router.post(
+    "/sql-import/apply", response_model=SqlImportResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def apply_sql_import(
+    payload: SqlImportApplyRequest, session: SessionDep, ctx: CtxDep,
+):
+    """Write the models, and queue the build that proves they work."""
+    ctx.require(
+        Module.TRANSFORMS,
+        Action.EDIT if payload.project_id else Action.CREATE,
+    )
+    project, connection = await _import_target(
+        session, ctx, payload.project_id, payload.connection_id,
+    )
+    files = sql_import_service.normalise(
+        [(item.name, item.content) for item in payload.files],
+    )
+
+    existing_yml, existing_paths = (None, set())
+    if project is not None:
+        existing_yml, existing_paths = await sql_import_service.existing_sources(
+            session, project,
+        )
+
+    emitted = sql_import_service.render(
+        files,
+        [decision.model_dump() for decision in payload.decisions],
+        adapter=_dialect_of(connection),
+        source_schema=payload.source_schema,
+        existing_paths=existing_paths,
+        existing_sources_yml=existing_yml,
+    )
+
+    created = False
+    if project is None:
+        if payload.connection_id is None or not (payload.name or "").strip():
+            raise ValidationError(
+                "A new project needs a name and a warehouse connection.",
+                code="SQL_IMPORT_PROJECT_DETAILS_REQUIRED",
+            )
+        # Scaffold first, then add the imported models on top: the project
+        # needs a dbt_project.yml and a profile before anything can build, and
+        # the starter model is what a reader compares the import against.
+        project = await project_service.create(
+            session, ctx,
+            name=payload.name.strip(), description=None,
+            connection_id=payload.connection_id,
+            mode=project_service.MANAGED,
+            development_schema=payload.development_schema,
+            production_schema=payload.production_schema,
+            source_schema=payload.source_schema,
+            with_examples=False,
+        )
+        created = True
+
+    revision = await sql_import_service.write_into(
+        session, ctx, project, emitted, expected_revision_id=None,
+    )
+
+    # `build` runs the models and their tests, which is the report somebody
+    # is waiting for. A parse alone would say the project is readable and
+    # nothing about whether the queries run.
+    invocation = None
+    if payload.verify:
+        environment = await environment_service.resolve(session, project, None)
+        invocation = await invocation_service.enqueue(
+            session, ctx, project,
+            command="build", environment=environment, revision=revision,
+            trigger_type=TriggerType.MANUAL,
+        )
+    else:
+        invocation = await _queue_parse(session, ctx, project)
+
+    await session.commit()
+    return SqlImportResult(
+        project_id=project.id,
+        created_project=created,
+        written_paths=sorted(emitted.files),
+        renamed=[{"from": a, "to": b} for a, b in emitted.renamed],
+        revision_id=getattr(revision, "id", None),
+        invocation_id=getattr(invocation, "id", None),
     )
 
 

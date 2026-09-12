@@ -54,7 +54,11 @@ export function ReleasesDialog({
       refresh();
       toastSuccess(t('tfrel.activated'));
     },
-    onError: toastError,
+    // Wrapped, not passed by reference: react-query calls a handler with
+    // (error, variables, context), and `toastError`'s second parameter is the
+    // fallback message -- so the bare reference quietly hands it the release
+    // id to show somebody when the error is not one it recognises.
+    onError: (caught) => toastError(caught),
   });
 
   const restore = useMutation({

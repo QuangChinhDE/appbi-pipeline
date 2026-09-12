@@ -739,3 +739,90 @@ class SearchView(BaseModel):
 
 
 FileNode.model_rebuild()
+
+
+# ── SQL import ────────────────────────────────────────────────────────────
+
+
+class SqlImportFile(BaseModel):
+    """One uploaded query, as it was typed."""
+
+    #: The filename. Used to name the model and to say where it came from.
+    name: str = Field(max_length=400)
+    content: str
+
+
+class SqlImportDecision(BaseModel):
+    """What a person settled on for one proposed model.
+
+    Preferences only. There is no field for a dependency -- which model reads
+    which is worked out from the SQL on the server, every time, so a client
+    cannot send a graph and cannot send a wrong one.
+    """
+
+    key: str = Field(max_length=500)
+    name: str = Field(max_length=60)
+    layer: str = Field(default="staging", max_length=20)
+    materialized: str = Field(default="view", max_length=20)
+    description: str = Field(default="", max_length=300)
+    tests: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SqlImportAnalyseRequest(BaseModel):
+    files: list[SqlImportFile]
+    #: Where the import is going. Absent means a project that does not exist
+    #: yet, and then `connection_id` says which warehouse to read the SQL as.
+    project_id: uuid.UUID | None = None
+    connection_id: uuid.UUID | None = None
+    source_schema: str = Field(default="raw", max_length=200)
+
+
+class SqlImportCandidateView(BaseModel):
+    key: str
+    file_name: str
+    suggested_name: str
+    name: str
+    layer: str
+    materialized: str
+    description: str
+    depends_on: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    tests: list[dict[str, Any]] = Field(default_factory=list)
+    preview: str
+
+
+class SqlImportAnalysis(BaseModel):
+    candidates: list[SqlImportCandidateView] = Field(default_factory=list)
+    skipped: list[dict[str, str]] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    cycle: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    #: False when no model was consulted, so the interface can say the names
+    #: are conventional defaults rather than a suggestion.
+    ai_used: bool = False
+
+
+class SqlImportApplyRequest(BaseModel):
+    files: list[SqlImportFile]
+    decisions: list[SqlImportDecision] = Field(default_factory=list)
+    #: Import into this project. Absent creates one.
+    project_id: uuid.UUID | None = None
+    #: Only for a new project.
+    name: str | None = Field(default=None, max_length=200)
+    connection_id: uuid.UUID | None = None
+    development_schema: str | None = Field(default=None, max_length=200)
+    production_schema: str | None = Field(default=None, max_length=200)
+    source_schema: str = Field(default="raw", max_length=200)
+    #: Run `dbt build` on what was written. The report a person is waiting for.
+    verify: bool = True
+
+
+class SqlImportResult(BaseModel):
+    project_id: uuid.UUID
+    created_project: bool
+    written_paths: list[str] = Field(default_factory=list)
+    #: Models renamed because the project already had a file by that name.
+    renamed: list[dict[str, str]] = Field(default_factory=list)
+    revision_id: uuid.UUID | None = None
+    #: The build queued to prove it works.
+    invocation_id: uuid.UUID | None = None

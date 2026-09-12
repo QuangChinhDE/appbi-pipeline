@@ -36,6 +36,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { CommandBar, type ParsedCommand } from '@/components/transforms/CommandBar';
 import { ScheduleDialog } from '@/components/transforms/ScheduleDialog';
+import { SqlImportDialog } from '@/components/transforms/SqlImportDialog';
 import { ReleasesDialog } from '@/components/transforms/ReleasesDialog';
 import { describeSchedule } from '@/lib/format';
 import { useI18n } from '@/providers/LanguageProvider';
@@ -82,6 +83,7 @@ export default function TransformWorkbenchPage() {
   const [outputTab, setOutputTab] = React.useState<OutputTab>('problems');
   const [inspectorId, setInspectorId] = React.useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = React.useState(false);
+  const [sqlImportOpen, setSqlImportOpen] = React.useState(false);
   const [releasesOpen, setReleasesOpen] = React.useState(false);
   const { t } = useI18n();
 
@@ -722,6 +724,10 @@ export default function TransformWorkbenchPage() {
                 id: 'docs', label: t('tfw.docs'),
                 onSelect: () => router.push(`/transforms/${projectId}/docs`),
               },
+              ...(canEdit ? [{
+                id: 'sql-import', label: t('tfsql.importAction'),
+                onSelect: () => setSqlImportOpen(true),
+              }] : []),
               {
                 id: 'runs', label: t('tfw.runHistory'),
                 onSelect: () => router.push(`/transforms/${projectId}/runs`),
@@ -1072,6 +1078,19 @@ export default function TransformWorkbenchPage() {
           canEdit={canEdit}
         />
       )}
+
+      <SqlImportDialog
+        open={sqlImportOpen}
+        onClose={() => setSqlImportOpen(false)}
+        projectId={projectId}
+        onImported={(invocationId) => {
+          // The build is the report somebody is waiting for, so the results
+          // panel is where they should land -- not on a file tree that has
+          // silently grown six entries.
+          invalidate();
+          if (invocationId) { setInvocationId(invocationId); setOutputTab('results'); }
+        }}
+      />
 
       <Modal
         open={Boolean(conflict)}

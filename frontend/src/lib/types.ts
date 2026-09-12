@@ -1466,3 +1466,58 @@ export interface BuilderAIChangeResult {
   project: BuilderProjectDetail;
   change_set: BuilderAIChangeSet;
 }
+
+
+// ── Transform: importing existing SQL ─────────────────────────────────────
+
+/** One uploaded query, as it was typed. */
+export interface SqlImportFile {
+  name: string;
+  content: string;
+}
+
+/**
+ * What a person settled on for one proposed model.
+ *
+ * Preferences only. There is deliberately no field for a dependency: which
+ * model reads which is worked out from the SQL on the server every time, so
+ * this cannot carry a graph and cannot carry a wrong one.
+ */
+export interface SqlImportDecision {
+  key: string;
+  name: string;
+  layer: string;
+  materialized: string;
+  description: string;
+  tests: { name: string; unique: boolean; not_null: boolean }[];
+}
+
+export interface SqlImportCandidate extends SqlImportDecision {
+  file_name: string;
+  /** The name the query itself used, before anything was suggested. */
+  suggested_name: string;
+  depends_on: string[];
+  sources: string[];
+  /** The converted body, so the review can show exactly what will be written. */
+  preview: string;
+}
+
+export interface SqlImportAnalysis {
+  candidates: SqlImportCandidate[];
+  skipped: { file: string; reason: string }[];
+  sources: string[];
+  cycle: string[];
+  notes: string[];
+  /** False when no model was consulted, so the screen can say the names are
+   *  conventional defaults rather than a suggestion. */
+  ai_used: boolean;
+}
+
+export interface SqlImportResult {
+  project_id: string;
+  created_project: boolean;
+  written_paths: string[];
+  renamed: { from: string; to: string }[];
+  revision_id: string | null;
+  invocation_id: string | null;
+}

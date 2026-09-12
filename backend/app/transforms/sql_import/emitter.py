@@ -13,6 +13,7 @@ rather than replacing somebody's work.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import yaml
@@ -172,20 +173,41 @@ def _docs_entry(decision: ModelDecision) -> dict:
     return entry
 
 
+#: Text that must not reach a model file, even inside a comment.
+#:
+#: dbt reads a model twice: a fast static scan of the raw text to find its
+#: dependencies, and then the real Jinja render. If the two disagree about
+#: which refs a model has, dbt refuses the model outright -- and the scan does
+#: not know a comment is a comment. A header that helpfully explained the
+#: conversion by naming `ref()` was read as a ref with no arguments, and every
+#: model with a genuine dependency failed to compile.
+_JINJA_LOOKALIKE = re.compile(r"\{\{|\}\}|\b(?:ref|source|config|var|env_var)\s*\(")
+
+
+def _comment_safe(text: str) -> str:
+    """One line of prose that cannot be mistaken for Jinja."""
+    flattened = " ".join(str(text).split())
+    return _JINJA_LOOKALIKE.sub("", flattened).strip()
+
+
 def _header(candidate: Candidate, decision: ModelDecision) -> str:
     """Where this model came from, written where somebody will read it.
 
     Six months from now the question about a model is always the same one --
     where did this come from -- and the answer is cheapest to record now.
+
+    Everything here goes through `_comment_safe`, including the description,
+    which may have been written by a model and may say anything at all.
     """
     lines = [
-        f"-- Imported by AppBI from {candidate.file_name}.",
-        "-- The query below is the one that was uploaded. Only the table names "
-        "changed,",
-        "-- into ref() and source() so dbt can work out the order to build in.",
+        f"-- Imported by AppBI from {_comment_safe(candidate.file_name)}.",
+        "-- The query below is exactly the one that was uploaded. Only the "
+        "table names",
+        "-- were changed, so dbt can work out what has to be built first.",
     ]
-    if decision.description.strip():
-        lines.insert(1, f"-- {decision.description.strip()}")
+    described = _comment_safe(decision.description)
+    if described:
+        lines.insert(1, f"-- {described}")
     return "\n".join(lines)
 
 

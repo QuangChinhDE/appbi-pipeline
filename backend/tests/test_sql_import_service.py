@@ -136,3 +136,35 @@ class Dialects(unittest.TestCase):
     def test_an_adapter_nobody_knows_is_read_as_postgres(self):
         assert service.dialect_for("duckdb") == "postgres"
         assert service.dialect_for(None) == "postgres"
+
+
+class ReadingWhatWasUploaded(unittest.TestCase):
+    """Two ways a list of files becomes a lossy dict, both closed."""
+
+    def test_two_files_with_one_name_both_survive(self):
+        """Different folders, or the same file picked twice. Keying a dict by
+        name would keep the last and lose the other without saying so."""
+        out = service.normalise([
+            ("orders.sql", "SELECT 1 AS a"),
+            ("orders.sql", "SELECT 2 AS b"),
+            ("orders.sql", "SELECT 3 AS c"),
+        ])
+        assert list(out) == ["orders.sql", "orders (2).sql", "orders (3).sql"]
+        assert list(out.values()) == ["SELECT 1 AS a", "SELECT 2 AS b", "SELECT 3 AS c"]
+
+    def test_a_byte_order_mark_is_not_sql(self):
+        """Windows editors add one. sqlglot reads it as part of the first
+        token and the whole file fails to parse for an invisible reason."""
+        out = service.normalise([("q.sql", "﻿SELECT 1 AS x")])
+        assert out["q.sql"].startswith("SELECT")
+        parsed = _render(files=out, decisions=[])
+        assert "models/staging/q.sql" in parsed.files
+
+    def test_a_nameless_file_still_gets_a_name(self):
+        assert list(service.normalise([("", "SELECT 1 AS x")])) == ["query.sql"]
+
+    def test_a_path_in_a_name_cannot_become_a_path(self):
+        out = service.normalise([("../../etc/passwd.sql", "SELECT 1 AS x")])
+        emitted = _render(files=out, decisions=[])
+        assert all(path.startswith("models/") for path in emitted.files)
+        assert not any(".." in path for path in emitted.files)
