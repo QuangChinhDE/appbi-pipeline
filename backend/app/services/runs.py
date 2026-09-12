@@ -50,7 +50,10 @@ async def get(session: AsyncSession, ctx: RequestContext, run_id: uuid.UUID) -> 
         )
     )
     if run is None:
-        raise NotFoundError("Không tìm thấy lần chạy này trong workspace.")
+        raise NotFoundError(
+            "No run like that in this workspace.",
+            code="RUN_NOT_IN_WORKSPACE",
+        )
     return run
 
 
@@ -347,7 +350,8 @@ async def retry(session: AsyncSession, ctx: RequestContext, run_id: uuid.UUID) -
     original = await get(session, ctx, run_id)
     if original.status not in RETRYABLE:
         raise ValidationError(
-            "Chỉ có thể chạy lại những lần chạy đã kết thúc ở trạng thái thất bại hoặc bị hủy.",
+            "Only a run that ended in failure or was cancelled can be run "
+            "again.",
             code="RUN_NOT_RETRYABLE",
         )
     pipeline = await pipeline_service.get(session, ctx, original.pipeline_id)

@@ -23,6 +23,9 @@ export interface RemediationInput {
   action?: string | null;
   technicalMessage?: string | null;
   traceId?: string | null;
+  /** The envelope's structured facts, which a translated message
+   *  interpolates: the field that was wrong, the host that refused. */
+  details?: Record<string, unknown>;
   onAction?: () => void;
   onRetry?: () => void;
 }
@@ -37,6 +40,7 @@ export function fromApiError(error: unknown, affects?: string): RemediationInput
       action: error.remediation?.action,
       technicalMessage: error.technicalMessage,
       traceId: error.traceId,
+      details: error.details,
     };
   }
   return {
@@ -94,7 +98,7 @@ export function ErrorRemediationCard({
               {t('error.whatHappened')}
             </p>
             <p className="text-caption font-emphasis leading-relaxed text-text-primary">
-              {translateError(locale, error.code, error.message)
+              {translateError(locale, error.code, error.message, error.details)
                 || t('common.unknownError')}
             </p>
           </div>

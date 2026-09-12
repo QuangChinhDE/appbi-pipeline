@@ -24,7 +24,7 @@ def as_enum(value: str | None, enum_cls: type[E], *, field: str) -> E | None:
     except ValueError:
         allowed = [member.value for member in enum_cls]
         raise ValidationError(
-            f"Giá trị '{value}' không hợp lệ cho '{field}'.",
+            f"'{value}' is not a valid value for '{field}'.",
             code="INVALID_FILTER_VALUE",
             details={"field": field, "value": value, "allowed": allowed},
         ) from None
@@ -39,7 +39,7 @@ def as_lower_enum(value: str | None, enum_cls: type[E], *, field: str) -> E | No
     except ValueError:
         allowed = [member.value for member in enum_cls]
         raise ValidationError(
-            f"Giá trị '{value}' không hợp lệ cho '{field}'.",
+            f"'{value}' is not a valid value for '{field}'.",
             code="INVALID_FILTER_VALUE",
             details={"field": field, "value": value, "allowed": allowed},
         ) from None

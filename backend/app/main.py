@@ -104,8 +104,8 @@ async def validation_handler(request: Request, exc: RequestValidationError) -> J
         for err in exc.errors()
     ]
     return _envelope(request, AppError(
-        "Dữ liệu gửi lên không hợp lệ.",
-        code="VALIDATION_FAILED", category=ErrorCategory.VALIDATION, status_code=422,
+        "What was sent is not valid.",
+        code="REQUEST_BODY_INVALID", category=ErrorCategory.VALIDATION, status_code=422,
         details={"fields": details},
     ))
 
@@ -133,9 +133,9 @@ async def integrity_handler(request: Request, exc: IntegrityError) -> JSONRespon
     log_event(logger, logging.WARNING, "api.integrity_error",
               path=request.url.path, duplicate=duplicate, technical=detail[:300])
     return _envelope(request, AppError(
-        "Tên này đã tồn tại trong workspace." if duplicate
-        else "Dữ liệu vi phạm ràng buộc toàn vẹn.",
-        code="RESOURCE_CONFLICT" if duplicate else "INTEGRITY_ERROR",
+        "That name already exists in this workspace." if duplicate
+        else "The data breaks an integrity constraint.",
+        code="NAME_TAKEN_IN_WORKSPACE" if duplicate else "INTEGRITY_ERROR",
         category=ErrorCategory.CONFLICT, status_code=409,
         technical_message=detail[:1000] if settings.app_env != "production" else None,
     ))
@@ -146,7 +146,7 @@ async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     log_event(logger, logging.ERROR, "api.unhandled", path=request.url.path,
               error=f"{type(exc).__name__}: {exc}")
     return _envelope(request, AppError(
-        "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.",
+        "Something unexpected went wrong. Try again.",
         code="INTERNAL_ERROR", category=ErrorCategory.UNKNOWN, status_code=500,
         technical_message=f"{type(exc).__name__}: {exc}"
         if settings.app_env != "production" else None,

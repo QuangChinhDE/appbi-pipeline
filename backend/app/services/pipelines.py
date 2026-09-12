@@ -45,7 +45,10 @@ async def get(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.UUID
         )
     )
     if pipeline is None:
-        raise NotFoundError("Không tìm thấy pipeline này trong workspace.")
+        raise NotFoundError(
+            "No pipeline like that in this workspace.",
+            code="PIPELINE_NOT_IN_WORKSPACE",
+        )
     return pipeline
 
 
@@ -191,19 +194,31 @@ def _validate_streams(
         entry = catalog_streams.get(key)
         if entry is None:
             raise ValidationError(
-                f"Stream '{selection.name}' không có trong snapshot cấu trúc đang dùng.",
+                f"The stream '{selection.name}' is not in the structure "
+                f"snapshot in use.",
+                code="STREAM_NOT_IN_SNAPSHOT",
                 details={"stream": selection.name},
             )
         supported = entry.get("supported_sync_modes") or ["full_refresh"]
         if selection.sync_mode not in supported:
             raise ValidationError(
-                f"Stream '{selection.name}' không hỗ trợ chế độ {selection.sync_mode}.",
-                details={"stream": selection.name, "supported_sync_modes": supported},
+                f"The stream '{selection.name}' does not offer "
+                f"{selection.sync_mode} mode.",
+                code="STREAM_SYNC_MODE_UNSUPPORTED",
+                details={
+                    "stream": selection.name, "sync_mode": selection.sync_mode,
+                    "supported_sync_modes": supported,
+                },
             )
         if selection.destination_sync_mode not in connector_dest_modes:
             raise ValidationError(
-                f"Destination không hỗ trợ chế độ ghi '{selection.destination_sync_mode}'.",
-                details={"supported": connector_dest_modes},
+                f"The destination cannot write in "
+                f"'{selection.destination_sync_mode}' mode.",
+                code="DESTINATION_SYNC_MODE_UNSUPPORTED",
+                details={
+                    "sync_mode": selection.destination_sync_mode,
+                    "supported": connector_dest_modes,
+                },
             )
 
         available = set(schema_service.field_types(entry.get("json_schema") or {}))
@@ -250,13 +265,17 @@ def _validate_streams(
         if selected_fields is not None:
             if not selected_fields:
                 raise ValidationError(
-                    f"Stream '{selection.name}' phải có ít nhất một trường được chọn.",
+                    f"The stream '{selection.name}' needs at least one "
+                    f"field selected.",
+                    code="STREAM_NO_FIELD_SELECTED",
                     details={"stream": selection.name},
                 )
             unknown_fields = set(selected_fields) - available
             if unknown_fields:
                 raise ValidationError(
-                    f"Stream '{selection.name}' có trường không tồn tại trong snapshot.",
+                    f"The stream '{selection.name}' names a field the "
+                    f"snapshot does not have.",
+                    code="STREAM_FIELD_UNKNOWN",
                     details={
                         "stream": selection.name,
                         "unknown_fields": sorted(unknown_fields),
@@ -267,7 +286,9 @@ def _validate_streams(
             missing_required = required_fields - set(selected_fields)
             if missing_required:
                 raise ValidationError(
-                    f"Stream '{selection.name}' phải giữ lại cursor và primary key.",
+                    f"The stream '{selection.name}' has to keep its cursor "
+                    f"and primary key.",
+                    code="STREAM_KEY_FIELD_REMOVED",
                     details={
                         "stream": selection.name,
                         "required_fields": sorted(required_fields),
@@ -323,11 +344,16 @@ def _reject_unsupported_naming(
     if not unsupported:
         return
     raise ValidationError(
-        f"Engine đang chạy ({settings.engine_type}) chưa đổi được tên stream ở "
-        f"đích, nên {' và '.join(unsupported)} sẽ không có tác dụng. Hãy để "
-        "trống, và tách hai pipeline bằng cách cho mỗi cái một schema riêng ở "
-        "Đích.",
-        details={"unsupported_fields": unsupported, "engine_type": settings.engine_type},
+        f"The engine in use ({settings.engine_type}) cannot rename a stream "
+        f"at the destination, so {' and '.join(unsupported)} would do nothing. "
+        f"Leave them empty, and keep two pipelines apart by giving each one its "
+        f"own schema at the destination.",
+        code="DESTINATION_NAMING_UNSUPPORTED",
+        details={
+            "fields": " and ".join(unsupported),
+            "unsupported_fields": unsupported,
+            "engine_type": settings.engine_type,
+        },
     )
 
 
@@ -360,7 +386,11 @@ async def create(session: AsyncSession, ctx: RequestContext, payload) -> Pipelin
     destination = await actors.get(session, ctx, actors.DESTINATION, payload.destination_id)
     for actor, label in ((source, "Source"), (destination, "Destination")):
         if actor.status is not ResourceStatus.ACTIVE:
-            raise ValidationError(f"{label} '{actor.name}' đang không hoạt động.")
+            raise ValidationError(
+                f"{label} '{actor.name}' is not active.",
+                code="ACTOR_NOT_ACTIVE",
+                details={"side": label, "name": actor.name},
+            )
 
     clash = await session.scalar(
         select(Pipeline).where(
@@ -370,7 +400,11 @@ async def create(session: AsyncSession, ctx: RequestContext, payload) -> Pipelin
         )
     )
     if clash is not None:
-        raise ValidationError(f"Đã có pipeline tên '{payload.name}'.")
+        raise ValidationError(
+            f"There is already a pipeline called '{payload.name}'.",
+            code="PIPELINE_NAME_TAKEN",
+            details={"name": payload.name},
+        )
 
     snapshot = (
         await schema_service.get_snapshot(session, ctx, payload.schema_snapshot_id)
@@ -379,11 +413,14 @@ async def create(session: AsyncSession, ctx: RequestContext, payload) -> Pipelin
     )
     if snapshot is None:
         raise ValidationError(
-            "Chưa có cấu trúc dữ liệu cho nguồn này. Hãy chạy Discover trước.",
+            "There is no structure for this source yet. Run Discover first.",
             code="SCHEMA_SNAPSHOT_MISSING",
         )
     if snapshot.source_id != source.id:
-        raise ValidationError("Snapshot cấu trúc không thuộc về source đã chọn.")
+        raise ValidationError(
+            "That structure snapshot belongs to a different source.",
+            code="SNAPSHOT_WRONG_SOURCE",
+        )
 
     destination_connector = await catalog.get_connector(session, destination.connector_key)
     resolved = _validate_streams(
@@ -499,7 +536,11 @@ async def update(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.U
             )
         )
         if clash is not None:
-            raise ValidationError(f"Đã có pipeline tên '{payload.name}'.")
+            raise ValidationError(
+                f"There is already a pipeline called '{payload.name}'.",
+                code="PIPELINE_NAME_TAKEN",
+                details={"name": payload.name},
+            )
         pipeline.name = payload.name.strip()
     if payload.description is not None:
         pipeline.description = payload.description
@@ -538,7 +579,10 @@ async def update(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.U
     if payload.streams is not None:
         snapshot = await session.get(SchemaSnapshot, pipeline.active_schema_snapshot_id)
         if snapshot is None:
-            raise ValidationError("Pipeline chưa có snapshot cấu trúc dữ liệu hợp lệ.")
+            raise ValidationError(
+                "This pipeline has no valid structure snapshot.",
+                code="PIPELINE_SNAPSHOT_MISSING",
+            )
         destination = await actors.get(session, ctx, actors.DESTINATION, pipeline.destination_id)
         destination_connector = await catalog.get_connector(session, destination.connector_key)
         resolved = _validate_streams(
@@ -691,8 +735,9 @@ async def set_replication_state(
     running = await active_run(session, pipeline.id)
     if running is not None:
         raise ValidationError(
-            "Pipeline đang chạy. Lần chạy này sẽ ghi đè con trỏ khi kết thúc, "
-            "nên hãy đợi nó xong hoặc huỷ trước khi sửa."
+            "The pipeline is running. That run overwrites the cursor when "
+            "it finishes, so wait for it or cancel it before editing.",
+            code="PIPELINE_RUNNING_CURSOR_LOCKED",
         )
 
     before = pipeline.sync_state if isinstance(pipeline.sync_state, list) else []
@@ -751,7 +796,9 @@ async def delete(session: AsyncSession, ctx: RequestContext, pipeline_id: uuid.U
     running = await active_run(session, pipeline.id)
     if running is not None:
         raise ResourceInUseError(
-            "Pipeline đang có lần chạy chưa kết thúc. Hãy hủy hoặc đợi hoàn tất trước khi xóa.",
+            "The pipeline has a run that has not finished. Cancel it, or "
+            "wait for it, before deleting.",
+            code="PIPELINE_RUN_UNFINISHED",
             constraints=[{"type": "RUN", "id": str(running.id), "name": str(running.id)[:8]}],
         )
 

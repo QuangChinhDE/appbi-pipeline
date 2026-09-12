@@ -47,7 +47,8 @@ def _load(raw: bytes | None) -> dict[str, Any]:
         parsed = yaml.safe_load(raw.decode("utf-8"))
     except yaml.YAMLError as exc:
         raise ValidationError(
-            "Tệp YAML hiện tại không đọc được, nên không thể thêm vào.",
+            "The YAML file as it stands cannot be read, so nothing can be "
+            "added to it.",
             code="TRANSFORM_YAML_UNREADABLE",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -55,7 +56,7 @@ def _load(raw: bytes | None) -> dict[str, Any]:
         return {"version": 2}
     if not isinstance(parsed, dict):
         raise ValidationError(
-            "Tệp YAML hiện tại không đúng cấu trúc dbt.",
+            "The YAML file as it stands is not shaped like dbt's.",
             code="TRANSFORM_YAML_UNREADABLE",
         )
     parsed.setdefault("version", 2)
@@ -140,7 +141,9 @@ async def generate_staging_model(
 
     selected = [column for column in columns if column.get("selected", True)]
     if not selected:
-        raise ValidationError("Chọn ít nhất một cột.", code="TRANSFORM_NO_COLUMNS")
+        raise ValidationError(
+            "Choose at least one column.", code="TRANSFORM_NO_COLUMNS",
+        )
     for column in selected:
         scaffold.validate_identifier(column["name"], field="Tên cột")
         if (alias := (column.get("alias") or "").strip()):
@@ -150,8 +153,10 @@ async def generate_staging_model(
     revision = await file_service.working_revision(session, project)
     if model_path in (revision.manifest_index or {}):
         raise ValidationError(
-            f"Đã có tệp {model_path}. Đổi tên model hoặc sửa tệp đó trực tiếp.",
+            f"There is already a file at {model_path}. Rename the model, "
+            f"or edit that file directly.",
             code="TRANSFORM_FILE_EXISTS",
+            details={"path": str(model_path)},
         )
 
     sources_doc = _merge_source(

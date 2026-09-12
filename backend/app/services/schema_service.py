@@ -136,7 +136,7 @@ async def discover(
     now = utcnow()
     if not force and source.discover_locked_until and source.discover_locked_until > now:
         raise ConflictError(
-            "Đang đọc cấu trúc dữ liệu của nguồn này. Vui lòng đợi vài giây.",
+            "This source's structure is being read. Give it a few seconds.",
             code="DISCOVER_IN_PROGRESS",
         )
     source.discover_locked_until = now + timedelta(seconds=DISCOVER_LOCK_SECONDS)
@@ -204,7 +204,9 @@ async def get_snapshot(session: AsyncSession, ctx: RequestContext, snapshot_id: 
         )
     )
     if snapshot is None:
-        raise NotFoundError("Không tìm thấy snapshot cấu trúc dữ liệu.")
+        raise NotFoundError(
+            "No such structure snapshot.", code="SNAPSHOT_NOT_FOUND",
+        )
     return snapshot
 
 

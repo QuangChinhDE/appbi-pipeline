@@ -102,7 +102,7 @@ def resolve_targets(host: str) -> list[ipaddress._BaseAddress]:
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
         raise ValidationError(
-            f"Không phân giải được tên miền '{host}'.",
+            f"The domain '{host}' could not be resolved.",
             code="EGRESS_DNS_FAILED",
             details={"host": host, "reason": str(exc)[:200]},
         ) from None
@@ -121,7 +121,7 @@ def check_url_syntax(url: str, *, field: str = "base_url") -> None:
 
     if parsed.scheme.lower() not in ALLOWED_SCHEMES:
         raise ValidationError(
-            "Chỉ hỗ trợ http:// và https://.",
+            "Only http:// and https:// are supported.",
             code="EGRESS_SCHEME_BLOCKED",
             details={"field": field, "scheme": parsed.scheme,
                      "allowed": sorted(ALLOWED_SCHEMES)},
@@ -130,7 +130,7 @@ def check_url_syntax(url: str, *, field: str = "base_url") -> None:
     host = (parsed.hostname or "").strip().lower()
     if not host:
         raise ValidationError(
-            "URL thiếu tên miền.", code="EGRESS_HOST_MISSING",
+            "The URL has no domain in it.", code="EGRESS_HOST_MISSING",
             details={"field": field},
         )
 
@@ -140,7 +140,7 @@ def check_url_syntax(url: str, *, field: str = "base_url") -> None:
     # `localhost` never needs a lookup to be recognised.
     if host in {"localhost", "localhost.localdomain"}:
         raise ValidationError(
-            "Không thể trỏ connector vào chính máy chủ.",
+            "A connector cannot be pointed at this server itself.",
             code="EGRESS_PRIVATE_ADDRESS",
             details={"field": field, "host": host},
         )
@@ -154,8 +154,8 @@ def check_url_syntax(url: str, *, field: str = "base_url") -> None:
         return
     if not _is_public(literal):
         raise ValidationError(
-            f"Địa chỉ '{host}' nằm trong mạng nội bộ. Nếu đây là API nội bộ, "
-            "hãy nhờ quản trị viên thêm vào danh sách cho phép.",
+            f"The address '{host}' is on a private network. If that is an "
+            f"internal API, ask an administrator to add it to the allow list.",
             code="EGRESS_PRIVATE_ADDRESS",
             details={"field": field, "host": host, "resolved": str(literal)},
         )
@@ -182,9 +182,9 @@ def check_url(url: str, *, field: str = "base_url") -> None:
             continue
         if not _is_public(address):
             raise ValidationError(
-                f"Địa chỉ '{host}' trỏ vào mạng nội bộ ({address}). "
-                "Nếu đây là API nội bộ, hãy nhờ quản trị viên thêm vào danh sách "
-                "cho phép.",
+                f"The address '{host}' points into a private network "
+                f"({address}). If that is an internal API, ask an administrator "
+                f"to add it to the allow list.",
                 code="EGRESS_PRIVATE_ADDRESS",
                 details={"field": field, "host": host, "resolved": str(address)},
             )
@@ -206,14 +206,16 @@ def check_connected_address(url: str, address: str, *, field: str = "base_url") 
         peer = ipaddress.ip_address(address)
     except ValueError:
         raise ValidationError(
-            "Không xác định được địa chỉ máy chủ đã kết nối.",
+            "The address of the server that answered could not be "
+            "determined.",
             code="EGRESS_PEER_UNKNOWN", details={"field": field, "host": host},
         ) from None
     if any(peer in network for network in _allowlisted_networks()):
         return
     if not _is_public(peer):
         raise ValidationError(
-            f"Kết nối tới '{host}' đã đi vào mạng nội bộ ({peer}).",
+            f"The connection to '{host}' went into a private network "
+            f"({peer}).",
             code="EGRESS_PRIVATE_ADDRESS",
             details={"field": field, "host": host, "resolved": str(peer)},
         )

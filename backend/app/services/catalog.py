@@ -227,7 +227,10 @@ async def get_connector(session: AsyncSession, connector_key: str) -> ConnectorD
         select(ConnectorDefinition).where(ConnectorDefinition.connector_key == connector_key)
     )
     if row is None:
-        raise NotFoundError(f"Không tìm thấy connector '{connector_key}'.")
+        raise NotFoundError(
+            f"No connector called '{connector_key}'.",
+            code="CONNECTOR_NOT_FOUND", details={"connector": connector_key},
+        )
     return row
 
 
@@ -236,11 +239,18 @@ async def require_usable(session: AsyncSession, connector_key: str, expected_typ
     connector = await get_connector(session, connector_key)
     if connector.connector_type is not expected_type:
         raise ValidationError(
-            f"Connector '{connector_key}' không phải loại {expected_type.value.lower()}."
+            f"The connector '{connector_key}' is not a "
+            f"{expected_type.value.lower()}.",
+            code="CONNECTOR_WRONG_TYPE",
+            details={
+                "connector": connector_key,
+                "expected": expected_type.value.lower(),
+            },
         )
     if connector.status is ConnectorStatus.DISABLED or connector.certification is Certification.BLOCKED:
         raise ValidationError(
-            connector.disabled_reason or "Connector này đang bị tạm khóa cho workspace của bạn.",
+            connector.disabled_reason
+            or "This connector is suspended for your workspace.",
             code="CONNECTOR_DISABLED",
         )
     # The launch scope, enforced where it cannot be bypassed. The presenter
@@ -251,8 +261,8 @@ async def require_usable(session: AsyncSession, connector_key: str, expected_typ
                                          connector.certification.value,
                                          connector.spec_source):
         raise ValidationError(
-            "Connector này chưa nằm trong phạm vi hỗ trợ của bản phát hành "
-            "hiện tại. Liên hệ quản trị viên nếu bạn cần bật nó.",
+            "This connector is outside what the current release supports. "
+            "Ask an administrator if you need it turned on.",
             code="CONNECTOR_NOT_IN_LAUNCH_SCOPE",
         )
     return connector
@@ -681,6 +691,7 @@ def validate_against_spec(spec: dict, configuration: dict) -> None:
         properties = (spec or {}).get("properties") or {}
         labels = [properties.get(key, {}).get("title", key) for key in missing]
         raise ValidationError(
-            "Thiếu thông tin bắt buộc: " + ", ".join(labels),
-            details={"missing_fields": missing},
+            "Required information is missing: " + ", ".join(labels),
+            code="REQUIRED_FIELDS_MISSING",
+            details={"fields": ", ".join(labels), "missing_fields": missing},
         )

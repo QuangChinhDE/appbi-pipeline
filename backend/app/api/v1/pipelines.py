@@ -266,7 +266,10 @@ async def schema_approve(
     pipeline = await pipeline_service.get(session, ctx, pipeline_id)
     snapshot = await schema_service.get_snapshot(session, ctx, payload.snapshot_id)
     if snapshot.source_id != pipeline.source_id:
-        raise ValidationError("Snapshot không thuộc về source của pipeline này.")
+        raise ValidationError(
+            "That snapshot does not belong to this pipeline's source.",
+            code="SNAPSHOT_WRONG_PIPELINE_SOURCE",
+        )
     await schema_service.approve(session, ctx, pipeline, snapshot,
                                  drop_removed=payload.drop_removed_streams)
     await session.commit()

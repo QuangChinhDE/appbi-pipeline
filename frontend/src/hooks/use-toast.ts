@@ -21,7 +21,7 @@ function locale(): 'vi' | 'en' {
 
 export function toastError(error: unknown, fallback?: string) {
   if (error instanceof ApiError) {
-    toast.error(translateError(locale(), error.code, error.message), {
+    toast.error(translateError(locale(), error.code, error.message, error.details), {
       description: error.traceId ? `trace: ${error.traceId}` : undefined,
     });
     return;

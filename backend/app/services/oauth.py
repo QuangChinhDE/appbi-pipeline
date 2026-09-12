@@ -204,15 +204,20 @@ def exchange_code(provider: Provider, code: str) -> dict[str, Any]:
         log_event(logger, logging.WARNING, "oauth.exchange_failed",
                   provider=provider.key, error=type(exc).__name__)
         raise ValidationError(
-            "Không đổi được mã uỷ quyền thành token. Hãy thử kết nối lại.")
+            "The authorization code could not be exchanged for a token. "
+            "Try connecting again.",
+            code="OAUTH_EXCHANGE_FAILED",
+        )
 
     if not payload.get("refresh_token"):
         # An access token alone expires within the hour, and a sync scheduled
         # for tonight would fail with something that reads like a permission
         # problem. Better to refuse now and say why.
         raise ValidationError(
-            "Nhà cung cấp không trả refresh token. Hãy gỡ quyền truy cập đã "
-            "cấp trước đó cho ứng dụng này rồi kết nối lại.")
+            "The provider returned no refresh token. Revoke the access "
+            "already granted to this application, then connect again.",
+            code="OAUTH_NO_REFRESH_TOKEN",
+        )
     return payload
 
 
@@ -285,13 +290,25 @@ async def consume_grant(session: AsyncSession, grant_id: uuid.UUID, *,
     """
     grant = await session.get(OAuthGrant, grant_id)
     if grant is None or grant.workspace_id != workspace_id:
-        raise ValidationError("Phiên uỷ quyền không tồn tại hoặc đã hết hạn.")
+        raise ValidationError(
+            "That authorization session does not exist, or it has expired.",
+            code="OAUTH_SESSION_UNKNOWN",
+        )
     if grant.connector_key != connector_key:
-        raise ValidationError("Phiên uỷ quyền thuộc về một connector khác.")
+        raise ValidationError(
+            "That authorization session belongs to a different connector.",
+            code="OAUTH_SESSION_WRONG_CONNECTOR",
+        )
     if grant.consumed_at is not None:
-        raise ValidationError("Phiên uỷ quyền đã được dùng. Hãy kết nối lại.")
+        raise ValidationError(
+            "That authorization session has already been used. Connect again.",
+            code="OAUTH_SESSION_USED",
+        )
     if grant.expires_at < utcnow():
-        raise ValidationError("Phiên uỷ quyền đã hết hạn. Hãy kết nối lại.")
+        raise ValidationError(
+            "That authorization session has expired. Connect again.",
+            code="OAUTH_SESSION_EXPIRED",
+        )
 
     credentials = await secret_store.read(session, grant.secret_ref)
     grant.consumed_at = utcnow()

@@ -213,10 +213,11 @@ def org_allowed(role: OrgRole | None, action: Action) -> bool:
 def org_require(role: OrgRole | None, action: Action) -> None:
     if not org_allowed(role, action):
         raise ForbiddenError(
-            f"Vai trò tổ chức {role.value if role else 'không có'} "
-            f"không có quyền {action.value} trên tổ chức.",
+            f"The organization role {role.value if role else 'none'} does "
+            f"not carry {action.value} on the organization.",
+            code="ORG_ACTION_DENIED",
             details={"scope": "organization", "action": action.value,
-                     "role": role.value if role else None},
+                     "role": role.value if role else "none"},
         )
 
 
@@ -242,8 +243,11 @@ def allowed(role: Role, module: Module, action: Action) -> bool:
 def require(role: Role, module: Module, action: Action) -> None:
     if not allowed(role, module, action):
         raise ForbiddenError(
-            f"Vai trò {role.value} không có quyền {action.value} trên {module.value}.",
-            details={"module": module.value, "action": action.value, "role": role.value},
+            f"The role {role.value} does not carry {action.value} on "
+            f"{module.value}.",
+            code="MODULE_ACTION_DENIED",
+            details={"module": module.value, "action": action.value,
+                     "role": role.value},
         )
 
 

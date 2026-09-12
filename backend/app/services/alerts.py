@@ -66,7 +66,9 @@ async def upsert_rule(
             )
         )
         if rule is None:
-            raise NotFoundError("Không tìm thấy quy tắc cảnh báo.")
+            raise NotFoundError(
+                "No such alert rule.", code="ALERT_RULE_NOT_FOUND",
+            )
     else:
         rule = AlertRule(workspace_id=ctx.workspace_id, created_by=ctx.user_id,
                          event_type=AlertEventType(payload.event_type))
@@ -95,7 +97,9 @@ async def delete_rule(session: AsyncSession, ctx: RequestContext, rule_id: uuid.
         select(AlertRule).where(AlertRule.id == rule_id, AlertRule.workspace_id == ctx.workspace_id)
     )
     if rule is None:
-        raise NotFoundError("Không tìm thấy quy tắc cảnh báo.")
+        raise NotFoundError(
+                "No such alert rule.", code="ALERT_RULE_NOT_FOUND",
+            )
     await session.delete(rule)
     await audit.record(session, ctx, "alert.rule.deleted",
                        resource_type="ALERT_RULE", resource_id=rule_id, resource_name=rule.name)

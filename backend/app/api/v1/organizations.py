@@ -32,7 +32,10 @@ router = APIRouter(tags=["organization"])
 
 def _org_id(ctx) -> uuid.UUID:
     if ctx.organization_id is None:
-        raise ForbiddenError("Phiên làm việc chưa gắn với tổ chức nào.")
+        raise ForbiddenError(
+            "This session is not attached to an organization.",
+            code="SESSION_WITHOUT_ORG",
+        )
     return ctx.organization_id
 
 
@@ -40,7 +43,10 @@ def _parse_org_role(raw: str) -> OrgRole:
     try:
         return OrgRole(raw.upper())
     except ValueError as exc:
-        raise ValidationError(f"Vai trò tổ chức '{raw}' không hợp lệ.") from exc
+        raise ValidationError(
+            f"'{raw}' is not an organization role.",
+            code="ORG_ROLE_INVALID", details={"role": raw},
+        ) from exc
 
 
 async def _assert_not_last_org_owner(session, organization_id, membership_id: uuid.UUID) -> None:
@@ -59,7 +65,8 @@ async def _assert_not_last_org_owner(session, organization_id, membership_id: uu
     )
     if not remaining:
         raise ValidationError(
-            "Tổ chức phải còn ít nhất một Org Owner. Hãy chỉ định người khác trước.",
+            "An organization has to keep at least one Org Owner. Name "
+            "somebody else first.",
             code="LAST_ORG_OWNER",
         )
 
@@ -69,7 +76,7 @@ async def get_organization(session: SessionDep, ctx: CtxDep) -> OrganizationSumm
     ctx.require_org(Action.VIEW)
     organization = await session.get(Organization, _org_id(ctx))
     if organization is None:
-        raise ValidationError("Không tìm thấy tổ chức.")
+        raise ValidationError("No such organization.", code="ORG_NOT_FOUND")
     count = await session.scalar(
         select(func.count()).select_from(Workspace)
         .where(Workspace.organization_id == organization.id)
@@ -88,7 +95,7 @@ async def update_organization(
     ctx.require_org(Action.EDIT)
     organization = await session.get(Organization, _org_id(ctx))
     if organization is None:
-        raise ValidationError("Không tìm thấy tổ chức.")
+        raise ValidationError("No such organization.", code="ORG_NOT_FOUND")
     before = organization.name
     organization.name = payload.name.strip()
     await audit.record(session, ctx, "organization.renamed", resource_type="ORGANIZATION",
@@ -142,7 +149,10 @@ async def create_workspace(
     slug = payload.slug.strip().lower()
     clash = await session.scalar(select(Workspace).where(Workspace.slug == slug))
     if clash is not None:
-        raise ValidationError(f"Slug '{slug}' đã được dùng.")
+        raise ValidationError(
+            f"The slug '{slug}' is already in use.",
+            code="ORG_SLUG_TAKEN", details={"slug": slug},
+        )
 
     workspace = Workspace(
         organization_id=_org_id(ctx), name=payload.name.strip(), slug=slug,
@@ -227,15 +237,19 @@ async def delete_workspace(
     )
     if not remaining:
         raise ValidationError(
-            "Tổ chức phải còn ít nhất một workspace. Hãy tạo workspace khác trước.",
+            "An organization has to keep at least one workspace. Create "
+            "another one first.",
             code="LAST_WORKSPACE",
         )
 
     blocking = await _blocking_contents(session, workspace.id)
     if blocking:
         raise ResourceInUseError(
-            f"Workspace còn {len(blocking)} tài nguyên. Hãy xóa chúng trước — "
-            "xóa từng cái sẽ dọn cả tài nguyên phía engine và thông tin đăng nhập.",
+            f"The workspace still holds {len(blocking)} resources. Delete "
+            f"them first -- deleting each one also clears what it left on the "
+            f"engine, and its credentials.",
+            code="WORKSPACE_NOT_EMPTY",
+            details={"count": len(blocking)},
             constraints=blocking,
         )
 
@@ -298,7 +312,10 @@ async def invite_org_member(
         )
     )
     if existing is not None:
-        raise ValidationError("Người dùng đã là thành viên của tổ chức.")
+        raise ValidationError(
+            "That person is already a member of the organization.",
+            code="ALREADY_ORG_MEMBER",
+        )
 
     membership = OrganizationMembership(
         organization_id=organization_id, user_id=user.id, role=role
@@ -328,13 +345,18 @@ async def update_org_member_role(
         )
     )
     if membership is None:
-        raise ValidationError("Không tìm thấy thành viên tổ chức.")
+        raise ValidationError(
+            "No such organization member.", code="ORG_MEMBER_NOT_FOUND",
+        )
     role = _parse_org_role(payload.role)
 
     # An ORG_ADMIN may not mint an owner, nor demote one: that is the boundary
     # between running the organisation and owning it.
     if not ctx.can_org(Action.DELETE) and OrgRole.ORG_OWNER in (role, membership.role):
-        raise ForbiddenError("Chỉ Org Owner mới thay đổi được vai trò Org Owner.")
+        raise ForbiddenError(
+            "Only an Org Owner can change the Org Owner role.",
+            code="ORG_OWNER_ROLE_RESTRICTED",
+        )
     if membership.role is OrgRole.ORG_OWNER and role is not OrgRole.ORG_OWNER:
         await _assert_not_last_org_owner(session, organization_id, membership.id)
 
@@ -367,10 +389,16 @@ async def remove_org_member(
     if membership is None:
         return Response(status_code=204)
     if membership.user_id == ctx.user_id:
-        raise ValidationError("Không thể tự xóa chính mình khỏi tổ chức.")
+        raise ValidationError(
+            "You cannot remove yourself from the organization.",
+            code="CANNOT_REMOVE_SELF_ORG",
+        )
     if membership.role is OrgRole.ORG_OWNER:
         if not ctx.can_org(Action.DELETE):
-            raise ForbiddenError("Chỉ Org Owner mới xóa được một Org Owner khác.")
+            raise ForbiddenError(
+                "Only an Org Owner can remove another Org Owner.",
+                code="ORG_OWNER_REMOVAL_RESTRICTED",
+            )
         await _assert_not_last_org_owner(session, organization_id, membership.id)
 
     await audit.record(session, ctx, "organization.member.removed", resource_type="ORG_MEMBER",

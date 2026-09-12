@@ -34,17 +34,19 @@ async def current_user(
 ) -> User:
     token = _bearer(authorization) or appbi_session
     if not token:
-        raise UnauthorizedError("Bạn cần đăng nhập.")
+        raise UnauthorizedError("You have to sign in.", code="SIGN_IN_REQUIRED")
     claims = decode_session_token(token)
     user = await session.get(User, uuid.UUID(claims["sub"]))
     if user is None or not user.is_active:
-        raise UnauthorizedError("Tài khoản không còn hoạt động.")
+        raise UnauthorizedError(
+            "This account is no longer active.", code="ACCOUNT_INACTIVE",
+        )
     # A token issued before the last password change is no longer a session.
     # Tokens minted before this field existed carry no `sv`; they are treated
     # as version 0, which is what every untouched account still has.
     if int(claims.get("sv", 0)) != user.session_version:
         raise UnauthorizedError(
-            "Phiên đăng nhập đã hết hiệu lực do mật khẩu được thay đổi.",
+            "The session ended because the password was changed.",
             code="SESSION_REVOKED")
     actor_id_var.set(str(user.id))
     return user
@@ -76,7 +78,8 @@ async def request_context(
     """
     if user.password_change_required:
         raise ForbiddenError(
-            "Tài khoản này phải đổi mật khẩu trước khi sử dụng.",
+            "This account has to change its password before using the "
+            "product.",
             code="PASSWORD_CHANGE_REQUIRED",
         )
     token = _bearer(authorization) or appbi_session
@@ -87,7 +90,10 @@ async def request_context(
     # and the permission check from disagreeing.
     accesses = await access.reachable(session, user)
     if not accesses:
-        raise ForbiddenError("Tài khoản chưa thuộc workspace nào.")
+        raise ForbiddenError(
+            "This account does not belong to a workspace yet.",
+            code="NO_WORKSPACE",
+        )
 
     # An explicit header and a workspace remembered in the token are not the
     # same request, and must not fail the same way.
@@ -107,10 +113,16 @@ async def request_context(
         try:
             wanted_id = uuid.UUID(str(x_workspace_id))
         except (ValueError, TypeError):
-            raise ForbiddenError("X-Workspace-Id không hợp lệ.") from None
+            raise ForbiddenError(
+                "X-Workspace-Id is not a valid value.",
+                code="WORKSPACE_HEADER_INVALID",
+            ) from None
         chosen = next((a for a in accesses if a.workspace.id == wanted_id), None)
         if chosen is None:
-            raise ForbiddenError("Bạn không truy cập được workspace này.")
+            raise ForbiddenError(
+                "Your account cannot reach that workspace.",
+                code="WORKSPACE_ACCESS_DENIED",
+            )
     elif claims.get("ws"):
         try:
             remembered = uuid.UUID(str(claims["ws"]))
@@ -121,7 +133,9 @@ async def request_context(
 
     workspace = chosen.workspace
     if workspace.status is not WorkspaceStatus.ACTIVE:
-        raise ForbiddenError("Workspace đang không hoạt động.")
+        raise ForbiddenError(
+            "That workspace is not active.", code="WORKSPACE_INACTIVE",
+        )
 
     org_role = await access.org_role_of(session, user, workspace.organization_id)
     workspace_id_var.set(str(workspace.id))
@@ -150,7 +164,10 @@ CtxDep = Annotated[RequestContext, Depends(request_context)]
 
 async def platform_admin(ctx: CtxDep) -> RequestContext:
     if not ctx.is_platform_admin:
-        raise ForbiddenError("Chỉ platform admin mới truy cập được khu vực này.")
+        raise ForbiddenError(
+            "Only a platform administrator can reach this area.",
+            code="PLATFORM_ADMIN_ONLY",
+        )
     return ctx
 
 

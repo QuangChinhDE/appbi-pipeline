@@ -94,7 +94,7 @@ def _catalogs_bigquery(configuration: dict[str, Any]) -> list[str]:
         seen = [item.project_id for item in client.list_projects()]
     except Exception as exc:
         raise ValidationError(
-            "Không đọc được danh sách project của tài khoản này.",
+            "The list of projects for this account could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -196,7 +196,7 @@ def _columns_postgres(
                 ]
     except Exception as exc:
         raise ValidationError(
-            f"Không đọc được danh sách cột của bảng {relation_name}.",
+            f"The columns of the table {relation_name} could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -221,7 +221,7 @@ def _columns_bigquery(
         ]
     except Exception as exc:
         raise ValidationError(
-            f"Không đọc được danh sách cột của bảng {relation_name}.",
+            f"The columns of the table {relation_name} could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -268,7 +268,7 @@ def _schemas_bigquery(
         return sorted(item.dataset_id for item in client.list_datasets())
     except Exception as exc:
         raise ValidationError(
-            "Không đọc được danh sách dataset của kho dữ liệu.",
+            "The warehouse's list of datasets could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -289,7 +289,7 @@ def _relations_bigquery(
         ]
     except Exception as exc:
         raise ValidationError(
-            f"Không đọc được danh sách bảng trong dataset {schema_name}.",
+            f"The tables in the dataset {schema_name} could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -322,7 +322,7 @@ def _schemas_postgres(configuration: dict[str, Any]) -> list[str]:
                 return [row[0] for row in cursor.fetchall()]
     except Exception as exc:
         raise ValidationError(
-            "Không đọc được danh sách schema của kho dữ liệu.",
+            "The warehouse's list of schemas could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc
@@ -348,7 +348,7 @@ def _relations_postgres(
                 ]
     except Exception as exc:
         raise ValidationError(
-            f"Không đọc được danh sách bảng trong schema {schema_name}.",
+            f"The tables in the schema {schema_name} could not be read.",
             code="TRANSFORM_BROWSE_FAILED",
             technical_message=f"{type(exc).__name__}: {exc}",
         ) from exc

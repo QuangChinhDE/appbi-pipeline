@@ -38,7 +38,7 @@ def require_zone(name: str | None) -> str:
         ZoneInfo(candidate)
     except (ZoneInfoNotFoundError, ValueError, KeyError):
         raise ValidationError(
-            f"Múi giờ '{candidate}' không hợp lệ.",
+            f"The timezone '{candidate}' is not one this system knows.",
             code="INVALID_TIMEZONE",
             details={"timezone": candidate},
         ) from None
@@ -52,9 +52,12 @@ def validate(config: dict[str, Any]) -> dict[str, Any]:
         schedule_type = ScheduleType(raw_type)
     except ValueError:
         raise ValidationError(
-            f"Loại lịch chạy '{raw_type}' không hợp lệ.",
+            f"'{raw_type}' is not a kind of schedule.",
             code="INVALID_SCHEDULE_TYPE",
-            details={"allowed": [t.value for t in ScheduleType]},
+            details={
+                "schedule_type": raw_type,
+                "allowed": [t.value for t in ScheduleType],
+            },
         ) from None
     timezone_name = require_zone(config.get("timezone") or "Asia/Bangkok")
 
@@ -64,8 +67,13 @@ def validate(config: dict[str, Any]) -> dict[str, Any]:
         interval = int(config.get("interval_seconds") or 0)
         if interval < settings.min_schedule_interval_seconds:
             raise ValidationError(
-                f"Khoảng chạy tối thiểu là {settings.min_schedule_interval_seconds // 60} phút.",
-                details={"min_interval_seconds": settings.min_schedule_interval_seconds},
+                f"Runs have to be at least "
+                f"{settings.min_schedule_interval_seconds // 60} minutes apart.",
+                code="SCHEDULE_INTERVAL_TOO_SHORT",
+                details={
+                    "minutes": settings.min_schedule_interval_seconds // 60,
+                    "min_interval_seconds": settings.min_schedule_interval_seconds,
+                },
             )
         normalized["interval_seconds"] = interval
 
@@ -75,25 +83,36 @@ def validate(config: dict[str, Any]) -> dict[str, Any]:
             hour, minute = (int(part) for part in raw.split(":"))
             time(hour, minute)
         except (ValueError, TypeError) as exc:
-            raise ValidationError("Giờ chạy hằng ngày phải có dạng HH:mm.") from exc
+            raise ValidationError(
+                "A daily run time has to be written as HH:mm.",
+                code="SCHEDULE_TIME_INVALID",
+            ) from exc
         normalized["time_of_day"] = f"{hour:02d}:{minute:02d}"
 
     elif schedule_type is ScheduleType.CRON:
         expression = (config.get("cron_expression") or "").strip()
         if not expression:
-            raise ValidationError("Cron expression không được để trống.")
+            raise ValidationError(
+                "The cron expression is empty.", code="SCHEDULE_CRON_EMPTY",
+            )
         try:
             croniter(expression)
         except (CroniterBadCronError, ValueError) as exc:
-            raise ValidationError(f"Cron expression không hợp lệ: {exc}") from exc
+            raise ValidationError(
+                f"That cron expression cannot be read: {exc}",
+                code="SCHEDULE_CRON_INVALID",
+                details={"reason": str(exc)},
+            ) from exc
         probe = croniter(expression, utcnow())
         first = probe.get_next(datetime)
         second = probe.get_next(datetime)
         gap = (second - first).total_seconds()
         if gap < settings.min_schedule_interval_seconds:
             raise ValidationError(
-                f"Cron chạy dày hơn mức tối thiểu "
-                f"({settings.min_schedule_interval_seconds // 60} phút).",
+                f"That cron fires more often than the minimum of "
+                f"{settings.min_schedule_interval_seconds // 60} minutes.",
+                code="SCHEDULE_CRON_TOO_DENSE",
+                details={"minutes": settings.min_schedule_interval_seconds // 60},
             )
         normalized["cron_expression"] = expression
 

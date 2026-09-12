@@ -94,7 +94,9 @@ def build_router(kind, *, prefix: str, tag: str) -> APIRouter:
         payload: ActorTestRequest, session: SessionDep, ctx: CtxDep
     ) -> ActorTestResult:
         if not payload.connector_key:
-            raise ValidationError("Thiếu connector_key.")
+            raise ValidationError(
+                "connector_key is missing.", code="CONNECTOR_KEY_MISSING",
+            )
         result, check_token = await actor_service.test_payload(
             session, ctx, kind, payload.connector_key,
             payload.configuration or {}, payload.credentials or {},

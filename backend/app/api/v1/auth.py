@@ -62,7 +62,10 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
     user = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if user is None:
         # Same wording either way so the endpoint is not a user-enumeration oracle.
-        raise UnauthorizedError("Email hoặc mật khẩu không đúng.")
+        raise UnauthorizedError(
+            "That email and password do not match an account.",
+            code="CREDENTIALS_INVALID",
+        )
     if user.locked_until and user.locked_until > utcnow():
         # Deliberately the same 401 an unknown account gets, not a distinct
         # 429. A lockout response that only appears for real accounts turns
@@ -76,7 +79,10 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
                            resource_type="USER", resource_id=user.id,
                            result=AuditResult.FAILURE)
         await session.commit()
-        raise UnauthorizedError("Email hoặc mật khẩu không đúng.")
+        raise UnauthorizedError(
+            "That email and password do not match an account.",
+            code="CREDENTIALS_INVALID",
+        )
 
     if not verify_password(payload.password, user.password_hash):
         user.failed_login_count += 1
@@ -94,9 +100,14 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
         await audit.record(session, None, "auth.login.failed", resource_type="USER",
                            resource_id=user.id, result=AuditResult.FAILURE)
         await session.commit()
-        raise UnauthorizedError("Email hoặc mật khẩu không đúng.")
+        raise UnauthorizedError(
+            "That email and password do not match an account.",
+            code="CREDENTIALS_INVALID",
+        )
     if not user.is_active:
-        raise ForbiddenError("Tài khoản đã bị vô hiệu hóa.")
+        raise ForbiddenError(
+            "This account has been disabled.", code="ACCOUNT_DISABLED",
+        )
 
     user.failed_login_count = 0
     user.locked_until = None
@@ -155,9 +166,15 @@ async def me(
         try:
             wanted_id = uuid.UUID(str(x_workspace_id))
         except (ValueError, TypeError):
-            raise ForbiddenError("X-Workspace-Id không hợp lệ.") from None
+            raise ForbiddenError(
+                "X-Workspace-Id is not a valid value.",
+                code="WORKSPACE_HEADER_INVALID",
+            ) from None
         if wanted_id not in reachable:
-            raise ForbiddenError("Bạn không truy cập được workspace này.")
+            raise ForbiddenError(
+            "Your account cannot reach that workspace.",
+            code="WORKSPACE_ACCESS_DENIED",
+        )
         workspace_id = wanted_id
     elif claims.get("ws"):
         try:
@@ -174,7 +191,10 @@ async def switch_workspace(
     workspace_id: uuid.UUID, response: Response, session: SessionDep, user: UserDep
 ) -> CurrentUser:
     if workspace_id not in await _reachable_ids(session, user):
-        raise ForbiddenError("Bạn không truy cập được workspace này.")
+        raise ForbiddenError(
+            "Your account cannot reach that workspace.",
+            code="WORKSPACE_ACCESS_DENIED",
+        )
     _set_cookie(response, issue_session_token(user.id, workspace_id, user.session_version))
     return await _current_user_payload(session, user, workspace_id)
 
@@ -249,13 +269,19 @@ async def change_password(
                            resource_type="USER", resource_id=user.id,
                            result=AuditResult.FAILURE)
         await session.commit()
-        raise UnauthorizedError("Mật khẩu hiện tại không đúng.")
+        raise UnauthorizedError(
+            "The current password is not right.",
+            code="CURRENT_PASSWORD_WRONG",
+        )
 
     problems = password_problems(payload.new_password)
     if problems:
         raise ValidationError(" ".join(problems))
     if payload.new_password == payload.current_password:
-        raise ValidationError("Mật khẩu mới phải khác mật khẩu hiện tại.")
+        raise ValidationError(
+            "The new password has to differ from the current one.",
+            code="NEW_PASSWORD_SAME",
+        )
 
     user.password_hash = hash_password(payload.new_password)
     user.password_change_required = False
@@ -354,7 +380,8 @@ async def _assert_not_last_owner(session, workspace_id, membership_id: uuid.UUID
     )
     if not remaining:
         raise ValidationError(
-            "Workspace phải còn ít nhất một Owner. Hãy chỉ định Owner khác trước.",
+            "A workspace has to keep at least one Owner. Name another one "
+            "first.",
             code="LAST_OWNER",
         )
 
@@ -365,9 +392,16 @@ def _parse_assignable_role(raw: str) -> Role:
     try:
         role = Role(raw.upper())
     except ValueError as exc:
-        raise ValidationError(f"Vai trò '{raw}' không hợp lệ.") from exc
+        raise ValidationError(
+            f"'{raw}' is not a role.",
+            code="ROLE_INVALID", details={"role": raw},
+        ) from exc
     if role not in ASSIGNABLE_ROLES:
-        raise ValidationError(f"Vai trò '{role.value}' không thể gán cho thành viên workspace.")
+        raise ValidationError(
+            f"The role '{role.value}' cannot be given to a workspace "
+            f"member.",
+            code="ROLE_NOT_FOR_WORKSPACE", details={"role": role.value},
+        )
     return role
 
 
@@ -421,7 +455,10 @@ async def invite_member(payload: MemberInvite, session: SessionDep, ctx: CtxDep)
         )
     )
     if existing is not None:
-        raise ValidationError("Người dùng đã là thành viên của workspace.")
+        raise ValidationError(
+            "That person is already a member of the workspace.",
+            code="ALREADY_WORKSPACE_MEMBER",
+        )
 
     membership = Membership(workspace_id=ctx.workspace_id, user_id=user.id, role=role)
     session.add(membership)
@@ -446,7 +483,7 @@ async def update_member_role(
         )
     )
     if membership is None:
-        raise ValidationError("Không tìm thấy thành viên.")
+        raise ValidationError("No such member.", code="MEMBER_NOT_FOUND")
     role = _parse_assignable_role(payload.role)
     if membership.role is Role.OWNER and role is not Role.OWNER:
         await _assert_not_last_owner(session, ctx.workspace_id, membership.id)
@@ -474,7 +511,10 @@ async def remove_member(member_id: uuid.UUID, session: SessionDep, ctx: CtxDep) 
     if membership is None:
         return Response(status_code=204)
     if membership.user_id == ctx.user_id:
-        raise ValidationError("Không thể tự xóa chính mình khỏi workspace.")
+        raise ValidationError(
+            "You cannot remove yourself from the workspace.",
+            code="CANNOT_REMOVE_SELF",
+        )
     if membership.role is Role.OWNER:
         await _assert_not_last_owner(session, ctx.workspace_id, membership.id)
     await audit.record(session, ctx, "member.removed", resource_type="MEMBER",

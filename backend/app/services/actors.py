@@ -125,7 +125,10 @@ async def get(session: AsyncSession, ctx: RequestContext, kind: ActorKind, actor
         )
     )
     if row is None:
-        raise NotFoundError("Không tìm thấy kết nối này trong workspace.")
+        raise NotFoundError(
+            "No connection like that in this workspace.",
+            code="ACTOR_NOT_IN_WORKSPACE",
+        )
     return row
 
 
@@ -443,7 +446,12 @@ async def create(
         )
     )
     if clash is not None:
-        raise ValidationError(f"Đã có kết nối tên '{payload.name}' trong workspace.")
+        raise ValidationError(
+            f"There is already a connection called '{payload.name}' in this "
+            f"workspace.",
+            code="ACTOR_NAME_TAKEN",
+            details={"name": payload.name},
+        )
 
     config, spec_secrets = catalog.split_configuration(connector.spec_schema, payload.configuration)
     secrets = {**spec_secrets, **(payload.credentials or {})}
@@ -577,7 +585,12 @@ async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
             )
         )
         if clash is not None:
-            raise ValidationError(f"Đã có kết nối tên '{payload.name}' trong workspace.")
+            raise ValidationError(
+                f"There is already a connection called '{payload.name}' in "
+                f"this workspace.",
+                code="ACTOR_NAME_TAKEN",
+                details={"name": payload.name},
+            )
         actor.name = payload.name
     if payload.description is not None:
         actor.description = payload.description
@@ -778,7 +791,9 @@ async def set_enabled(session: AsyncSession, ctx: RequestContext, kind: ActorKin
                   if p.status is PipelineStatus.ACTIVE]
         if active:
             raise ResourceInUseError(
-                f"Kết nối đang được {len(active)} pipeline đang bật sử dụng.",
+                f"The connection is used by {len(active)} enabled pipelines.",
+                code="ACTOR_IN_USE_ENABLED",
+                details={"count": len(active)},
                 constraints=[{"type": "PIPELINE", "id": str(p.id), "name": p.name} for p in active],
             )
     actor.status = ResourceStatus.ACTIVE if enabled else ResourceStatus.DISABLED
@@ -815,12 +830,20 @@ async def delete(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
         )
     if dependents and not force:
         raise ResourceInUseError(
-            f"{'Source' if kind.side == 'SOURCE' else 'Destination'} đang được "
-            f"{len(dependents)} pipeline sử dụng.",
+            f"{'Source' if kind.side == 'SOURCE' else 'Destination'} is used "
+            f"by {len(dependents)} pipelines.",
+            code="ACTOR_IN_USE",
+            details={
+                "name": "Source" if kind.side == "SOURCE" else "Destination",
+                "count": len(dependents),
+            },
             constraints=[{"type": "PIPELINE", "id": str(p.id), "name": p.name} for p in dependents],
         )
     if dependents and force and not ctx.can(Module.PIPELINES, Action.DELETE):
-        raise ResourceInUseError("Cần quyền xóa pipeline để xóa cưỡng bức.")
+        raise ResourceInUseError(
+            "Force-deleting needs the permission to delete pipelines.",
+            code="ACTOR_FORCE_DELETE_DENIED",
+        )
 
     actor.status = ResourceStatus.DELETE_PENDING
     await session.flush()

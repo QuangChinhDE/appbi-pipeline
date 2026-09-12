@@ -83,11 +83,18 @@ async def start(connector_key: str, ctx: CtxDep) -> StartResponse:
     provider = oauth_service.provider_for(connector_key)
     if provider is None:
         raise ValidationError(
-            f"Connector '{connector_key}' không hỗ trợ đăng nhập uỷ quyền. "
-            "Hãy dùng service account.")
+            f"The connector '{connector_key}' does not offer sign-in by "
+            f"authorization. Use a service account.",
+            code="OAUTH_NOT_SUPPORTED",
+            details={"connector": connector_key},
+        )
     if not oauth_service.configured(provider):
         raise ValidationError(
-            f"Deployment này chưa cấu hình ứng dụng OAuth cho {provider.label}.")
+            f"This deployment has no OAuth application configured for "
+            f"{provider.label}.",
+            code="OAUTH_APP_NOT_CONFIGURED",
+            details={"provider": provider.label},
+        )
 
     # The state carries who is asking, in a token signed for this purpose
     # only. The provider's redirect arrives as a fresh top-level navigation
@@ -167,7 +174,10 @@ async def grant(grant_id: uuid.UUID, session: SessionDep, ctx: CtxDep) -> GrantV
 
     row = await session.get(OAuthGrant, grant_id)
     if row is None or row.workspace_id != ctx.workspace_id:
-        raise ValidationError("Phiên uỷ quyền không tồn tại hoặc đã hết hạn.")
+        raise ValidationError(
+            "That authorization session does not exist, or it has expired.",
+            code="OAUTH_SESSION_UNKNOWN",
+        )
     ctx.require(
         Module.TRANSFORMS if row.connector_key.startswith("destination-")
         else Module.SOURCES,
