@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { formatBytes, formatDuration, formatNumber, formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { useI18n } from '@/providers/LanguageProvider';
+import { translateError } from '@/lib/i18n';
 import { Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
@@ -189,7 +190,9 @@ export default function RunsPage() {
                     <td className="max-w-[240px] px-4 py-2.5">
                       {run.error ? <span
                         className={cn('block truncate text-caption', run.error.category === 'CANCELLED' ? 'text-text-tertiary' : 'text-danger')}
-                        title={run.error.summary ?? run.error.category ?? ''}
+                        title={run.error.summary
+                          ? translateError(locale, run.error.code, run.error.summary)
+                          : (run.error.category ?? '')}
                       >
                         {tf([`errorCategory.${run.error.category ?? 'UNKNOWN'}`], run.error.category ?? t('errorCategory.UNKNOWN'))}
                       </span> : <span className="text-caption text-text-quaternary">-</span>}

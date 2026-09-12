@@ -14,6 +14,7 @@ import { formatNumber, formatPercent, formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useI18n } from '@/providers/LanguageProvider';
+import { translateError } from '@/lib/i18n';
 import { Button } from '@/components/ui/Button';
 import { CardSkeleton, EmptyState, ErrorState, Skeleton } from '@/components/ui/Feedback';
 import { Card, PageListLayout, StatTile } from '@/components/layout/PageLayout';
@@ -228,8 +229,9 @@ function RunList({
                 {run.pipeline?.name ?? run.short_id}
               </p>
               <p className="truncate text-tiny text-text-tertiary">
-                {run.error?.summary
-                  ?? `${t('overview.recordsSuffix', { n: formatNumber(run.records_synced) })} · ${formatRelative(run.created_at, locale)}`}
+                {run.error
+                  ? translateError(locale, run.error.code, run.error.summary ?? '')
+                  : `${t('overview.recordsSuffix', { n: formatNumber(run.records_synced) })} · ${formatRelative(run.created_at, locale)}`}
               </p>
             </div>
             <RunStatusBadge status={run.status} size="xs" />

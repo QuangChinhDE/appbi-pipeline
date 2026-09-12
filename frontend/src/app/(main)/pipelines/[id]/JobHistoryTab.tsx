@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { toastSuccess } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/providers/LanguageProvider';
+import { translateError } from '@/lib/i18n';
 
 export const OUTCOMES = ['ALL', 'SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
 export type JobOutcomeFilter = (typeof OUTCOMES)[number];
@@ -169,7 +170,9 @@ function JobRow({
         <p className="mt-0.5 truncate text-tiny tabular-nums text-text-tertiary">
           {facts.join('  ·  ') || '—'}
           {run.error?.summary && (
-            <span className="ml-2 text-danger">{run.error.summary}</span>
+            <span className="ml-2 text-danger">
+              {translateError(locale, run.error.code, run.error.summary)}
+            </span>
           )}
         </p>
       </div>

@@ -15,6 +15,7 @@ import { useWorkspaceId } from '@/hooks/use-current-user';
 import { useUrlTab } from '@/hooks/use-url-tab';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useI18n } from '@/providers/LanguageProvider';
+import { translateError } from '@/lib/i18n';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback';
@@ -127,7 +128,9 @@ export default function RunDetailPage() {
     <DetailBody>
       {run.error && <div className="mb-4"><ErrorRemediationCard error={{
         code: run.error.code,
-        message: run.error.summary ?? t('runs.failedDefault'),
+        message: run.error.summary
+          ? translateError(locale, run.error.code, run.error.summary)
+          : t('runs.failedDefault'),
         category: run.error.category,
         affects: resource?.name,
         action: run.error.remediation_action,

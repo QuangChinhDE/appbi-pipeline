@@ -41,7 +41,17 @@ export function HealthBadge({
     health.label,
   );
   return (
-    <Badge variant={style.variant} size={size} title={health.message ?? undefined}>
+    <Badge
+      variant={style.variant}
+      size={size}
+      // The tooltip is the last check's own words, stored when the
+      // check ran. `health.code` is the error code that produced it,
+      // so the code decides the language and the stored sentence is
+      // the fallback.
+      title={health.message
+        ? tf([`errorCode.${health.code}`], health.message)
+        : undefined}
+    >
       <style.Icon className={cn('h-3 w-3', spinning && 'animate-spin')} aria-hidden />
       {label}
     </Badge>

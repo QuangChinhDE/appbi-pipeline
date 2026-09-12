@@ -19,7 +19,7 @@ const RESOURCE_TYPES = ['SOURCE', 'DESTINATION', 'PIPELINE', 'RUN', 'MEMBER',
   'CONNECTOR', 'WORKSPACE', 'ALERT_RULE', 'USER'];
 
 export default function AuditPage() {
-  const { t, locale } = useI18n();
+  const { t, tf, locale } = useI18n();
   const workspaceId = useWorkspaceId();
 
   const [action, setAction] = React.useState('');
@@ -105,8 +105,11 @@ export default function AuditPage() {
                           {formatDateTime(event.created_at, locale)}
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className="font-mono text-caption text-text-primary">
-                            {event.action}
+                          {/* Monospace suited the raw identifier. A sentence
+                              reads as prose, and an action the catalog does
+                              not know still arrives as its identifier. */}
+                          <span className="text-caption text-text-primary">
+                            {tf([`audit.action.${event.action}`], event.action)}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-caption text-text-secondary">
