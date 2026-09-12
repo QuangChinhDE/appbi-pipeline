@@ -242,7 +242,7 @@ def diff(
         added.append({
             "kind": "STREAM_ADDED", "severity": SchemaChangeSeverity.INFO.value,
             "namespace": namespace, "stream_name": name,
-            "message": f"Bảng/stream mới: {name}. Chưa được chọn tự động.",
+            "message": f"New table or stream: {name}. Not selected automatically.",
         })
 
     for key in before.keys() - after.keys():
@@ -253,8 +253,10 @@ def diff(
             "severity": (SchemaChangeSeverity.BREAKING if is_selected
                          else SchemaChangeSeverity.INFO).value,
             "namespace": namespace, "stream_name": name,
-            "message": (f"Stream '{name}' đang được đồng bộ nhưng không còn ở nguồn."
-                        if is_selected else f"Stream '{name}' đã bị xóa khỏi nguồn."),
+            "message": (f"The stream '{name}' is being synced but is no "
+                        f"longer at the source."
+                        if is_selected
+                        else f"The stream '{name}' was removed from the source."),
         })
 
     for key in before.keys() & after.keys():
@@ -268,7 +270,7 @@ def diff(
                 "kind": "FIELD_ADDED", "severity": SchemaChangeSeverity.INFO.value,
                 "namespace": namespace, "stream_name": name, "field_name": field_name,
                 "after": new_fields[field_name],
-                "message": f"Trường mới '{field_name}' ({new_fields[field_name]}).",
+                "message": f"New field '{field_name}' ({new_fields[field_name]}).",
             })
 
         for field_name in old_fields.keys() - new_fields.keys():
@@ -278,7 +280,7 @@ def diff(
                              else SchemaChangeSeverity.INFO).value,
                 "namespace": namespace, "stream_name": name, "field_name": field_name,
                 "before": old_fields[field_name],
-                "message": f"Trường '{field_name}' không còn tồn tại ở nguồn.",
+                "message": f"The field '{field_name}' no longer exists at the source.",
             })
 
         for field_name in old_fields.keys() & new_fields.keys():
@@ -289,7 +291,7 @@ def diff(
                                  else SchemaChangeSeverity.WARNING).value,
                     "namespace": namespace, "stream_name": name, "field_name": field_name,
                     "before": old_fields[field_name], "after": new_fields[field_name],
-                    "message": (f"Kiểu dữ liệu của '{field_name}' đổi từ "
+                    "message": (f"The data type of '{field_name}' changed from "
                                 f"{old_fields[field_name]} sang {new_fields[field_name]}."),
                 })
 
@@ -299,8 +301,9 @@ def diff(
                 changed.append({
                     "kind": "CURSOR_REMOVED", "severity": SchemaChangeSeverity.BREAKING.value,
                     "namespace": namespace, "stream_name": name, "field_name": cursor,
-                    "message": (f"Cursor '{cursor}' không còn ở nguồn. Pipeline không thể "
-                                f"chạy incremental cho stream này."),
+                    "message": (f"The cursor '{cursor}' is no longer at the source. "
+                                f"The pipeline cannot run this stream "
+                                f"incrementally."),
                 })
 
         old_pk = before[key].get("source_defined_primary_key") or []
@@ -310,7 +313,8 @@ def diff(
                 "kind": "PRIMARY_KEY_CHANGED", "severity": SchemaChangeSeverity.BREAKING.value,
                 "namespace": namespace, "stream_name": name,
                 "before": str(old_pk), "after": str(new_pk),
-                "message": "Primary key của stream đã thay đổi; chế độ dedupe cần được xác nhận lại.",
+                "message": "The stream's primary key changed; dedupe mode has to "
+                           "be confirmed again.",
             })
 
     return {"added": added, "removed": removed, "changed": changed}
@@ -368,10 +372,10 @@ def _summarize(result: dict[str, list[dict[str, Any]]]) -> str:
         if change["severity"] == SchemaChangeSeverity.BREAKING.value
     ]
     if not breaking:
-        return "Cấu trúc nguồn đã thay đổi."
+        return "The source structure has changed."
     head = "; ".join(change["message"] for change in breaking[:3])
     if len(breaking) > 3:
-        head += f" (+{len(breaking) - 3} thay đổi khác)"
+        head += f" (+{len(breaking) - 3} more changes)"
     return head
 
 
@@ -452,7 +456,7 @@ def capability_view(entry: dict[str, Any]) -> dict[str, Any]:
     modes = entry.get("supported_sync_modes") or ["full_refresh"]
     reason = None
     if "incremental" not in modes:
-        reason = "Connector không hỗ trợ incremental cho stream này."
+        reason = "The connector does not offer incremental for this stream."
     return {
         "name": entry.get("name"),
         "namespace": entry.get("namespace"),

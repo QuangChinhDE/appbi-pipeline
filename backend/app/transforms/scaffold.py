@@ -407,7 +407,8 @@ def validate_identifier(value: str, *, field: str) -> str:
     name = (value or "").strip().lower()
     if not _IDENT.fullmatch(name):
         raise ValidationError(
-            f"{field} chỉ gồm chữ thường, số và gạch dưới, và bắt đầu bằng chữ.",
+            f"{field} takes lower-case letters, digits and underscores, "
+            f"and starts with a letter.",
             code="TRANSFORM_INVALID_NAME",
         )
     return name
@@ -466,12 +467,12 @@ def staging_model_sql(
     """
     if materialized not in ("view", "table"):
         raise ValidationError(
-            "Kiểu materialization phải là view hoặc table.",
+            "Materialization has to be view or table.",
             code="TRANSFORM_INVALID_MATERIALIZATION",
         )
     if not columns:
         raise ValidationError(
-            "Chọn ít nhất một cột.", code="TRANSFORM_NO_COLUMNS",
+            "Choose at least one column.", code="TRANSFORM_NO_COLUMNS",
         )
 
     width = max(len(column["name"]) for column in columns)
@@ -486,10 +487,11 @@ def staging_model_sql(
     lines[-1] = lines[-1].rstrip(",")
 
     return (
-        f"-- Staging model cho bảng `{table_name}`.\n"
+        f"-- Staging model for the table `{table_name}`.\n"
         "--\n"
-        "-- Tầng staging chỉ đổi tên và chọn cột, không đổi ý nghĩa dữ liệu.\n"
-        "-- Mọi phép tính, join hay tổng hợp nên nằm ở tầng marts.\n"
+        "-- The staging layer renames and selects columns; it does not "
+        "change what the data means.\n"
+        "-- Every calculation, join and aggregation belongs in marts.\n"
         f"{{{{ config(materialized='{materialized}') }}}}\n"
         "\n"
         "select\n"

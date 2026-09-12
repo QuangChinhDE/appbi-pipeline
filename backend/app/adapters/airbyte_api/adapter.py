@@ -116,7 +116,7 @@ class _ClientCredentialsAuth(httpx.Auth):
                 headers={"Content-Type": "application/json"})
         if response.status_code >= 400:
             raise EngineOperationError(
-                message="Không lấy được token xác thực từ engine.",
+                message="No authentication token could be obtained from the engine.",
                 code="ENGINE_AUTH_FAILED",
                 technical_message=(
                     f"POST /api/v1/applications/token -> "
@@ -203,7 +203,7 @@ class AirbyteApiAdapter:
 
         if not settings.airbyte_workspace_auto:
             raise EngineOperationError(
-                message="Chưa cấu hình workspace của Airbyte.",
+                message="Airbyte's workspace has not been configured.",
                 technical_message=(
                     "AIRBYTE_WORKSPACE_ID is empty. Find it with "
                     "`python scripts/airbyte-workspace.py list`, or set "
@@ -214,7 +214,7 @@ class AirbyteApiAdapter:
         found = await self._list_workspaces()
         if len(found) != 1:
             raise EngineOperationError(
-                message="Không xác định được workspace của Airbyte.",
+                message="Airbyte's workspace could not be determined.",
                 technical_message=(
                     f"AIRBYTE_WORKSPACE_AUTO is on but this Airbyte has "
                     f"{len(found)} workspaces. Auto-resolution only applies when "
@@ -267,7 +267,7 @@ class AirbyteApiAdapter:
                 return workspaces
             errors.append(f"{path}: answered without a `workspaces` key")
         raise EngineOperationError(
-            message="Không đọc được danh sách workspace của Airbyte.",
+            message="Airbyte's list of workspaces could not be read.",
             technical_message=("no workspace listing route answered on this "
                                "deployment: " + "; ".join(errors)),
         )
@@ -315,7 +315,7 @@ class AirbyteApiAdapter:
             # previously indistinguishable from a 404 -- which is how a rotated
             # credential came to mark live syncs FAILED.
             raise EngineOperationError(
-                message="Không xác thực được với engine đồng bộ.",
+                message="The sync engine would not accept the credentials.",
                 code="ENGINE_AUTH_FAILED",
                 technical_message=f"HTTP {response.status_code}: {response.text[:500]}")
         if response.status_code == 404 or _looks_absent(response.text):
@@ -543,7 +543,7 @@ class AirbyteApiAdapter:
 
         if entry is None:
             raise EngineOperationError(
-                message=(f"Airbyte deployment này chưa có connector "
+                message=(f"This Airbyte deployment has no connector "
                          f"'{connector.connector_key}'."),
                 technical_message=(
                     f"{connector.docker_repository} is not among the "
@@ -569,7 +569,7 @@ class AirbyteApiAdapter:
             return
         if not connector.version or connector.version == UNPINNED:
             raise EngineOperationError(
-                message="Connector chưa được pin phiên bản để chạy.",
+                message="The connector has no pinned version to run.",
                 technical_message=(
                     f"{connector.connector_key} requested an unpinned image tag"),
             )
@@ -691,7 +691,7 @@ class AirbyteApiAdapter:
                 "records": [],
                 "logs": logs,
                 "error": {
-                    "summary": result.message or "Kết nối thất bại.",
+                    "summary": result.message or "The connection failed.",
                     "code": result.error_code or "CONNECTOR_CHECK_FAILED",
                     "category": (result.category.value if result.category
                                  else ErrorCategory.CONFIGURATION.value),
@@ -733,7 +733,7 @@ class AirbyteApiAdapter:
             if not job.get("succeeded", True):
                 reason = (job.get("failureReason") or {})
                 error = {
-                    "summary": "Không đọc được cấu trúc dữ liệu từ connector.",
+                    "summary": "The data structure could not be read from the connector.",
                     "code": "BUILDER_DISCOVER_FAILED",
                     "category": ErrorCategory.SCHEMA.value,
                     "technical_message": (reason.get("externalMessage")
@@ -751,7 +751,7 @@ class AirbyteApiAdapter:
                     names = sorted((entry.get("stream") or {}).get("name", "")
                                    for entry in streams)
                     error = {
-                        "summary": f"Connector không trả về stream '{stream_name}'.",
+                        "summary": f"The connector did not return the stream '{stream_name}'.",
                         "code": "BUILDER_STREAM_NOT_DISCOVERED",
                         "category": ErrorCategory.CONFIGURATION.value,
                         "technical_message": (
@@ -762,7 +762,8 @@ class AirbyteApiAdapter:
                     schema = (wanted.get("stream") or {}).get("jsonSchema")
         except AppError as exc:
             error = {
-                "summary": getattr(exc, "message", None) or "Không đọc được cấu trúc dữ liệu.",
+                "summary": getattr(exc, "message", None)
+                or "The data structure could not be read.",
                 "code": getattr(exc, "code", None) or "BUILDER_DISCOVER_FAILED",
                 "category": ErrorCategory.ENGINE.value,
                 "technical_message": getattr(exc, "technical_message", None) or str(exc),
@@ -1116,7 +1117,7 @@ class AirbyteApiAdapter:
         if status is RunStatus.CANCELLED and failure is None:
             failure = EngineFailure(
                 code="RUN_CANCELLED", category=ErrorCategory.CANCELLED,
-                summary="Lần chạy đã bị hủy.", fingerprint=fingerprint("cancelled"),
+                summary="The run was cancelled.", fingerprint=fingerprint("cancelled"),
             )
         return EngineJobStatus(
             ref=ref, status=status,

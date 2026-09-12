@@ -315,7 +315,7 @@ async def _ensure_organization(session) -> Organization:
         select(Organization).where(Organization.slug == "default")
     )
     if organization is None:
-        organization = Organization(name="Tổ chức mặc định", slug="default")
+        organization = Organization(name="Default organization", slug="default")
         session.add(organization)
         await session.flush()
     return organization

@@ -194,8 +194,8 @@ async def engine_status(
     lag = (utcnow() - oldest_heartbeat).total_seconds() if oldest_heartbeat else 0.0
 
     payload: dict[str, Any] = {
-        "label": "Dịch vụ đồng bộ hoạt động bình thường" if health.reachable
-                 else "Dịch vụ đồng bộ đang tạm gián đoạn",
+        "label": "The sync service is working normally" if health.reachable
+                 else "The sync service is unavailable at the moment",
         "operational": health.reachable,
         "checked_at": health.checked_at,
         "active_runs": active,

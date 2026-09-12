@@ -96,8 +96,8 @@ async def enqueue(
     """
     if not settings.transform_runtime_available:
         raise ValidationError(
-            "Bản cài đặt này không kèm Transform. Dựng lại image với "
-            "WITH_TRANSFORM=1 để dùng tính năng này.",
+            "This installation does not include Transform. Rebuild the "
+            "image with WITH_TRANSFORM=1 to use it.",
             code="TRANSFORM_RUNTIME_UNAVAILABLE",
         )
 

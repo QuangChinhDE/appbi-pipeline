@@ -362,7 +362,7 @@ class EmbeddedAirbyteAdapter:
             )
         except DockerUnavailable as exc:
             return ConnectionCheckResult(
-                succeeded=False, message="Không tải được connector.",
+                succeeded=False, message="The connector could not be downloaded.",
                 error_code="CONNECTOR_IMAGE_UNAVAILABLE", category=ErrorCategory.ENGINE,
                 technical_message=str(exc),
             )
@@ -486,7 +486,7 @@ class EmbeddedAirbyteAdapter:
             if failure is None and result.exit_code not in (0, None):
                 stderr = (result.stderr or b"").decode(errors="replace").strip()
                 if result.timed_out:
-                    failure = "Đọc thử quá thời gian cho phép."
+                    failure = "The trial read took too long."
                 elif not records:
                     failure = stderr[-1500:] or f"connector exited with code {result.exit_code}"
 
@@ -512,7 +512,7 @@ class EmbeddedAirbyteAdapter:
             return {
                 "ok": False, "records": [], "logs": [], "requests": [],
                 "error": {
-                    "summary": "Không tải được runner cho connector tùy biến.",
+                    "summary": "The runner for a custom connector could not be downloaded.",
                     "code": "CONNECTOR_IMAGE_UNAVAILABLE",
                     "category": ErrorCategory.ENGINE.value,
                     "technical_message": str(exc),
@@ -855,7 +855,7 @@ class EmbeddedAirbyteAdapter:
                 job.status = RunStatus.CANCELLED
                 job.failure = EngineFailure(
                     code="RUN_CANCELLED", category=ErrorCategory.CANCELLED,
-                    summary="Lần chạy đã bị hủy theo yêu cầu.",
+                    summary="The run was cancelled on request.",
                     fingerprint=fingerprint("cancelled"),
                 )
             elif source_rc == 0 and dest_rc == 0:
@@ -880,7 +880,7 @@ class EmbeddedAirbyteAdapter:
             job.status = RunStatus.TIMED_OUT
             job.failure = EngineFailure(
                 code="ENGINE_TIMEOUT", category=ErrorCategory.TIMEOUT,
-                summary="Lần chạy vượt quá thời gian tối đa và đã bị dừng.",
+                summary="The run went past its time limit and was stopped.",
                 remediation_action="RETRY_LATER", fingerprint=fingerprint("run timeout"),
             )
             emit("[engine] run exceeded timeout, killing containers")
@@ -893,7 +893,7 @@ class EmbeddedAirbyteAdapter:
             job.status = RunStatus.FAILED_TO_START
             job.failure = EngineFailure(
                 code="CONNECTOR_IMAGE_UNAVAILABLE", category=ErrorCategory.ENGINE,
-                summary="Không tải được image của connector.",
+                summary="The connector's image could not be downloaded.",
                 technical_message=str(exc)[:2000], remediation_action="CONTACT_ADMIN",
                 fingerprint=fingerprint(str(exc)),
             )

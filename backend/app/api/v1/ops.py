@@ -249,7 +249,7 @@ async def acknowledge(
 ) -> Acknowledged:
     count = await alert_service.acknowledge(session, ctx, notification_id)
     await session.commit()
-    return Acknowledged(message=f"Đã đánh dấu {count} thông báo.")
+    return Acknowledged(message=f"Marked {count} notifications.")
 
 
 # ── audit ──────────────────────────────────────────────────────────────────

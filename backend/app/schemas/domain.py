@@ -26,7 +26,7 @@ class _EmailMixin:
     def _validate_email(cls, value: str) -> str:
         cleaned = value.strip().lower()
         if not _EMAIL_RE.match(cleaned):
-            raise ValueError("Email không hợp lệ.")
+            raise ValueError("That is not a valid email address.")
         return cleaned
 
 # ── auth / workspace ───────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ class ActorCreate(BaseModel):
     def _trim(cls, value: str) -> str:
         trimmed = value.strip()
         if not trimmed:
-            raise ValueError("Tên không được để trống.")
+            raise ValueError("A name cannot be empty.")
         return trimmed
 
 
@@ -516,7 +516,7 @@ class ConnectionStateUpdate(BaseModel):
         for index, entry in enumerate(value):
             if not isinstance(entry, dict):
                 raise ValueError(
-                    f"phần tử {index} phải là một object, nhận được "
+                    f"item {index} has to be an object, and is "
                     f"{type(entry).__name__}")
         return value
 

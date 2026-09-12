@@ -207,7 +207,8 @@ class SqlDirectAdapter:
         metadata = CONNECTORS.get(connector.connector_key)
         if metadata is None:
             raise EngineOperationError(
-                message=f"Engine này không hỗ trợ connector '{connector.connector_key}'.",
+                message=f"This engine does not support the connector "
+                    f"'{connector.connector_key}'.",
                 technical_message=(
                     f"sql_direct supports {sorted(CONNECTORS)}; it moves rows "
                     "between Postgres databases and has no connector ecosystem."),
@@ -229,7 +230,7 @@ class SqlDirectAdapter:
             "ok": False, "records": [], "logs": [], "requests": [],
             "record_preview_supported": False,
             "error": {
-                "summary": "Engine hiện tại không chạy được connector tự build.",
+                "summary": "The current engine cannot run a self-built connector.",
                 "code": "BUILDER_UNSUPPORTED_BY_ENGINE",
                 "category": ErrorCategory.CONFIGURATION.value,
                 "technical_message": (
@@ -319,7 +320,7 @@ class SqlDirectAdapter:
         except Exception as exc:  # noqa: BLE001
             return ConnectionCheckResult(
                 succeeded=False,
-                message="Không kết nối được tới cơ sở dữ liệu.",
+                message="The database could not be reached.",
                 error_code="SQL_CONNECT_FAILED",
                 category=ErrorCategory.NETWORK,
                 technical_message=f"{type(exc).__name__}: {str(exc)[:300]}",
@@ -509,7 +510,7 @@ class SqlDirectAdapter:
             job.ended_at = _utcnow()
             job.failure = EngineFailure(
                 code="SQL_CONNECT_FAILED", category=ErrorCategory.NETWORK,
-                summary="Không kết nối được tới cơ sở dữ liệu.",
+                summary="The database could not be reached.",
                 technical_message=f"{type(exc).__name__}: {str(exc)[:300]}",
                 fingerprint=fingerprint("sql-direct connect"),
             )
@@ -544,7 +545,7 @@ class SqlDirectAdapter:
             job.ended_at = _utcnow()
             job.failure = EngineFailure(
                 code="SQL_SYNC_FAILED", category=ErrorCategory.SOURCE_READ,
-                summary="Đồng bộ thất bại.",
+                summary="The sync failed.",
                 technical_message=f"{type(exc).__name__}: {str(exc)[:300]}",
                 fingerprint=fingerprint(f"sql-direct {type(exc).__name__}"),
             )

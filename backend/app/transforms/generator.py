@@ -134,10 +134,10 @@ async def generate_staging_model(
     parsed cleanly before should parse cleanly after -- not be briefly broken
     between two saves.
     """
-    source = scaffold.validate_identifier(source_name, field="Tên source")
-    schema = scaffold.validate_identifier(schema_name, field="Tên schema")
-    table = scaffold.validate_identifier(table_name, field="Tên bảng")
-    model = scaffold.validate_identifier(model_name, field="Tên model")
+    source = scaffold.validate_identifier(source_name, field="Source name")
+    schema = scaffold.validate_identifier(schema_name, field="Schema name")
+    table = scaffold.validate_identifier(table_name, field="Table name")
+    model = scaffold.validate_identifier(model_name, field="Model name")
 
     selected = [column for column in columns if column.get("selected", True)]
     if not selected:
@@ -145,9 +145,9 @@ async def generate_staging_model(
             "Choose at least one column.", code="TRANSFORM_NO_COLUMNS",
         )
     for column in selected:
-        scaffold.validate_identifier(column["name"], field="Tên cột")
+        scaffold.validate_identifier(column["name"], field="Column name")
         if (alias := (column.get("alias") or "").strip()):
-            scaffold.validate_identifier(alias, field="Tên cột sau khi đổi")
+            scaffold.validate_identifier(alias, field="New column name")
 
     model_path = f"models/staging/{model}.sql"
     revision = await file_service.working_revision(session, project)

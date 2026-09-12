@@ -162,8 +162,8 @@ async def seed_catalog(session: AsyncSession) -> SeedOutcome:
             row.certification = Certification.BLOCKED
             row.status = ConnectorStatus.DISABLED
             row.disabled_reason = (
-                "Connector này không còn nằm trong phạm vi phát hành, nhưng "
-                "vẫn có kết nối đang dùng nó.")
+                "This connector is no longer in the release scope, but "
+                "connections still use it.")
             continue
         await session.delete(row)
 

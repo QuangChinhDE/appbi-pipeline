@@ -229,12 +229,13 @@ def _validate_streams(
             if not cursor and not entry.get("source_defined_cursor"):
                 raise error_from_matrix(
                     "PIPELINE_CURSOR_INVALID",
-                    message=f"Stream '{selection.name}' cần chọn cursor cho chế độ incremental.",
+                    message=f"The stream '{selection.name}' needs a cursor for "
+                            f"incremental mode.",
                 )
             if cursor and not set(cursor) <= available:
                 raise error_from_matrix(
                     "PIPELINE_CURSOR_INVALID",
-                    message=f"Cursor '{', '.join(cursor)}' không tồn tại trong stream "
+                    message=f"The cursor '{', '.join(cursor)}' does not exist in the stream "
                             f"'{selection.name}'.",
                 )
         else:
@@ -247,13 +248,15 @@ def _validate_streams(
             if not primary_key:
                 raise error_from_matrix(
                     "PIPELINE_PRIMARY_KEY_REQUIRED",
-                    message=f"Stream '{selection.name}' cần primary key cho chế độ dedupe.",
+                    message=f"The stream '{selection.name}' needs a primary key for "
+                            f"dedupe mode.",
                 )
             flat = {field for pk in primary_key for field in pk}
             if not flat <= available:
                 raise error_from_matrix(
                     "PIPELINE_PRIMARY_KEY_REQUIRED",
-                    message=f"Primary key của '{selection.name}' không tồn tại trong dữ liệu nguồn.",
+                    message=f"The primary key of '{selection.name}' does not exist "
+                            f"in the source data.",
                 )
         else:
             primary_key = primary_key or []
@@ -688,7 +691,9 @@ async def replication_state(
 
     ref = await connection_ref(session, pipeline_id)
     if not ref:
-        return True, stored, (None if stored else "Pipeline chưa được tạo trên engine.")
+        return True, stored, (
+            None if stored else "The pipeline has not been created on the engine."
+        )
     try:
         state = await get_adapter().connection_state(ref)
     except Exception as exc:                                   # noqa: BLE001
@@ -696,7 +701,7 @@ async def replication_state(
                   pipeline_id=str(pipeline_id), error=type(exc).__name__)
         if stored:
             return True, stored, None
-        return True, [], "Engine không trả lời được trạng thái replication."
+        return True, [], "The engine could not report the replication state."
     if state is None:
         # The engine has no such concept; we may still have stored one.
         return (True, stored, None) if stored else (False, [], None)
@@ -869,13 +874,13 @@ async def metrics(session: AsyncSession, workspace_id: uuid.UUID, pipeline: Pipe
 
 def health_block(pipeline: Pipeline, health: PipelineHealth) -> dict[str, Any]:
     labels = {
-        PipelineHealth.HEALTHY: "Hoạt động tốt",
-        PipelineHealth.RUNNING: "Đang chạy",
-        PipelineHealth.WARNING: "Cần theo dõi",
-        PipelineHealth.ACTION_REQUIRED: "Cần xử lý",
-        PipelineHealth.FAILED: "Thất bại",
-        PipelineHealth.PAUSED: "Tạm dừng",
-        PipelineHealth.NEVER_RUN: "Chưa chạy lần nào",
+        PipelineHealth.HEALTHY: "Healthy",
+        PipelineHealth.RUNNING: "Running",
+        PipelineHealth.WARNING: "Needs a look",
+        PipelineHealth.ACTION_REQUIRED: "Needs attention",
+        PipelineHealth.FAILED: "Failed",
+        PipelineHealth.PAUSED: "Paused",
+        PipelineHealth.NEVER_RUN: "Never run",
     }
     level_map = {
         PipelineHealth.HEALTHY: "HEALTHY",

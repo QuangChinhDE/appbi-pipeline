@@ -50,8 +50,8 @@ def connector_view(connector: ConnectorDefinition) -> ConnectorView:
 
     reason = connector.disabled_reason
     if reason is None and not offered and connector.certification is Certification.BETA:
-        reason = ("Connector này chưa được chứng nhận cho bản phát hành hiện "
-                  "tại. Quản trị viên có thể bật riêng từng connector.")
+        reason = ("This connector is not certified for the current release. "
+                  "An administrator can turn individual connectors on.")
     return ConnectorView(
         connector_key=connector.connector_key,
         display_name=connector.display_name,

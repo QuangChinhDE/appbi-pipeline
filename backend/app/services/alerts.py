@@ -25,11 +25,11 @@ from app.services import audit
 logger = logging.getLogger(__name__)
 
 DEFAULT_RULES = [
-    ("Đồng bộ thất bại", AlertEventType.RUN_FAILED, 1, 900),
-    ("Thất bại liên tiếp", AlertEventType.CONSECUTIVE_FAILURES, 3, 3600),
-    ("Lỗi xác thực nguồn", AlertEventType.SOURCE_AUTH_ERROR, 1, 3600),
-    ("Cấu trúc dữ liệu thay đổi", AlertEventType.SCHEMA_BREAKING_CHANGE, 1, 3600),
-    ("Dữ liệu quá hạn làm mới", AlertEventType.FRESHNESS_BREACH, 1, 7200),
+    ("Sync failed", AlertEventType.RUN_FAILED, 1, 900),
+    ("Failing repeatedly", AlertEventType.CONSECUTIVE_FAILURES, 3, 3600),
+    ("Source authentication error", AlertEventType.SOURCE_AUTH_ERROR, 1, 3600),
+    ("Data structure changed", AlertEventType.SCHEMA_BREAKING_CHANGE, 1, 3600),
+    ("Data is past its refresh deadline", AlertEventType.FRESHNESS_BREACH, 1, 7200),
 ]
 
 
@@ -228,7 +228,7 @@ async def evaluate_run(session: AsyncSession, run: PipelineRun) -> list[Notifica
         note = await _emit(
             session, run.workspace_id, rule,
             event_type=AlertEventType.RUN_FAILED, severity=Severity.ERROR,
-            title=f"Pipeline '{pipeline.name}' đồng bộ thất bại",
+            title=f"Pipeline '{pipeline.name}' failed to sync",
             body=run.error_summary,
             dedup_key=f"{run.workspace_id}:{pipeline.id}:RUN_FAILED:{fingerprint}",
             cooldown_seconds=rule.cooldown_seconds,
@@ -247,7 +247,8 @@ async def evaluate_run(session: AsyncSession, run: PipelineRun) -> list[Notifica
             note = await _emit(
                 session, run.workspace_id, rule,
                 event_type=AlertEventType.CONSECUTIVE_FAILURES, severity=Severity.CRITICAL,
-                title=f"Pipeline '{pipeline.name}' thất bại {pipeline.consecutive_failures} lần liên tiếp",
+                title=f"Pipeline '{pipeline.name}' has failed "
+              f"{pipeline.consecutive_failures} times in a row",
                 body=run.error_summary,
                 dedup_key=f"{run.workspace_id}:{pipeline.id}:CONSECUTIVE:{pipeline.consecutive_failures // rule.threshold}",
                 cooldown_seconds=rule.cooldown_seconds,
@@ -264,8 +265,9 @@ async def evaluate_run(session: AsyncSession, run: PipelineRun) -> list[Notifica
             note = await _emit(
                 session, run.workspace_id, rule,
                 event_type=AlertEventType.SOURCE_AUTH_ERROR, severity=Severity.CRITICAL,
-                title="Thông tin đăng nhập nguồn không còn hợp lệ",
-                body=f"Pipeline '{pipeline.name}' không xác thực được với nguồn dữ liệu.",
+                title="The source credentials are no longer valid",
+                body=f"Pipeline '{pipeline.name}' could not authenticate with the "
+             f"source.",
                 dedup_key=f"{run.workspace_id}:{pipeline.source_id}:AUTH",
                 cooldown_seconds=rule.cooldown_seconds,
                 resource_type=ProductResourceType.SOURCE, resource_id=pipeline.source_id,
@@ -281,7 +283,7 @@ async def evaluate_run(session: AsyncSession, run: PipelineRun) -> list[Notifica
             note = await _emit(
                 session, run.workspace_id, rule,
                 event_type=AlertEventType.DESTINATION_ERROR, severity=Severity.ERROR,
-                title="Không ghi được dữ liệu vào đích",
+                title="The data could not be written to the destination",
                 body=run.error_summary,
                 dedup_key=f"{run.workspace_id}:{pipeline.destination_id}:DEST_WRITE",
                 cooldown_seconds=rule.cooldown_seconds,
@@ -298,7 +300,7 @@ async def evaluate_run(session: AsyncSession, run: PipelineRun) -> list[Notifica
             note = await _emit(
                 session, run.workspace_id, rule,
                 event_type=AlertEventType.SCHEMA_BREAKING_CHANGE, severity=Severity.WARNING,
-                title=f"Cấu trúc nguồn của '{pipeline.name}' đã thay đổi",
+                title=f"The source structure of '{pipeline.name}' has changed",
                 body=run.error_summary,
                 dedup_key=f"{run.workspace_id}:{pipeline.id}:SCHEMA:{fingerprint}",
                 cooldown_seconds=rule.cooldown_seconds,
@@ -327,8 +329,8 @@ async def evaluate_freshness(session: AsyncSession, pipeline: Pipeline) -> Notif
         note = await _emit(
             session, pipeline.workspace_id, rule,
             event_type=AlertEventType.FRESHNESS_BREACH, severity=Severity.WARNING,
-            title=f"Pipeline '{pipeline.name}' chưa đồng bộ thành công đúng hạn",
-            body=f"Hạn làm mới dữ liệu đã qua lúc {deadline.isoformat()}.",
+            title=f"Pipeline '{pipeline.name}' has not synced successfully in time",
+            body=f"The refresh deadline passed at {deadline.isoformat()}.",
             dedup_key=f"{pipeline.workspace_id}:{pipeline.id}:FRESHNESS:{deadline.date()}",
             cooldown_seconds=rule.cooldown_seconds,
             resource_type=ProductResourceType.PIPELINE, resource_id=pipeline.id,

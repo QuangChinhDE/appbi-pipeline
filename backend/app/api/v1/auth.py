@@ -129,7 +129,7 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
 @router.post("/auth/logout", response_model=Acknowledged)
 async def logout(response: Response) -> Acknowledged:
     response.delete_cookie(settings.session_cookie_name, path="/")
-    return Acknowledged(message="Đã đăng xuất.")
+    return Acknowledged(message="Signed out.")
 
 
 @router.get("/auth/me", response_model=CurrentUser)

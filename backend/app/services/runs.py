@@ -159,7 +159,9 @@ async def fetch_logs(
     except AppError as exc:
         log_event(logger, logging.WARNING, "run.logs_unavailable",
                   run_id=str(run.id), error=str(exc))
-        return ["[engine] không đọc được log của lần chạy này."], None, False, 1
+        return (
+            ["[engine] this run's log could not be read."], None, False, 1,
+        )
     return result.lines, result.next_cursor, result.has_more, result.total_lines
 
 
@@ -246,7 +248,9 @@ async def trigger(
     if pipeline.status is PipelineStatus.NEEDS_REVIEW:
         raise error_from_matrix("PIPELINE_NEEDS_REVIEW", resource_id=pipeline.id)
     if pipeline.status in (PipelineStatus.DELETE_PENDING, PipelineStatus.DELETED):
-        raise ValidationError("Pipeline đang được xóa.")
+        raise ValidationError(
+            "The pipeline is being deleted.", code="PIPELINE_BEING_DELETED",
+        )
 
     if not [s for s in pipeline.streams if s.selected]:
         raise error_from_matrix("PIPELINE_NO_STREAM_SELECTED", resource_id=pipeline.id)
@@ -327,7 +331,7 @@ async def cancel(session: AsyncSession, ctx: RequestContext, run_id: uuid.UUID) 
         run.ended_at = utcnow()
         run.error_category = ErrorCategory.CANCELLED
         run.error_code = "RUN_CANCELLED"
-        run.error_summary = "Lần chạy bị hủy trước khi bắt đầu."
+        run.error_summary = "The run was cancelled before it started."
     else:
         run.status = RunStatus.CANCEL_REQUESTED
         if run.engine_job_ref:
@@ -507,11 +511,16 @@ async def build_sync_request(session: AsyncSession, run: PipelineRun) -> EngineS
     """Resolve everything the engine needs, including decrypted credentials."""
     pipeline = await session.get(Pipeline, run.pipeline_id)
     if pipeline is None:
-        raise NotFoundError("Pipeline đã bị xóa.")
+        raise NotFoundError(
+            "The pipeline has been deleted.", code="PIPELINE_DELETED",
+        )
     source = await session.get(Source, pipeline.source_id)
     destination = await session.get(Destination, pipeline.destination_id)
     if source is None or destination is None:
-        raise NotFoundError("Source hoặc destination của pipeline không còn tồn tại.")
+        raise NotFoundError(
+            "The pipeline's source or destination no longer exists.",
+            code="PIPELINE_ENDPOINT_GONE",
+        )
 
     source_connector = await catalog.get_connector(session, source.connector_key)
     destination_connector = await catalog.get_connector(session, destination.connector_key)
@@ -692,7 +701,7 @@ async def _schedule_auto_retry(session: AsyncSession, run: PipelineRun) -> int |
         retry_of_run_id=run.id,
         status=RunStatus.QUEUED,
         run_after=utcnow() + timedelta(seconds=delay),
-        queue_reason=f"Tự chạy lại sau {delay}s vì lỗi tạm thời.",
+        queue_reason=f"Retrying by itself in {delay}s after a temporary fault.",
         technical_metadata={"auto_retry_attempt": attempt,
                             "auto_retry_of": str(run.id),
                             "auto_retry_reason": run.error_code},
@@ -811,8 +820,9 @@ async def enforce_timeouts(session: AsyncSession) -> dict[str, int]:
         run.error_category = ErrorCategory.ENGINE
         run.error_code = "RUN_TIMEOUT"
         run.error_summary = (
-            f"Lần chạy vượt quá giới hạn {settings.run_timeout_seconds} giây "
-            "và đã được hủy trên engine.")
+            f"The run went past the "
+            f"{settings.run_timeout_seconds}-second limit and was stopped on "
+            f"the engine.")
         run.remediation_action = "RETRY_RUN"
         counts["timed_out"] += 1
         log_event(logger, logging.WARNING, "run.timed_out", run_id=str(run.id),
@@ -918,7 +928,9 @@ def _mark_lost(run: PipelineRun) -> None:
     run.ended_at = utcnow()
     run.error_code = "ENGINE_JOB_LOST"
     run.error_category = ErrorCategory.ENGINE
-    run.error_summary = "Tiến trình đồng bộ bị gián đoạn (engine hoặc worker khởi động lại)."
+    run.error_summary = (
+            "The sync was interrupted (the engine or a worker restarted)."
+        )
     run.remediation_action = "RETRY_RUN"
 
 

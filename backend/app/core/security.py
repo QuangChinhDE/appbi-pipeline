@@ -29,14 +29,17 @@ def password_problems(raw: str) -> list[str]:
     """Every reason this password is refused, so the user fixes them at once."""
     problems: list[str] = []
     if len(raw) < MIN_PASSWORD_LENGTH:
-        problems.append(f"Mật khẩu phải có ít nhất {MIN_PASSWORD_LENGTH} ký tự.")
+        problems.append(
+            f"A password has to be at least {MIN_PASSWORD_LENGTH} "
+            f"characters."
+        )
     if raw.lower() == raw or raw.upper() == raw:
-        problems.append("Mật khẩu phải có cả chữ hoa và chữ thường.")
+        problems.append("A password has to have both upper and lower case.")
     if not any(character.isdigit() for character in raw):
-        problems.append("Mật khẩu phải có ít nhất một chữ số.")
+        problems.append("A password has to have at least one digit.")
     # Whitespace-only padding passes every rule above and is not a password.
     if not raw.strip():
-        problems.append("Mật khẩu không được để trống.")
+        problems.append("A password cannot be empty.")
     return problems
 
 

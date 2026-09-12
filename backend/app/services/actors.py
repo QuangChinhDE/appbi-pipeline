@@ -474,7 +474,9 @@ async def create(
         getattr(payload, "check_token", None), kind.side, connector.connector_key, merged
     )
     check: ConnectionCheckResult | None = (
-        ConnectionCheckResult(succeeded=True, message="Đã kiểm tra ở bước trước.")
+        ConnectionCheckResult(
+            succeeded=True, message="Already checked at the previous step.",
+        )
         if prechecked else None
     )
     if check is None and (payload.test_before_save or not allow_untested):
@@ -623,7 +625,9 @@ async def update(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
         getattr(payload, "check_token", None), kind.side, connector.connector_key, merged
     )
     check: ConnectionCheckResult | None = (
-        ConnectionCheckResult(succeeded=True, message="Đã kiểm tra ở bước trước.")
+        ConnectionCheckResult(
+            succeeded=True, message="Already checked at the previous step.",
+        )
         if prechecked else None
     )
     if check is None and (payload.test_before_save or incoming):
@@ -908,19 +912,19 @@ def available_actions(ctx: RequestContext, kind: ActorKind, actor) -> list[str]:
 
 def health_block(actor) -> dict[str, Any]:
     labels = {
-        HealthLevel.HEALTHY: "Hoạt động tốt",
-        HealthLevel.WARNING: "Cần theo dõi",
-        HealthLevel.ERROR: "Cần xử lý",
-        HealthLevel.UNKNOWN: "Chưa kiểm tra",
+        HealthLevel.HEALTHY: "Healthy",
+        HealthLevel.WARNING: "Needs a look",
+        HealthLevel.ERROR: "Needs attention",
+        HealthLevel.UNKNOWN: "Not checked",
     }
     level = actor.health_status
     if actor.status is ResourceStatus.DISABLED:
-        return {"level": "UNKNOWN", "code": "DISABLED", "label": "Đã tắt",
+        return {"level": "UNKNOWN", "code": "DISABLED", "label": "Turned off",
                 "last_checked_at": actor.last_test_at, "message": None}
     return {
         "level": level.value,
         "code": actor.health_code,
-        "label": labels.get(level, "Không rõ"),
+        "label": labels.get(level, "Unknown"),
         "last_checked_at": actor.last_test_at,
         "message": actor.health_message,
     }

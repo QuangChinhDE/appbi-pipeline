@@ -173,16 +173,16 @@ def preview(
 
 def describe(schedule_type: ScheduleType, config: dict[str, Any]) -> str:
     if schedule_type is ScheduleType.MANUAL:
-        return "Chạy thủ công"
+        return "Run by hand"
     if schedule_type is ScheduleType.INTERVAL:
         seconds = int(config.get("interval_seconds") or 0)
         if seconds % 86400 == 0:
-            return f"Mỗi {seconds // 86400} ngày"
+            return f"Every {seconds // 86400} days"
         if seconds % 3600 == 0:
-            return f"Mỗi {seconds // 3600} giờ"
-        return f"Mỗi {max(1, seconds // 60)} phút"
+            return f"Every {seconds // 3600} hours"
+        return f"Every {max(1, seconds // 60)} minutes"
     if schedule_type is ScheduleType.DAILY:
-        return f"Hằng ngày lúc {config.get('time_of_day', '02:00')}"
+        return f"Daily at {config.get('time_of_day', '02:00')}"
     return f"Cron: {config.get('cron_expression', '')}"
 
 
