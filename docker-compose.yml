@@ -138,6 +138,69 @@ x-backend-env: &backend-env
   TRANSFORM_STORAGE_S3_PREFIX: ${TRANSFORM_STORAGE_S3_PREFIX:-transform}
   TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE: ${TRANSFORM_STORAGE_S3_FORCE_PATH_STYLE:-false}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  # --- everything below was unreachable ---
+  #
+  # A setting absent from this list cannot be set from .env at all: the
+  # container never receives it and keeps the built-in default however the
+  # file is edited. Four were found that way one at a time, each after a
+  # deployment had already edited .env and wondered why nothing changed.
+  # An audit of all 100 settings found thirty-five more, including the two
+  # that a production install cannot start without.
+  #
+  # Every default here is the one the code already had, so this changes
+  # nothing for a deployment that sets none of them.
+  # --- session and cookies ---
+  # COOKIE_SECURE must be on behind TLS and must be off for plain http, so a
+  # deployment has to be able to say which it is.
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-43200}
+  SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-appbi_session}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  # --- the first administrator on an empty production database ---
+  # `SEED_DEMO_DATA=false` makes the bootstrap refuse to start until these are
+  # supplied, and names them in the message. They were absent from this list,
+  # so there was no way to supply them: a production install could be told
+  # exactly what to do and had no way to do it.
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+  BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+  # --- what the product is allowed to reach ---
+  # The SSRF guard for the Builder and for AI crawling. .env.production.example
+  # documented both and neither reached the container.
+  EGRESS_ALLOW_PRIVATE: ${EGRESS_ALLOW_PRIVATE:-false}
+  EGRESS_ALLOWLIST: ${EGRESS_ALLOWLIST:-}
+  ALLOW_DERIVED_ENCRYPTION_KEY: ${ALLOW_DERIVED_ENCRYPTION_KEY:-false}
+  # --- startup and readiness ---
+  STARTUP_REQUIRE_ENGINE: ${STARTUP_REQUIRE_ENGINE:-false}
+  READINESS_REQUIRE_ENGINE: ${READINESS_REQUIRE_ENGINE:-false}
+  ENGINE_DOCKER_BINARY: ${ENGINE_DOCKER_BINARY:-docker}
+  # --- timeouts and polling ---
+  # A connector on a slow network, or a host where two seconds of polling is
+  # more than it can spare, has to be tunable without a rebuild.
+  CHECK_TIMEOUT_SECONDS: ${CHECK_TIMEOUT_SECONDS:-180}
+  DISCOVER_TIMEOUT_SECONDS: ${DISCOVER_TIMEOUT_SECONDS:-300}
+  SPEC_TIMEOUT_SECONDS: ${SPEC_TIMEOUT_SECONDS:-120}
+  STALE_RUN_SECONDS: ${STALE_RUN_SECONDS:-21600}
+  CATALOG_REFRESH_SECONDS: ${CATALOG_REFRESH_SECONDS:-21600}
+  RECONCILE_INTERVAL_SECONDS: ${RECONCILE_INTERVAL_SECONDS:-5}
+  WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-2.0}
+  MAX_CONCURRENT_RUNS_PER_PIPELINE: ${MAX_CONCURRENT_RUNS_PER_PIPELINE:-1}
+  # --- Builder and its AI assistance ---
+  OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-90.0}
+  BUILDER_AI_SOURCE_MAX_BYTES: ${BUILDER_AI_SOURCE_MAX_BYTES:-10485760}
+  BUILDER_AI_CRAWL_MAX_PAGES: ${BUILDER_AI_CRAWL_MAX_PAGES:-30}
+  BUILDER_AI_CRAWL_MAX_DEPTH: ${BUILDER_AI_CRAWL_MAX_DEPTH:-2}
+  BUILDER_AI_CRAWL_MAX_BYTES: ${BUILDER_AI_CRAWL_MAX_BYTES:-5242880}
+  BUILDER_TEST_SESSION_TTL_SECONDS: ${BUILDER_TEST_SESSION_TTL_SECONDS:-1200}
+  # --- Transform ---
+  TRANSFORM_RUNTIME_AVAILABLE: ${TRANSFORM_RUNTIME_AVAILABLE:-true}
+  TRANSFORM_STALE_QUEUE_SECONDS: ${TRANSFORM_STALE_QUEUE_SECONDS:-900}
+  TRANSFORM_WORKER_POLL_SECONDS: ${TRANSFORM_WORKER_POLL_SECONDS:-1.0}
+  TRANSFORM_PREVIEW_LIMIT: ${TRANSFORM_PREVIEW_LIMIT:-200}
+  TRANSFORM_PARSE_ARTIFACT_RETENTION: ${TRANSFORM_PARSE_ARTIFACT_RETENTION:-5}
+  TRANSFORM_REVISION_RETENTION: ${TRANSFORM_REVISION_RETENTION:-200}
+  TRANSFORM_MAX_FILE_BYTES: ${TRANSFORM_MAX_FILE_BYTES:-2000000}
+  TRANSFORM_MAX_PROJECT_FILES: ${TRANSFORM_MAX_PROJECT_FILES:-5000}
+  DBT_CORE_VERSION: ${DBT_CORE_VERSION:-1.12.3}
 
 services:
   postgres:
