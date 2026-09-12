@@ -197,11 +197,54 @@ class LocalStore(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((Path(self.directory.name) / key).is_file())
 
     async def test_concurrent_writes_of_the_same_blob(self):
+        """Twenty writers, one blob -- and one spelling of where it goes.
+
+        This failed about two runs in five, with "Invalid storage key." for a
+        key the store had just accepted. Content addressing means every writer
+        renames byte-identical bytes over the same name at the same moment, and
+        while that is going on Windows hands `Path.resolve()` back the
+        extended-length spelling of the path, `\\\\?\\C:\\...`, whose root
+        does not match the plainly-spelled root the store was built with.
+
+        A flaky test is worse than a failing one: it teaches whoever sees it to
+        run the suite again.
+        """
         results = await asyncio.gather(
             *(self.store.put_content(b"racing") for _ in range(20))
         )
         self.assertEqual(len(set(results)), 1)
         self.assertEqual(await self.store.get(results[0]), b"racing")
+
+
+class LongPathSpelling(unittest.TestCase):
+    """`\\\\?\\C:\\x` and `C:\\x` are one directory, not two.
+
+    The prefix asks Windows to skip path parsing -- it says nothing about
+    which directory a path names, so it cannot be allowed to decide whether
+    one path is inside another. Tested on the string, so the check runs on
+    every platform rather than only on the one that produces the spelling.
+    """
+
+    def test_the_drive_form_loses_its_prefix(self):
+        from app.transforms.storage import _plain_spelling
+
+        self.assertEqual(
+            _plain_spelling(r"\\?\C:\store\blobs\ab"), r"C:\store\blobs\ab",
+        )
+
+    def test_the_unc_form_keeps_its_two_slashes(self):
+        from app.transforms.storage import _plain_spelling
+
+        self.assertEqual(
+            _plain_spelling(r"\\?\UNC\server\share\store"),
+            r"\\server\share\store",
+        )
+
+    def test_an_ordinary_path_is_left_exactly_as_it_is(self):
+        from app.transforms.storage import _plain_spelling
+
+        for path in ("/var/lib/appbi/store", r"C:\store", "relative/store"):
+            self.assertEqual(_plain_spelling(path), path)
 
 
 class ProjectNaming(unittest.TestCase):

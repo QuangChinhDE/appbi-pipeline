@@ -129,15 +129,48 @@ def _validate_key(key: str) -> str:
     return key
 
 
+#: Windows' extended-length path prefix, and its UNC spelling.
+_LONG_PATH_PREFIX = "\\\\?\\"
+_LONG_UNC_PREFIX = "\\\\?\\UNC\\"
+
+
+def _real(path: Path) -> Path:
+    """`Path.resolve()`, in one spelling.
+
+    On Windows `resolve()` sometimes hands back the extended-length form,
+    `\\\\?\\C:\\...`, of a path whose root it resolved as `C:\\...`. It
+    happens when the call that would strip the prefix cannot open the file --
+    which is the normal case here, because content addressing means several
+    writers rename byte-identical blobs over the same name at the same time.
+    The store then rejected a key it had accepted a moment earlier, because
+    the containment check was comparing two spellings of one directory.
+
+    The prefix asks the filesystem to skip path parsing. It says nothing about
+    which directory a path is in, so it has no business in a comparison.
+    """
+    resolved = path.resolve()
+    plain = _plain_spelling(str(resolved))
+    return resolved if plain == str(resolved) else Path(plain)
+
+
+def _plain_spelling(text: str) -> str:
+    """Drop the extended-length prefix, keeping what the path names."""
+    if text.startswith(_LONG_UNC_PREFIX):
+        return "\\\\" + text[len(_LONG_UNC_PREFIX):]
+    if text.startswith(_LONG_PATH_PREFIX):
+        return text[len(_LONG_PATH_PREFIX):]
+    return text
+
+
 class LocalObjectStore(ObjectStore):
     """Filesystem-backed store, rooted at a single directory."""
 
     def __init__(self, root: str | os.PathLike[str]) -> None:
-        self.root = Path(root).resolve()
+        self.root = _real(Path(root))
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, key: str) -> Path:
-        candidate = (self.root / _validate_key(key)).resolve()
+        candidate = _real(self.root / _validate_key(key))
         # Belt and braces: `_validate_key` rejects traversal syntactically, this
         # rejects it after symlink resolution.
         if not candidate.is_relative_to(self.root):
