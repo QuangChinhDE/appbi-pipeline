@@ -81,13 +81,13 @@ KIOTVIET = KiotVietConnector(
             # `modifiedDate`, so the cursor tracks the field that exists.
             fields={"branchName": "string", "address": "string",
                     "contactNumber": "string", "retailerId": "integer"},
-            note="Chi nhánh của cửa hàng.",
+            note="The shop's branches.",
         ),
         Stream(
             name="user", path="users", incremental=_MODIFIED,
             fields={"userName": "string", "givenName": "string",
                     "retailerId": "integer"},
-            note="Người dùng trong cửa hàng.",
+            note="The people in the shop.",
         ),
         Stream(
             # Not a collection: the response *is* the settings object, with the
@@ -97,7 +97,7 @@ KIOTVIET = KiotVietConnector(
             primary_key=("retailerId",),
             fields={"ManagerCustomerByBranch": "boolean",
                     "AllowSellWhenOutStock": "boolean"},
-            note="Thiết lập cửa hàng. Một bản ghi duy nhất, không phải danh sách.",
+            note="Shop settings. A single record, not a list.",
         ),
 
         # ── catalogue ────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ KIOTVIET = KiotVietConnector(
             name="category", path="categories", incremental=_MODIFIED,
             fields={"categoryName": "string", "parentId": "integer",
                     "hasChild": "boolean", "retailerId": "integer"},
-            note="Nhóm hàng, tối đa 3 cấp.",
+            note="Product categories, up to three levels.",
         ),
         Stream(
             name="product", path="products", incremental=_MODIFIED,
@@ -116,18 +116,18 @@ KIOTVIET = KiotVietConnector(
                     "categoryId": "integer", "categoryName": "string",
                     "basePrice": "number", "unit": "string",
                     "hasVariants": "boolean", "retailerId": "integer"},
-            note="Hàng hóa của cửa hàng.",
+            note="The shop's products.",
         ),
         Stream(
             name="trademark", path="trademark", incremental=_MODIFIED,
             fields={"name": "string", "retailerId": "integer"},
-            note="Thương hiệu.",
+            note="Brands.",
         ),
         Stream(
             name="pricebook", path="pricebooks",
             fields={"name": "string", "isActive": "boolean",
                     "startDate": "string", "endDate": "string"},
-            note="Bảng giá.",
+            note="Price books.",
         ),
 
         # ── people ───────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ KIOTVIET = KiotVietConnector(
             fields={"code": "string", "name": "string", "contactNumber": "string",
                     "email": "string", "groups": "string", "debt": "number",
                     "retailerId": "integer"},
-            note="Khách hàng.",
+            note="Customers.",
         ),
         Stream(
             # `customers/group`, measured. Not `customergroup`, which 404s
@@ -144,13 +144,13 @@ KIOTVIET = KiotVietConnector(
             name="customer_group", path="customers/group",
             fields={"name": "string", "description": "string",
                     "retailerId": "integer"},
-            note="Nhóm khách hàng.",
+            note="Customer groups.",
         ),
         Stream(
             name="supplier", path="suppliers", incremental=_MODIFIED,
             fields={"code": "string", "name": "string", "contactNumber": "string",
                     "email": "string", "retailerId": "integer"},
-            note="Nhà cung cấp.",
+            note="Suppliers.",
         ),
 
         # ── money moving ─────────────────────────────────────────────────
@@ -160,7 +160,7 @@ KIOTVIET = KiotVietConnector(
                     "branchId": "integer", "customerId": "integer",
                     "total": "number", "status": "integer",
                     "statusValue": "string", "retailerId": "integer"},
-            note="Đặt hàng.",
+            note="Orders.",
         ),
         Stream(
             name="invoice", path="invoices", incremental=_MODIFIED,
@@ -168,21 +168,21 @@ KIOTVIET = KiotVietConnector(
                     "branchId": "integer", "customerId": "integer",
                     "total": "number", "totalPayment": "number",
                     "status": "integer", "retailerId": "integer"},
-            note="Hóa đơn bán hàng.",
+            note="Sales invoices.",
         ),
         Stream(
             name="return_order", path="returns", incremental=_MODIFIED,
             fields={"code": "string", "returnDate": "string",
                     "branchId": "integer", "customerId": "integer",
                     "totalPayment": "number", "retailerId": "integer"},
-            note="Phiếu trả hàng.",
+            note="Returns.",
         ),
         Stream(
             name="purchase_order", path="purchaseorders", incremental=_MODIFIED,
             fields={"code": "string", "purchaseDate": "string",
                     "branchId": "integer", "supplierId": "integer",
                     "total": "number", "retailerId": "integer"},
-            note="Nhập hàng.",
+            note="Purchase receipts.",
         ),
         Stream(
             # Ships despite answering 420 on the shop this was measured on:
@@ -191,33 +191,34 @@ KIOTVIET = KiotVietConnector(
             name="order_supplier", path="ordersuppliers", incremental=_MODIFIED,
             fields={"code": "string", "branchId": "integer",
                     "supplierId": "integer", "total": "number"},
-            note="Đặt hàng nhập. Chỉ có dữ liệu nếu cửa hàng bật tính năng này; "
-                 "không bật thì stream được bỏ qua chứ không làm hỏng lần sync.",
+            note="Purchase orders. There is data only if the shop has the "
+                 "feature turned on; if it has not, the stream is skipped rather "
+                 "than failing the sync.",
         ),
         Stream(
             name="transfer", path="transfers", incremental=_MODIFIED,
             fields={"code": "string", "fromBranchId": "integer",
                     "toBranchId": "integer", "status": "integer"},
-            note="Chuyển hàng giữa các chi nhánh.",
+            note="Transfers between branches.",
         ),
         Stream(
             name="cashflow", path="cashflow",
             fields={"code": "string", "branchId": "integer",
                     "amount": "number", "method": "string"},
-            note="Sổ quỹ.",
+            note="The cash book.",
         ),
 
         # ── reference data ───────────────────────────────────────────────
         Stream(
             name="sale_channel", path="salechannel",
             fields={"name": "string", "isActive": "boolean"},
-            note="Kênh bán hàng.",
+            note="Sales channels.",
         ),
         Stream(
             name="bank_account", path="bankaccounts",
             fields={"bankName": "string", "accountNumber": "string",
                     "accountName": "string"},
-            note="Tài khoản ngân hàng.",
+            note="Bank accounts.",
         ),
         Stream(
             # `/tax`, measured (13 records). Not `/tax/detail` as §2.27.1
@@ -225,25 +226,25 @@ KIOTVIET = KiotVietConnector(
             name="tax", path="tax",
             fields={"name": "string", "value": "number", "type": "integer",
                     "typeName": "string"},
-            note="Danh mục thuế KiotViet hỗ trợ.",
+            note="The tax categories KiotViet supports.",
         ),
         Stream(
             name="location", path="locations",
             fields={"name": "string", "normalName": "string"},
-            note="Danh mục tỉnh/huyện dùng cho địa chỉ.",
+            note="The province and district lists used by addresses.",
         ),
         Stream(
             name="voucher_campaign", path="voucherCampaign",
             fields={"code": "string", "name": "string",
                     "startDate": "string", "endDate": "string"},
-            note="Đợt phát hành voucher.",
+            note="Voucher issues.",
         ),
         Stream(
             # Answers `{total, pageSize, timestamp}` with no `data` key while
             # empty; the extractor yields nothing rather than failing.
             name="webhook", path="webhooks",
             fields={"type": "string", "url": "string", "isActive": "boolean"},
-            note="Webhook đã đăng ký.",
+            note="Registered webhooks.",
         ),
     ),
 )

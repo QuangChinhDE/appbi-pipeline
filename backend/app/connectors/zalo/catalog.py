@@ -55,8 +55,15 @@ ZALO_ADS = ZaloConnector(
     config=(
         {
             "name": "phone",
-            "title": "Số điện thoại tài khoản quảng cáo",
+            "title": "Advertising account phone number",
+            "title_vi": "Số điện thoại tài khoản quảng cáo",
             "description": (
+                "Zalo Ads identifies an advertising account by phone number "
+                "rather than deriving it from the token, so each account needs "
+                "its own source. The number is also written into the "
+                "phone_account column of every record."
+            ),
+            "description_vi": (
                 "Zalo Ads định danh tài khoản quảng cáo bằng số điện thoại chứ "
                 "không suy ra từ token, nên mỗi tài khoản cần một nguồn riêng. "
                 "Số này cũng được ghi vào cột phone_account của mọi bản ghi."
@@ -64,9 +71,18 @@ ZALO_ADS = ZaloConnector(
         },
         {
             "name": "date",
-            "title": "Đọc dữ liệu từ mốc",
+            "title": "Read data from",
+            "title_vi": "Đọc dữ liệu từ mốc",
             "type": "integer",
             "description": (
+                "A moment in epoch seconds, sent as the API's date parameter. "
+                "It is a fixed value somebody types in, not a cursor: every "
+                "run reads from exactly this point. For an incremental sync, "
+                "set a schedule and move the point -- or wait until there is a "
+                "real account to measure whether the API reads date as a "
+                "starting point or as one particular day."
+            ),
+            "description_vi": (
                 "Mốc thời gian dạng epoch giây gửi cho tham số date của API. "
                 "Đây là một giá trị cố định do người dùng nhập, không phải "
                 "cursor: mỗi lần chạy đều đọc từ đúng mốc này. Cần đồng bộ "
@@ -95,8 +111,8 @@ ZALO_ADS = ZaloConnector(
                 "start_date": "integer", "end_date": "integer",
                 "reports": "object", "target": "object",
             },
-            note="Quảng cáo kèm chiến dịch và số liệu báo cáo lồng trong "
-                 "trường reports.",
+            note="Adverts, with their campaign and their reporting figures "
+                 "nested in the reports field.",
         ),
     ),
 )

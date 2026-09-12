@@ -161,8 +161,8 @@ CRM_LEADS = BaseConnector(
             name="lead_service", path="lead/services",
             collection=("services",), paginate=False,
             fields={"name": "string", "last_update": "string"},
-            note="Danh mục dịch vụ lead. Là cha của lead — thay cho việc phải "
-                 "điền sẵn service_id.",
+            note="The lead-service catalogue. Parent of lead -- so a "
+                 "service_id does not have to be filled in by hand.",
         ),
         Stream(
             name="lead", path="lead/list", collection=("leads",),
@@ -183,8 +183,8 @@ CRM_LEADS = BaseConnector(
                     "stage": "string", "status": "string",
                     "source_id": "string", "owner_id": "string",
                     "last_update": "string"},
-            note="Lead theo từng dịch vụ, lọc tăng dần theo last_update ngay "
-                 "trên server.",
+            note="Leads, read per service, filtered incrementally by "
+                 "last_update on the server.",
         ),
         Stream(
             name="lead_feed", path="lead/feed/list", collection=("feeds",),
@@ -193,9 +193,9 @@ CRM_LEADS = BaseConnector(
             paginate=False,
             fields={"content": "string", "metatype": "string",
                     "last_update": "string"},
-            note="Dòng hoạt động của từng lead. Lọc tăng dần phía client vì "
-                 "endpoint không nhận bộ lọc thời gian. Tốn kém: một lượt gọi "
-                 "cho mỗi lead ở mỗi lần sync.",
+            note="The activity feed of each lead. Filtered incrementally on "
+                 "this side, because the endpoint takes no time filter. "
+                 "Expensive: one call per lead, every sync.",
         ),
     ),
 )

@@ -157,7 +157,14 @@ def connection_specification(connector: ZaloConnector) -> dict[str, Any]:
         "client_id": {
             "type": "string",
             "title": "Client ID",
+            "title_vi": "Client ID",
             "description": (
+                "Found in Zalo Ads, under the application you registered. The "
+                "connector exchanges the Client ID and Client Secret for an "
+                "access token on every run, so no token has to be pasted in "
+                "here."
+            ),
+            "description_vi": (
                 "Lấy trong Zalo Ads ở phần ứng dụng đã đăng ký. Connector tự "
                 "đổi Client ID và Client Secret lấy access token ở mỗi lần "
                 "chạy, nên không cần dán token vào đây."
@@ -168,7 +175,10 @@ def connection_specification(connector: ZaloConnector) -> dict[str, Any]:
         "client_secret": {
             "type": "string",
             "title": "Client Secret",
-            "description": "Mã bí mật đi cùng Client ID của ứng dụng Zalo Ads.",
+            "title_vi": "Client Secret",
+            "description": "The secret that goes with the Zalo Ads "
+                           "application's Client ID.",
+            "description_vi": "Mã bí mật đi cùng Client ID của ứng dụng Zalo Ads.",
             "airbyte_secret": True,
             "order": 1,
         },
@@ -182,6 +192,12 @@ def connection_specification(connector: ZaloConnector) -> dict[str, Any]:
             "description": extra["description"],
             "order": index,
         }
+        # Carried through rather than dropped: `localizeSpec()` in the browser
+        # looks for these, and a field that arrives without them is a field
+        # the language switch cannot reach.
+        for suffix in ("title_vi", "description_vi"):
+            if extra.get(suffix):
+                properties[name][suffix] = extra[suffix]
         if extra.get("secret"):
             properties[name]["airbyte_secret"] = True
         if extra.get("required", True):

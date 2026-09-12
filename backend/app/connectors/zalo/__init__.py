@@ -82,7 +82,7 @@ def stream_inventory() -> list[dict[str, Any]]:
         "app": connector.app,
         "stream": stream.name,
         "endpoint": stream.path,
-        "collection": ".".join(stream.collection) or "(toàn bộ phản hồi)",
+        "collection": ".".join(stream.collection) or "(the whole response)",
         "primary_key": list(stream.primary_key),
         "incremental": None,
         "paginated": False,

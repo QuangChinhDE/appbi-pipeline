@@ -172,21 +172,21 @@ CRM = BaseConnector(
             name="pipeline", path="pipeline/all", collection=("pipelines",),
             paginate=False,
             fields={"name": "string", "last_update": "string"},
-            note="Mọi pipeline bán hàng, kèm sẵn stages và segments trong "
+            note="Every sales pipeline, with its stages and segments already in "
                  "cached_stages / cached_segments.",
         ),
         Stream(
             name="account_service", path="account/service/all",
             collection=("account_services",), paginate=False,
             fields={"name": "string"},
-            note="Danh mục dịch vụ khách hàng. Là cha của account và "
+            note="The customer-service catalogue. Parent of account and "
                  "account_segment -- thay cho service_id hardcode.",
         ),
         Stream(
             name="contact_service", path="contact/service/all",
             collection=("contact_services",), paginate=False,
             fields={"name": "string"},
-            note="Danh mục dịch vụ liên hệ. Là cha của contact và "
+            note="The contact-service catalogue. Parent of contact and "
                  "contact_segment.",
         ),
 
@@ -200,7 +200,7 @@ CRM = BaseConnector(
                     "contact_id": "string", "value": "number",
                     "stage_id": "string", "status": "string",
                     "last_update": "string"},
-            note="Deal theo từng pipeline.",
+            note="Deals, read per pipeline.",
         ),
         Stream(
             name="pipeline_log", path="pipeline/get.logs", collection=("logs",),
@@ -208,9 +208,9 @@ CRM = BaseConnector(
             incremental=_INC_LOG,
             page_size=1000, first_page=1, page_on_first_request=True,
             fields={"action": "string", "user_id": "string", "since": "integer"},
-            note="Nhật ký thay đổi của pipeline: ai đổi gì, lúc nào. Lọc tăng "
-                 "dần theo `since` ngay trên server -- stream duy nhất ở CRM "
-                 "mà incremental tiết kiệm được lượt gọi API.",
+            note="A pipeline's change log: who changed what, and when. "
+                 "Filtered incrementally by `since` on the server -- the one CRM "
+                 "stream where incremental saves API calls.",
         ),
 
         # ── under a deal ─────────────────────────────────────────────────
@@ -225,8 +225,8 @@ CRM = BaseConnector(
             paginate=False,
             fields={"content": "string", "metatype": "string",
                     "last_update": "string"},
-            note="Dòng hoạt động của từng deal. Tốn kém: một lượt gọi cho mỗi "
-                 "deal, khoảng 30 phút mỗi lần sync ở quy mô 5.500 deal.",
+            note="The activity feed of each deal. Expensive: one call per "
+                 "deal, about 30 minutes a sync at 5,500 deals.",
         ),
 
         # ── under an account service ─────────────────────────────────────
@@ -237,8 +237,8 @@ CRM = BaseConnector(
             first_page=1, page_on_first_request=True,
             fields={"name": "string", "service_id": "string",
                     "status": "string", "last_update": "string"},
-            note="Khách hàng theo từng dịch vụ. service_id là bắt buộc, dù "
-                 "tài liệu ghi optional.",
+            note="Customers, read per service. service_id is required, "
+                 "whatever the documentation says.",
         ),
         Stream(
             name="account_segment", path="account/service/get.segments",
@@ -246,7 +246,7 @@ CRM = BaseConnector(
             parent=Parent(stream="account_service", inject="service_id"),
             paginate=False,
             fields={"name": "string", "service_id": "string"},
-            note="Phân khúc trong một dịch vụ khách hàng.",
+            note="Segments within one customer service.",
         ),
 
         # ── under a contact service ──────────────────────────────────────
@@ -257,7 +257,7 @@ CRM = BaseConnector(
             first_page=1, page_on_first_request=True,
             fields={"name": "string", "service_id": "string",
                     "last_update": "string"},
-            note="Liên hệ theo từng dịch vụ.",
+            note="Contacts, read per service.",
         ),
         Stream(
             name="contact_segment", path="contact/service/get.segments",
@@ -265,7 +265,7 @@ CRM = BaseConnector(
             parent=Parent(stream="contact_service", inject="service_id"),
             paginate=False,
             fields={"name": "string", "service_id": "string"},
-            note="Phân khúc trong một dịch vụ liên hệ.",
+            note="Segments within one contact service.",
         ),
     ),
 )

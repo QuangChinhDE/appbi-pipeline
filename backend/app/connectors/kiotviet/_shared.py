@@ -300,8 +300,14 @@ def connection_specification(connector: KiotVietConnector) -> dict[str, Any]:
         "properties": {
             "retailer": {
                 "type": "string",
-                "title": "Tên gian hàng",
+                "title": "Shop name",
+                "title_vi": "Tên gian hàng",
                 "description": (
+                    "The part before .kiotviet.vn in the shop's address. For "
+                    "https://taphoaxyz.kiotviet.vn it is taphoaxyz. This is "
+                    "what decides whose data the connector reads."
+                ),
+                "description_vi": (
                     "Phần đứng trước .kiotviet.vn trong địa chỉ cửa hàng. "
                     "Ví dụ với https://taphoaxyz.kiotviet.vn thì điền "
                     "taphoaxyz. Đây là thứ quyết định connector đọc dữ liệu "
@@ -312,7 +318,12 @@ def connection_specification(connector: KiotVietConnector) -> dict[str, Any]:
             "client_id": {
                 "type": "string",
                 "title": "Client ID",
+                "title_vi": "Client ID",
                 "description": (
+                    "Found in KiotViet under Shop settings, in the API "
+                    "connection section. It is not the sign-in name."
+                ),
+                "description_vi": (
                     "Lấy trong KiotViet ở mục Thiết lập cửa hàng, phần Kết nối "
                     "API. Không phải tên đăng nhập."
                 ),
@@ -322,7 +333,13 @@ def connection_specification(connector: KiotVietConnector) -> dict[str, Any]:
             "client_secret": {
                 "type": "string",
                 "title": "Client Secret",
+                "title_vi": "Client Secret",
                 "description": (
+                    "The secret that goes with the Client ID. The connector "
+                    "exchanges the pair for an access token on every run, so "
+                    "no token has to be pasted in here."
+                ),
+                "description_vi": (
                     "Mã bảo mật đi cùng Client ID. Connector tự đổi hai giá trị "
                     "này lấy access token ở mỗi lần chạy, nên không cần dán "
                     "token vào đây."
@@ -332,8 +349,14 @@ def connection_specification(connector: KiotVietConnector) -> dict[str, Any]:
             },
             "modified_from": {
                 "type": "string",
-                "title": "Chỉ lấy dữ liệu thay đổi từ",
+                "title": "Only read changes from",
+                "title_vi": "Chỉ lấy dữ liệu thay đổi từ",
                 "description": (
+                    "Where the first run starts, written as "
+                    "2024-01-01T00:00:00. Leave it empty to read the whole "
+                    "history."
+                ),
+                "description_vi": (
                     "Mốc bắt đầu cho lần chạy đầu tiên, dạng "
                     "2024-01-01T00:00:00. Bỏ trống để lấy toàn bộ lịch sử."
                 ),
