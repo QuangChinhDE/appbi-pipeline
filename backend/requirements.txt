@@ -15,4 +15,9 @@ croniter==6.0.0
 python-multipart==0.0.32
 email-validator==2.2.0
 PyYAML==6.0.2
+# Reads uploaded SQL for the Transform importer. dbt-core pulls this in
+# too, but only when the image is built WITH_TRANSFORM=1 -- and the
+# importer's behaviour must not drift with whatever version dbt happens
+# to resolve, so it is pinned here on its own account. Pure Python, ~2 MB.
+sqlglot==30.18.0
 alembic==1.14.0
