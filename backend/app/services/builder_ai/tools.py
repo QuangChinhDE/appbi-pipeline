@@ -40,7 +40,7 @@ async def record_tool(
 ) -> None:
     if tool_name not in ALLOWED_TOOLS[phase]:
         raise ValidationError(
-            "AI tool không được phép trong giai đoạn hiện tại.",
+            "That AI tool is not allowed at this stage.",
             code="AI_TOOL_PHASE_BLOCKED",
             details={"phase": phase.value, "tool": tool_name},
         )

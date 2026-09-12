@@ -131,3 +131,77 @@ def test_no_vietnamese_is_written_into_a_component() -> None:
     assert not offences, (
         "Vietnamese no language setting can reach:\n" + "\n".join(offences)
     )
+
+
+@pytest.mark.skipif(not CATALOG.exists(), reason="frontend source not present")
+def test_every_placeholder_has_a_value_to_fill_it() -> None:
+    """A hole the envelope cannot fill would reach the reader as `{name}`.
+
+    A translated error interpolates from `details`, the envelope's structured
+    account of the failure. So a catalog entry that says `{stream}` needs the
+    raise site to put `stream` in `details`, or the sentence arrives with the
+    brace in it -- which is worse than the English it replaced, because the
+    English at least had the value.
+
+    `translateError` falls back rather than showing a half-built sentence, so
+    this cannot reach a user. What it does instead is quietly give Vietnamese
+    readers English, which is the bug this whole sweep was about, one entry at
+    a time and invisibly. Hence a test.
+    """
+    import ast as _ast
+
+    backend = pathlib.Path(__file__).resolve().parents[1] / "app"
+    catalog = CATALOG.read_text(encoding="utf-8")
+    vi_source, rest = catalog.split("const en: Catalog = {", 1)
+    en_source = rest.split("\nexport const CATALOGS", 1)[0]
+
+    line = re.compile(
+        r"^\s+(['\"])(errorCode\.[A-Za-z0-9_.]+)\1\s*:\s*(['\"])(.*?)\3,\s*$", re.M
+    )
+    needed: dict[str, set[str]] = {}
+    for source in (vi_source, en_source):
+        for match in line.finditer(source):
+            code = match.group(2).split(".", 1)[1]
+            needed.setdefault(code, set()).update(
+                re.findall(r"\{(\w+)\}", match.group(4))
+            )
+
+    raisers = {
+        "ValidationError", "NotFoundError", "UnauthorizedError", "ForbiddenError",
+        "ConflictError", "ResourceInUseError", "ResourceModifiedError",
+        "QuotaExceededError", "RateLimitedError", "EngineUnavailableError",
+        "EngineOperationError", "EngineResourceGoneError", "AppError",
+    }
+    supplied: dict[str, set[str]] = {}
+    for path in sorted(backend.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if not any(name in text for name in raisers):
+            continue
+        for node in _ast.walk(_ast.parse(text)):
+            if not isinstance(node, _ast.Call):
+                continue
+            name = node.func.id if isinstance(node.func, _ast.Name) else None
+            if name not in raisers:
+                continue
+            code = None
+            details: set[str] = set()
+            for keyword in node.keywords:
+                if keyword.arg == "code" and isinstance(keyword.value, _ast.Constant):
+                    code = keyword.value.value
+                if keyword.arg == "details" and isinstance(keyword.value, _ast.Dict):
+                    details = {
+                        key.value for key in keyword.value.keys
+                        if isinstance(key, _ast.Constant)
+                    }
+            if code:
+                supplied.setdefault(code, set()).update(details)
+
+    gaps = [
+        f"  {code}: {sorted(needed[code] - supplied[code])}"
+        for code in sorted(needed)
+        if code in supplied and needed[code] - supplied[code]
+    ]
+    assert not gaps, (
+        "catalog entries whose placeholders nothing fills:\n" + "\n".join(gaps)
+        + "\n\nAdd the value to `details` at the raise site."
+    )

@@ -28,11 +28,11 @@ def definition_hash(definition: dict[str, Any]) -> str:
 
 def _segments(path: str) -> list[str]:
     if not path.startswith("/"):
-        raise ValidationError("Đường dẫn thay đổi không hợp lệ.", code="AI_CHANGE_PATH_INVALID")
+        raise ValidationError("That change does not point anywhere valid.", code="AI_CHANGE_PATH_INVALID")
     parts = [part.replace("~1", "/").replace("~0", "~") for part in path[1:].split("/")]
     if not parts or parts[0] not in ALLOWED_ROOTS or len(parts) > 12:
         raise ValidationError(
-            "AI chỉ được đề xuất thay đổi trong định nghĩa connector.",
+            "AI may only propose changes inside the connector definition.",
             code="AI_CHANGE_PATH_BLOCKED", details={"path": path},
         )
     return parts
@@ -44,10 +44,10 @@ def _index(value: str, size: int, *, allow_end: bool = False) -> int:
     try:
         parsed = int(value)
     except ValueError:
-        raise ValidationError("Chỉ số thay đổi không hợp lệ.", code="AI_CHANGE_PATH_INVALID") from None
+        raise ValidationError("The change index is not valid.", code="AI_CHANGE_PATH_INVALID") from None
     limit = size if allow_end else size - 1
     if parsed < 0 or parsed > limit:
-        raise ValidationError("Chỉ số thay đổi nằm ngoài phạm vi.", code="AI_CHANGE_PATH_INVALID")
+        raise ValidationError("The change index is out of range.", code="AI_CHANGE_PATH_INVALID")
     return parsed
 
 
@@ -55,7 +55,7 @@ def apply_operations(
     definition: dict[str, Any], operations: list[AgentOperation],
 ) -> dict[str, Any]:
     if not operations or len(operations) > 50:
-        raise ValidationError("Đề xuất không có thay đổi hợp lệ.", code="AI_CHANGE_EMPTY")
+        raise ValidationError("The proposal contains no valid changes.", code="AI_CHANGE_EMPTY")
     result = copy.deepcopy(definition)
     for operation in operations:
         parts = _segments(operation.path)
@@ -67,7 +67,8 @@ def apply_operations(
                 current = current[part]
             else:
                 raise ValidationError(
-                    "Đường dẫn thay đổi không tồn tại.", code="AI_CHANGE_PATH_INVALID",
+                    "That change points at something that does "
+                    "not exist.", code="AI_CHANGE_PATH_INVALID",
                     details={"path": operation.path},
                 )
         leaf = parts[-1]
@@ -77,7 +78,7 @@ def apply_operations(
                 value = json.loads(operation.value_json)
             except ValueError:
                 raise ValidationError(
-                    "Giá trị thay đổi không phải JSON hợp lệ.", code="AI_CHANGE_VALUE_INVALID",
+                    "The change value is not valid JSON.", code="AI_CHANGE_VALUE_INVALID",
                 ) from None
         if isinstance(current, list):
             if operation.op == "add":
@@ -89,18 +90,18 @@ def apply_operations(
         elif isinstance(current, dict):
             if operation.op == "remove":
                 if leaf not in current:
-                    raise ValidationError("Không tìm thấy trường cần xóa.", code="AI_CHANGE_PATH_INVALID")
+                    raise ValidationError("The field to delete was not found.", code="AI_CHANGE_PATH_INVALID")
                 del current[leaf]
             elif operation.op == "replace" and leaf not in current:
-                raise ValidationError("Không tìm thấy trường cần thay thế.", code="AI_CHANGE_PATH_INVALID")
+                raise ValidationError("The field to replace was not found.", code="AI_CHANGE_PATH_INVALID")
             else:
                 current[leaf] = value
         else:
-            raise ValidationError("Đường dẫn thay đổi không hợp lệ.", code="AI_CHANGE_PATH_INVALID")
+            raise ValidationError("That change does not point anywhere valid.", code="AI_CHANGE_PATH_INVALID")
     for field in result.get("user_inputs") or []:
         if field.get("secret") and field.get("default") not in (None, ""):
             raise ValidationError(
-                "AI không được đặt giá trị mặc định cho thông tin bí mật.",
+                "AI may not set a default value for a secret.",
                 code="AI_CHANGE_LITERAL_SECRET",
             )
     for stream in result.get("streams") or []:
@@ -111,7 +112,7 @@ def apply_operations(
             value = str(row.get("value") or "")
             if any(hint in key for hint in SENSITIVE_KEYS) and "config[" not in value:
                 raise ValidationError(
-                    "AI không được ghi credential trực tiếp vào request.",
+                    "AI may not write a credential straight into a request.",
                     code="AI_CHANGE_LITERAL_SECRET", details={"field": row.get("key")},
                 )
     # This is the authoritative semantic gate. A proposal that cannot compile
@@ -128,7 +129,7 @@ async def get_change_set(
         BuilderAIChangeSet.workspace_id == ctx.workspace_id,
     ))
     if item is None:
-        raise NotFoundError("Không tìm thấy đề xuất AI.", code="AI_CHANGE_NOT_FOUND")
+        raise NotFoundError("No such AI proposal.", code="AI_CHANGE_NOT_FOUND")
     return item
 
 
@@ -164,10 +165,11 @@ async def apply_change_set(
     item: BuilderAIChangeSet,
 ) -> None:
     if item.project_id != project.id or item.status != "PROPOSED":
-        raise ConflictError("Đề xuất AI không còn ở trạng thái có thể áp dụng.", code="AI_CHANGE_NOT_APPLICABLE")
+        raise ConflictError("The AI proposal is no longer in a state that can be applied.", code="AI_CHANGE_NOT_APPLICABLE")
     if definition_hash(project.definition or {}) != item.base_hash:
         raise ConflictError(
-            "Connector đã thay đổi sau khi AI tạo đề xuất. Hãy yêu cầu AI tạo lại đề xuất mới.",
+            "The connector changed after the AI made this proposal. Ask it for "
+            "a fresh one.",
             code="AI_CHANGE_STALE",
         )
     builder.compile_manifest(item.proposed_definition)
@@ -183,7 +185,7 @@ async def apply_change_set(
 
 async def reject_change_set(ctx: RequestContext, item: BuilderAIChangeSet) -> None:
     if item.status != "PROPOSED":
-        raise ConflictError("Đề xuất AI đã được xử lý.", code="AI_CHANGE_NOT_APPLICABLE")
+        raise ConflictError("That AI proposal has already been dealt with.", code="AI_CHANGE_NOT_APPLICABLE")
     item.status = "REJECTED"
     item.decided_by = ctx.user_id
     item.decided_at = utcnow()
@@ -194,10 +196,11 @@ async def undo_change_set(
     item: BuilderAIChangeSet,
 ) -> None:
     if item.project_id != project.id or item.status != "APPLIED":
-        raise ConflictError("Chỉ có thể hoàn tác đề xuất đã áp dụng.", code="AI_CHANGE_NOT_UNDOABLE")
+        raise ConflictError("Only a proposal that was applied can be undone.", code="AI_CHANGE_NOT_UNDOABLE")
     if definition_hash(project.definition or {}) != item.proposed_hash:
         raise ConflictError(
-            "Connector đã được sửa sau lần Apply này nên không thể hoàn tác tự động.",
+            "The connector was edited after this Apply, so it cannot be undone "
+            "automatically.",
             code="AI_CHANGE_UNDO_STALE",
         )
     project.definition = copy.deepcopy(item.previous_definition)

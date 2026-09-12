@@ -84,7 +84,7 @@ async def get_revision(
 ) -> TransformProjectRevision:
     revision = await session.get(TransformProjectRevision, revision_id)
     if revision is None:
-        raise NotFoundError("That project version no longer exists.")
+        raise NotFoundError("That project version no longer exists.", code="TRANSFORM_REVISION_GONE")
     return revision
 
 
@@ -92,7 +92,7 @@ async def working_revision(
     session: AsyncSession, project: TransformProject,
 ) -> TransformProjectRevision:
     if project.working_revision_id is None:
-        raise NotFoundError("This project has no files yet.")
+        raise NotFoundError("This project has no files yet.", code="TRANSFORM_NO_FILES")
     return await get_revision(session, project.working_revision_id)
 
 
@@ -154,13 +154,17 @@ async def read_file(
     safe = validate_path(path)
     entry = (revision.manifest_index or {}).get(safe.value)
     if entry is None:
-        raise NotFoundError(f"`{safe.value}` is not in this project.")
+        raise NotFoundError(
+            f"`{safe.value}` is not in this project.",
+            code="TRANSFORM_FILE_NOT_FOUND", details={"path": safe.value},
+        )
     store = store or object_store()
     try:
         data = await store.get(str(entry["key"]))
     except ObjectNotFound as exc:
         raise NotFoundError(
-            f"The stored copy of `{safe.value}` is missing."
+            f"The stored copy of `{safe.value}` is missing.",
+            code="TRANSFORM_FILE_BLOB_MISSING", details={"path": safe.value},
         ) from exc
     return data, FileEntry(
         path=safe.value,
@@ -238,7 +242,10 @@ async def apply_changes(
         if change.from_path is not None:
             source = validate_path(change.from_path)
             if source.value not in index:
-                raise NotFoundError(f"`{source.value}` is not in this project.")
+                raise NotFoundError(
+            f"`{source.value}` is not in this project.",
+            code="TRANSFORM_FILE_NOT_FOUND", details={"path": source.value},
+        )
             moved = index.pop(source.value)
             if change.content is None and change.path:
                 # A pure move keeps the blob; only the path changes.
@@ -248,7 +255,10 @@ async def apply_changes(
         if change.content is None:
             target = validate_path(change.path)
             if target.value not in index:
-                raise NotFoundError(f"`{target.value}` is not in this project.")
+                raise NotFoundError(
+            f"`{target.value}` is not in this project.",
+            code="TRANSFORM_FILE_NOT_FOUND", details={"path": target.value},
+        )
             index.pop(target.value)
             continue
 

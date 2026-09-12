@@ -133,7 +133,7 @@ async def get_resource(
         TransformResourceIndex.unique_id == unique_id,
     ))
     if row is None:
-        raise NotFoundError("That resource is not in the current version of this project.")
+        raise NotFoundError("That resource is not in the current version of this project.", code="TRANSFORM_RESOURCE_NOT_FOUND")
     return row
 
 

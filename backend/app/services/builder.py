@@ -74,7 +74,7 @@ async def get_project(
     if project is None:
         # 404 rather than 403: a project in another workspace must not be
         # distinguishable from one that never existed (§10).
-        raise NotFoundError("Không tìm thấy dự án connector.", code="BUILDER_NOT_FOUND")
+        raise NotFoundError("No such connector project.", code="BUILDER_NOT_FOUND")
     return project
 
 
@@ -96,8 +96,8 @@ async def test_read(
     known = {s["name"] for s in manifest["streams"]}
     if target not in known:
         raise ValidationError(
-            f"Stream '{target}' không tồn tại trong connector này.",
-            code="BUILDER_STREAM_UNKNOWN", details={"allowed": sorted(known)},
+            f"The stream '{target}' does not exist in this connector.",
+            code="BUILDER_STREAM_UNKNOWN", details={"allowed": sorted(known), "stream": target},
         )
 
     # About to make the request for real, so this is where the resolving checks
@@ -171,7 +171,7 @@ async def publish(
         runner = declare()
         if runner is None:
             raise ValidationError(
-                "Engine hiện tại không chạy được connector tự build.",
+                "The current engine cannot run a self-built connector.",
                 code="BUILDER_UNSUPPORTED_BY_ENGINE",
             )
     runner_repository, runner_version = runner

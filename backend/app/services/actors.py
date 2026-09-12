@@ -790,6 +790,7 @@ async def set_enabled(session: AsyncSession, ctx: RequestContext, kind: ActorKin
                     {"type": "TRANSFORM", "id": str(item.id), "name": item.name}
                     for item in transform_dependents
                 ],
+                code="DESTINATION_USED_BY_ACTIVE_TRANSFORM",
             )
         active = [p for p in await dependent_pipelines(session, ctx.workspace_id, kind, actor_id)
                   if p.status is PipelineStatus.ACTIVE]
@@ -831,6 +832,7 @@ async def delete(session: AsyncSession, ctx: RequestContext, kind: ActorKind,
                 {"type": "PIPELINE", "id": str(item.id), "name": item.name}
                 for item in dependents
             ],
+            code="DESTINATION_USED_BY_TRANSFORM",
         )
     if dependents and not force:
         raise ResourceInUseError(

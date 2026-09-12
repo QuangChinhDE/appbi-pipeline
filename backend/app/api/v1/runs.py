@@ -136,7 +136,7 @@ async def list_runs(
     ctx.require(Module.MONITORING, Action.VIEW)
     normalized = (run_type or "ALL").upper()
     if normalized not in {"ALL", "PIPELINE", "TRANSFORM"}:
-        raise ValidationError("Run type must be ALL, PIPELINE, or TRANSFORM.")
+        raise ValidationError("Run type must be ALL, PIPELINE, or TRANSFORM.", code="RUN_TYPE_INVALID")
     if pipeline_id:
         normalized = "PIPELINE"
     if transform_id:
@@ -226,7 +226,7 @@ async def _find(
     ))
     if transform_run is not None:
         return "TRANSFORM", transform_run
-    raise NotFoundError("Run was not found in this workspace.")
+    raise NotFoundError("Run was not found in this workspace.", code="RUN_NOT_IN_WORKSPACE")
 
 
 @router.get("/{run_id}", response_model=RunDetail)

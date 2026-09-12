@@ -68,7 +68,8 @@ class ChatRequest(ORMModel):
 def _require_ai() -> None:
     if not settings.openai_api_key.strip():
         raise AppError(
-            "AI Builder chưa được cấu hình. Hãy thêm OPENAI_API_KEY vào môi trường chạy API.",
+            "AI Builder is not configured. Add OPENAI_API_KEY to the API's "
+            "environment.",
             code="AI_NOT_CONFIGURED", category=ErrorCategory.CONFIGURATION, status_code=503,
         )
 
@@ -117,7 +118,7 @@ async def add_url_source(
         raise
     except Exception as exc:
         raise ValidationError(
-            "Không thể tải tài liệu từ URL này.", code="AI_SOURCE_FETCH_FAILED",
+            "The document at that URL could not be fetched.", code="AI_SOURCE_FETCH_FAILED",
             details={"reason": f"{type(exc).__name__}: {exc}"[:300]},
         ) from exc
     source = BuilderAISource(
@@ -178,7 +179,7 @@ async def delete_plan(plan_id: uuid.UUID, session: SessionDep, ctx: CtxDep) -> N
     plan = await service.get_plan(session, ctx, plan_id)
     if plan.status != "READY":
         raise ValidationError(
-            "Kế hoạch đã được dùng để tạo connector.", code="AI_PLAN_ALREADY_USED",
+            "That plan has already been used to create a connector.", code="AI_PLAN_ALREADY_USED",
         )
     await session.delete(plan)
     await session.commit()
@@ -190,7 +191,7 @@ async def create_project_from_plan(
 ) -> dict[str, Any]:
     ctx.require(Module.CONNECTORS, Action.CREATE)
     if payload.icon is not None and payload.icon not in BUILDER_ICONS:
-        raise ValidationError("Icon connector không hợp lệ.", code="BUILDER_ICON_INVALID")
+        raise ValidationError("That connector icon is not valid.", code="BUILDER_ICON_INVALID")
     plan = await service.get_plan(session, ctx, payload.plan_id)
     project = await service.create_project_from_plan(
         session,
@@ -231,7 +232,8 @@ async def chat(
 
     async def events():
         yield "event: progress\ndata: " + json.dumps({
-            "stage": "reading_context", "message": "Đang đọc cấu hình và lần test hiện tại...",
+            "stage": "reading_context",
+            "message": "Reading the configuration and the latest test...",
         }, ensure_ascii=False) + "\n\n"
         try:
             ai_session, answer, item = await service.chat(
@@ -271,7 +273,7 @@ async def get_change_set(
     await builder.get_project(session, ctx, project_id)
     item = await changesets.get_change_set(session, ctx, change_set_id)
     if item.project_id != project_id:
-        raise ValidationError("Đề xuất không thuộc connector này.", code="AI_CHANGE_PROJECT_MISMATCH")
+        raise ValidationError("That proposal belongs to a different connector.", code="AI_CHANGE_PROJECT_MISMATCH")
     return change_set_view(item)
 
 
@@ -283,7 +285,7 @@ async def _mutate_change_set(
     project = await builder.get_project(session, ctx, project_id)
     item = await changesets.get_change_set(session, ctx, change_set_id)
     if item.project_id != project.id:
-        raise ValidationError("Đề xuất không thuộc connector này.", code="AI_CHANGE_PROJECT_MISMATCH")
+        raise ValidationError("That proposal belongs to a different connector.", code="AI_CHANGE_PROJECT_MISMATCH")
     if action == "apply":
         await changesets.apply_change_set(session, ctx, project, item)
     elif action == "reject":

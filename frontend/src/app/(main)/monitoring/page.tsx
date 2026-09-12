@@ -52,7 +52,7 @@ export default function MonitoringPage() {
       }
     >
       {error ? (
-        <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
+        <ErrorState title={t('common.errorTitle')} message={(error as Error).message} error={error}
                     onRetry={() => refetch()} />
       ) : isLoading ? (
         <TableSkeleton rows={6} columns={6} />

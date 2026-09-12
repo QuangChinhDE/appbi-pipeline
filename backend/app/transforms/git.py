@@ -140,7 +140,7 @@ def _check(response: httpx.Response, *, action: str) -> httpx.Response:
             code="TRANSFORM_GIT_FORBIDDEN",
         )
     if response.status_code == 404:
-        raise NotFoundError("That repository, branch or path was not found on GitHub.")
+        raise NotFoundError("That repository, branch or path was not found on GitHub.", code="TRANSFORM_GIT_TARGET_NOT_FOUND")
     if response.status_code == 409:
         raise ConflictError(
             "GitHub rejected this because the branch moved. Pull first, then try again.",

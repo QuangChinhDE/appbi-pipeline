@@ -291,7 +291,7 @@ async def invite_org_member(
     role = _parse_org_role(payload.role)
     problems = password_problems(payload.password)
     if problems:
-        raise ValidationError(" ".join(problems))
+        raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
 
     email = payload.email.lower()
     user = await session.scalar(select(User).where(User.email == email))

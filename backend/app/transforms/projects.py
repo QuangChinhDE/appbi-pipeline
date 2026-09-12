@@ -49,7 +49,7 @@ async def get(
         TransformProject.deleted_at.is_(None),
     ).execution_options(populate_existing=True))
     if project is None:
-        raise NotFoundError("That project was not found in this workspace.")
+        raise NotFoundError("That project was not found in this workspace.", code="TRANSFORM_PROJECT_NOT_IN_WORKSPACE")
     return project
 
 

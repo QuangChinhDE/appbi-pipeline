@@ -127,7 +127,7 @@ export default function PipelineDetailPage() {
   if (error) {
     return (
       <div className="p-6">
-        <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
+        <ErrorState title={t('common.errorTitle')} message={(error as Error).message} error={error}
                     onRetry={() => refetch()} />
       </div>
     );

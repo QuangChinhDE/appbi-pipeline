@@ -276,7 +276,7 @@ async def change_password(
 
     problems = password_problems(payload.new_password)
     if problems:
-        raise ValidationError(" ".join(problems))
+        raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
     if payload.new_password == payload.current_password:
         raise ValidationError(
             "The new password has to differ from the current one.",
@@ -435,7 +435,7 @@ async def invite_member(payload: MemberInvite, session: SessionDep, ctx: CtxDep)
     # accounts for other people was the weakest one in the product.
     problems = password_problems(payload.password)
     if problems:
-        raise ValidationError(" ".join(problems))
+        raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
 
     email = payload.email.lower()
     user = await session.scalar(select(User).where(User.email == email))

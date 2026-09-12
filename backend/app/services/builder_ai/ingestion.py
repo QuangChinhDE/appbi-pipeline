@@ -30,14 +30,14 @@ def validate_upload(name: str, mime_type: str | None, content: bytes) -> None:
     )
     if suffix not in ALLOWED_SUFFIXES and not allowed_mime:
         raise ValidationError(
-            "Định dạng tài liệu chưa được hỗ trợ.", code="AI_SOURCE_TYPE_UNSUPPORTED",
+            "That document format is not supported yet.", code="AI_SOURCE_TYPE_UNSUPPORTED",
             details={"allowed": sorted(ALLOWED_SUFFIXES)},
         )
     if not content:
-        raise ValidationError("Tệp rỗng.", code="AI_SOURCE_EMPTY")
+        raise ValidationError("The file is empty.", code="AI_SOURCE_EMPTY")
     if len(content) > settings.builder_ai_source_max_bytes:
         raise ValidationError(
-            "Tệp vượt quá giới hạn của AI Builder.", code="AI_SOURCE_TOO_LARGE",
+            "The file is past AI Builder's size limit.", code="AI_SOURCE_TOO_LARGE",
             details={"max_bytes": settings.builder_ai_source_max_bytes},
         )
 
@@ -56,7 +56,7 @@ async def _bounded_body(response: httpx.Response, remaining: int) -> bytes:
         used += len(chunk)
         if used > remaining:
             raise ValidationError(
-                "Tài liệu URL vượt quá giới hạn tải.", code="AI_SOURCE_TOO_LARGE",
+                "The document at that URL is past the download limit.", code="AI_SOURCE_TOO_LARGE",
                 details={"max_bytes": settings.builder_ai_crawl_max_bytes},
             )
         chunks.append(chunk)
@@ -72,20 +72,21 @@ async def _fetch(client: httpx.AsyncClient, url: str, remaining: int) -> tuple[s
             peer = network_stream.get_extra_info("server_addr") if network_stream else None
             if not isinstance(peer, (tuple, list)) or not peer:
                 raise ValidationError(
-                    "Không xác định được máy chủ tài liệu đã kết nối.",
+                    "The address of the document server that answered could not be "
+                    "determined.",
                     code="AI_SOURCE_PEER_UNKNOWN",
                 )
             egress.check_connected_address(current, str(peer[0]), field="source_url")
             if response.status_code in {301, 302, 303, 307, 308}:
                 location = response.headers.get("location")
                 if not location:
-                    raise ValidationError("URL chuyển hướng thiếu Location.", code="AI_SOURCE_REDIRECT_INVALID")
+                    raise ValidationError("The redirect has no Location in it.", code="AI_SOURCE_REDIRECT_INVALID")
                 current = str(httpx.URL(current).join(location))
                 continue
             response.raise_for_status()
             body = await _bounded_body(response, remaining)
             return current, body, response.headers.get("content-type", "").split(";", 1)[0]
-    raise ValidationError("URL chuyển hướng quá nhiều lần.", code="AI_SOURCE_REDIRECT_LIMIT")
+    raise ValidationError("That URL redirects too many times.", code="AI_SOURCE_REDIRECT_LIMIT")
 
 
 def _postman_collection_url(url: str) -> str | None:
@@ -173,7 +174,7 @@ async def crawl_url(url: str) -> CrawledSource:
             final = urlsplit(final_url)
             if (final.scheme.lower(), final.hostname or "", final.port) != origin:
                 raise ValidationError(
-                    "URL chuyển sang một tên miền khác.", code="AI_SOURCE_CROSS_ORIGIN_REDIRECT",
+                    "That URL redirects to a different domain.", code="AI_SOURCE_CROSS_ORIGIN_REDIRECT",
                 )
             total += len(body)
             decoded = body.decode("utf-8", errors="replace")
@@ -191,5 +192,5 @@ async def crawl_url(url: str) -> CrawledSource:
                 if (parsed.scheme.lower(), parsed.hostname or "", parsed.port) == origin:
                     pending.append((link, depth + 1))
     if not pages:
-        raise ValidationError("Không đọc được nội dung từ URL.", code="AI_SOURCE_EMPTY")
+        raise ValidationError("Nothing could be read from that URL.", code="AI_SOURCE_EMPTY")
     return CrawledSource(text="\n".join(text_parts), size_bytes=total, pages=pages)

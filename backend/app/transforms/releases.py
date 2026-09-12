@@ -61,7 +61,7 @@ async def get(
         TransformRelease.project_id == project.id,
     ))
     if row is None:
-        raise NotFoundError("That release was not found in this project.")
+        raise NotFoundError("That release was not found in this project.", code="TRANSFORM_RELEASE_NOT_FOUND")
     return row
 
 

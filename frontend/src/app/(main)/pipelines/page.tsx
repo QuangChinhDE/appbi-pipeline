@@ -132,7 +132,7 @@ export default function PipelinesPage() {
       }
     >
       {error ? (
-        <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
+        <ErrorState title={t('common.errorTitle')} message={(error as Error).message} error={error}
                     onRetry={() => refetch()} />
       ) : isLoading ? (
         <TableSkeleton rows={5} columns={7} />

@@ -45,7 +45,7 @@ async def get(
         TransformConnection.deleted_at.is_(None),
     ))
     if row is None:
-        raise NotFoundError("That warehouse connection was not found.")
+        raise NotFoundError("That warehouse connection was not found.", code="TRANSFORM_CONNECTION_NOT_FOUND")
     return row
 
 

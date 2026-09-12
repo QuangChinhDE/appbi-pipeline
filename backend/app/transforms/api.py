@@ -675,7 +675,7 @@ async def file_content(
         else await file_service.working_revision(session, project)
     )
     if revision.project_id != project.id:
-        raise NotFoundError("That version does not belong to this project.")
+        raise NotFoundError("That version does not belong to this project.", code="TRANSFORM_RELEASE_WRONG_PROJECT")
 
     data, entry = await file_service.read_file(revision, path)
     if not entry.is_text:
@@ -1007,7 +1007,7 @@ async def resource_detail(
     ctx.require(Module.TRANSFORMS, Action.VIEW)
     bundle = await _bundle_for(session, project, scope)
     if bundle is None:
-        raise NotFoundError("This project has not been parsed yet.")
+        raise NotFoundError("This project has not been parsed yet.", code="TRANSFORM_NOT_PARSED")
 
     catalog = await indexer.load_catalog(bundle)
     freshness = await indexer.load_sources(bundle)
@@ -1312,13 +1312,13 @@ async def compiled(
     ctx.require(Module.TRANSFORMS, Action.VIEW)
     bundle = await indexer.latest_bundle(session, project.id, scope="DRAFT")
     if bundle is None:
-        raise NotFoundError("This project has not been compiled yet.")
+        raise NotFoundError("This project has not been compiled yet.", code="TRANSFORM_NOT_COMPILED")
     document = await indexer.load_raw(bundle.manifest_storage_key)
     if not document:
-        raise NotFoundError("The compiled output for this version is no longer stored.")
+        raise NotFoundError("The compiled output for this version is no longer stored.", code="TRANSFORM_COMPILED_GONE")
     node = (document.get("nodes") or {}).get(unique_id)
     if not isinstance(node, dict):
-        raise NotFoundError("That resource was not in the last compile.")
+        raise NotFoundError("That resource was not in the last compile.", code="TRANSFORM_RESOURCE_NOT_COMPILED")
     return CompiledView(
         unique_id=unique_id,
         compiled_code=node.get("compiled_code"),

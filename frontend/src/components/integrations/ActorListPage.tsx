@@ -131,7 +131,7 @@ export function ActorListPage({ kind }: { kind: ActorKind }) {
       }
     >
       {error ? (
-        <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
+        <ErrorState title={t('common.errorTitle')} message={(error as Error).message} error={error}
                     onRetry={() => refetch()} />
       ) : isLoading ? (
         <TableSkeleton rows={5} columns={6} />

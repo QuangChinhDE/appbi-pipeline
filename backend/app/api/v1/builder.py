@@ -141,7 +141,7 @@ async def create_project(
     ctx.require(Module.CONNECTORS, Action.CREATE)
 
     if payload.icon not in BUILDER_ICONS:
-        raise ValidationError("Icon connector không hợp lệ.", code="BUILDER_ICON_INVALID")
+        raise ValidationError("That connector icon is not valid.", code="BUILDER_ICON_INVALID")
     project_id = uuid.uuid4()
     project = BuilderProject(
         id=project_id,
@@ -185,7 +185,7 @@ async def update_project(
         project.description = payload.description
     if payload.icon is not None:
         if payload.icon not in BUILDER_ICONS:
-            raise ValidationError("Icon connector không hợp lệ.", code="BUILDER_ICON_INVALID")
+            raise ValidationError("That connector icon is not valid.", code="BUILDER_ICON_INVALID")
         project.icon = payload.icon
     if payload.definition is not None:
         # Saved as given: a draft the user is still shaping should not be
@@ -253,7 +253,7 @@ async def test_project(
         ))
         if test_session is None:
             raise ValidationError(
-                "Phiên thông tin test đã hết hạn. Hãy nhập lại credential.",
+                "The test credentials have expired. Enter them again.",
                 code="BUILDER_TEST_SESSION_EXPIRED",
             )
         config = await secret_store.read(session, test_session.secret_ref)
@@ -336,7 +336,7 @@ async def publish_project(
         # Publishing puts the connector in front of everyone in the workspace.
         # A green test read is the cheapest evidence that it does anything.
         raise ValidationError(
-            "Hãy chạy thử thành công trước khi phát hành connector.",
+            "Run a successful test before publishing the connector.",
             code="BUILDER_TEST_REQUIRED",
         )
 

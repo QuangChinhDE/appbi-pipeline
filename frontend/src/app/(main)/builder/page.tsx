@@ -81,7 +81,7 @@ export default function BuilderPage() {
       />
 
       {error ? (
-        <ErrorState title={t('common.errorTitle')} message={(error as Error).message}
+        <ErrorState title={t('common.errorTitle')} message={(error as Error).message} error={error}
                     onRetry={() => refetch()} />
       ) : isLoading ? (
         <TableSkeleton rows={4} columns={5} />

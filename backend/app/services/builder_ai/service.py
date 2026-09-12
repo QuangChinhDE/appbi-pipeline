@@ -110,7 +110,7 @@ class BuilderAIService:
             BuilderAISource.workspace_id == ctx.workspace_id,
         ))
         if source is None:
-            raise NotFoundError("Không tìm thấy tài liệu AI.", code="AI_SOURCE_NOT_FOUND")
+            raise NotFoundError("No such AI document.", code="AI_SOURCE_NOT_FOUND")
         return source
 
     async def analyze_source(
@@ -154,7 +154,7 @@ class BuilderAIService:
         intent: str | None,
     ) -> BuilderAIPlan:
         if not source_ids or len(source_ids) > 20:
-            raise ValidationError("Hãy chọn ít nhất một tài liệu.", code="AI_PLAN_SOURCES_REQUIRED")
+            raise ValidationError("Choose at least one document.", code="AI_PLAN_SOURCES_REQUIRED")
         sources = [await self.get_source(session, ctx, source_id) for source_id in source_ids]
         knowledge: list[dict[str, Any]] = []
         for source in sources:
@@ -183,7 +183,7 @@ class BuilderAIService:
             })
         if not plan.streams:
             raise ValidationError(
-                "Tài liệu chưa đủ để tạo stream có thể chạy.", code="AI_PLAN_NO_STREAMS",
+                "The documents are not enough to build a stream that runs.", code="AI_PLAN_NO_STREAMS",
                 details={"unknowns": plan.unknowns},
             )
         # Compile before presenting the plan. The user never reviews something
@@ -206,7 +206,7 @@ class BuilderAIService:
             BuilderAIPlan.id == plan_id, BuilderAIPlan.workspace_id == ctx.workspace_id,
         ))
         if plan is None:
-            raise NotFoundError("Không tìm thấy kế hoạch AI.", code="AI_PLAN_NOT_FOUND")
+            raise NotFoundError("No such AI plan.", code="AI_PLAN_NOT_FOUND")
         return plan
 
     async def create_project_from_plan(
@@ -221,7 +221,7 @@ class BuilderAIService:
         stream_reviews: list[dict[str, Any]] | None = None,
     ) -> BuilderProject:
         if plan_row.status != "READY":
-            raise ValidationError("Kế hoạch AI đã được sử dụng.", code="AI_PLAN_ALREADY_USED")
+            raise ValidationError("That AI plan has already been used.", code="AI_PLAN_ALREADY_USED")
         plan_data = copy.deepcopy(plan_row.plan)
         original_streams = plan_data.get("streams") or []
         if stream_reviews is not None:
@@ -229,7 +229,7 @@ class BuilderAIService:
             review_names = [str(item.get("source_name") or "") for item in stream_reviews]
             if len(review_names) != len(set(review_names)) or set(review_names) != set(original_names):
                 raise ValidationError(
-                    "Danh sách stream review không khớp với AI plan.",
+                    "The reviewed stream list does not match the AI plan.",
                     code="AI_PLAN_STREAM_REVIEW_INVALID",
                 )
             reviews = {str(item["source_name"]): item for item in stream_reviews}
@@ -242,7 +242,7 @@ class BuilderAIService:
                 reviewed_name = str(review.get("name") or "").strip()
                 if not reviewed_name:
                     raise ValidationError(
-                        "Tên stream không được để trống.", code="AI_PLAN_STREAM_NAME_REQUIRED",
+                        "A stream name cannot be empty.", code="AI_PLAN_STREAM_NAME_REQUIRED",
                     )
                 updated = copy.deepcopy(stream)
                 updated["name"] = reviewed_name
@@ -250,11 +250,11 @@ class BuilderAIService:
                 selected_names.append(reviewed_name.casefold())
             if not selected:
                 raise ValidationError(
-                    "Hãy chọn ít nhất một stream.", code="AI_PLAN_STREAM_REQUIRED",
+                    "Choose at least one stream.", code="AI_PLAN_STREAM_REQUIRED",
                 )
             if len(selected_names) != len(set(selected_names)):
                 raise ValidationError(
-                    "Tên stream sau khi review bị trùng.", code="AI_PLAN_STREAM_NAME_DUPLICATE",
+                    "Two reviewed streams ended up with the same name.", code="AI_PLAN_STREAM_NAME_DUPLICATE",
                 )
             plan_data["streams"] = selected
         if name is not None:
@@ -350,7 +350,7 @@ class BuilderAIService:
         test_run_id: uuid.UUID | None,
     ) -> tuple[BuilderAISession, AgentAnswer, BuilderAIChangeSet | None]:
         if not message.strip():
-            raise ValidationError("Hãy nhập yêu cầu cho AI.", code="AI_MESSAGE_REQUIRED")
+            raise ValidationError("Type what you want the AI to do.", code="AI_MESSAGE_REQUIRED")
         ai_session = await self.get_or_create_session(session, ctx, project)
         test_evidence: dict[str, Any] | None = None
         if test_run_id:
@@ -360,7 +360,7 @@ class BuilderAIService:
                 BuilderTestRun.workspace_id == ctx.workspace_id,
             ))
             if test_run is None:
-                raise NotFoundError("Không tìm thấy lần test.", code="BUILDER_TEST_RUN_NOT_FOUND")
+                raise NotFoundError("No such test run.", code="BUILDER_TEST_RUN_NOT_FOUND")
             test_evidence = test_run.evidence
 
         recent_messages = list((await session.scalars(select(BuilderAIMessage).where(

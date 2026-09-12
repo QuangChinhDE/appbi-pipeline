@@ -136,17 +136,17 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
     everything that is wrong.
     """
     if not isinstance(definition, dict):
-        raise ValidationError("Cấu hình connector không hợp lệ.", code="INVALID_DEFINITION")
+        raise ValidationError("The connector configuration is not valid.", code="INVALID_DEFINITION")
 
     base_url = (definition.get("base_url") or "").strip()
     if not base_url:
         raise ValidationError(
-            "Base URL là bắt buộc.", code="BUILDER_BASE_URL_REQUIRED",
+            "A base URL is required.", code="BUILDER_BASE_URL_REQUIRED",
             details={"field": "base_url"},
         )
     if not base_url.startswith(("http://", "https://")):
         raise ValidationError(
-            "Base URL phải bắt đầu bằng http:// hoặc https://.",
+            "The base URL has to start with http:// or https://.",
             code="BUILDER_BASE_URL_INVALID", details={"field": "base_url"},
         )
     # Where a connector may point is a policy decision, not a free choice. Only
@@ -158,20 +158,20 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
     method = (auth.get("method") or "none").lower()
     if method not in AUTH_METHODS:
         raise ValidationError(
-            f"Phương thức xác thực '{method}' không được hỗ trợ.",
+            f"The authentication method '{method}' is not supported.",
             code="BUILDER_AUTH_UNSUPPORTED",
-            details={"field": "auth.method", "allowed": sorted(AUTH_METHODS)},
+            details={"field": "auth.method", "allowed": sorted(AUTH_METHODS), "method": method},
         )
     if method == "api_key" and not (auth.get("header") or "").strip():
         raise ValidationError(
-            "Cần tên header cho API key.", code="BUILDER_AUTH_HEADER_REQUIRED",
+            "An API key needs a header name.", code="BUILDER_AUTH_HEADER_REQUIRED",
             details={"field": "auth.header"},
         )
     if method == "api_key" and (auth.get("inject_into") or "header") not in {
         "header", "request_parameter",
     }:
         raise ValidationError(
-            "API key chỉ có thể gửi bằng header hoặc query parameter.",
+            "An API key can only be sent as a header or a query parameter.",
             code="BUILDER_AUTH_INJECT_INVALID",
             details={"field": "auth.inject_into"},
         )
@@ -179,7 +179,7 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
         token_url = ((auth.get("oauth") or {}).get("token_url") or "").strip()
         if not token_url.startswith(("http://", "https://")):
             raise ValidationError(
-                "OAuth cần token refresh endpoint là URL đầy đủ.",
+                "OAuth needs the token refresh endpoint to be a full URL.",
                 code="BUILDER_OAUTH_TOKEN_URL_REQUIRED",
                 details={"field": "auth.oauth.token_url"},
             )
@@ -193,7 +193,7 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             "HS256", "HS384", "HS512", "RS256", "RS384", "RS512",
         }:
             raise ValidationError(
-                "Thuật toán JWT không được Builder hỗ trợ.",
+                "Builder does not support that JWT algorithm.",
                 code="BUILDER_JWT_ALGORITHM_UNSUPPORTED",
                 details={"field": "auth.jwt.algorithm"},
             )
@@ -203,7 +203,7 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError
         except (TypeError, ValueError):
             raise ValidationError(
-                "Thời hạn JWT phải là số nguyên dương.",
+                "A JWT lifetime has to be a positive whole number.",
                 code="BUILDER_JWT_DURATION_INVALID",
                 details={"field": "auth.jwt.token_duration"},
             ) from None
@@ -217,34 +217,34 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
         key = (field.get("key") or "").strip()
         if not _CONFIG_KEY_RE.match(key):
             raise ValidationError(
-                "Khóa tham số chỉ gồm chữ thường, số và dấu gạch dưới.",
+                "A parameter key takes lower-case letters, digits and underscores.",
                 code="BUILDER_INPUT_KEY_INVALID",
                 details={"field": f"user_inputs[{index}].key", "value": key},
             )
         if key in reserved:
             raise ValidationError(
-                f"'{key}' là tham số hệ thống, hãy chọn tên khác.",
+                f"'{key}' is a system parameter; choose another name.",
                 code="BUILDER_INPUT_KEY_RESERVED",
                 details={"field": f"user_inputs[{index}].key",
-                         "reserved": sorted(reserved)},
+                         "reserved": sorted(reserved), "key": key},
             )
         if key in seen_inputs:
             raise ValidationError(
-                f"Tham số '{key}' bị trùng.", code="BUILDER_INPUT_DUPLICATE",
-                details={"field": f"user_inputs[{index}].key"},
+                f"The parameter '{key}' appears twice.", code="BUILDER_INPUT_DUPLICATE",
+                details={"field": f"user_inputs[{index}].key", "key": key},
             )
         input_type = (field.get("type") or "string").lower()
         if input_type not in {"string", "integer", "number", "boolean"}:
             raise ValidationError(
-                f"Kiểu tham số '{input_type}' không được Builder hỗ trợ.",
+                f"Builder does not support the parameter type '{input_type}'.",
                 code="BUILDER_INPUT_TYPE_UNSUPPORTED",
-                details={"field": f"user_inputs[{index}].type"},
+                details={"field": f"user_inputs[{index}].type", "type": input_type},
             )
         seen_inputs.add(key)
         default = field.get("default")
         if field.get("secret") and default not in (None, ""):
             raise ValidationError(
-                "Tham số bí mật không được có giá trị mặc định trong manifest.",
+                "A secret parameter cannot have a default value in the manifest.",
                 code="BUILDER_SECRET_DEFAULT_FORBIDDEN",
                 details={"field": f"user_inputs[{index}].default"},
             )
@@ -258,16 +258,16 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError
             except (TypeError, ValueError):
                 raise ValidationError(
-                    f"Giá trị mặc định của '{key}' không đúng kiểu {input_type}.",
+                    f"The default value of '{key}' is not a {input_type}.",
                     code="BUILDER_INPUT_DEFAULT_INVALID",
                     details={"field": f"user_inputs[{index}].default",
-                             "type": input_type},
+                             "type": input_type, "key": key},
                 ) from None
 
     streams = definition.get("streams") or []
     if not streams:
         raise ValidationError(
-            "Cần ít nhất một stream.", code="BUILDER_NO_STREAM",
+            "At least one stream is needed.", code="BUILDER_NO_STREAM",
             details={"field": "streams"},
         )
 
@@ -277,84 +277,88 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
         name = (stream.get("name") or "").strip()
         if not _STREAM_NAME_RE.match(name):
             raise ValidationError(
-                "Tên stream chỉ gồm chữ, số và dấu gạch dưới, bắt đầu bằng chữ.",
+                "A stream name takes letters, digits and underscores, and starts "
+                "with a letter.",
                 code="BUILDER_STREAM_NAME_INVALID",
                 details={"field": f"streams[{index}].name", "value": name},
             )
         if name.casefold() in seen_normalized:
             raise ValidationError(
-                f"Stream '{name}' bị trùng tên.", code="BUILDER_STREAM_DUPLICATE",
-                details={"field": f"streams[{index}].name"},
+                f"The stream name '{name}' appears twice.", code="BUILDER_STREAM_DUPLICATE",
+                details={"field": f"streams[{index}].name", "name": name},
             )
         seen.add(name)
         seen_normalized.add(name.casefold())
 
         if not (stream.get("path") or "").strip():
             raise ValidationError(
-                f"Stream '{name}' cần đường dẫn (path).",
+                f"The stream '{name}' needs a path.",
                 code="BUILDER_STREAM_PATH_REQUIRED",
-                details={"field": f"streams[{index}].path"},
+                details={"field": f"streams[{index}].path", "name": name},
             )
         if (stream.get("http_method") or "GET").upper() not in {"GET", "POST"}:
             raise ValidationError(
-                f"Stream '{name}' chỉ hỗ trợ GET hoặc POST.",
+                f"The stream '{name}' supports only GET or POST.",
                 code="BUILDER_HTTP_METHOD_UNSUPPORTED",
-                details={"field": f"streams[{index}].http_method"},
+                details={"field": f"streams[{index}].http_method", "name": name},
             )
         body_mode = ((stream.get("request_body") or {}).get("mode") or "json").lower()
         if body_mode not in {"json", "form"}:
             raise ValidationError(
-                f"Stream '{name}' có kiểu request body không được hỗ trợ.",
+                f"The stream '{name}' has a request body type that is not "
+                f"supported.",
                 code="BUILDER_BODY_MODE_UNSUPPORTED",
-                details={"field": f"streams[{index}].request_body.mode"},
+                details={"field": f"streams[{index}].request_body.mode", "name": name},
             )
 
         cursor = (stream.get("cursor_field") or "").strip()
         if stream.get("incremental") and not cursor:
             raise ValidationError(
-                f"Stream '{name}' bật incremental thì phải chọn cursor field.",
+                f"The stream '{name}' is incremental, so it needs a cursor field.",
                 code="BUILDER_CURSOR_REQUIRED",
-                details={"field": f"streams[{index}].cursor_field"},
+                details={"field": f"streams[{index}].cursor_field", "name": name},
             )
         cursor_filter_mode = (stream.get("cursor_filter_mode") or "server").lower()
         if stream.get("incremental") and cursor_filter_mode not in {"server", "client"}:
             raise ValidationError(
-                f"Stream '{name}' có chế độ lọc cursor không được hỗ trợ.",
+                f"The stream '{name}' has a cursor filter mode that is not "
+                f"supported.",
                 code="BUILDER_CURSOR_FILTER_MODE_UNSUPPORTED",
-                details={"field": f"streams[{index}].cursor_filter_mode"},
+                details={"field": f"streams[{index}].cursor_filter_mode", "name": name},
             )
         if stream.get("incremental") and cursor_filter_mode == "server" and (
             stream.get("cursor_inject_into") or "request_parameter"
         ) not in INJECT_LOCATIONS:
             raise ValidationError(
-                f"Stream '{name}' có vị trí gửi cursor không hợp lệ.",
+                f"The stream '{name}' sends its cursor somewhere that is not valid.",
                 code="BUILDER_CURSOR_INJECT_INVALID",
-                details={"field": f"streams[{index}].cursor_inject_into"},
+                details={"field": f"streams[{index}].cursor_inject_into", "name": name},
             )
 
         pagination = stream.get("pagination") or {}
         mode = (pagination.get("mode") or "none").lower()
         if mode not in PAGINATION_MODES:
             raise ValidationError(
-                f"Kiểu phân trang '{mode}' không được hỗ trợ.",
+                f"The pagination type '{mode}' is not supported.",
                 code="BUILDER_PAGINATION_UNSUPPORTED",
                 details={"field": f"streams[{index}].pagination.mode",
-                         "allowed": sorted(PAGINATION_MODES)},
+                         "allowed": sorted(PAGINATION_MODES), "mode": mode},
             )
         if mode == "cursor" and not (pagination.get("cursor_path") or "").strip():
             raise ValidationError(
-                f"Stream '{name}' dùng cursor pagination thì phải chỉ ra vị trí "
-                "cursor trong phản hồi.",
+                f"The stream '{name}' uses cursor pagination, so it has to say "
+                f"where the cursor sits in the response.",
                 code="BUILDER_CURSOR_PATH_REQUIRED",
-                details={"field": f"streams[{index}].pagination.cursor_path"},
+                details={"field": f"streams[{index}].pagination.cursor_path", "name": name},
             )
         if mode in {"page", "offset", "cursor"} and (
             pagination.get("inject_into") or "request_parameter"
         ) not in INJECT_LOCATIONS:
             raise ValidationError(
-                f"Stream '{name}' có vị trí gửi page token không hợp lệ.",
+                f"The stream '{name}' sends its page token somewhere that is not "
+                f"valid.",
                 code="BUILDER_PAGINATION_INJECT_INVALID",
-                details={"field": f"streams[{index}].pagination.inject_into"},
+                details={"field": f"streams[{index}].pagination.inject_into", "name": name},
             )
         if mode == "page" and pagination.get("start_from") not in (None, ""):
             try:
@@ -362,9 +366,10 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError
             except (TypeError, ValueError):
                 raise ValidationError(
-                    f"Stream '{name}' cần trang bắt đầu là số nguyên không âm.",
+                    f"The stream '{name}' needs a starting page that is a whole "
+                    f"number, zero or more.",
                     code="BUILDER_PAGE_START_INVALID",
-                    details={"field": f"streams[{index}].pagination.start_from"},
+                    details={"field": f"streams[{index}].pagination.start_from", "name": name},
                 ) from None
         page_size = pagination.get("page_size")
         if page_size not in (None, ""):
@@ -373,9 +378,10 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError
             except (TypeError, ValueError):
                 raise ValidationError(
-                    f"Stream '{name}' cần page size là số nguyên dương.",
+                    f"The stream '{name}' needs a page size that is a positive whole "
+                    f"number.",
                     code="BUILDER_PAGE_SIZE_INVALID",
-                    details={"field": f"streams[{index}].pagination.page_size"},
+                    details={"field": f"streams[{index}].pagination.page_size", "name": name},
                 ) from None
 
         for collection_name, case_insensitive in (
@@ -387,19 +393,20 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                 value = str((row or {}).get("value") or "")
                 if not key and value:
                     raise ValidationError(
-                        f"Stream '{name}' có giá trị request nhưng thiếu tên tham số.",
+                        f"The stream '{name}' has a request value with no parameter name "
+                        f"for it.",
                         code="BUILDER_REQUEST_KEY_REQUIRED",
                         details={
-                            "field": f"streams[{index}].{collection_name}[{row_index}].key",
+                            "field": f"streams[{index}].{collection_name}[{row_index}].key", "name": name,
                         },
                     )
                 normalized_key = key.casefold() if case_insensitive else key
                 if normalized_key and normalized_key in row_keys:
                     raise ValidationError(
-                        f"Stream '{name}' có tham số request '{key}' bị trùng.",
+                        f"The stream '{name}' has the request parameter '{key}' twice.",
                         code="BUILDER_REQUEST_KEY_DUPLICATE",
                         details={
-                            "field": f"streams[{index}].{collection_name}[{row_index}].key",
+                            "field": f"streams[{index}].{collection_name}[{row_index}].key", "name": name, "key": key,
                         },
                     )
                 if normalized_key:
@@ -413,18 +420,18 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             value = str((row or {}).get("value") or "")
             if not key and value:
                 raise ValidationError(
-                    f"Stream '{name}' có giá trị body nhưng thiếu tên trường.",
+                    f"The stream '{name}' has a body value with no field name for it.",
                     code="BUILDER_REQUEST_KEY_REQUIRED",
                     details={
-                        "field": f"streams[{index}].request_body.entries[{row_index}].key",
+                        "field": f"streams[{index}].request_body.entries[{row_index}].key", "name": name,
                     },
                 )
             if key and key in body_keys:
                 raise ValidationError(
-                    f"Stream '{name}' có trường body '{key}' bị trùng.",
+                    f"The stream '{name}' has the body field '{key}' twice.",
                     code="BUILDER_REQUEST_KEY_DUPLICATE",
                     details={
-                        "field": f"streams[{index}].request_body.entries[{row_index}].key",
+                        "field": f"streams[{index}].request_body.entries[{row_index}].key", "name": name, "key": key,
                     },
                 )
             if key:
@@ -435,26 +442,29 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             path = ((transformation or {}).get("path") or "").strip()
             if kind not in {"add", "remove"}:
                 raise ValidationError(
-                    f"Stream '{name}' có kiểu transformation không được hỗ trợ.",
+                    f"The stream '{name}' has a transformation type that is not "
+                    f"supported.",
                     code="BUILDER_TRANSFORM_UNSUPPORTED",
                     details={
-                        "field": f"streams[{index}].transformations[{transform_index}].type",
+                        "field": f"streams[{index}].transformations[{transform_index}].type", "name": name,
                     },
                 )
             if not path:
                 raise ValidationError(
-                    f"Stream '{name}' có transformation chưa điền field path.",
+                    f"The stream '{name}' has a transformation with no field path "
+                    f"filled in.",
                     code="BUILDER_TRANSFORM_PATH_REQUIRED",
                     details={
-                        "field": f"streams[{index}].transformations[{transform_index}].path",
+                        "field": f"streams[{index}].transformations[{transform_index}].path", "name": name,
                     },
                 )
             if kind == "add" and (transformation or {}).get("value") is None:
                 raise ValidationError(
-                    f"Stream '{name}' có transformation thêm field nhưng thiếu giá trị.",
+                    f"The stream '{name}' has a transformation that adds a field but "
+                    f"gives it no value.",
                     code="BUILDER_TRANSFORM_VALUE_REQUIRED",
                     details={
-                        "field": f"streams[{index}].transformations[{transform_index}].value",
+                        "field": f"streams[{index}].transformations[{transform_index}].value", "name": name,
                     },
                 )
 
@@ -466,18 +476,18 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError
             except (TypeError, ValueError):
                 raise ValidationError(
-                    f"Stream '{name}' cần số lần thử lại không âm.",
+                    f"The stream '{name}' needs a retry count of zero or more.",
                     code="BUILDER_MAX_RETRIES_INVALID",
-                    details={"field": f"streams[{index}].error_handler.max_retries"},
+                    details={"field": f"streams[{index}].error_handler.max_retries", "name": name},
                 ) from None
 
         backoff = error_handler.get("backoff") or {}
         backoff_mode = (backoff.get("mode") or "none").lower()
         if backoff_mode not in {"none", "constant", "exponential", "header"}:
             raise ValidationError(
-                f"Stream '{name}' có kiểu backoff không được hỗ trợ.",
+                f"The stream '{name}' has a backoff type that is not supported.",
                 code="BUILDER_BACKOFF_UNSUPPORTED",
-                details={"field": f"streams[{index}].error_handler.backoff.mode"},
+                details={"field": f"streams[{index}].error_handler.backoff.mode", "name": name},
             )
         numeric_backoff = "seconds" if backoff_mode == "constant" else (
             "factor" if backoff_mode == "exponential" else None
@@ -488,10 +498,11 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     raise ValueError
             except (TypeError, ValueError):
                 raise ValidationError(
-                    f"Stream '{name}' cần giá trị backoff là số nguyên dương.",
+                    f"The stream '{name}' needs a backoff value that is a positive "
+                    f"whole number.",
                     code="BUILDER_BACKOFF_VALUE_INVALID",
                     details={
-                        "field": f"streams[{index}].error_handler.backoff.{numeric_backoff}",
+                        "field": f"streams[{index}].error_handler.backoff.{numeric_backoff}", "name": name,
                     },
                 ) from None
 
@@ -507,9 +518,10 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             if codes and (not normalized_codes
                           or any(code < 100 or code > 599 for code in normalized_codes)):
                 raise ValidationError(
-                    f"Stream '{name}' có quy tắc với mã HTTP không hợp lệ.",
+                    f"The stream '{name}' has a rule with an HTTP code that is not "
+                    f"valid.",
                     code="BUILDER_RESPONSE_CODES_INVALID",
-                    details={"field": f"{field_prefix}.http_codes"},
+                    details={"field": f"{field_prefix}.http_codes", "name": name},
                 )
             if not normalized_codes and not predicate:
                 raise ValidationError(
@@ -524,11 +536,11 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             action = ((response_filter or {}).get("action") or "").upper()
             if action not in allowed_response_actions:
                 raise ValidationError(
-                    f"Stream '{name}' có hành động xử lý response không được hỗ trợ.",
+                    f"The stream '{name}' has a response action that is not supported.",
                     code="BUILDER_RESPONSE_ACTION_UNSUPPORTED",
                     details={
                         "field": f"streams[{index}].error_handler.filters[{filter_index}].action",
-                        "allowed": sorted(allowed_response_actions),
+                        "allowed": sorted(allowed_response_actions), "name": name,
                     },
                 )
 
@@ -536,24 +548,26 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
         partition_mode = (partition.get("mode") or "none").lower()
         if partition_mode not in {"none", "list", "parent"}:
             raise ValidationError(
-                f"Stream '{name}' có kiểu partition không được hỗ trợ.",
+                f"The stream '{name}' has a partition type that is not supported.",
                 code="BUILDER_PARTITION_UNSUPPORTED",
-                details={"field": f"streams[{index}].partition.mode"},
+                details={"field": f"streams[{index}].partition.mode", "name": name},
             )
         if partition_mode in {"list", "parent"} and partition.get("param") and (
             partition.get("inject_into") or "request_parameter"
         ) not in INJECT_LOCATIONS:
             raise ValidationError(
-                f"Stream '{name}' có vị trí gửi partition không hợp lệ.",
+                f"The stream '{name}' sends its partition somewhere that is not "
+                f"valid.",
                 code="BUILDER_PARTITION_INJECT_INVALID",
-                details={"field": f"streams[{index}].partition.inject_into"},
+                details={"field": f"streams[{index}].partition.inject_into", "name": name},
             )
         if partition_mode == "list":
             if not (partition.get("values") or "").strip():
                 raise ValidationError(
-                    f"Stream '{name}' phân mảnh theo danh sách thì cần ít nhất một giá trị.",
+                    f"The stream '{name}' partitions over a list, so the list needs "
+                    f"at least one value.",
                     code="BUILDER_PARTITION_VALUES_REQUIRED",
-                    details={"field": f"streams[{index}].partition.values"},
+                    details={"field": f"streams[{index}].partition.values", "name": name},
                 )
             list_field = partition.get("cursor_field") or "partition"
             list_reference = f"stream_partition.{list_field}"
@@ -569,35 +583,36 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             )
             if not (partition.get("param") or "").strip() and not used_somewhere:
                 raise ValidationError(
-                    f"Stream '{name}' lặp theo danh sách nhưng không dùng giá trị partition "
-                    "trong request.",
+                    f"The stream '{name}' loops over a list but never uses the "
+                    f"partition value in its request.",
                     code="BUILDER_LIST_PARTITION_UNUSED",
                     details={
                         "field": f"streams[{index}].partition.param",
-                        "partition_field": list_field,
+                        "partition_field": list_field, "name": name,
                     },
                 )
         if partition_mode == "parent":
             parent = partition.get("parent_stream")
             if not parent:
                 raise ValidationError(
-                    f"Stream '{name}' phân mảnh theo stream cha thì phải chọn stream cha.",
+                    f"The stream '{name}' partitions over a parent stream, so a "
+                    f"parent has to be chosen.",
                     code="BUILDER_PARENT_STREAM_REQUIRED",
-                    details={"field": f"streams[{index}].partition.parent_stream"},
+                    details={"field": f"streams[{index}].partition.parent_stream", "name": name},
                 )
             if parent == name:
                 raise ValidationError(
-                    f"Stream '{name}' không thể là cha của chính nó.",
+                    f"The stream '{name}' cannot be its own parent.",
                     code="BUILDER_PARENT_STREAM_SELF",
-                    details={"field": f"streams[{index}].partition.parent_stream"},
+                    details={"field": f"streams[{index}].partition.parent_stream", "name": name},
                 )
             known = {(s.get("name") or "").strip() for s in streams}
             if parent not in known:
                 raise ValidationError(
-                    f"Không tìm thấy stream cha '{parent}'.",
+                    f"No parent stream called '{parent}'.",
                     code="BUILDER_PARENT_STREAM_UNKNOWN",
                     details={"field": f"streams[{index}].partition.parent_stream",
-                             "allowed": sorted(known - {name})},
+                             "allowed": sorted(known - {name}), "parent": parent},
                 )
 
             # A parent that is never used is always a mistake.
@@ -622,14 +637,15 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
             )
             if not (partition.get("param") or "").strip() and not used_somewhere:
                 raise ValidationError(
-                    f"Stream '{name}' chọn stream cha '{parent}' nhưng không dùng id "
-                    f"của bản ghi cha ở đâu cả, nên mỗi phân mảnh sẽ gọi đúng một "
-                    f"request giống nhau. Hoặc điền tên tham số nhận id cha, hoặc "
-                    f"chèn {{{{ stream_partition.{field_name} }}}} vào URL path, "
-                    f"query, header hay body.",
+                    f"The stream '{name}' takes '{parent}' as its parent but never "
+                    f"uses the parent record's id anywhere, so every partition would "
+                    f"make the same one request. Either name the parameter that "
+                    f"receives the parent id, or put "
+                    f"{{{{ stream_partition.{field_name} }}}} into the URL path, "
+                    f"query, header or body.",
                     code="BUILDER_PARENT_KEY_UNUSED",
                     details={"field": f"streams[{index}].partition.param",
-                             "partition_field": field_name},
+                             "partition_field": field_name, "name": name, "parent": parent},
                 )
 
     # Every parent chain must terminate at a root. A cycle can render in the
@@ -651,7 +667,7 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
                     if (stream.get("name") or "").strip() == origin
                 )
                 raise ValidationError(
-                    f"Các stream tạo thành vòng lặp cha-con: {' -> '.join(cycle)}.",
+                    f"These streams form a parent-child loop: {' -> '.join(cycle)}.",
                     code="BUILDER_PARENT_STREAM_CYCLE",
                     details={
                         "field": f"streams[{index}].partition.parent_stream",
@@ -684,9 +700,10 @@ def validate(definition: dict[str, Any]) -> dict[str, Any]:
     unknown_references = sorted(referenced - available_system_inputs - seen_inputs)
     if unknown_references:
         raise ValidationError(
-            f"Cấu hình đang tham chiếu input không tồn tại: {', '.join(unknown_references)}.",
+            f"The configuration refers to inputs that do not exist: "
+            f"{', '.join(unknown_references)}.",
             code="BUILDER_INPUT_REFERENCE_UNKNOWN",
-            details={"field": "user_inputs", "keys": unknown_references},
+            details={"field": "user_inputs", "keys": unknown_references, "inputs": ", ".join(unknown_references)},
         )
 
     return definition
@@ -1261,7 +1278,8 @@ def _connection_spec(definition: dict[str, Any]) -> dict[str, Any]:
         "base_url": {
             "type": "string",
             "title": "Base URL",
-            "description": "Địa chỉ gốc của API.",
+            "description": "The API's base address.",
+            "description_vi": "Địa chỉ gốc của API.",
             "default": definition.get("base_url"),
             "order": 0,
         },
@@ -1301,7 +1319,8 @@ def _connection_spec(definition: dict[str, Any]) -> dict[str, Any]:
         properties["start_date"] = {
             "type": "string",
             "title": "Start date",
-            "description": "Mốc thời gian bắt đầu cho đồng bộ incremental.",
+            "description": "Where an incremental sync starts reading from.",
+            "description_vi": "Mốc thời gian bắt đầu cho đồng bộ incremental.",
             "default": "1970-01-01T00:00:00Z",
             "order": 9,
         }
@@ -1482,9 +1501,9 @@ def manifest_yaml(definition: dict[str, Any]) -> str:
 def _manifest_import_unsupported(field: str, component: Any) -> NoReturn:
     kind = component.get("type") if isinstance(component, dict) else type(component).__name__
     raise ValidationError(
-        f"Builder chưa thể chỉnh sửa thành phần manifest '{kind}' tại {field}.",
+        f"Builder cannot edit the manifest component '{kind}' at {field} yet.",
         code="BUILDER_MANIFEST_COMPONENT_UNSUPPORTED",
-        details={"field": field, "type": kind},
+        details={"field": field, "type": kind, "kind": kind},
     )
 
 
@@ -1695,20 +1714,20 @@ def definition_from_manifest(document: str) -> dict[str, Any]:
         manifest = yaml.safe_load(document)
     except yaml.YAMLError as exc:
         raise ValidationError(
-            "Không đọc được YAML.", code="BUILDER_YAML_INVALID",
+            "The YAML could not be read.", code="BUILDER_YAML_INVALID",
             details={"reason": str(exc)[:300]},
         ) from None
 
     if not isinstance(manifest, dict) or manifest.get("type") != "DeclarativeSource":
         raise ValidationError(
-            "Tài liệu này không phải một DeclarativeSource.",
+            "This document is not a DeclarativeSource.",
             code="BUILDER_MANIFEST_NOT_SOURCE",
         )
 
     streams = manifest.get("streams")
     if not isinstance(streams, list) or not streams:
         raise ValidationError(
-            "Manifest không có stream nào.", code="BUILDER_MANIFEST_NO_STREAM",
+            "The manifest has no streams in it.", code="BUILDER_MANIFEST_NO_STREAM",
         )
 
     spec = (manifest.get("spec") or {}).get("connection_specification") or {}

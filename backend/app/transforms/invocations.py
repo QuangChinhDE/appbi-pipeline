@@ -60,7 +60,7 @@ async def get(
         TransformInvocation.workspace_id == ctx.workspace_id,
     ))
     if row is None:
-        raise NotFoundError("That run was not found in this workspace.")
+        raise NotFoundError("That run was not found in this workspace.", code="TRANSFORM_RUN_NOT_IN_WORKSPACE")
     return row
 
 
@@ -317,7 +317,7 @@ async def get_claimed(
 ) -> TransformInvocation:
     invocation = await session.get(TransformInvocation, invocation_id)
     if invocation is None:
-        raise NotFoundError("That run no longer exists.")
+        raise NotFoundError("That run no longer exists.", code="TRANSFORM_RUN_GONE")
     return invocation
 
 
@@ -518,7 +518,7 @@ async def retry(
     ctx.require(Module.TRANSFORMS, Action.OPERATE)
     project = await session.get(TransformProject, invocation.project_id)
     if project is None:
-        raise NotFoundError("That project no longer exists.")
+        raise NotFoundError("That project no longer exists.", code="TRANSFORM_PROJECT_GONE")
     environment = await session.get(TransformEnvironment, invocation.environment_id)
     revision = await session.get(TransformProjectRevision, invocation.revision_id)
     if environment is None or revision is None:

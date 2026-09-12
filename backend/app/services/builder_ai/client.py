@@ -20,7 +20,8 @@ class OpenAIBuilderClient:
     def __init__(self) -> None:
         if not settings.openai_api_key.strip():
             raise AppError(
-                "AI Builder chưa được cấu hình. Hãy thêm OPENAI_API_KEY vào môi trường chạy API.",
+                "AI Builder is not configured. Add OPENAI_API_KEY to the API's "
+                "environment.",
                 code="AI_NOT_CONFIGURED", category=ErrorCategory.CONFIGURATION,
                 status_code=503,
             )
@@ -86,7 +87,8 @@ class OpenAIBuilderClient:
                 error_type=type(exc).__name__,
             )
             raise AppError(
-                "OpenAI chưa thể xử lý yêu cầu này. Hãy thử lại sau.",
+                "OpenAI cannot handle this request at the moment. Try again in a "
+                "little while.",
                 code="AI_PROVIDER_ERROR", category=ErrorCategory.UNKNOWN,
                 status_code=502, technical_message=f"{type(exc).__name__}: {exc}"[:1000],
             ) from exc

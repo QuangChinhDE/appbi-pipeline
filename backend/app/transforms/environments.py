@@ -40,7 +40,7 @@ async def get(
         TransformEnvironment.deleted_at.is_(None),
     ))
     if row is None:
-        raise NotFoundError("That environment was not found in this project.")
+        raise NotFoundError("That environment was not found in this project.", code="TRANSFORM_ENVIRONMENT_NOT_FOUND")
     return row
 
 

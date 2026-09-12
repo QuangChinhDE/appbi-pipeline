@@ -6,6 +6,7 @@ import { AlertTriangle, Info, Loader2, Lock, type LucideIcon } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
 import { useI18n } from '@/providers/LanguageProvider';
+import { translateError } from '@/lib/i18n';
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={cn('skeleton h-4 w-full', className)} aria-hidden />;
@@ -123,8 +124,21 @@ export function ErrorState({
    */
   error?: unknown;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const denied = isPermissionDenied(error);
+  // The error's own code is the part that can be translated; the message the
+  // caller passed is the fallback for a code the catalog does not know. This
+  // is the fourth place an error reaches a person, after the toast, the
+  // remediation card and the run detail, and it is the one a list or a detail
+  // page falls back to -- so it is the one most people actually see.
+  const detail = error && typeof error === 'object'
+    ? translateError(
+      locale,
+      (error as { code?: string }).code,
+      message ?? '',
+      (error as { details?: Record<string, unknown> }).details,
+    )
+    : message;
   return (
     <div
       className={cn(
@@ -144,8 +158,8 @@ export function ErrorState({
         )}
         <div className="min-w-0 flex-1">
           <p className="text-caption font-strong text-text-primary">{title}</p>
-          {message && (
-            <p className="mt-1 text-caption leading-relaxed text-text-secondary">{message}</p>
+          {detail && (
+            <p className="mt-1 text-caption leading-relaxed text-text-secondary">{detail}</p>
           )}
           {traceId && (
             <p className="mt-1.5 font-mono text-tiny text-text-quaternary">trace: {traceId}</p>
