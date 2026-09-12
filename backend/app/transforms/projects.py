@@ -409,6 +409,9 @@ async def present(
             } if git else None
         ),
         "schedule_type": project.schedule_type.value,
+        "schedule_config": project.schedule_config or {},
+        "schedule_command": project.schedule_command or {},
+        "timezone": project.timezone,
         "next_run_at": project.next_run_at,
         "updated_at": project.updated_at,
     }
@@ -433,7 +436,21 @@ def _has_unpublished(
 async def detail(
     session: AsyncSession, ctx: RequestContext, project: TransformProject,
 ) -> dict[str, Any]:
-    """Everything the workbench header needs on open."""
+    """Everything the workbench header needs on open.
+
+    The refresh is not decoration. `updated_at` carries `onupdate=func.now()`,
+    so after any UPDATE its value exists only in the database and SQLAlchemy
+    marks the attribute expired. `present` is synchronous and reads it, which
+    turns into a lazy SELECT inside an async request -- the error SQLAlchemy
+    raises for that is `MissingGreenlet`, and every caller that mutated the
+    project first got a 500.
+
+    Found by setting a schedule through the API: PATCH /transforms/{id}
+    answered INTERNAL_ERROR while the schedule itself had been written. One
+    route already worked around it by re-fetching the project by id; doing it
+    here covers the other two and the next one somebody adds.
+    """
+    await session.refresh(project)
     row = await present(session, ctx, project)
 
     environments = []

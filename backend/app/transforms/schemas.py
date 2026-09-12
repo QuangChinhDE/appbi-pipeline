@@ -153,6 +153,13 @@ class ProjectView(BaseModel):
     last_success_at: datetime | None = None
     git: GitStateView | None = None
     schedule_type: str = "MANUAL"
+    #: The interval, time of day or cron expression behind `schedule_type`, and
+    #: which dbt command a firing runs. Absent, the UI could tell somebody a
+    #: schedule existed and not what it was, which is why there was no editor
+    #: for it: nothing to populate one with.
+    schedule_config: dict[str, Any] = Field(default_factory=dict)
+    schedule_command: dict[str, Any] = Field(default_factory=dict)
+    timezone: str = "Asia/Bangkok"
     next_run_at: datetime | None = None
     updated_at: datetime | None = None
 

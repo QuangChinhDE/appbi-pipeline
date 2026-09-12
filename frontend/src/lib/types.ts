@@ -575,6 +575,25 @@ export interface Transform {
   last_success_at: string | null;
   git: TransformGitState | null;
   schedule_type: string;
+  /**
+   * The interval, time of day or cron expression behind `schedule_type`, and
+   * which dbt command a firing runs. The API reported only the type, so the
+   * workbench could say a schedule existed and not what it was -- which is
+   * why there was no editor: nothing to populate one with.
+   */
+  schedule_config: {
+    interval_seconds?: number | null;
+    time_of_day?: string | null;
+    cron_expression?: string | null;
+    timezone?: string | null;
+  };
+  schedule_command: {
+    command?: string;
+    selector?: string | null;
+    exclude?: string | null;
+    full_refresh?: boolean;
+  };
+  timezone: string;
   next_run_at: string | null;
   updated_at: string | null;
 }

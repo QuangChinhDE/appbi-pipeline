@@ -24,7 +24,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, ChevronDown, FileCode, GitBranch, Hammer, Loader2,
+  ArrowLeft, CalendarClock, ChevronDown, FileCode, GitBranch, Hammer, Loader2,
   Play, Save, Settings2, TriangleAlert,
 } from 'lucide-react';
 
@@ -35,6 +35,9 @@ import { Menu } from '@/components/ui/Menu';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { CommandBar, type ParsedCommand } from '@/components/transforms/CommandBar';
+import { ScheduleDialog } from '@/components/transforms/ScheduleDialog';
+import { describeSchedule } from '@/lib/format';
+import { useI18n } from '@/providers/LanguageProvider';
 import { GenerateModelDialog } from '@/components/transforms/GenerateModelDialog';
 import { DbtFileEditor } from '@/components/transforms/DbtFileEditor';
 import { EditorTabs, type OpenTab } from '@/components/transforms/EditorTabs';
@@ -77,6 +80,8 @@ export default function TransformWorkbenchPage() {
   const [centreView, setCentreView] = React.useState<CentreView>('editor');
   const [outputTab, setOutputTab] = React.useState<OutputTab>('problems');
   const [inspectorId, setInspectorId] = React.useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = React.useState(false);
+  const { t } = useI18n();
 
   // ── editor state ────────────────────────────────────────────────────────
   const [tabs, setTabs] = React.useState<OpenTab[]>([]);
@@ -592,6 +597,25 @@ export default function TransformWorkbenchPage() {
             Build landed on top of Preview. The title yields space instead, and
             a left margin keeps the two groups apart rather than touching. */}
         <div className="flex shrink-0 items-center gap-2 pl-3 [&>*]:shrink-0">
+          {/* The schedule was reachable by nothing: the columns, the service
+              and the worker loop all existed, and no screen offered a way in.
+              A badge rather than a plain button, so a project that runs on its
+              own says so without anybody opening the dialog. */}
+          <Button
+            variant={detail.schedule_type === 'MANUAL' ? 'ghost' : 'secondary'}
+            size="xs"
+            onClick={() => setScheduleOpen(true)}
+            leadingIcon={<CalendarClock className="h-3.5 w-3.5" />}
+          >
+            {detail.schedule_type === 'MANUAL'
+              ? 'Lịch chạy'
+              : describeSchedule({
+                  type: detail.schedule_type,
+                  interval_seconds: detail.schedule_config?.interval_seconds ?? null,
+                  time_of_day: detail.schedule_config?.time_of_day ?? null,
+                  cron_expression: detail.schedule_config?.cron_expression ?? null,
+                }, t)}
+          </Button>
           {canEdit && (
             <Button
               variant="ghost" size="xs"
@@ -1022,6 +1046,15 @@ export default function TransformWorkbenchPage() {
         onClose={() => setNewFileOpen(false)}
         onCreate={(path, template) => createFile.mutate({ path, template })}
       />
+
+      {detail && (
+        <ScheduleDialog
+          project={detail}
+          open={scheduleOpen}
+          onClose={() => setScheduleOpen(false)}
+          canEdit={canEdit}
+        />
+      )}
 
       <Modal
         open={Boolean(conflict)}
