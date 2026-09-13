@@ -8,6 +8,24 @@ import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/providers/LanguageProvider';
 
+/**
+ * How wide content is allowed to get, and why it is allowed to stop.
+ *
+ * Every layout here used to grow with the window. On a laptop that reads as
+ * generous; on a 1920 monitor a four-column table spreads across 1600px until
+ * `Đã đồng bộ` and `group` are separate islands with a hand-span between them,
+ * and a form label gets 500px to hold two words.
+ *
+ * So content has a measure. Past it the page stops growing and centres, which
+ * turns accidental emptiness into deliberate margin -- the same reason a book
+ * is not typeset to the width of the desk it is on.
+ *
+ * Full-bleed is still available by not using these primitives: the Transform
+ * workbench is an editor and takes the whole window, which is correct for a
+ * tool you sit inside rather than a page you read.
+ */
+export const CONTENT_MEASURE = 'mx-auto w-full max-w-[1280px]';
+
 /** List page skeleton shared by every module (section 7.3). */
 export function PageListLayout({
   title, description, overview, action, searchable = true, searchPlaceholder,
@@ -26,7 +44,7 @@ export function PageListLayout({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex h-full flex-col px-4 pt-5 sm:px-6 xl:px-8">
+    <div className={cn(CONTENT_MEASURE, 'flex h-full flex-col px-4 pt-5 sm:px-6 xl:px-8')}>
       <header className="mb-3.5 shrink-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
@@ -110,7 +128,11 @@ export function DetailHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-[rgb(var(--border-line))] bg-surface-1 px-4 pb-4 pt-5 sm:px-6 xl:px-8">
+    // The border and its background stay full width -- a rule that stops
+    // short of the window edge looks like a mistake -- while what sits on
+    // them lines up with the body below.
+    <div className="border-b border-[rgb(var(--border-line))] bg-surface-1">
+      <div className={cn(CONTENT_MEASURE, 'px-4 pb-4 pt-5 sm:px-6 xl:px-8')}>
       <Link
         href={backHref}
         className="mb-1 -ml-1 inline-flex items-center gap-1 rounded px-1 py-1.5 text-caption text-text-tertiary transition-colors hover:text-text-primary"
@@ -136,6 +158,7 @@ export function DetailHeader({
         </div>
         {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
+      </div>
     </div>
   );
 }
@@ -146,7 +169,7 @@ export function DetailBody({ children }: { children: React.ReactNode }) {
   // with flex-1. Content that does not ask keeps its natural height and sits at
   // the top exactly as before.
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-6 xl:px-8">
+    <div className={cn(CONTENT_MEASURE, 'flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-6 xl:px-8')}>
       {children}
     </div>
   );

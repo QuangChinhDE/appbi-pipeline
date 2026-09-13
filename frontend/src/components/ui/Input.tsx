@@ -84,17 +84,39 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   invalid?: boolean;
 }
 
+/**
+ * Width classes belong on the wrapper, not on the `<select>`.
+ *
+ * The chevron is positioned against the wrapper, so a `<Select className="w-40">`
+ * whose parent does not shrink to fit -- a table cell, a block container --
+ * ends up with a 160px box and an arrow pinned to the far edge of the cell,
+ * sometimes a couple of hundred pixels away from the control it belongs to.
+ * Hoisting the width means the caller writes what they mean and the arrow
+ * follows.
+ */
+const WIDTH_UTILITY = /^(?:(?:sm|md|lg|xl|2xl):)?(?:w|min-w|max-w)-/;
+
+function splitWidth(className?: string): [string, string] {
+  const widths: string[] = [];
+  const rest: string[] = [];
+  for (const token of (className ?? '').split(/\s+/).filter(Boolean)) {
+    (WIDTH_UTILITY.test(token) ? widths : rest).push(token);
+  }
+  return [widths.join(' '), rest.join(' ')];
+}
+
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function Select(
   { className, size = 'md', invalid, children, ...props },
   ref,
 ) {
+  const [width, rest] = splitWidth(className);
   return (
-    <div className="relative flex items-center">
+    <div className={cn('relative flex items-center', width)}>
       <select
         ref={ref}
         aria-invalid={invalid || undefined}
         className={cn(fieldBase, fieldState(invalid), sizeMap[size],
-          'appearance-none pl-3 pr-8', className)}
+          'appearance-none pl-3 pr-8', rest)}
         {...props}
       >
         {children}

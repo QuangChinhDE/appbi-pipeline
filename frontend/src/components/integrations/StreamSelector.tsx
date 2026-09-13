@@ -104,7 +104,7 @@ export function StreamSelector({
         <div className="overflow-hidden rounded-lg border border-[rgb(var(--border-line))] bg-surface-1">
           {/* Virtualisation is unnecessary below a few hundred streams; the list
               is windowed by the search box above for very large catalogs. */}
-          <div className="max-h-[520px] overflow-y-auto">
+          <div className="max-h-[520px] overflow-auto">
             <table className="w-full min-w-[820px] text-left">
               <thead className="sticky top-0 z-10 bg-surface-1">
                 <tr className="border-b border-[rgb(var(--border-line))] text-tiny uppercase tracking-[0.08em] text-text-quaternary">

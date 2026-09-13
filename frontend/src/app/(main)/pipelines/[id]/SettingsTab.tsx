@@ -38,7 +38,10 @@ function Row({
 }) {
   return (
     <div className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-start sm:gap-6">
-      <div className="sm:w-[46%] sm:flex-shrink-0">
+      {/* A measure, not a proportion. At 46% of the card this column grew
+          with the window until "Tên pipeline" had 500px to itself and the
+          field it labels sat half a screen away. */}
+      <div className="sm:w-[42%] sm:max-w-[280px] sm:flex-shrink-0">
         <p className="text-caption font-strong text-text-primary">{label}</p>
         {description && (
           <p className="mt-0.5 text-tiny leading-relaxed text-text-tertiary">{description}</p>

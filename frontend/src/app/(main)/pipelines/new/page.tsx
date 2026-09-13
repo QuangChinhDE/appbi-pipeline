@@ -454,8 +454,8 @@ export default function NewPipelinePage() {
               </Card>
 
               <Card title={t('pipelines.reviewData')} padded={false}>
-                <div className="max-h-64 overflow-y-auto">
-                  <table className="w-full text-left">
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full min-w-[460px] text-left">
                     <thead className="sticky top-0 bg-surface-1">
                       <tr className="border-b border-[rgb(var(--border-line))] text-tiny uppercase tracking-[0.08em] text-text-quaternary">
                         <th scope="col" className="px-4 py-2 font-emphasis">

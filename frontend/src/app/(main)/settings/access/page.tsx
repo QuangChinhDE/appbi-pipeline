@@ -179,12 +179,15 @@ export default function AccessSettingsPage() {
           title={t('settings.currentPermissions')}
           description={t('settings.currentPermissionsHint', { role: me?.role ?? '—' })}
         >
-          <ul className="divide-y divide-[rgb(var(--border-line))]">
+          {/* Ten short rows, one per module. Down a single column they put the
+              module name and its level a screen apart on a wide monitor, so
+              the list wraps into columns as the room appears. */}
+          <ul className="grid gap-x-10 sm:grid-cols-2 xl:grid-cols-3">
             {Object.entries(permissions ?? {}).map(([module, actions]) => {
               const { level, flags } = summarisePermissions(actions);
               return (
                 <li key={module}
-                    className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0">
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[rgb(var(--border-line))] py-2 last:border-b-0">
                   <span className="flex-1 basis-32 text-caption font-emphasis text-text-primary">
                     {tf([`module.${module}`], module)}
                   </span>

@@ -262,7 +262,7 @@ export function GenerateModelDialog({
                 {t('tf.gen.pickTable')}
               </p>
             ) : (
-              <table className="w-full text-caption">
+              <table className="w-full min-w-[420px] text-caption">
                 <thead className="sticky top-0 bg-surface-2 text-tiny text-text-tertiary">
                   <tr>
                     <th className="w-8 px-2 py-1.5" />

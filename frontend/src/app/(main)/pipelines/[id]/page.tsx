@@ -7,11 +7,12 @@ import * as React from 'react';
 import { ErrorRemediationCard, fromApiError, type RemediationInput }
   from '@/components/integrations/ErrorRemediationCard';
 import { SchemaDiffViewer } from '@/components/integrations/SchemaDiffViewer';
-import { DetailBody, Card } from '@/components/layout/PageLayout';
+import { CONTENT_MEASURE, DetailBody, Card } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/Button';
 import { ErrorState, Spinner } from '@/components/ui/Feedback';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { Tabs } from '@/components/ui/Tabs';
+import { cn } from '@/lib/utils';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { useUrlTab } from '@/hooks/use-url-tab';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
@@ -170,7 +171,10 @@ export default function PipelineDetailPage() {
         toggling={toggleEnabled.isPending}
       />
 
-      <div className="border-b border-[rgb(var(--border-line))] bg-surface-1 px-4 sm:px-6 xl:px-8">
+      {/* Same as the header above it: the rule runs the width of the page,
+          the tabs line up with the content. */}
+      <div className="border-b border-[rgb(var(--border-line))] bg-surface-1">
+        <div className={cn(CONTENT_MEASURE, 'px-4 sm:px-6 xl:px-8')}>
         <Tabs
           value={tab}
           items={[
@@ -192,6 +196,7 @@ export default function PipelineDetailPage() {
             },
           ]}
         />
+        </div>
       </div>
 
       <DetailBody>

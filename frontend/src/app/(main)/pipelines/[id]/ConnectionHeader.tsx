@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { ConnectorIcon } from '@/components/integrations/ConnectorIcon';
 import type { ActorRef, PipelineDetail } from '@/lib/types';
+import { CONTENT_MEASURE } from '@/components/layout/PageLayout';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/providers/LanguageProvider';
 
@@ -30,7 +31,10 @@ export function ConnectionHeader({
 }) {
   const { t } = useI18n();
   return (
-    <div className="border-b border-[rgb(var(--border-line))] bg-surface-1 px-4 pt-4 sm:px-6 xl:px-8">
+    // The rule runs the width of the page; the title, the connection chips
+    // and the actions line up with the tabs and the body below them.
+    <div className="border-b border-[rgb(var(--border-line))] bg-surface-1">
+      <div className={cn(CONTENT_MEASURE, 'px-4 pt-4 sm:px-6 xl:px-8')}>
       <Link
         href="/pipelines"
         className="-ml-1 mb-1 inline-flex items-center gap-1 rounded px-1 py-1 text-caption text-text-tertiary transition-colors hover:text-text-primary"
@@ -77,6 +81,7 @@ export function ConnectionHeader({
             disabledLabel={t('pipelines.disabled')}
           />
         </div>
+      </div>
       </div>
     </div>
   );

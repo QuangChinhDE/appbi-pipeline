@@ -78,111 +78,113 @@ export function SqlImportReview({
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-[rgb(var(--border-line))]">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-[rgb(var(--border-line))] bg-surface-2 text-tiny uppercase tracking-[0.08em] text-text-quaternary">
-                <th scope="col" className="px-3 py-2 font-emphasis">{t('tfsql.colModel')}</th>
-                <th scope="col" className="px-3 py-2 font-emphasis">{t('tfsql.colLayer')}</th>
-                <th scope="col" className="px-3 py-2 font-emphasis">{t('tfsql.colStored')}</th>
-                <th scope="col" className="px-3 py-2 font-emphasis">{t('tfsql.colReads')}</th>
-                <th scope="col" className="w-8 px-2 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[rgb(var(--border-line))]">
-              {analysis.candidates.map((candidate) => (
-                <React.Fragment key={candidate.key}>
-                  <tr className="align-top">
-                    <td className="px-3 py-2">
-                      <Input
-                        size="sm"
-                        value={candidate.name}
-                        aria-label={t('tfsql.nameFor', { file: candidate.file_name })}
-                        onChange={(event) =>
-                          update(candidate.key, { name: event.target.value })}
-                        className="font-mono"
-                      />
-                      <p className="mt-1 truncate text-tiny text-text-quaternary">
-                        {candidate.file_name}
-                      </p>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        size="sm"
-                        value={candidate.layer}
-                        aria-label={t('tfsql.layerFor', { file: candidate.file_name })}
-                        onChange={(event) =>
-                          update(candidate.key, { layer: event.target.value })}
-                      >
-                        {LAYERS.map((layer) => (
-                          <option key={layer} value={layer}>{layer}</option>
-                        ))}
-                      </Select>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        size="sm"
-                        value={candidate.materialized}
-                        aria-label={t('tfsql.storedFor', { file: candidate.file_name })}
-                        onChange={(event) =>
-                          update(candidate.key, { materialized: event.target.value })}
-                      >
-                        {MATERIALIZATIONS.map((item) => (
-                          <option key={item} value={item}>{item}</option>
-                        ))}
-                      </Select>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {candidate.depends_on.map((name) => (
-                          <Badge key={name} variant="brand" size="xs">{name}</Badge>
-                        ))}
-                        {candidate.sources.map((name) => (
-                          <Badge key={name} variant="subtle" size="xs">
-                            <Database className="h-2.5 w-2.5" />{name}
-                          </Badge>
-                        ))}
-                        {candidate.depends_on.length === 0
-                          && candidate.sources.length === 0 && (
-                          <span className="text-tiny text-text-quaternary">—</span>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] table-fixed text-left">
+              <thead>
+                <tr className="border-b border-[rgb(var(--border-line))] bg-surface-2 text-tiny uppercase tracking-[0.08em] text-text-quaternary">
+                  <th scope="col" className="px-3 py-2 font-emphasis">{t('tfsql.colModel')}</th>
+                  <th scope="col" className="w-[176px] px-3 py-2 font-emphasis">{t('tfsql.colLayer')}</th>
+                  <th scope="col" className="w-[176px] px-3 py-2 font-emphasis">{t('tfsql.colStored')}</th>
+                  <th scope="col" className="px-3 py-2 font-emphasis">{t('tfsql.colReads')}</th>
+                  <th scope="col" className="w-10 px-2 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgb(var(--border-line))]">
+                {analysis.candidates.map((candidate) => (
+                  <React.Fragment key={candidate.key}>
+                    <tr className="align-top">
+                      <td className="px-3 py-2">
+                        <Input
+                          size="sm"
+                          value={candidate.name}
+                          aria-label={t('tfsql.nameFor', { file: candidate.file_name })}
+                          onChange={(event) =>
+                            update(candidate.key, { name: event.target.value })}
+                          className="font-mono"
+                        />
+                        <p className="mt-1 truncate text-tiny text-text-quaternary">
+                          {candidate.file_name}
+                        </p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Select
+                          size="sm"
+                          value={candidate.layer}
+                          aria-label={t('tfsql.layerFor', { file: candidate.file_name })}
+                          onChange={(event) =>
+                            update(candidate.key, { layer: event.target.value })}
+                        >
+                          {LAYERS.map((layer) => (
+                            <option key={layer} value={layer}>{layer}</option>
+                          ))}
+                        </Select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Select
+                          size="sm"
+                          value={candidate.materialized}
+                          aria-label={t('tfsql.storedFor', { file: candidate.file_name })}
+                          onChange={(event) =>
+                            update(candidate.key, { materialized: event.target.value })}
+                        >
+                          {MATERIALIZATIONS.map((item) => (
+                            <option key={item} value={item}>{item}</option>
+                          ))}
+                        </Select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {candidate.depends_on.map((name) => (
+                            <Badge key={name} variant="brand" size="xs">{name}</Badge>
+                          ))}
+                          {candidate.sources.map((name) => (
+                            <Badge key={name} variant="subtle" size="xs">
+                              <Database className="h-2.5 w-2.5" />{name}
+                            </Badge>
+                          ))}
+                          {candidate.depends_on.length === 0
+                            && candidate.sources.length === 0 && (
+                            <span className="text-tiny text-text-quaternary">—</span>
+                          )}
+                        </div>
+                        {candidate.description && (
+                          <p className="mt-1 text-tiny text-text-tertiary">
+                            {candidate.description}
+                          </p>
                         )}
-                      </div>
-                      {candidate.description && (
-                        <p className="mt-1 text-tiny text-text-tertiary">
-                          {candidate.description}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-2 py-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpen(open === candidate.key ? null : candidate.key)}
-                        aria-label={t('tfsql.showQuery', { file: candidate.file_name })}
-                        className="rounded-sm p-1 text-text-tertiary hover:bg-surface-2"
-                      >
-                        <ChevronRight className={cn(
-                          'h-3.5 w-3.5 transition-transform',
-                          open === candidate.key && 'rotate-90',
-                        )} />
-                      </button>
-                    </td>
-                  </tr>
-                  {open === candidate.key && (
-                    <tr className="bg-surface-2/40">
-                      <td colSpan={5} className="px-3 py-2">
-                        <p className="mb-1 text-tiny text-text-tertiary">
-                          {t('tfsql.queryUnchanged')}
-                        </p>
-                        <pre className="max-h-64 overflow-auto rounded-sm bg-surface-1 p-2 font-mono text-tiny leading-relaxed text-text-secondary">
-                          {candidate.preview}
-                        </pre>
+                      </td>
+                      <td className="px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpen(open === candidate.key ? null : candidate.key)}
+                          aria-label={t('tfsql.showQuery', { file: candidate.file_name })}
+                          className="rounded-sm p-1 text-text-tertiary hover:bg-surface-2"
+                        >
+                          <ChevronRight className={cn(
+                            'h-3.5 w-3.5 transition-transform',
+                            open === candidate.key && 'rotate-90',
+                          )} />
+                        </button>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                    {open === candidate.key && (
+                      <tr className="bg-surface-2/40">
+                        <td colSpan={5} className="px-3 py-2">
+                          <p className="mb-1 text-tiny text-text-tertiary">
+                            {t('tfsql.queryUnchanged')}
+                          </p>
+                          <pre className="max-h-64 overflow-auto rounded-sm bg-surface-1 p-2 font-mono text-tiny leading-relaxed text-text-secondary">
+                            {candidate.preview}
+                          </pre>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
