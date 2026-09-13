@@ -151,8 +151,11 @@ function ProjectRow({ project }: { project: Transform }) {
           'bg-surface-1 px-3.5 py-3 transition-colors hover:bg-surface-2',
         )}
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+        {/* Two lines stacked on a phone, two columns once there is room. The
+            room a wide window brings goes to the detail line rather than to
+            the gap between the name and the badges on the right. */}
+        <div className="grid min-w-0 flex-1 gap-x-6 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-small font-emphasis text-text-primary">
               {project.name}
             </span>
@@ -167,7 +170,7 @@ function ProjectRow({ project }: { project: Transform }) {
               <Badge variant="danger" size="xs">{t('tf.list.parseFailed')}</Badge>
             )}
           </div>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-tiny text-text-tertiary">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-tiny text-text-tertiary xl:mt-0">
             {project.warehouse && (
               <span>
                 {project.warehouse.connector_display_name ?? project.warehouse.connector_key}

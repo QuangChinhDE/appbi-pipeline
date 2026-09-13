@@ -115,7 +115,11 @@ export default function OverviewPage() {
             />
           </div>
 
-          <div className="grid items-start gap-3 xl:grid-cols-2">
+          {/* Columns, not a grid. A healthy workspace has nothing failing and
+              nothing running, so two of these four cards are usually empty --
+              and in a grid an empty card holds open a hole the height of its
+              neighbour. Flowing them lets each card sit under the one above. */}
+          <div className="gap-3 xl:columns-2 [&>*:last-child]:mb-0 [&>*]:mb-3">
             <Card
               title={t('overview.recentFailures')}
               action={

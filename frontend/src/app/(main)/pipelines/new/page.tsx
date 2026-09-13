@@ -217,7 +217,7 @@ export default function NewPipelinePage() {
           }
         />
       ) : (
-        <div className="max-w-5xl space-y-4">
+        <div className="w-full space-y-4">
           {failure && (
             <ErrorRemediationCard
               error={{ ...failure, onRetry: step === 1 ? () => discover.mutate() : undefined }}

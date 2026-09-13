@@ -9,22 +9,25 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/providers/LanguageProvider';
 
 /**
- * How wide content is allowed to get, and why it is allowed to stop.
+ * The page takes the whole window, and each region earns the room it gets.
  *
- * Every layout here used to grow with the window. On a laptop that reads as
- * generous; on a 1920 monitor a four-column table spreads across 1600px until
- * `Đã đồng bộ` and `group` are separate islands with a hand-span between them,
- * and a form label gets 500px to hold two words.
+ * Capping the page and centring it was the wrong answer: it turned emptiness
+ * at the edge into emptiness in the margin, which is the same emptiness with a
+ * better excuse. This is an operations console -- more rows, more columns and
+ * more of a log visible at once is the point of a large monitor.
  *
- * So content has a measure. Past it the page stops growing and centres, which
- * turns accidental emptiness into deliberate margin -- the same reason a book
- * is not typeset to the width of the desk it is on.
+ * What is still bounded is bounded where it belongs, not at the page:
  *
- * Full-bleed is still available by not using these primitives: the Transform
- * workbench is an editor and takes the whole window, which is correct for a
- * tool you sit inside rather than a page you read.
+ *   - a paragraph of prose keeps a readable line (`max-w-2xl` on descriptions),
+ *     because a 1600px line of text is genuinely harder to read;
+ *   - a control is as wide as the value it holds, so a name field does not
+ *     become a 900px box;
+ *   - a grid of cards adds columns as the room appears rather than stretching
+ *     four cards to the width of the desk.
+ *
+ * Padding grows with the window so content does not run into the frame.
  */
-export const CONTENT_MEASURE = 'mx-auto w-full max-w-[1280px]';
+export const CONTENT_MEASURE = 'w-full';
 
 /** List page skeleton shared by every module (section 7.3). */
 export function PageListLayout({
@@ -44,7 +47,7 @@ export function PageListLayout({
 }) {
   const { t } = useI18n();
   return (
-    <div className={cn(CONTENT_MEASURE, 'flex h-full flex-col px-4 pt-5 sm:px-6 xl:px-8')}>
+    <div className={cn(CONTENT_MEASURE, 'flex h-full flex-col px-4 pt-5 sm:px-6 xl:px-8 2xl:px-10')}>
       <header className="mb-3.5 shrink-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
@@ -132,7 +135,7 @@ export function DetailHeader({
     // short of the window edge looks like a mistake -- while what sits on
     // them lines up with the body below.
     <div className="border-b border-[rgb(var(--border-line))] bg-surface-1">
-      <div className={cn(CONTENT_MEASURE, 'px-4 pb-4 pt-5 sm:px-6 xl:px-8')}>
+      <div className={cn(CONTENT_MEASURE, 'px-4 pb-4 pt-5 sm:px-6 xl:px-8 2xl:px-10')}>
       <Link
         href={backHref}
         className="mb-1 -ml-1 inline-flex items-center gap-1 rounded px-1 py-1.5 text-caption text-text-tertiary transition-colors hover:text-text-primary"
@@ -169,7 +172,7 @@ export function DetailBody({ children }: { children: React.ReactNode }) {
   // with flex-1. Content that does not ask keeps its natural height and sits at
   // the top exactly as before.
   return (
-    <div className={cn(CONTENT_MEASURE, 'flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-6 xl:px-8')}>
+    <div className={cn(CONTENT_MEASURE, 'flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-6 xl:px-8 2xl:px-10')}>
       {children}
     </div>
   );

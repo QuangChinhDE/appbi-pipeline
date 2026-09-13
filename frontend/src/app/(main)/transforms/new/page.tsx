@@ -231,7 +231,7 @@ export default function NewTransformPage() {
     // viewport and stranded the footer at the bottom of the screen, leaving a
     // few hundred pixels of nothing between the last field and the buttons.
     // The wizard is a short document -- it should be as tall as its content.
-    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 pt-5 sm:px-6 lg:px-8">
+    <div className="flex w-full flex-col px-4 pt-5 sm:px-6 xl:px-8 2xl:px-10">
       <header className="mb-4 shrink-0">
         <Link
           href="/transforms"
@@ -275,10 +275,11 @@ export default function NewTransformPage() {
       <div className="pb-4">
         {step === 1 && (
           <div className="space-y-3">
-            {/* Three mutually exclusive choices: side by side they are read as
-                alternatives at a glance, where a full-width stack made three
-                short labels each 1000px wide. */}
-            <div className="grid gap-3 sm:grid-cols-3">
+            {/* Four mutually exclusive choices: side by side they are read as
+                alternatives at a glance, where a full-width stack made four
+                short labels each 1000px wide. Two up on a tablet, all four in
+                one row once the window can hold them. */}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {SOURCES.map((item) => (
                 <button
                   key={item.id}

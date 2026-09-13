@@ -7,6 +7,7 @@ import { ShieldCheck, UserPlus } from 'lucide-react';
 import { workspaceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { formatDateTime } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { useCurrentUser, useWorkspaceId } from '@/hooks/use-current-user';
 import { summarisePermissions, usePermissions } from '@/hooks/use-permissions';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
@@ -96,6 +97,12 @@ export default function AccessSettingsPage() {
       <SettingsTabs active="access" />
 
       <div className="space-y-4">
+        {/* Side by side once there is room for both. The members table has four
+            columns; given a 1600px row it does not fill them, it just spreads
+            them out. Pairing it with the permissions card uses the window
+            without stretching either one past the width of its content. */}
+        <div className={cn('grid items-start gap-4',
+          canViewMembers && '2xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]')}>
         {!canViewMembers ? null : members.error ? (
           <ErrorState title={t('common.errorTitle')} message={(members.error as Error).message}
                       onRetry={() => members.refetch()} />
@@ -182,7 +189,7 @@ export default function AccessSettingsPage() {
           {/* Ten short rows, one per module. Down a single column they put the
               module name and its level a screen apart on a wide monitor, so
               the list wraps into columns as the room appears. */}
-          <ul className="grid gap-x-10 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="grid gap-x-10 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-2">
             {Object.entries(permissions ?? {}).map(([module, actions]) => {
               const { level, flags } = summarisePermissions(actions);
               return (
@@ -206,6 +213,7 @@ export default function AccessSettingsPage() {
             })}
           </ul>
         </Card>
+        </div>
 
         <Card title={t('settings.roleDescriptions')}>
           <ul className="space-y-2">

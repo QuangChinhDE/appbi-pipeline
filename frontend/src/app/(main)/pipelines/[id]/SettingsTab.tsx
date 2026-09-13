@@ -118,7 +118,7 @@ export function SettingsTab({
 
   return (
     <div className="space-y-4">
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Card title={t('pipelines.settings.title')}>
         <div className="divide-y divide-[rgb(var(--border-line))]">
           <Row
