@@ -276,9 +276,7 @@ export function ActorWizard({ kind }: { kind: Kind }) {
         <Stepper steps={steps} current={step} onStepClick={setStep} />
       </div>
 
-      {/* The picker is a browse surface over the whole catalogue and wants the
-          width; a config form is easier to read kept narrow. */}
-      <div className={step === 0 ? 'max-w-6xl' : 'max-w-3xl'}>
+      <div className="w-full">
         {step === 0 && (
           connectors.isLoading ? (
             <CardSkeleton count={6} />
@@ -381,7 +379,9 @@ export function ActorWizard({ kind }: { kind: Kind }) {
                 </div>
               </div>
 
-              <div className="space-y-4 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4">
+              {/* Name and description side by side once there is room: two short
+                  fields stacked down a 1600px card leave the rest of it blank. */}
+              <div className="grid gap-4 rounded-lg border border-[rgb(var(--border-line))] bg-surface-1 p-4 md:grid-cols-2 md:items-start md:gap-x-8">
                 <div>
                   <Label htmlFor="actor-name" required>
                     {t(isSource ? 'sources.nameLabel' : 'destinations.nameLabel')}
@@ -424,6 +424,8 @@ export function ActorWizard({ kind }: { kind: Kind }) {
                     values={values}
                     errors={errors}
                     onChange={setValues}
+                    layout="two-up"
+                    pairAt="2xl"
                   />
                 </div>
                 {connector.data && (

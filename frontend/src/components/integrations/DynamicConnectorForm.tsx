@@ -569,14 +569,33 @@ export function localizeSpec(spec: JsonSchema, locale: string): JsonSchema {
   return walk(spec) as JsonSchema;
 }
 
+/** A field wide enough that halving it would hurt: a choice between variants,
+ *  a repeated list, a nested object. These keep the full row. */
+function needsTheWholeRow(schema: JsonSchema): boolean {
+  return Boolean(schema.oneOf) || schema.type === 'object' || schema.type === 'array';
+}
+
+//: Where the pairing starts. A form that owns the page can pair at `xl`; one
+//: sharing the row with a docs panel has to wait for `2xl`, or each column is
+//: too narrow to hold a field and the sentence explaining it.
+const PAIR_AT = {
+  xl: { grid: 'xl:grid-cols-2 xl:items-start xl:gap-x-8', span: 'xl:col-span-2' },
+  '2xl': { grid: '2xl:grid-cols-2 2xl:items-start 2xl:gap-x-8', span: '2xl:col-span-2' },
+} as const;
+
 export function DynamicConnectorForm({
   spec: rawSpec, values, onChange, errors, secretsConfigured,
+  layout = 'stack', pairAt = 'xl',
 }: {
   spec: JsonSchema;
   values: FormValues;
   onChange: (values: FormValues) => void;
   errors?: Record<string, string>;
   secretsConfigured?: Record<string, boolean>;
+  /** `two-up` pairs fields once the window is wide enough. */
+  layout?: 'stack' | 'two-up';
+  /** How wide is wide enough -- see `PAIR_AT`. */
+  pairAt?: keyof typeof PAIR_AT;
 }) {
   const { t, locale } = useI18n();
   const [showAdvanced, setShowAdvanced] = React.useState(false);
@@ -606,19 +625,26 @@ export function DynamicConnectorForm({
         </div>
       )}
 
-      {basic.map(([key, prop]) => (
-        <SchemaField
-          key={key}
-          name={key}
-          schema={prop}
-          value={values[key]}
-          required={(spec.required ?? []).includes(key)}
-          error={errors?.[key]}
-          path={`cfg-${key}`}
-          secretsConfigured={secretsConfigured}
-          onChange={(next) => setField(key, next)}
-        />
-      ))}
+      {/* Two columns rather than one long ribbon down the left of a wide
+          window. Each column still holds a readable line of help text, which
+          is why this stops at two however wide the monitor gets. */}
+      <div className={cn('grid gap-4', layout === 'two-up' && PAIR_AT[pairAt].grid)}>
+        {basic.map(([key, prop]) => (
+          <div key={key}
+               className={cn(layout === 'two-up' && needsTheWholeRow(prop) && PAIR_AT[pairAt].span)}>
+            <SchemaField
+              name={key}
+              schema={prop}
+              value={values[key]}
+              required={(spec.required ?? []).includes(key)}
+              error={errors?.[key]}
+              path={`cfg-${key}`}
+              secretsConfigured={secretsConfigured}
+              onChange={(next) => setField(key, next)}
+            />
+          </div>
+        ))}
+      </div>
 
       {advanced.length > 0 && (
         <div className="rounded-md border border-[rgb(var(--border-line))]">

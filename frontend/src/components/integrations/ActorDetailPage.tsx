@@ -515,11 +515,13 @@ function ConfigurationTab({ kind, actor }: { kind: Kind; actor: import('@/lib/ty
   });
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="w-full space-y-4">
       {failure && <ErrorRemediationCard error={failure} />}
 
       <Card title={t('actor.sectionGeneral')}>
-        <div className="space-y-3">
+        {/* Two short fields. Stacked down the left of a 1600px window they
+            left the rest of the card blank; side by side they fill it. */}
+        <div className="grid gap-3 md:grid-cols-2 md:items-start md:gap-x-8">
           <div>
             <Label htmlFor="cfg-name" required>{t('common.name')}</Label>
             <Input id="cfg-name" value={name} onChange={(event) => setName(event.target.value)} />
@@ -542,6 +544,7 @@ function ConfigurationTab({ kind, actor }: { kind: Kind; actor: import('@/lib/ty
           errors={errors}
           onChange={setValues}
           secretsConfigured={secretsConfigured}
+          layout="two-up"
         />
       </Card>
 
