@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Hammer,
-  Activity, Bell, Boxes, Building2, ChevronLeft, ChevronRight, ChevronsUpDown, Check, Database,
+  Activity, Bell, Boxes, ChevronLeft, ChevronRight, ChevronsUpDown, Check, Database,
   GitBranch, Globe, Home, LayoutGrid, LogOut, PlayCircle, Plus, Radar, ScrollText, Settings,
   Warehouse, Workflow, X,
 } from 'lucide-react';
@@ -107,6 +107,7 @@ export function Sidebar({
   const queryClient = useQueryClient();
   const { t, tf, locale, setLocale } = useI18n();
   const { data: user } = useCurrentUser();
+  const isPlatformAdmin = Boolean(user?.is_platform_admin);
   const workspaceId = useWorkspaceId();
   // Nav entries are written workspace-relative and prefixed here, so the
   // table above stays a list of what the product has rather than a list of
@@ -265,18 +266,11 @@ export function Sidebar({
               </div>
               <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-text-quaternary" />
             </button>
-            {/* Straight to the people grid: `/admin` is a signpost that
-                forwards to the workspace list, which is the page this link is
-                usually rendered next to. */}
-            {user.organization_permissions?.includes('admin') && (
-              <Link
-                href="/admin/people"
-                className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-caption text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary"
-              >
-                <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">{t('admin.open')}</span>
-              </Link>
-            )}
+            {/* No console link inside a workspace. Administering the
+                organisation is a level up, and the way up is the switcher
+                below: All workspaces, then the tabs. A door to the floor above
+                in every room is how a reader loses track of which floor they
+                are on. */}
             {workspaceMenuOpen && (
               <div className="absolute left-2 right-2 z-50 mt-1 overflow-hidden rounded-lg border border-[rgb(var(--border-strong))] bg-surface-1 shadow-popover">
                 {/* Switching is navigation, not a mutation. It used to POST a
@@ -432,14 +426,18 @@ export function Sidebar({
                     <p className="truncate text-tiny text-text-tertiary">{user.email}</p>
                   </div>
 
+                  {/* Members left: who can reach which workspace is not a
+                      setting of one workspace. These are workspace-scoped now,
+                      so they address the workspace in the bar rather than
+                      bouncing through a redirect to find one. */}
                   {hasPermission(permissions, 'settings', 'view') && (
                     <>
-                      <MenuLink href="/settings/workspace" onClick={() => setMenuOpen(false)}
+                      <MenuLink href={ws('/settings/workspace')} onClick={() => setMenuOpen(false)}
                         icon={<Settings className="h-3.5 w-3.5" />} label={t('settings.workspace')} />
-                      <MenuLink href="/settings/access" onClick={() => setMenuOpen(false)}
-                        icon={<Settings className="h-3.5 w-3.5" />} label={t('settings.access')} />
-                      <MenuLink href="/settings/engine" onClick={() => setMenuOpen(false)}
-                        icon={<Settings className="h-3.5 w-3.5" />} label={t('settings.engine')} />
+                      {isPlatformAdmin && (
+                        <MenuLink href={ws('/settings/engine')} onClick={() => setMenuOpen(false)}
+                          icon={<Settings className="h-3.5 w-3.5" />} label={t('settings.engine')} />
+                      )}
                     </>
                   )}
 

@@ -162,6 +162,11 @@ x-backend-env: &backend-env
   # the only one by default: an administrator keeps a password so that a
   # misconfigured Google client is an inconvenience rather than a deployment
   # nobody can sign in to.
+  # What the interface speaks before anybody chooses: en or vi. Whoever
+  # switches it in the account menu keeps their choice; this is the first
+  # visit, and a fresh install.
+  DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
+
   AUTH_PASSWORD_LOGIN_ENABLED: ${AUTH_PASSWORD_LOGIN_ENABLED:-true}
   AUTH_GOOGLE_ENABLED: ${AUTH_GOOGLE_ENABLED:-false}
   # Public by design -- the secret half of the pair is not used by this flow.

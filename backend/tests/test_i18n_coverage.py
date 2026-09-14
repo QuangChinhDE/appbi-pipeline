@@ -93,9 +93,26 @@ def test_every_key_the_code_asks_for_is_in_both_catalogs() -> None:
 
 @pytest.mark.skipif(not CATALOG.exists(), reason="frontend source not present")
 def test_the_two_catalogs_hold_the_same_keys() -> None:
+    """Every key a screen asks for must exist in both, or it renders as itself.
+
+    `.one` is exempt, and that is not a loophole. It is the singular form of a
+    count, which English needs and Vietnamese does not have -- `1 workspace`
+    against `in 1 workspaces`, where the Vietnamese plural is already correct
+    for every number. `translate()` falls back to the base key when the variant
+    is absent, so a missing `.one` cannot render as a raw key, which is the
+    only thing this test exists to prevent. Demanding one anyway would mean
+    copying the Vietnamese string beside itself to satisfy a rule about a
+    problem that language does not have.
+    """
     vi, en = _catalogs()
-    assert not vi - en, f"in vi, missing from en: {sorted(vi - en)}"
-    assert not en - vi, f"in en, missing from vi: {sorted(en - vi)}"
+    plural_variant = lambda keys: {k for k in keys if not k.endswith(".one")}
+    assert not plural_variant(vi) - en, f"in vi, missing from en: {sorted(plural_variant(vi) - en)}"
+    assert not plural_variant(en) - vi, f"in en, missing from vi: {sorted(plural_variant(en) - vi)}"
+
+    # A `.one` must still have the plural it falls back to.
+    for catalog, name in ((vi, "vi"), (en, "en")):
+        orphans = {k for k in catalog if k.endswith(".one") and k[: -len(".one")] not in catalog}
+        assert not orphans, f"in {name}, .one without its plural: {sorted(orphans)}"
 
 
 @pytest.mark.skipif(not CATALOG.exists(), reason="frontend source not present")

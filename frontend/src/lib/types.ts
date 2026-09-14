@@ -1368,6 +1368,9 @@ export interface AuthMethods {
   google: boolean;
   google_client_id: string;
   google_domains: string[];
+  /** What the interface speaks before anybody chooses, from the deployment's
+   *  own .env. A reader's own choice is kept in their browser and wins. */
+  default_locale: string;
 }
 
 export interface WorkspaceSettings {

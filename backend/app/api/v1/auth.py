@@ -165,6 +165,7 @@ async def auth_config() -> AuthMethods:
             settings.auth_google_client_id.strip() if settings.google_login_ready else ""
         ),
         google_domains=settings.google_domains,
+        default_locale=settings.locale,
     )
 
 

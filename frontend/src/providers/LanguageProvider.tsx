@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { authApi } from '@/lib/api';
+
 import { type Locale, translate } from '@/lib/i18n';
 
 interface I18nValue {
@@ -33,13 +35,37 @@ const DEFAULT_LOCALE: Locale = 'en';
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = React.useState<Locale>(DEFAULT_LOCALE);
+  //: A choice, once made, belongs to the reader. The deployment default
+  //: arrives a moment later over the network and must not overwrite it.
+  const chosen = React.useRef(false);
 
   React.useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === 'vi' || stored === 'en') setLocaleState(stored);
+    if (stored === 'vi' || stored === 'en') {
+      chosen.current = true;
+      setLocaleState(stored);
+    }
+  }, []);
+
+  // What this deployment speaks, from its own `.env`. Asked rather than
+  // compiled into the bundle, so shipping to a Vietnamese team is a setting
+  // rather than a rebuild. The endpoint is public because the sign-in page is
+  // the first thing rendered and has to be in the right language too.
+  React.useEffect(() => {
+    let cancelled = false;
+    authApi.config()
+      .then((config) => {
+        if (cancelled || chosen.current) return;
+        if (config.default_locale === 'vi' || config.default_locale === 'en') {
+          setLocaleState(config.default_locale);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const setLocale = React.useCallback((next: Locale) => {
+    chosen.current = true;
     setLocaleState(next);
     window.localStorage.setItem(STORAGE_KEY, next);
     document.documentElement.lang = next;

@@ -3182,6 +3182,7 @@ const en: Catalog = {
   'admin.runningCount': '{n} running',
   'admin.allHealthy': 'Healthy',
   'admin.pipelineCount': '{n} pipelines',
+  'admin.pipelineCount.one': '1 pipeline',
   'admin.nobodyInside': 'nobody inside',
   'admin.lastRun': 'last run {when}',
   'admin.neverRun': 'never run',
@@ -3193,6 +3194,7 @@ const en: Catalog = {
   'admin.peopleFootnote': 'A role here is a starting point. To tune one person\'s permissions area by area inside a workspace, open that workspace and go to Members & permissions.',
   'admin.colOrgRole': 'Organization role',
   'admin.inCount': 'in {n} workspaces',
+  'admin.inCount.one': 'in 1 workspace',
   'common.notFound': 'No such page',
   'common.notFoundBody': 'That address is not part of the product. Check the link, or go back to your workspaces.',
   'workspace.notReachable': 'You cannot open this workspace',
@@ -3217,11 +3219,14 @@ const en: Catalog = {
   'admin.pickAPerson': 'Pick a person',
   'admin.copyAccessWarning': 'Match, not add: workspaces the other person is not in are removed from this one too.',
   'admin.accessCopied': 'Copied — {n} changes.',
+  'admin.accessCopied.one': 'Copied — 1 change.',
   'admin.offboard': 'Offboard',
   'admin.offboardTitle': 'Remove {name} from everywhere?',
   'admin.offboardBody': 'Removes {name} from {n} workspaces and from the organization. If this is their only organization the account is disabled and open sessions stop working.',
   'admin.offboarded': 'Removed from {n} workspaces.',
+  'admin.offboarded.one': 'Removed from 1 workspace.',
   'admin.offboardedAndLocked': 'Removed from {n} workspaces, and the account is disabled.',
+  'admin.offboardedAndLocked.one': 'Removed from 1 workspace, and the account is disabled.',
   'admin.whatChanged': 'What just changed',
   'admin.nothingChanged': 'Nothing changed.',
   'admin.change.granted': 'granted',
@@ -3283,6 +3288,7 @@ const en: Catalog = {
   'org.seatsIn': 'Who is in {name}',
   'org.seatsHint': 'Add or remove people without switching into this workspace. Fine-tuning a permission map happens inside the workspace itself.',
   'org.seatCount': '{n} members',
+  'org.seatCount.one': '1 member',
   'org.grantSeat': 'Add to workspace',
   'org.seatGranted': 'Added to the workspace.',
   'org.seatRemoved': 'Removed from the workspace.',
@@ -4381,7 +4387,17 @@ export function translate(
   key: string,
   vars?: Record<string, string | number>,
 ): string {
-  const raw = CATALOGS[locale][key] ?? CATALOGS.vi[key] ?? key;
+  // A count of one reads differently in English and identically in
+  // Vietnamese, so the rule is a sibling key rather than logic at each call
+  // site: `admin.inCount` plus `admin.inCount.one`. Every count string in the
+  // product said "1 members", "1 pipelines", "Removed from 1 workspaces" --
+  // not one mistake in one place but the same mistake everywhere, which is
+  // what a missing mechanism looks like.
+  //
+  // Vietnamese catalogues simply do not define the `.one` variant, and the
+  // plural form is already correct there.
+  const singular = Number(vars?.n) === 1 ? CATALOGS[locale][`${key}.one`] : undefined;
+  const raw = singular ?? CATALOGS[locale][key] ?? CATALOGS.vi[key] ?? key;
   if (!vars) return raw;
   return raw.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
 }

@@ -58,6 +58,22 @@ class Settings(BaseSettings):
     # administrator keeps a password so that a misconfigured Google client --
     # a rotated id, an expired consent screen -- is an inconvenience rather
     # than a deployment nobody can sign in to.
+    # --- language ---
+    #: What the interface speaks before anybody chooses. A person's own choice
+    #: is remembered in their browser and always wins; this is what a first
+    #: visit, and a fresh install, gets.
+    #:
+    #: Served rather than compiled into the bundle: a deployment that ships to
+    #: a Vietnamese team should not need a rebuild to say so.
+    default_locale: str = "en"
+
+    @property
+    def locale(self) -> str:
+        """Sanitised, because a typo here would otherwise render every string
+        as its own key."""
+        value = (self.default_locale or "").strip().lower()
+        return value if value in {"en", "vi"} else "en"
+
     auth_password_login_enabled: bool = True
     auth_google_enabled: bool = False
     #: Public by design; the secret half of the pair never leaves the server,

@@ -371,6 +371,10 @@ class AuthMethods(BaseModel):
     #: Shown under the button so somebody signing in with the wrong account
     #: reads why it was refused before trying three more times.
     google_domains: list[str] = Field(default_factory=list)
+    #: What the interface speaks before anybody chooses. On this endpoint
+    #: because the sign-in page is the first thing rendered, and it has to be
+    #: in the right language too.
+    default_locale: str = "en"
 
 
 # ── connectors ─────────────────────────────────────────────────────────────
