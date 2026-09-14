@@ -7,12 +7,13 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from app.core.security import MIN_PASSWORD_LENGTH
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.security import MIN_PASSWORD_LENGTH
 from app.schemas.common import (
     ActorRef, CredentialsView, HealthBlock, ORMModel, UserRef,
 )
+from app.schemas.health import DataHealth
 
 # Deliberately not pydantic's EmailStr: it rejects special-use domains such as
 # `.local`, which are exactly what a self-hosted deployment uses. The address is
@@ -909,6 +910,10 @@ class OverviewKpis(BaseModel):
 
 
 class OverviewResponse(BaseModel):
+    #: The answer, rather than the ingredients. Everything below it is kept
+    #: because other screens and the onboarding checklist read it, but the
+    #: overview itself now renders from here.
+    health: DataHealth = Field(default_factory=DataHealth)
     kpis: OverviewKpis
     recent_failures: list[RunView] = Field(default_factory=list)
     running: list[RunView] = Field(default_factory=list)

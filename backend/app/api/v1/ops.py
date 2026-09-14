@@ -32,7 +32,10 @@ from app.schemas.domain import (
     MonitoringResponse, NotificationView, OverviewKpis,
     OverviewResponse, PipelineView, RunView,
 )
-from app.services import alerts as alert_service, audit, catalog, monitoring, reconcile
+from app.services import (
+    alerts as alert_service, audit, catalog, health as health_service, monitoring,
+    reconcile,
+)
 
 _ICON_DIR = Path(__file__).resolve().parents[2] / "resources" / "connector_icons"
 _SAFE_CONNECTOR_KEY = re.compile(r"[a-z0-9][a-z0-9._-]{0,119}")
@@ -79,6 +82,7 @@ async def overview(session: SessionDep, ctx: CtxDep) -> OverviewResponse:
     ][:5]
 
     return OverviewResponse(
+        health=await health_service.build(session, ctx),
         kpis=OverviewKpis(**await monitoring.kpis(session, ctx.workspace_id)),
         recent_failures=await to_views(failures),
         running=await to_views(running),

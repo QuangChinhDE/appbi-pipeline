@@ -1146,7 +1146,110 @@ export interface OverviewKpis {
   records_synced_24h: number;
 }
 
+/**
+ * "Is my data OK" — answered on the server, rendered here.
+ *
+ * Every string is a code plus a bag of values, never a sentence. A failure's
+ * words are chosen when somebody reads them, not when it happened, and this is
+ * the screen where that matters most: it is the first one of the morning and
+ * must be in the reader's language whether the run broke an hour ago or last
+ * week.
+ */
+export interface HealthResource {
+  type: string;
+  id: string | null;
+  name: string;
+  /** Relative to the workspace; the page adds the workspace segment. */
+  href: string | null;
+}
+
+export interface HealthIssue {
+  key: string;
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  kind: string;
+  title_code: string;
+  title_vars: Record<string, string | number>;
+  cause_code: string | null;
+  cause_vars: Record<string, string | number>;
+  impact_code: string | null;
+  impact_vars: Record<string, string | number>;
+  evidence_code: string | null;
+  evidence_vars: Record<string, string | number>;
+  root: HealthResource | null;
+  affected: HealthResource[];
+  affected_total: number;
+  started_at: string | null;
+  last_seen_at: string | null;
+  occurrence_count: number;
+  action_code: string | null;
+  action_href: string | null;
+}
+
+export interface HealthMetric {
+  key: string;
+  value: number | null;
+  unit: string;
+  delta: number | null;
+  tone: 'good' | 'warn' | 'bad' | 'neutral';
+}
+
+export interface FreshnessRow {
+  pipeline_id: string;
+  name: string;
+  deadline: string | null;
+  late_seconds: number | null;
+  state: 'late' | 'on_time' | 'unscheduled' | 'unknown';
+}
+
+export interface ReliabilityDay { date: string; succeeded: number; failed: number }
+export interface CauseShare { cause: string; count: number; share: number }
+
+export interface AnomalyRow {
+  pipeline_id: string;
+  name: string;
+  current: number;
+  baseline: number;
+  change: number;
+  run_id: string | null;
+  at: string | null;
+}
+
+export interface StageHealth { stage: string; total: number; healthy: number; problem: number }
+export interface TransformRow {
+  project_id: string;
+  name: string;
+  state: 'healthy' | 'warning' | 'failing';
+  detail_code: string | null;
+  detail_vars: Record<string, string | number>;
+}
+export interface PlatformSignal {
+  key: string;
+  state: string;
+  detail_code: string | null;
+  detail_vars: Record<string, string | number>;
+}
+
+export interface DataHealth {
+  status: 'HEALTHY' | 'ATTENTION' | 'CRITICAL';
+  headline_code: string | null;
+  headline_vars: Record<string, string | number>;
+  generated_at: string | null;
+  metrics: HealthMetric[];
+  issues: HealthIssue[];
+  freshness: FreshnessRow[];
+  reliability: ReliabilityDay[];
+  failure_causes: CauseShare[];
+  volume: AnomalyRow[];
+  duration: AnomalyRow[];
+  stages: StageHealth[];
+  transforms: TransformRow[];
+  platform: PlatformSignal[];
+}
+
 export interface Overview {
+  /** The answer. Everything below it is the ingredients, kept because the
+   *  onboarding checklist and other screens still read them. */
+  health: DataHealth;
   kpis: OverviewKpis;
   recent_failures: Run[];
   running: Run[];
