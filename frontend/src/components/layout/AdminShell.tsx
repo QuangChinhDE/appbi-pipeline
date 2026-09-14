@@ -41,7 +41,7 @@ interface ConsoleTab {
 }
 
 const TABS: ConsoleTab[] = [
-  { href: '/admin', labelKey: 'admin.overview', icon: Home, exact: true },
+  { href: '/workspaces', labelKey: 'admin.workspaces', icon: Home, exact: true },
   { href: '/admin/people', labelKey: 'admin.people', icon: Users, needs: 'members' },
   { href: '/admin/organization', labelKey: 'admin.organization', icon: Building2, needs: 'org' },
 ];
@@ -80,13 +80,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <Link
-            href="/overview"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--border-line))] px-2.5 py-1.5 text-caption text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t('admin.backToProduct', { name: user?.workspace?.name ?? '' })}
-          </Link>
+          {/* Back into whichever workspace the session last used. Absent when
+              there is none, rather than a link to nowhere. */}
+          {user?.workspace?.id && (
+            <Link
+              href={`/workspaces/${user.workspace.id}/overview`}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--border-line))] px-2.5 py-1.5 text-caption text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              {t('admin.backToProduct', { name: user.workspace.name })}
+            </Link>
+          )}
 
           <nav
             aria-label={t('admin.title')}

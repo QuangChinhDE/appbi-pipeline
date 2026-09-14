@@ -21,7 +21,7 @@ export default function RootPage() {
 
   React.useEffect(() => {
     if (isLoading) return;
-    router.replace(user ? '/admin' : '/login');
+    router.replace(user ? '/workspaces' : '/login');
   }, [isLoading, user, router]);
 
   return null;

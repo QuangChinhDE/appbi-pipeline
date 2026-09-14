@@ -1,0 +1,614 @@
+'use client';
+
+/**
+ * New Transform project: three steps, in the order the blueprint sets out.
+ *
+ *   1. Where the project comes from
+ *   2. Which warehouse it runs on
+ *   3. What to call it, and where it writes
+ *
+ * "Connect an existing Git repository" does not convert anything. The repository
+ * is checked out as it is and stays a dbt project -- which is why step 1 offers
+ * inspection rather than a conversion preview.
+ */
+
+import * as React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft, ArrowRight, CircleAlert, FileCode2, FilePlus2, FolderGit2, Loader2,
+  PackageOpen, Search,
+} from 'lucide-react';
+
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { ConnectionPicker } from '@/components/transforms/ConnectionPicker';
+import { useWorkspaceId } from '@/hooks/use-current-user';
+import { toastError, toastSuccess } from '@/hooks/use-toast';
+import { transformApi } from '@/lib/api';
+import { FilePicker } from '@/components/ui/FilePicker';
+import { SqlImportBrief } from '@/components/transforms/SqlImportBrief';
+import { SqlImportReview } from '@/components/transforms/SqlImportReview';
+import { decisionOf, readAll } from '@/components/transforms/SqlImportDialog';
+import { qk } from '@/lib/queryKeys';
+import type {
+  RepositoryInspectResult, SqlImportAnalysis, SqlImportFile,
+} from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { useWorkspacePath } from '@/hooks/use-workspace-path';
+import { useI18n } from '@/providers/LanguageProvider';
+
+type Source = 'NEW' | 'GIT' | 'UPLOAD' | 'SQL';
+
+// Keys, not text: this list is built at module load, where no hook exists.
+// It is translated where it is rendered instead.
+const SOURCES: { id: Source; titleKey: string; descriptionKey: string; icon: typeof FilePlus2 }[] = [
+  {
+    id: 'NEW',
+    titleKey: 'tfnew.sourceNew',
+    descriptionKey: 'tfnew.sourceNewHint',
+    icon: FilePlus2,
+  },
+  {
+    id: 'GIT',
+    titleKey: 'tfnew.sourceGit',
+    descriptionKey: 'tfnew.sourceGitHint',
+    icon: FolderGit2,
+  },
+  {
+    id: 'UPLOAD',
+    titleKey: 'tfnew.sourceUpload',
+    descriptionKey: 'tfnew.sourceUploadHint',
+    icon: PackageOpen,
+  },
+  {
+    id: 'SQL',
+    titleKey: 'tfnew.sourceSql',
+    descriptionKey: 'tfnew.sourceSqlHint',
+    icon: FileCode2,
+  },
+];
+
+export default function NewTransformPage() {
+  const { t } = useI18n();
+  const ws = useWorkspacePath();
+  const router = useRouter();
+  const workspaceId = useWorkspaceId();
+  const queryClient = useQueryClient();
+
+  const [step, setStep] = React.useState(1);
+  const [source, setSource] = React.useState<Source>('NEW');
+  // The SQL option's own state. `analysis` doubles as the step-4 gate: it is
+  // null until the queries have been read, and holding it here rather than on
+  // the server is what lets the import stay stateless.
+  const [sqlFiles, setSqlFiles] = React.useState<SqlImportFile[]>([]);
+  const [analysis, setAnalysis] = React.useState<SqlImportAnalysis | null>(null);
+  const [connectionId, setConnectionId] = React.useState<string | null>(null);
+
+  const [name, setName] = React.useState('');
+  const [dbtProjectName, setDbtProjectName] = React.useState('');
+  const [devSchema, setDevSchema] = React.useState('');
+  const [prodSchema, setProdSchema] = React.useState('');
+  const [sourceSchema, setSourceSchema] = React.useState('raw');
+  const [perUser, setPerUser] = React.useState(false);
+  const [withExamples, setWithExamples] = React.useState(true);
+
+  const [repoUrl, setRepoUrl] = React.useState('');
+  const [branch, setBranch] = React.useState('');
+  const [subdirectory, setSubdirectory] = React.useState('');
+  const [token, setToken] = React.useState('');
+  const [autoPull, setAutoPull] = React.useState(false);
+  const [inspection, setInspection] = React.useState<RepositoryInspectResult | null>(null);
+
+  const [file, setFile] = React.useState<File | null>(null);
+
+  const { data: systems = [] } = useQuery({
+    queryKey: qk.transformSystems(workspaceId),
+    queryFn: () => transformApi.systems(),
+  });
+  const { data: connections = [], refetch: refetchConnections } = useQuery({
+    queryKey: qk.transformConnections(workspaceId),
+    queryFn: () => transformApi.connections(),
+  });
+
+  const inspect = useMutation({
+    mutationFn: () => transformApi.inspectRepository({
+      repo_url: repoUrl,
+      branch: branch || undefined,
+      subdirectory: subdirectory || undefined,
+      token: token || undefined,
+    }),
+    onSuccess: (result) => {
+      setInspection(result);
+      // Prefill from what the repository actually says, so nothing has to be
+      // retyped and nothing is guessed.
+      if (result.dbt_project_name && !name) setName(result.dbt_project_name);
+      if (result.branch && !branch) setBranch(result.branch);
+      if (result.detected_root && !subdirectory) setSubdirectory(result.detected_root);
+      toastSuccess(t('tfnew.inspected', { n: result.model_count }));
+    },
+    onError: (error) => { setInspection(null); toastError(error); },
+  });
+
+  const analyse = useMutation({
+    mutationFn: async () => transformApi.analyseSqlImport({
+      files: sqlFiles,
+      connection_id: connectionId ?? undefined,
+      source_schema: sourceSchema || undefined,
+    }),
+    onSuccess: (result) => { setAnalysis(result); setStep(4); },
+    onError: (error) => toastError(error),
+  });
+
+  const importSql = useMutation({
+    mutationFn: async () => transformApi.applySqlImport({
+      files: sqlFiles,
+      decisions: (analysis?.candidates ?? []).map(decisionOf),
+      name,
+      connection_id: connectionId!,
+      development_schema: devSchema || undefined,
+      production_schema: prodSchema || undefined,
+      source_schema: sourceSchema || undefined,
+      verify: true,
+    }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
+      toastSuccess(
+        t('tfsql.imported', { n: result.written_paths.length }),
+        result.renamed.length
+          ? t('tfsql.renamed', { n: result.renamed.length })
+          : undefined,
+      );
+      router.push(ws(`/transforms/${result.project_id}`));
+    },
+    onError: (error) => toastError(error),
+  });
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (source === 'UPLOAD') {
+        if (!file || !connectionId) throw new Error('missing');
+        const form = new FormData();
+        form.append('file', file);
+        const query = new URLSearchParams({
+          name, connection_id: connectionId,
+          ...(devSchema ? { development_schema: devSchema } : {}),
+          ...(prodSchema ? { production_schema: prodSchema } : {}),
+        });
+        const response = await fetch(
+          `/api/v1/transforms/upload?${query.toString()}`,
+          { method: 'POST', body: form, credentials: 'include' },
+        );
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error?.message ?? t('tfnew.uploadFailed'));
+        }
+        return response.json();
+      }
+      if (source === 'SQL') throw new Error('unreachable: SQL has its own path');
+      return transformApi.create({
+        name,
+        connection_id: connectionId!,
+        source,
+        dbt_project_name: dbtProjectName || undefined,
+        development_schema: devSchema || undefined,
+        production_schema: prodSchema || undefined,
+        source_schema: sourceSchema || undefined,
+        per_user_schemas: perUser,
+        with_examples: withExamples,
+        repo_url: source === 'GIT' ? repoUrl : undefined,
+        branch: source === 'GIT' ? (branch || undefined) : undefined,
+        subdirectory: source === 'GIT' ? (subdirectory || undefined) : undefined,
+        token: source === 'GIT' ? (token || undefined) : undefined,
+        auto_pull: source === 'GIT' ? autoPull : undefined,
+      });
+    },
+    onSuccess: (project: { id: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['workspace', workspaceId] });
+      toastSuccess(t('tfnew.created'));
+      router.push(ws(`/transforms/${project.id}`));
+    },
+    onError: (error) => toastError(error),
+  });
+
+  const canAdvance =
+    step === 1
+      ? (source === 'NEW'
+        || (source === 'GIT' && Boolean(inspection))
+        || (source === 'UPLOAD' && Boolean(file))
+        || (source === 'SQL' && sqlFiles.length > 0))
+      : step === 2
+        ? Boolean(connectionId)
+        : step === 3
+          ? Boolean(name.trim())
+          // Step 4 is the review, and a loop is the one thing that cannot be
+          // fixed by renaming something in it.
+          : Boolean(analysis && analysis.candidates.length > 0
+            && analysis.cycle.length === 0);
+
+  return (
+    // Not `h-full` with a `flex-1` body: that stretched the form to the full
+    // viewport and stranded the footer at the bottom of the screen, leaving a
+    // few hundred pixels of nothing between the last field and the buttons.
+    // The wizard is a short document -- it should be as tall as its content.
+    <div className="flex w-full flex-col px-4 pt-5 sm:px-6 xl:px-8 2xl:px-10">
+      <header className="mb-4 shrink-0">
+        <Link
+          href={ws('/transforms')}
+          className="mb-2 inline-flex items-center gap-1 text-caption text-text-tertiary hover:text-text-primary"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Transform
+        </Link>
+        <h1 className="text-h3 font-strong text-text-primary">{t('tfnew.title')}</h1>
+        <ol className="mt-3 flex items-center gap-2">
+          {[
+            t('tfnew.stepSource'), t('tfnew.stepWarehouse'), t('tfnew.stepSetup'),
+            ...(source === 'SQL' ? [t('tfnew.stepReview')] : []),
+          ].map((label, index) => (
+            <li key={label} className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'flex h-5 w-5 items-center justify-center rounded-full text-tiny',
+                  step > index + 1
+                    ? 'bg-success text-white'
+                    : step === index + 1
+                      ? 'bg-brand text-text-inverse'
+                      : 'bg-surface-2 text-text-tertiary',
+                )}
+              >
+                {index + 1}
+              </span>
+              <span
+                className={cn(
+                  'text-caption',
+                  step === index + 1 ? 'text-text-primary font-emphasis' : 'text-text-tertiary',
+                )}
+              >
+                {label}
+              </span>
+              {index < 2 && <span className="text-text-quaternary">›</span>}
+            </li>
+          ))}
+        </ol>
+      </header>
+
+      <div className="pb-4">
+        {step === 1 && (
+          <div className="space-y-3">
+            {/* Four mutually exclusive choices: side by side they are read as
+                alternatives at a glance, where a full-width stack made four
+                short labels each 1000px wide. Two up on a tablet, all four in
+                one row once the window can hold them. */}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {SOURCES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { setSource(item.id); setInspection(null); }}
+                  className={cn(
+                    'flex h-full w-full flex-col gap-2 rounded-lg border p-4 text-left transition-colors',
+                    source === item.id
+                      ? 'border-brand bg-brand/5'
+                      : 'border-[rgb(var(--border-line))] hover:bg-surface-2',
+                  )}
+                >
+                  <item.icon className="h-5 w-5 shrink-0 text-brand" />
+                  <div>
+                    <p className="text-small font-emphasis text-text-primary">{t(item.titleKey)}</p>
+                    <p className="mt-1 text-caption text-text-tertiary">{t(item.descriptionKey)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {source === 'GIT' && (
+              <div className="space-y-2.5 rounded-lg border border-[rgb(var(--border-line))] p-3">
+                <Field label={t('tfnew.repoUrl')}>
+                  <Input
+                    value={repoUrl}
+                    onChange={(event) => { setRepoUrl(event.target.value); setInspection(null); }}
+                    placeholder="https://github.com/acme/analytics"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label={t('tfnew.branch')} hint={t('tfnew.branchHint')}>
+                    <Input value={branch} onChange={(event) => setBranch(event.target.value)} placeholder="main" />
+                  </Field>
+                  <Field label={t('tfnew.subdirectory')} hint={t('tfnew.subdirectoryHint')}>
+                    <Input
+                      value={subdirectory}
+                      onChange={(event) => setSubdirectory(event.target.value)}
+                      placeholder="transform"
+                    />
+                  </Field>
+                </div>
+                <Field label="Access token" hint={t('tfnew.tokenHint')}>
+                  <Input
+                    type="password" value={token}
+                    onChange={(event) => setToken(event.target.value)}
+                    placeholder="ghp_…"
+                  />
+                </Field>
+                <Button
+                  variant="secondary" size="sm"
+                  onClick={() => inspect.mutate()}
+                  loading={inspect.isPending}
+                  disabled={!repoUrl.trim()}
+                  leadingIcon={inspect.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Search className="h-3.5 w-3.5" />}
+                >
+                  {t('tfnew.inspect')}
+                </Button>
+
+                {inspection && (
+                  <div className="space-y-2 rounded-md bg-surface-2 p-2.5">
+                    <p className="text-caption font-emphasis text-text-primary">
+                      {t('tfnew.inspectFound')}
+                    </p>
+                    <dl className="space-y-0.5 text-tiny">
+                      <Pair label={t('tfnew.dbtProjectName')} value={inspection.dbt_project_name ?? '—'} />
+                      <Pair label={t('tfnew.folder')} value={inspection.detected_root || '/'} />
+                      <Pair label={t('tfnew.modelCount')} value={String(inspection.model_count)} />
+                      <Pair label={t('tfnew.fileCount')} value={String(inspection.file_count)} />
+                      {inspection.packages.length > 0 && (
+                        <Pair label="Package" value={inspection.packages.join(', ')} />
+                      )}
+                    </dl>
+                    <div className="flex flex-wrap gap-1">
+                      {inspection.resource_directories.map((directory) => (
+                        <Badge key={directory} variant="subtle" size="xs">{directory}</Badge>
+                      ))}
+                    </div>
+                    {inspection.warnings.map((warning) => (
+                      <p
+                        key={warning}
+                        className="flex items-start gap-1.5 text-tiny text-warning"
+                      >
+                        <CircleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                        {warning}
+                      </p>
+                    ))}
+                    <label className="flex items-center gap-2 text-caption text-text-secondary">
+                      <input
+                        type="checkbox" checked={autoPull}
+                        onChange={(event) => setAutoPull(event.target.checked)}
+                        className="h-3.5 w-3.5 accent-[rgb(var(--brand))]"
+                      />
+                      {t('tfnew.autoPull')}
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {source === 'SQL' && (
+              <div className="space-y-2.5">
+              <SqlImportBrief />
+              <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
+                <Field label={t('tfnew.sqlFiles')} hint={t('tfnew.sqlFilesHint')}>
+                  <FilePicker
+                    accept=".sql,text/plain"
+                    multiple
+                    chosen={sqlFiles.length
+                      ? t('tfnew.sqlChosen', { n: sqlFiles.length })
+                      : null}
+                    onChoose={async (list) => {
+                      setAnalysis(null);
+                      setSqlFiles(await readAll(list));
+                    }}
+                  />
+                </Field>
+              </div>
+              </div>
+            )}
+
+            {source === 'UPLOAD' && (
+              <div className="rounded-lg border border-[rgb(var(--border-line))] p-3">
+                <Field label={t('tfnew.zipFile')}>
+                  <FilePicker
+                    accept=".zip"
+                    chosen={file
+                      ? `${file.name} · ${Math.round(file.size / 1024)} KB`
+                      : null}
+                    onChoose={(list) => setFile(list?.[0] ?? null)}
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === 2 && (
+          <ConnectionPicker
+            systems={systems}
+            connections={connections}
+            value={connectionId}
+            onChange={setConnectionId}
+            onCreated={() => refetchConnections()}
+          />
+        )}
+
+        {step === 3 && (
+          /* Two columns on a desktop-width canvas: what the project is called
+             on the left, where it writes on the right. Stacked in one column
+             these five fields ran the height of the screen while two thirds of
+             the window stayed empty. */
+          <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+            <div className="space-y-3">
+            <Field label={t('tfnew.name')}>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={t('tfnew.namePlaceholder')}
+                autoFocus
+              />
+            </Field>
+
+            {source === 'NEW' && (
+              <Field
+                label={t('tfnew.dbtName')}
+                hint={t('tfnew.dbtNameHint')}
+              >
+                <Input
+                  value={dbtProjectName}
+                  onChange={(event) => setDbtProjectName(event.target.value)}
+                  placeholder="sales_analytics"
+                  className="font-mono"
+                />
+              </Field>
+            )}
+
+            {/* The SQL importer needs this too, and more than a scaffold
+                does: it is where a table named without a schema is taken to
+                live, and what the generated _sources.yml will declare. */}
+            {(source === 'NEW' || source === 'SQL') && (
+              <Field
+                label={t('tfnew.sourceSchema')}
+                hint={source === 'SQL'
+                  ? t('tfnew.sourceSchemaSqlHint')
+                  : t('tfnew.sourceSchemaHint')}
+              >
+                <Input
+                  value={sourceSchema} onChange={(event) => setSourceSchema(event.target.value)}
+                  placeholder="raw" className="font-mono"
+                />
+              </Field>
+            )}
+            </div>
+
+            <div className="space-y-3">
+              <Field label={t('tfnew.devSchema')} hint={t('tfnew.devSchemaHint')}>
+                <Input
+                  value={devSchema} onChange={(event) => setDevSchema(event.target.value)}
+                  placeholder="analytics_dev" className="font-mono"
+                />
+              </Field>
+              <Field label={t('tfnew.prodSchema')} hint={t('tfnew.prodSchemaHint')}>
+                <Input
+                  value={prodSchema} onChange={(event) => setProdSchema(event.target.value)}
+                  placeholder="analytics" className="font-mono"
+                />
+              </Field>
+
+            </div>
+
+            {/* Options read as a group, so they span both columns. */}
+            <div className="space-y-3 md:col-span-2">
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox" checked={perUser}
+                onChange={(event) => setPerUser(event.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
+              />
+              <span className="text-caption text-text-secondary">
+                {t('tfnew.perUser')}
+                <span className="block text-tiny text-text-tertiary">
+                  {t('tfnew.perUserHint')}
+                </span>
+              </span>
+            </label>
+
+            {source === 'NEW' && (
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox" checked={withExamples}
+                  onChange={(event) => setWithExamples(event.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 accent-[rgb(var(--brand))]"
+                />
+                <span className="text-caption text-text-secondary">
+                  {t('tfnew.withExamples')}
+                  <span className="block text-tiny text-text-tertiary">
+                    {t('tfnew.withExamplesHint')}
+                  </span>
+                </span>
+              </label>
+            )}
+            </div>
+          </div>
+        )}
+      </div>
+
+        {step === 4 && analysis && (
+          <div className="space-y-3">
+            <SqlImportReview
+              analysis={analysis}
+              onChange={(candidates) => setAnalysis({ ...analysis, candidates })}
+            />
+          </div>
+        )}
+
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[rgb(var(--border-line))] py-3">
+        <Button
+          variant="ghost"
+          onClick={() => (step === 1 ? router.push(ws('/transforms')) : setStep(step - 1))}
+        >
+          {step === 1 ? t('tfnew.cancel') : t('tfnew.back')}
+        </Button>
+        {step < 3 ? (
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            onClick={() => setStep(step + 1)}
+            trailingIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            {t('tfnew.continue')}
+          </Button>
+        ) : source === 'SQL' && step === 3 ? (
+          // The extra step: read the queries, then show what they become. A
+          // conversion nobody looked at is a project nobody trusts.
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            loading={analyse.isPending}
+            onClick={() => analyse.mutate()}
+            trailingIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            {analyse.isPending ? t('tfnew.analysing') : t('tfnew.analyse')}
+          </Button>
+        ) : source === 'SQL' ? (
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            loading={importSql.isPending}
+            onClick={() => importSql.mutate()}
+          >
+            {importSql.isPending ? t('tfsql.applying') : t('tfnew.createAndBuild')}
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            disabled={!canAdvance}
+            loading={create.isPending}
+            onClick={() => create.mutate()}
+          >
+            {t('tfnew.create')}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label, hint, children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-caption text-text-secondary">{label}</span>
+      {children}
+      {hint && <span className="mt-0.5 block text-tiny text-text-quaternary">{hint}</span>}
+    </label>
+  );
+}
+
+function Pair({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-32 shrink-0 text-text-tertiary">{label}</dt>
+      <dd className="min-w-0 flex-1 break-all text-text-secondary">{value}</dd>
+    </div>
+  );
+}

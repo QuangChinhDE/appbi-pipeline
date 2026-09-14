@@ -14,6 +14,7 @@ import { formatDateTime, formatRelative } from '@/lib/format';
 import { useWorkspaceId } from '@/hooks/use-current-user';
 import { useUrlTab } from '@/hooks/use-url-tab';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
+import { useWorkspacePath } from '@/hooks/use-workspace-path';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
 import { Input, Label, Textarea } from '@/components/ui/Input';
@@ -34,6 +35,7 @@ const ACTOR_TABS = ['overview', 'configuration', 'pipelines'] as const;
 
 export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string }) {
   const { t, locale } = useI18n();
+  const ws = useWorkspacePath();
   const router = useRouter();
   const queryClient = useQueryClient();
   const workspaceId = useWorkspaceId();
@@ -369,7 +371,7 @@ export function ActorDetailPage({ kind, actorId }: { kind: Kind; actorId: string
                   {linkedPipelines.map((pipeline) => (
                   <li key={pipeline.id}>
                     <Link
-                      href={`/pipelines/${pipeline.id}?tab=status`}
+                      href={ws(`/pipelines/${pipeline.id}?tab=status`)}
                       className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-surface-2"
                     >
                       <span className="text-caption font-emphasis text-text-primary">
@@ -437,6 +439,7 @@ export function DependencyModal({
   constraints: { id: string; name: string; type?: string }[] | null;
   onClose: () => void;
 }) {
+  const ws = useWorkspacePath();
   const { t } = useI18n();
   return (
     <Modal
@@ -451,7 +454,7 @@ export function DependencyModal({
           <li key={item.id} className="flex items-center justify-between gap-3 py-2">
             <span className="text-caption text-text-primary">{item.name}</span>
             <Link
-              href={`/pipelines/${item.id}?tab=status`}
+              href={ws(`/pipelines/${item.id}?tab=status`)}
               className="text-caption text-brand hover:underline"
               onClick={onClose}
             >

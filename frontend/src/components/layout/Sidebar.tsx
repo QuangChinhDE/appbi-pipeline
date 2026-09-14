@@ -14,8 +14,9 @@ import { authApi, opsApi, pipelineApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { LOCALE_NAMES } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { useCurrentUser, useWorkspaceId, useWorkspaceSwitch } from '@/hooks/use-current-user';
+import { useCurrentUser } from '@/hooks/use-current-user';
 import { hasPermission, type Action, type Module } from '@/hooks/use-permissions';
+import { useWorkspacePath, useWorkspaceId } from '@/hooks/use-workspace-path';
 import { useI18n } from '@/providers/LanguageProvider';
 
 interface NavItem {
@@ -79,6 +80,19 @@ function initials(name: string): string {
   return name.split(' ').map((word) => word[0]).join('').toUpperCase().slice(0, 2);
 }
 
+/**
+ * The same screen, in another workspace.
+ *
+ * Switching from the pipeline list should land on the pipeline list, not throw
+ * you back to the overview -- the workspace changed, not what you were doing.
+ * A record id cannot survive the move, so anything deeper than the section is
+ * dropped: `/workspaces/a/pipelines/123` becomes `/workspaces/b/pipelines`.
+ */
+function samePlaceIn(pathname: string): string {
+  const match = /^\/workspaces\/[^/]+\/([^/]+)/.exec(pathname);
+  return match ? `/${match[1]}` : '/overview';
+}
+
 export function Sidebar({
   collapsed, onToggle, mobileOpen, onCloseMobile,
 }: {
@@ -93,7 +107,10 @@ export function Sidebar({
   const { t, tf, locale, setLocale } = useI18n();
   const { data: user } = useCurrentUser();
   const workspaceId = useWorkspaceId();
-  const switchWorkspace = useWorkspaceSwitch();
+  // Nav entries are written workspace-relative and prefixed here, so the
+  // table above stays a list of what the product has rather than a list of
+  // URLs that must each remember which tenant they are in.
+  const ws = useWorkspacePath();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = React.useState(false);
@@ -157,7 +174,10 @@ export function Sidebar({
     }))
     .filter((group) => group.items.length > 0);
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    const full = ws(href);
+    return pathname === full || pathname.startsWith(`${full}/`);
+  };
 
   const logout = async () => {
     try {
@@ -258,21 +278,22 @@ export function Sidebar({
             )}
             {workspaceMenuOpen && (
               <div className="absolute left-2 right-2 z-50 mt-1 overflow-hidden rounded-lg border border-[rgb(var(--border-strong))] bg-surface-1 shadow-popover">
+                {/* Switching is navigation, not a mutation. It used to POST a
+                    new workspace into the session and refresh in place, which
+                    left the address unchanged -- so the back button could not
+                    undo it and a second tab silently followed along. */}
                 {user.workspaces.map((workspace) => (
-                  <button
+                  <Link
                     key={workspace.id}
-                    type="button"
-                    onClick={async () => {
-                      setWorkspaceMenuOpen(false);
-                      if (workspace.id !== user.workspace?.id) await switchWorkspace(workspace.id);
-                    }}
+                    href={`/workspaces/${workspace.id}${samePlaceIn(pathname)}`}
+                    onClick={() => setWorkspaceMenuOpen(false)}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-text-secondary hover:bg-surface-2"
                   >
                     <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-                    {workspace.id === user.workspace?.id && (
+                    {workspace.id === workspaceId && (
                       <Check className="h-3.5 w-3.5 text-brand" />
                     )}
-                  </button>
+                  </Link>
                 ))}
                 {/* The switcher is where somebody looks for "another
                     workspace", so it is where "a new one" belongs. Creating
@@ -280,7 +301,7 @@ export function Sidebar({
                     away from the question that prompts it. */}
                 {user.organization_permissions?.includes('create') && (
                   <Link
-                    href="/settings/organization"
+                    href="/workspaces"
                     onClick={() => setWorkspaceMenuOpen(false)}
                     className="flex w-full items-center gap-2 border-t border-[rgb(var(--border-line))] px-3 py-2 text-left text-caption text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
                   >
@@ -315,7 +336,7 @@ export function Sidebar({
                   return (
                     <li key={item.href}>
                       <Link
-                        href={item.href}
+                        href={ws(item.href)}
                         onClick={onCloseMobile}
                         aria-current={active ? 'page' : undefined}
                         className={cn(

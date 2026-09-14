@@ -108,6 +108,28 @@ function withQuery(path: string, query?: Query): string {
   return qs ? `${BASE}${path}?${qs}` : `${BASE}${path}`;
 }
 
+/**
+ * Which workspace a request is about, taken from the URL.
+ *
+ * It used to come from a claim inside the session cookie, which made the
+ * workspace a piece of hidden state: two browser tabs shared one, a link to a
+ * pipeline opened whichever workspace you happened to be in last, and the back
+ * button could not undo a switch because nothing in the address had changed.
+ *
+ * The API has accepted `X-Workspace-Id` all along -- the browser simply never
+ * sent it. Now the route segment sets this, so the address bar is the answer
+ * and the cookie is only a memory of where to go when there is no address.
+ */
+let activeWorkspaceId: string | null = null;
+
+export function setActiveWorkspace(id: string | null): void {
+  activeWorkspaceId = id;
+}
+
+export function getActiveWorkspace(): string | null {
+  return activeWorkspaceId;
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -118,6 +140,7 @@ async function request<T>(
     credentials: 'include',
     headers: {
       ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
       ...options.headers,
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
