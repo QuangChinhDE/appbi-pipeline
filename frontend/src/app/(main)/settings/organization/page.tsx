@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Plus, UserPlus } from 'lucide-react';
+import { Building2, Plus, UserPlus, Users } from 'lucide-react';
 
 import { organizationApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
@@ -17,6 +17,8 @@ import { Input, Label, Select } from '@/components/ui/Input';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { Card, PageListLayout } from '@/components/layout/PageLayout';
+import { WorkspaceMembersDialog } from '@/components/settings/WorkspaceMembersDialog';
+import type { WorkspaceSummary } from '@/lib/types';
 import { SettingsTabs } from '@/components/layout/SettingsTabs';
 
 // Three roles, ordered most to least authority. Kept short on purpose: the
@@ -46,6 +48,8 @@ export default function OrganizationSettingsPage() {
   const [workspace, setWorkspace] = React.useState({ name: '', slug: '' });
 
   const organization = useQuery({ queryKey: qk.organization(workspaceId), queryFn: organizationApi.get });
+  const [seatsFor, setSeatsFor] = React.useState<WorkspaceSummary | null>(null);
+
   const workspaces = useQuery({
     queryKey: qk.organizationWorkspaces(workspaceId),
     queryFn: organizationApi.workspaces,
@@ -165,7 +169,10 @@ export default function OrganizationSettingsPage() {
           padded={false}
           action={
             canOrg('create') ? (
-              <Button size="xs" variant="ghost" onClick={() => setWorkspaceOpen(true)}
+              // A ghost link in a card header is where this lived, and it read
+              // as a caption rather than the way to make a workspace. It is the
+              // primary thing an administrator comes to this card to do.
+              <Button size="xs" variant="secondary" onClick={() => setWorkspaceOpen(true)}
                       leadingIcon={<Plus className="h-3 w-3" />}>
                 {t('org.addWorkspace')}
               </Button>
@@ -192,6 +199,21 @@ export default function OrganizationSettingsPage() {
                   )}
                   {item.via_organization && (
                     <Badge variant="neutral" size="xs">{t('org.viaOrganization')}</Badge>
+                  )}
+                  {/* How many people are in it, which is the question this list
+                      could not answer at all -- the role shown beside each row
+                      is the reader's own. */}
+                  {typeof item.member_count === 'number' && (
+                    <span className="text-tiny text-text-tertiary">
+                      {t('org.seatCount', { n: item.member_count })}
+                    </span>
+                  )}
+                  {canOrg('admin') && (
+                    <Button size="xs" variant="ghost"
+                            leadingIcon={<Users className="h-3 w-3" />}
+                            onClick={() => setSeatsFor(item)}>
+                      {t('org.manageSeats')}
+                    </Button>
                   )}
                   {canOrg('delete') && (
                     <Button
@@ -390,6 +412,13 @@ export default function OrganizationSettingsPage() {
           </div>
         </div>
       </Modal>
+
+      <WorkspaceMembersDialog
+        workspace={seatsFor}
+        open={Boolean(seatsFor)}
+        onClose={() => setSeatsFor(null)}
+        onChanged={() => workspaces.refetch()}
+      />
 
       <ConfirmDialog
         open={Boolean(droppingWorkspace)}

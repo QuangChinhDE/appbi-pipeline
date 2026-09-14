@@ -51,6 +51,12 @@ export interface WorkspaceSummary {
    * the organisation" and "somebody added you to this" are different facts.
    */
   via_organization?: boolean;
+  /**
+   * How many people hold a seat. Only the organisation listing fills it in --
+   * it is the one place the question is asked about workspaces other than the
+   * one being used.
+   */
+  member_count?: number | null;
 }
 
 export interface OrganizationSummary {

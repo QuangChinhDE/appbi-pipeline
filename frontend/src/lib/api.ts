@@ -206,6 +206,21 @@ export const organizationApi = {
   updateRole: (memberId: string, role: string) =>
     patch<OrgMember>(`/organization/members/${memberId}`, { role }),
   removeMember: (memberId: string) => del<void>(`/organization/members/${memberId}`),
+
+  // Seats in a *named* workspace, addressed by id rather than by whichever
+  // workspace the session happens to be using. Without these, putting somebody
+  // into a second workspace meant switching into it first.
+  workspaceMembers: (workspaceId: string) =>
+    get<Member[]>(`/organization/workspaces/${workspaceId}/members`),
+  addWorkspaceMember: (workspaceId: string, body: {
+    email: string; full_name: string; role: string;
+    password?: string; permissions?: PermissionMap;
+  }) => post<Member>(`/organization/workspaces/${workspaceId}/members`, body),
+  updateWorkspaceMember: (workspaceId: string, memberId: string, body: {
+    role?: string; permissions?: PermissionMap;
+  }) => patch<Member>(`/organization/workspaces/${workspaceId}/members/${memberId}`, body),
+  removeWorkspaceMember: (workspaceId: string, memberId: string) =>
+    del<void>(`/organization/workspaces/${workspaceId}/members/${memberId}`),
 };
 
 // ── connector builder ──────────────────────────────────────────────────────

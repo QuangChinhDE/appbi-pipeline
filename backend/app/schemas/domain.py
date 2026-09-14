@@ -44,6 +44,10 @@ class WorkspaceSummary(ORMModel):
     role: str | None = None
     timezone: str = "Asia/Bangkok"
     status: str = "ACTIVE"
+    #: How many people hold a seat in this workspace. Only filled by the
+    #: organisation listing, which is the one place the question is asked about
+    #: workspaces other than the one being used.
+    member_count: int | None = None
     #: True when the reach came from administering the organisation rather than
     #: from a membership row. The UI says so instead of implying somebody was
     #: added to this workspace by hand.

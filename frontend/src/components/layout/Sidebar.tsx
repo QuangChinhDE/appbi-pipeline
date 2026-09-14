@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Hammer,
   Activity, Bell, Boxes, ChevronLeft, ChevronRight, ChevronsUpDown, Check, Database,
-  GitBranch, Globe, Home, LogOut, PlayCircle, Radar, ScrollText, Settings, Warehouse, Workflow, X,
+  GitBranch, Globe, Home, LogOut, PlayCircle, Plus, Radar, ScrollText, Settings, Warehouse, Workflow, X,
 } from 'lucide-react';
 
 import { authApi, opsApi, pipelineApi } from '@/lib/api';
@@ -262,6 +262,20 @@ export function Sidebar({
                     )}
                   </button>
                 ))}
+                {/* The switcher is where somebody looks for "another
+                    workspace", so it is where "a new one" belongs. Creating
+                    one lived only inside Settings → Organisation, three clicks
+                    away from the question that prompts it. */}
+                {user.organization_permissions?.includes('create') && (
+                  <Link
+                    href="/settings/organization"
+                    onClick={() => setWorkspaceMenuOpen(false)}
+                    className="flex w-full items-center gap-2 border-t border-[rgb(var(--border-line))] px-3 py-2 text-left text-caption text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
+                  >
+                    <Plus className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="truncate">{t('org.addWorkspace')}</span>
+                  </Link>
+                )}
               </div>
             )}
           </div>

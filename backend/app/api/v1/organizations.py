@@ -22,10 +22,11 @@ from app.models.integration import Destination, Pipeline, Source
 from app.models.identity import Membership, Organization, OrganizationMembership, User, Workspace
 from app.transforms.models import TransformProject
 from app.schemas.domain import (
+    MemberInvite, MemberRoleUpdate, MemberView,
     OrganizationSummary, OrganizationUpdate, OrgMemberInvite, OrgMemberRoleUpdate, OrgMemberView,
     WorkspaceCreate, WorkspaceSummary,
 )
-from app.services import audit
+from app.services import audit, members as member_service
 
 router = APIRouter(tags=["organization"])
 
@@ -129,12 +130,21 @@ async def list_workspaces(session: SessionDep, ctx: CtxDep) -> list[WorkspaceSum
         )).all()
     }
     reaches_all = ctx.can_org(Action.ADMIN)
+    # One query for every workspace rather than one per row: the number is the
+    # first thing somebody looks at on this screen, and fetching it per row is
+    # how a list of eight workspaces becomes nine round trips.
+    counts = dict((await session.execute(
+        select(Membership.workspace_id, func.count())
+        .where(Membership.workspace_id.in_([w.id for w in workspaces]))
+        .group_by(Membership.workspace_id)
+    )).all()) if workspaces else {}
     return [
         WorkspaceSummary(
             id=w.id, name=w.name, slug=w.slug,
             role=(Role.OWNER.value if reaches_all else
                   (mine[w.id].value if w.id in mine else None)),
             timezone=w.timezone, status=w.status.value,
+            member_count=counts.get(w.id, 0),
             via_organization=reaches_all and w.id not in mine,
         )
         for w in workspaces
@@ -202,6 +212,113 @@ async def _blocking_contents(session, workspace_id: uuid.UUID) -> list[dict]:
         )).all()
         blocking += [{"type": kind, "id": str(r.id), "name": r.name} for r in rows]
     return blocking
+
+
+async def _workspace_in_org(session, ctx, workspace_id: uuid.UUID) -> Workspace:
+    """The workspace, or a refusal -- never another organisation's.
+
+    The organisation scope is what makes these routes safe to address by id. A
+    workspace id from somewhere else answers 404 rather than 403, because
+    confirming it exists would make this a probe for other tenants.
+    """
+    workspace = await session.scalar(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.organization_id == _org_id(ctx),
+        )
+    )
+    if workspace is None:
+        raise ValidationError("No such workspace.", code="WORKSPACE_NOT_FOUND")
+    return workspace
+
+
+@router.get(
+    "/organization/workspaces/{workspace_id}/members",
+    response_model=list[MemberView],
+)
+async def list_workspace_members(
+    workspace_id: uuid.UUID, session: SessionDep, ctx: CtxDep
+) -> list[MemberView]:
+    """Who is in one workspace, asked from outside it.
+
+    The same question `/workspace/members` answers, addressed by id instead of
+    by whichever workspace the session happens to be using. Without it, putting
+    somebody into a second workspace meant switching into that workspace first
+    -- so an administrator with eight of them did eight round trips to answer
+    "who has access to what", and there was no screen that could show the
+    answer side by side.
+    """
+    ctx.require_org(Action.ADMIN)
+    await _workspace_in_org(session, ctx, workspace_id)
+    memberships = (await session.scalars(
+        select(Membership).where(Membership.workspace_id == workspace_id)
+    )).all()
+    out: list[MemberView] = []
+    for membership in memberships:
+        user = await session.get(User, membership.user_id)
+        if user is not None:
+            out.append(member_service.view(membership, user))
+    out.sort(key=lambda m: m.full_name.lower())
+    return out
+
+
+@router.post(
+    "/organization/workspaces/{workspace_id}/members",
+    response_model=MemberView, status_code=201,
+)
+async def add_workspace_member(
+    workspace_id: uuid.UUID, payload: MemberInvite, session: SessionDep, ctx: CtxDep
+) -> MemberView:
+    """Give somebody a seat in a workspace without being in it yourself."""
+    ctx.require_org(Action.ADMIN)
+    await _workspace_in_org(session, ctx, workspace_id)
+    membership, user = await member_service.invite(session, ctx, workspace_id, payload)
+    await session.commit()
+    return member_service.view(membership, user)
+
+
+@router.patch(
+    "/organization/workspaces/{workspace_id}/members/{member_id}",
+    response_model=MemberView,
+)
+async def update_workspace_member(
+    workspace_id: uuid.UUID, member_id: uuid.UUID, payload: MemberRoleUpdate,
+    session: SessionDep, ctx: CtxDep,
+) -> MemberView:
+    ctx.require_org(Action.ADMIN)
+    await _workspace_in_org(session, ctx, workspace_id)
+    membership = await session.scalar(
+        select(Membership).where(
+            Membership.id == member_id, Membership.workspace_id == workspace_id
+        )
+    )
+    if membership is None:
+        raise ValidationError("No such member.", code="MEMBER_NOT_FOUND")
+    membership, user = await member_service.update(
+        session, ctx, workspace_id, membership, payload,
+    )
+    await session.commit()
+    return member_service.view(membership, user)
+
+
+@router.delete(
+    "/organization/workspaces/{workspace_id}/members/{member_id}", status_code=204,
+)
+async def remove_workspace_member(
+    workspace_id: uuid.UUID, member_id: uuid.UUID, session: SessionDep, ctx: CtxDep
+) -> Response:
+    ctx.require_org(Action.ADMIN)
+    await _workspace_in_org(session, ctx, workspace_id)
+    membership = await session.scalar(
+        select(Membership).where(
+            Membership.id == member_id, Membership.workspace_id == workspace_id
+        )
+    )
+    if membership is None:
+        return Response(status_code=204)
+    await member_service.remove(session, ctx, workspace_id, membership)
+    await session.commit()
+    return Response(status_code=204)
 
 
 @router.delete("/organization/workspaces/{workspace_id}", status_code=204)

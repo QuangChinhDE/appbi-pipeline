@@ -648,6 +648,16 @@ không cần thêm từng cái một. Đó là lý do tầng này tồn tại: t
 workspace tạo hôm nay thì quản trị viên không thấy nó cho tới khi có người thêm
 họ vào — và họ phải làm việc đó cho từng workspace.
 
+**Tạo workspace** nằm ở hai chỗ: nút trong thẻ *Workspace của tổ chức*, và ngay
+dưới bộ chuyển workspace ở góc trên bên trái — vì đó là nơi người ta thực sự đi
+tìm khi cần "một workspace khác".
+
+**Đưa người vào một workspace khác** mà không phải chuyển sang nó: bấm **Thành
+viên** trên dòng workspace đó. Danh sách hiện ai đang ở trong, đổi được vai trò
+và gỡ được người. Email đã có tài khoản thì để trống ô mật khẩu — họ vào bằng
+đúng thông tin đăng nhập sẵn có. Muốn chỉnh quyền chi tiết từng khu vực thì vào
+chính workspace ấy, ở *Thành viên & phân quyền*.
+
 Hai chốt an toàn: không hạ được **Org Owner cuối cùng** của tổ chức, và không
 xoá được **workspace cuối cùng** — cả hai đều sẽ tạo ra một căn phòng khoá từ
 bên ngoài, vì mọi màn hình đều dựng bối cảnh từ một workspace.
