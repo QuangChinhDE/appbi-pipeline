@@ -223,12 +223,16 @@ class WorkspaceHealth(BaseModel):
     name: str
     slug: str
     status: str
-    member_count: int = 0
-    pipeline_count: int = 0
+    #: None where the reader holds no permission to know. The console is
+    #: everybody's home now, and a new page is not a reason for a workspace
+    #: permission to stop applying -- so a number nobody may see is absent
+    #: rather than zero, which would be a different and false claim.
+    member_count: int | None = 0
+    pipeline_count: int | None = 0
     #: Pipelines whose latest run did not succeed. The number somebody scanning
     #: this page is actually looking for.
-    failing_count: int = 0
-    running_count: int = 0
+    failing_count: int | None = 0
+    running_count: int | None = 0
     last_run_at: datetime | None = None
     #: True when the reader holds no membership row here and reaches it only by
     #: administering the organisation.
@@ -241,6 +245,11 @@ class OrganizationOverview(BaseModel):
     total_pipelines: int = 0
     total_failing: int = 0
     total_people: int = 0
+    #: What this reader may do here, so the interface hides what it must
+    #: rather than drawing a tab that answers 403. The backend re-checks every
+    #: call regardless; this only keeps the screen honest.
+    administers_organization: bool = False
+    administers_members: bool = False
 
 
 class WorkspaceSeat(BaseModel):
@@ -335,6 +344,10 @@ class AccessChangeReport(BaseModel):
 
 class OrganizationPeople(BaseModel):
     people: list[PersonAcrossWorkspaces] = Field(default_factory=list)
+    #: False for a workspace administrator using the same page: they manage
+    #: seats in their own workspaces and have no authority over organisation
+    #: roles, so that column is not theirs to edit.
+    administers_organization: bool = False
     #: The columns, in the order the grid should render them.
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
 

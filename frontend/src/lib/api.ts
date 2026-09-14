@@ -203,6 +203,10 @@ export const organizationApi = {
   // The two questions no workspace-scoped screen can answer: which workspace
   // needs somebody today, and where can one person go.
   overview: () => get<OrganizationOverview>('/organization/overview'),
+  // The workspace-scoped catalogue answers for whichever workspace the
+  // session is in, which is the wrong question in a console that edits
+  // permissions in workspaces the caller is not standing in.
+  permissionCatalog: () => get<PermissionCatalog>('/organization/permission-catalog'),
   people: () => get<OrganizationPeople>('/organization/people'),
   person: (userId: string) =>
     get<PersonAcrossWorkspaces>(`/organization/people/${userId}`),

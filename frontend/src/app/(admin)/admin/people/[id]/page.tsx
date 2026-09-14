@@ -26,7 +26,8 @@ import { Label, Select } from '@/components/ui/Input';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Feedback';
 import { Card } from '@/components/layout/PageLayout';
-import type { AccessChange } from '@/lib/types';
+import { PermissionEditor } from '@/components/settings/PermissionEditor';
+import type { AccessChange, PermissionMap } from '@/lib/types';
 
 const ROLE_IDS = ['OWNER', 'DATA_ADMIN', 'CONNECTOR_DEV', 'OPERATOR', 'ANALYST', 'AUDITOR'];
 
@@ -49,6 +50,13 @@ export default function AdminPersonPage() {
     queryKey: ['org-people'],
     queryFn: organizationApi.people,
   });
+  // Modules, actions and presets. Served rather than compiled in, so the
+  // editor cannot come to offer something the API will refuse.
+  const catalog = useQuery({
+    queryKey: ['permission-catalog'],
+    queryFn: organizationApi.permissionCatalog,
+    staleTime: 10 * 60 * 1000,
+  });
 
   const [copyFrom, setCopyFrom] = React.useState('');
   const [copyOpen, setCopyOpen] = React.useState(false);
@@ -56,6 +64,13 @@ export default function AdminPersonPage() {
   // What the last action actually did. Shown rather than assumed, because
   // "removed" and "removed from the two I remembered" look the same otherwise.
   const [report, setReport] = React.useState<AccessChange[] | null>(null);
+  // Which workspace's permission map is open, and what it currently says.
+  // Tuning used to mean switching the session into that workspace and
+  // finding its members screen; the console edits it in place now.
+  const [tuning, setTuning] = React.useState<{
+    workspaceId: string; membershipId: string; name: string; role: string;
+  } | null>(null);
+  const [draft, setDraft] = React.useState<PermissionMap>({});
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['org-person', userId] });
@@ -100,6 +115,18 @@ export default function AdminPersonPage() {
     onError: (caught) => toastError(caught),
   });
 
+  const savePermissions = useMutation({
+    mutationFn: () => organizationApi.updateWorkspaceMember(
+      tuning!.workspaceId, tuning!.membershipId, { permissions: draft },
+    ),
+    onSuccess: () => {
+      invalidate();
+      setTuning(null);
+      toastSuccess(t('settings.permissionsUpdated'));
+    },
+    onError: (caught) => toastError(caught),
+  });
+
   const offboard = useMutation({
     mutationFn: () => organizationApi.offboard(userId),
     onSuccess: (result) => {
@@ -126,6 +153,19 @@ export default function AdminPersonPage() {
 
   const data = person.data;
   const workspaces = everybody.data?.workspaces ?? [];
+  // The resolved permission map lives on the workspace's member rows, not on
+  // the seat, so the editor is opened with what the gate will actually use.
+  const memberLists = useQuery({
+    queryKey: ['org-member-maps', workspaces.map((w) => w.id).join(',')],
+    enabled: workspaces.length > 0,
+    queryFn: async () => {
+      const pairs = await Promise.all(workspaces.map(async (workspace) => [
+        workspace.id, await organizationApi.workspaceMembers(workspace.id),
+      ] as const));
+      return Object.fromEntries(pairs);
+    },
+  });
+  const members = memberLists.data ?? {};
   const models = (everybody.data?.people ?? [])
     .filter((candidate) => candidate.user_id !== userId && candidate.seats.length > 0);
 
@@ -239,17 +279,25 @@ export default function AdminPersonPage() {
                     ))}
                   </Select>
 
-                  {/* The path the grid's footnote used to only describe. Tuning
-                      a permission map happens inside the workspace, so this
-                      walks there instead of asking the reader to find it. */}
-                  {seat && (
+                  {/* Tuning used to mean switching the session into that
+                      workspace and finding its members screen — two context
+                      changes to adjust one checkbox. It happens here now. */}
+                  {seat && catalog.data && (
                     <Button
                       size="xs"
                       variant="ghost"
                       leadingIcon={<SlidersHorizontal className="h-3 w-3" />}
-                      onClick={async () => {
-                        await switchWorkspace(workspace.id);
-                        router.push('/settings/access');
+                      onClick={() => {
+                        setTuning({
+                          workspaceId: workspace.id,
+                          membershipId: seat.membership_id,
+                          name: workspace.name,
+                          role: seat.role,
+                        });
+                        const member = (members[workspace.id] ?? []).find(
+                          (m) => m.id === seat.membership_id,
+                        );
+                        setDraft(member?.permissions ?? {});
                       }}
                     >
                       {seat.customised
@@ -296,6 +344,34 @@ export default function AdminPersonPage() {
             {t('admin.copyAccessWarning')}
           </p>
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(tuning)}
+        onClose={() => setTuning(null)}
+        size="xl"
+        title={t('admin.tuneIn', { workspace: tuning?.name ?? '' })}
+        description={t('admin.tuneBody', { name: data.full_name })}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setTuning(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="primary" size="sm" loading={savePermissions.isPending}
+                    onClick={() => savePermissions.mutate()}>
+              {t('common.save')}
+            </Button>
+          </>
+        }
+      >
+        {tuning && catalog.data && (
+          <PermissionEditor
+            catalog={catalog.data}
+            value={draft}
+            preset={catalog.data.presets[tuning.role]}
+            onChange={setDraft}
+          />
+        )}
       </Modal>
 
       <ConfirmDialog

@@ -1277,11 +1277,16 @@ export interface WorkspaceHealth {
   name: string;
   slug: string;
   status: string;
-  member_count: number;
-  pipeline_count: number;
-  /** Pipelines whose latest run did not succeed. */
-  failing_count: number;
-  running_count: number;
+  /**
+   * Null where the reader holds no permission to know. The console is
+   * everybody's home now, and a new page is not a reason for a workspace
+   * permission to stop applying — so a number nobody may see is absent rather
+   * than zero, which would be a different and false claim.
+   */
+  member_count: number | null;
+  pipeline_count: number | null;
+  failing_count: number | null;
+  running_count: number | null;
   last_run_at: string | null;
   via_organization: boolean;
 }
@@ -1292,6 +1297,9 @@ export interface OrganizationOverview {
   total_pipelines: number;
   total_failing: number;
   total_people: number;
+  /** What this reader may do here, so the shell hides tabs that would 403. */
+  administers_organization: boolean;
+  administers_members: boolean;
 }
 
 /** One cell of the people-by-workspace grid. */
@@ -1349,6 +1357,9 @@ export interface AccessChangeReport {
 export interface OrganizationPeople {
   people: PersonAcrossWorkspaces[];
   workspaces: WorkspaceSummary[];
+  /** False for a workspace administrator using the same page: organisation
+   *  roles are not theirs to edit. */
+  administers_organization: boolean;
 }
 
 /** What the sign-in page should offer. Public; asked before anybody signs in. */

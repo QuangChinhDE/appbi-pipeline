@@ -102,23 +102,23 @@ export default function AdminWorkspacePage() {
   return (
     <div className="space-y-4">
       <Link
-        href="/admin/workspaces"
+        href="/admin"
         className="-ml-1 inline-flex items-center gap-1 rounded px-1 py-1 text-caption text-text-tertiary transition-colors hover:text-text-primary"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        {t('admin.workspaces')}
+        {t('admin.overview')}
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="flex flex-wrap items-center gap-2 text-h3 font-strong text-text-primary">
             {workspace.name}
-            {workspace.failing_count > 0 ? (
+            {workspace.failing_count != null && workspace.failing_count > 0 ? (
               <Badge variant="danger" size="sm">
                 <AlertTriangle className="h-2.5 w-2.5" />
                 {t('admin.failingCount', { n: workspace.failing_count })}
               </Badge>
-            ) : workspace.pipeline_count > 0 ? (
+            ) : workspace.pipeline_count ? (
               <Badge variant="success" size="sm">
                 <CheckCircle2 className="h-2.5 w-2.5" />
                 {t('admin.allHealthy')}
@@ -137,14 +137,13 @@ export default function AdminWorkspacePage() {
       </header>
 
       <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label={t('admin.kpiPipelines')} value={workspace.pipeline_count} />
+        <StatTile label={t('admin.kpiPipelines')} value={workspace.pipeline_count ?? '—'} />
         <StatTile
           label={t('admin.kpiFailing')}
-          value={workspace.failing_count}
-          tone={workspace.failing_count > 0 ? 'danger' : 'default'}
+          value={workspace.failing_count ?? '—'}
+          tone={(workspace.failing_count ?? 0) > 0 ? 'danger' : 'default'}
         />
-        <StatTile label={t('org.seatCount', { n: workspace.member_count })}
-                  value={workspace.member_count} />
+        <StatTile label={t('admin.kpiMembers')} value={workspace.member_count ?? '—'} />
         <StatTile
           label={t('admin.lastRunLabel')}
           value={workspace.last_run_at

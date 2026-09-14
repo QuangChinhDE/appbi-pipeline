@@ -1,16 +1,13 @@
 'use client';
 
 /**
- * Where a person lands, which depends on what their day is.
+ * Everybody starts at home.
  *
- * Somebody who administers several workspaces opens the product to ask "which
- * of them needs me today" — a question no workspace can answer from inside
- * itself. Dropping them into one particular workspace makes them navigate out
- * of it first, every morning.
- *
- * One workspace is the other case entirely: the console would be a page listing
- * the single thing they were already going to open. So the fork is on the
- * number, not on the role alone.
+ * The first question anybody has is the same one — what can I reach — and no
+ * workspace can answer it from inside itself. Somebody with one workspace sees
+ * one and walks in; somebody with eight sees which of them needs them today.
+ * Forking on the count would have meant two different products depending on
+ * how your account happened to be set up.
  */
 
 import * as React from 'react';
@@ -24,11 +21,7 @@ export default function RootPage() {
 
   React.useEffect(() => {
     if (isLoading) return;
-    if (!user) { router.replace('/login'); return; }
-    const administersOrg = Boolean(user.organization_permissions?.includes('admin'))
-      || user.is_platform_admin;
-    const several = (user.workspaces?.length ?? 0) > 1;
-    router.replace(administersOrg && several ? '/admin' : '/overview');
+    router.replace(user ? '/admin' : '/login');
   }, [isLoading, user, router]);
 
   return null;

@@ -7,18 +7,17 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { cn } from '@/lib/utils';
 
 interface SettingsTab {
-  id: 'workspace' | 'access' | 'engine';
+  id: 'workspace' | 'engine';
   href: string;
   labelKey: string;
   adminOnly?: boolean;
 }
 
-// Everything here is scoped to the workspace being used. The organisation sat
-// on this row too, which made "which of my workspaces is failing" a question
-// asked from inside one particular workspace; it has its own console now.
+// What is left is what genuinely belongs to *this* workspace. Members and the
+// organisation both moved to the console, because both are questions about
+// more than one workspace and neither could be answered from inside one.
 const TABS: SettingsTab[] = [
   { id: 'workspace', href: '/settings/workspace', labelKey: 'settings.workspace' },
-  { id: 'access', href: '/settings/access', labelKey: 'settings.access' },
   { id: 'engine', href: '/settings/engine', labelKey: 'settings.engine', adminOnly: true },
 ];
 

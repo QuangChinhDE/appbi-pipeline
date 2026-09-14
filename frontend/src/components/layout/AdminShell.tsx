@@ -1,60 +1,68 @@
 'use client';
 
 /**
- * The organisation console: a different place, not another tab.
+ * Home: the place everybody lands, above any one workspace.
  *
- * Organisation work used to happen on a settings tab *inside* a workspace, so
- * an administrator answering "which of my workspaces is failing" was always
- * standing in one particular workspace while asking about all of them. The
- * chrome said one thing and the question meant another.
+ * It began as an organisation console gated on administering the organisation,
+ * which made it a room most people were bounced out of. But the question it
+ * answers -- "what can I reach, and what needs me" -- is everybody's, and a
+ * person with one workspace should see one rather than be redirected past the
+ * page that would have told them so.
  *
- * So this shell drops the workspace sidebar entirely. Nothing here is scoped
- * to a workspace, there is no switcher, and the only way back into the product
- * is an explicit door -- which is the same separation Databricks draws between
- * its account console and a workspace, for the same reason.
+ * So the shell is open and the *tabs* are gated, on what the API says this
+ * reader may do rather than on a role name. Databricks and Airbyte both scope
+ * one console this way instead of building a screen per kind of administrator:
+ * an organisation admin sees every workspace, a workspace owner sees theirs,
+ * and an analyst sees a list with no management in it at all.
  */
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { ArrowLeft, Building2, Home, LayoutGrid, Users } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Building2, Home, Users } from 'lucide-react';
 
+import { organizationApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/hooks/use-current-user';
-import { usePermissions } from '@/hooks/use-permissions';
 import { useI18n } from '@/providers/LanguageProvider';
-import { ErrorState } from '@/components/ui/Feedback';
 
-const TABS = [
+//: `Workspaces` is gone: the home page already lists them with their health,
+//: and a second tab listing the same rows with fewer facts was a menu item
+//: that cost a click to learn less.
+interface ConsoleTab {
+  href: string;
+  labelKey: string;
+  icon: typeof Home;
+  exact?: boolean;
+  /** What the reader must administer for this tab to exist. Absent means
+   *  everybody -- home is not a permission. */
+  needs?: 'members' | 'org';
+}
+
+const TABS: ConsoleTab[] = [
   { href: '/admin', labelKey: 'admin.overview', icon: Home, exact: true },
-  { href: '/admin/workspaces', labelKey: 'admin.workspaces', icon: LayoutGrid },
-  { href: '/admin/people', labelKey: 'admin.people', icon: Users },
-  { href: '/admin/organization', labelKey: 'admin.organization', icon: Building2 },
+  { href: '/admin/people', labelKey: 'admin.people', icon: Users, needs: 'members' },
+  { href: '/admin/organization', labelKey: 'admin.organization', icon: Building2, needs: 'org' },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const pathname = usePathname();
-  const router = useRouter();
-  const { data: user, isLoading } = useCurrentUser();
-  const { canOrg, isPlatformAdmin } = usePermissions();
+  const { data: user } = useCurrentUser();
 
-  const allowed = isPlatformAdmin || canOrg('admin');
-
-  React.useEffect(() => {
-    // Sent back rather than shown a locked door. Somebody who lands here from a
-    // stale link is not being denied a thing they asked for -- they followed a
-    // link that stopped applying to them.
-    if (!isLoading && user && !allowed) router.replace('/overview');
-  }, [isLoading, user, allowed, router]);
-
-  if (!isLoading && user && !allowed) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <ErrorState title={t('admin.notAllowed')} message={t('admin.notAllowedBody')} />
-      </div>
-    );
-  }
+  // What this reader may do, answered by the API rather than guessed from a
+  // role name. The same call the home page makes, so the tabs and the page
+  // below them cannot disagree about who is looking.
+  const overview = useQuery({
+    queryKey: ['org-overview'],
+    queryFn: organizationApi.overview,
+  });
+  const may = {
+    members: Boolean(overview.data?.administers_members),
+    org: Boolean(overview.data?.administers_organization),
+  };
+  const tabs = TABS.filter((tab) => !tab.needs || may[tab.needs]);
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-0">
@@ -82,9 +90,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
           <nav
             aria-label={t('admin.title')}
-            className="-mb-px flex w-full items-center gap-1 overflow-x-auto"
+            className={cn(
+              '-mb-px w-full items-center gap-1 overflow-x-auto',
+              // A row of one is not a choice, so it is not drawn as one.
+              tabs.length > 1 ? 'flex' : 'hidden',
+            )}
           >
-            {TABS.map((tab) => {
+            {tabs.map((tab) => {
               const active = tab.exact
                 ? pathname === tab.href
                 : pathname.startsWith(tab.href);

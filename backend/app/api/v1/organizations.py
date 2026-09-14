@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import CtxDep, SessionDep
 from app.core.errors import ForbiddenError, ResourceInUseError, ValidationError
-from app.core.permissions import Action, OrgRole, Role
+from app.core.permissions import Action, Module, OrgRole, Role, catalogue, effective
 from app.core.security import hash_password, password_problems
 from app.models.enums import PipelineStatus, ResourceStatus, RunStatus, WorkspaceStatus
 from app.models.integration import Destination, Pipeline, Source
@@ -119,6 +119,24 @@ _BAD_RUN = (RunStatus.FAILED, RunStatus.FAILED_TO_START, RunStatus.TIMED_OUT)
 _LIVE_RUN = (RunStatus.QUEUED, RunStatus.STARTING, RunStatus.RUNNING)
 
 
+@router.get("/organization/permission-catalog")
+async def org_permission_catalog(session: SessionDep, ctx: CtxDep) -> dict:
+    """Modules, actions and presets, for the console's permission editor.
+
+    The workspace-scoped copy of this answers for whichever workspace the
+    session happens to be in, which is the wrong question here: the console
+    edits permissions in workspaces the caller may not be standing in. The
+    catalogue itself does not vary -- it is the product's vocabulary -- so this
+    is the same document behind a gate that fits the caller.
+    """
+    if not await _administrable(session, ctx):
+        raise ForbiddenError(
+            "You do not manage members in any workspace.",
+            code="NO_MEMBER_ADMIN",
+        )
+    return catalogue()
+
+
 @router.get("/organization/overview", response_model=OrganizationOverview)
 async def organization_overview(session: SessionDep, ctx: CtxDep) -> OrganizationOverview:
     """Which workspace needs somebody today.
@@ -129,12 +147,8 @@ async def organization_overview(session: SessionDep, ctx: CtxDep) -> Organizatio
     the one place that looks across, and it is gated on administering the
     organisation rather than on any workspace permission.
     """
-    ctx.require_org(Action.ADMIN)
     organization_id = _org_id(ctx)
-    workspaces = (await session.scalars(
-        select(Workspace).where(Workspace.organization_id == organization_id)
-        .order_by(Workspace.name)
-    )).all()
+    workspaces = await _reachable_workspaces(session, ctx)
     ids = [w.id for w in workspaces]
     if not ids:
         return OrganizationOverview()
@@ -195,25 +209,45 @@ async def organization_overview(session: SessionDep, ctx: CtxDep) -> Organizatio
         .group_by(PipelineRun.workspace_id)
     )).all())
 
-    mine = {
-        m.workspace_id
-        for m in (await session.scalars(
-            select(Membership).where(Membership.user_id == ctx.user_id)
-        )).all()
-    }
+    mine = await _my_memberships(session, ctx)
+    administers_org = ctx.is_platform_admin or ctx.can_org(Action.ADMIN)
     people = await session.scalar(
         select(func.count()).select_from(OrganizationMembership)
         .where(OrganizationMembership.organization_id == organization_id)
-    )
+    ) if administers_org else 0
+
+    def may_see_pipelines(workspace_id: uuid.UUID) -> bool:
+        """Counts are the workspace's data, not the organisation's.
+
+        Somebody with no `pipelines` grant inside a workspace must not learn
+        how many it has by reading the home page -- the home page is new, and a
+        new page is not a reason for a permission to stop applying.
+        """
+        if administers_org:
+            return True
+        membership = mine.get(workspace_id)
+        if membership is None:
+            return False
+        perms = effective(membership.role, membership.permissions)
+        return Action.VIEW in perms.get(Module.PIPELINES, set())
+
+    def may_see_members(workspace_id: uuid.UUID) -> bool:
+        if administers_org:
+            return True
+        membership = mine.get(workspace_id)
+        if membership is None:
+            return False
+        perms = effective(membership.role, membership.permissions)
+        return Action.VIEW in perms.get(Module.MEMBERS, set())
 
     rows = [
         WorkspaceHealth(
             id=w.id, name=w.name, slug=w.slug, status=w.status.value,
-            member_count=seats.get(w.id, 0),
-            pipeline_count=pipelines.get(w.id, 0),
-            failing_count=failing.get(w.id, 0),
-            running_count=running.get(w.id, 0),
-            last_run_at=last_run.get(w.id),
+            member_count=seats.get(w.id, 0) if may_see_members(w.id) else None,
+            pipeline_count=pipelines.get(w.id, 0) if may_see_pipelines(w.id) else None,
+            failing_count=failing.get(w.id, 0) if may_see_pipelines(w.id) else None,
+            running_count=running.get(w.id, 0) if may_see_pipelines(w.id) else None,
+            last_run_at=last_run.get(w.id) if may_see_pipelines(w.id) else None,
             via_organization=w.id not in mine,
         )
         for w in workspaces
@@ -221,9 +255,11 @@ async def organization_overview(session: SessionDep, ctx: CtxDep) -> Organizatio
     return OrganizationOverview(
         workspaces=rows,
         total_workspaces=len(rows),
-        total_pipelines=sum(r.pipeline_count for r in rows),
-        total_failing=sum(r.failing_count for r in rows),
+        total_pipelines=sum(r.pipeline_count or 0 for r in rows),
+        total_failing=sum(r.failing_count or 0 for r in rows),
         total_people=people or 0,
+        administers_organization=administers_org,
+        administers_members=bool(await _administrable(session, ctx)),
     )
 
 
@@ -240,13 +276,16 @@ async def organization_people(session: SessionDep, ctx: CtxDep) -> OrganizationP
     exist and they can sign in, and leaving them off a page called People would
     make it a list that quietly disagrees with who has access.
     """
-    ctx.require_org(Action.ADMIN)
     organization_id = _org_id(ctx)
-    workspaces = (await session.scalars(
-        select(Workspace).where(Workspace.organization_id == organization_id)
-        .order_by(Workspace.name)
-    )).all()
+    administrable = await _administrable(session, ctx)
+    if not administrable:
+        raise ForbiddenError(
+            "You do not manage members in any workspace.",
+            code="NO_MEMBER_ADMIN",
+        )
+    workspaces = [w for w in await _org_workspaces(session, ctx) if w.id in administrable]
     ids = [w.id for w in workspaces]
+    administers_org = ctx.is_platform_admin or ctx.can_org(Action.ADMIN)
 
     org_rows = {
         m.user_id: m
@@ -254,7 +293,7 @@ async def organization_people(session: SessionDep, ctx: CtxDep) -> OrganizationP
             select(OrganizationMembership)
             .where(OrganizationMembership.organization_id == organization_id)
         )).all()
-    }
+    } if administers_org else {}
     memberships = list((await session.scalars(
         select(Membership).where(Membership.workspace_id.in_(ids))
     )).all()) if ids else []
@@ -294,6 +333,7 @@ async def organization_people(session: SessionDep, ctx: CtxDep) -> OrganizationP
 
     return OrganizationPeople(
         people=people,
+        administers_organization=administers_org,
         workspaces=[
             WorkspaceSummary(
                 id=w.id, name=w.name, slug=w.slug, timezone=w.timezone,
@@ -309,6 +349,88 @@ async def _org_workspaces(session, ctx) -> list[Workspace]:
         select(Workspace).where(Workspace.organization_id == _org_id(ctx))
         .order_by(Workspace.name)
     )).all())
+
+
+async def _my_memberships(session, ctx) -> dict[uuid.UUID, Membership]:
+    return {
+        m.workspace_id: m
+        for m in (await session.scalars(
+            select(Membership).where(Membership.user_id == ctx.user_id)
+        )).all()
+    }
+
+
+async def _reachable_workspaces(session, ctx) -> list[Workspace]:
+    """The workspaces this caller can open, in the organisation's order.
+
+    The console is everybody's home now, so this is the list behind it: an
+    organisation administrator holds all of them, and everybody else holds the
+    ones they were given a seat in. Same page, different contents -- which is
+    how Databricks and Airbyte both scope an account console, rather than
+    having a separate screen per kind of administrator.
+    """
+    workspaces = await _org_workspaces(session, ctx)
+    if ctx.is_platform_admin or ctx.can_org(Action.ADMIN):
+        return workspaces
+    mine = await _my_memberships(session, ctx)
+    return [w for w in workspaces if w.id in mine]
+
+
+async def _administrable(
+    session, ctx, action: Action = Action.VIEW,
+) -> dict[uuid.UUID, Workspace]:
+    """Workspaces whose *members* this caller may see, or change.
+
+    Not the same question as "which can I open". A workspace Analyst reaches
+    their workspace and holds nothing on `members` there, so the People page
+    must be empty for them rather than showing a workspace they cannot
+    administer -- and a workspace Owner who is not an organisation admin must
+    see exactly their own.
+    """
+    workspaces = await _org_workspaces(session, ctx)
+    if ctx.is_platform_admin or ctx.can_org(Action.ADMIN):
+        return {w.id: w for w in workspaces}
+
+    mine = await _my_memberships(session, ctx)
+    out: dict[uuid.UUID, Workspace] = {}
+    for workspace in workspaces:
+        membership = mine.get(workspace.id)
+        if membership is None:
+            continue
+        perms = effective(membership.role, membership.permissions)
+        if action in perms.get(Module.MEMBERS, set()):
+            out[workspace.id] = workspace
+    return out
+
+
+async def _require_member_admin(
+    session, ctx, workspace_id: uuid.UUID, action: Action,
+) -> Workspace:
+    """Gate for the seat endpoints, now that they are not organisation-only.
+
+    A workspace Owner administering their own workspace comes through here with
+    the same authority an organisation admin has over all of them. The refusal
+    is a 404-shaped one for a workspace outside the organisation, because
+    confirming it exists would make this a probe for other tenants.
+    """
+    allowed = await _administrable(session, ctx, action)
+    workspace = allowed.get(workspace_id)
+    if workspace is None:
+        # Distinguish "not yours to administer" from "does not exist here" only
+        # as far as the caller's own organisation.
+        in_org = await session.scalar(
+            select(Workspace).where(
+                Workspace.id == workspace_id,
+                Workspace.organization_id == _org_id(ctx),
+            )
+        )
+        if in_org is None:
+            raise ValidationError("No such workspace.", code="WORKSPACE_NOT_FOUND")
+        raise ForbiddenError(
+            "You do not manage members in that workspace.",
+            code="WORKSPACE_MEMBERS_DENIED",
+        )
+    return workspace
 
 
 async def _seats_of(session, user_id: uuid.UUID, workspace_ids) -> dict:
@@ -385,7 +507,18 @@ async def add_person(
 async def person_detail(
     user_id: uuid.UUID, session: SessionDep, ctx: CtxDep
 ) -> PersonAcrossWorkspaces:
-    ctx.require_org(Action.ADMIN)
+    """One person, through the caller's own window.
+
+    A workspace administrator reaches this page from the grid and must see it,
+    but only the seats they administer -- showing somebody's access to a
+    workspace the reader has no authority over would leak the shape of the
+    organisation to a workspace-level role.
+    """
+    if not await _administrable(session, ctx):
+        raise ForbiddenError(
+            "You do not manage members in any workspace.",
+            code="NO_MEMBER_ADMIN",
+        )
     return await _person_view(session, ctx, user_id)
 
 
@@ -524,8 +657,8 @@ async def _person_view(session, ctx, user_id: uuid.UUID) -> PersonAcrossWorkspac
     user = await session.get(User, user_id)
     if user is None:
         raise ValidationError("No such person.", code="PERSON_NOT_FOUND")
-    workspaces = await _org_workspaces(session, ctx)
-    seats = await _seats_of(session, user_id, [w.id for w in workspaces])
+    administrable = await _administrable(session, ctx)
+    seats = await _seats_of(session, user_id, list(administrable))
     org_membership = await session.scalar(
         select(OrganizationMembership).where(
             OrganizationMembership.organization_id == _org_id(ctx),
@@ -687,8 +820,7 @@ async def list_workspace_members(
     "who has access to what", and there was no screen that could show the
     answer side by side.
     """
-    ctx.require_org(Action.ADMIN)
-    await _workspace_in_org(session, ctx, workspace_id)
+    await _require_member_admin(session, ctx, workspace_id, Action.VIEW)
     memberships = (await session.scalars(
         select(Membership).where(Membership.workspace_id == workspace_id)
     )).all()
@@ -709,8 +841,7 @@ async def add_workspace_member(
     workspace_id: uuid.UUID, payload: MemberInvite, session: SessionDep, ctx: CtxDep
 ) -> MemberView:
     """Give somebody a seat in a workspace without being in it yourself."""
-    ctx.require_org(Action.ADMIN)
-    await _workspace_in_org(session, ctx, workspace_id)
+    await _require_member_admin(session, ctx, workspace_id, Action.CREATE)
     membership, user = await member_service.invite(session, ctx, workspace_id, payload)
     await session.commit()
     return member_service.view(membership, user)
@@ -724,8 +855,7 @@ async def update_workspace_member(
     workspace_id: uuid.UUID, member_id: uuid.UUID, payload: MemberRoleUpdate,
     session: SessionDep, ctx: CtxDep,
 ) -> MemberView:
-    ctx.require_org(Action.ADMIN)
-    await _workspace_in_org(session, ctx, workspace_id)
+    await _require_member_admin(session, ctx, workspace_id, Action.EDIT)
     membership = await session.scalar(
         select(Membership).where(
             Membership.id == member_id, Membership.workspace_id == workspace_id
@@ -746,8 +876,7 @@ async def update_workspace_member(
 async def remove_workspace_member(
     workspace_id: uuid.UUID, member_id: uuid.UUID, session: SessionDep, ctx: CtxDep
 ) -> Response:
-    ctx.require_org(Action.ADMIN)
-    await _workspace_in_org(session, ctx, workspace_id)
+    await _require_member_admin(session, ctx, workspace_id, Action.DELETE)
     membership = await session.scalar(
         select(Membership).where(
             Membership.id == member_id, Membership.workspace_id == workspace_id
