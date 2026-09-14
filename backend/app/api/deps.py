@@ -156,6 +156,7 @@ async def request_context(
             "allow_save_without_test": workspace.allow_save_without_test,
             "auto_accept_additive_schema": workspace.auto_accept_additive_schema,
         },
+        permission_overrides=chosen.permissions,
     )
 
 

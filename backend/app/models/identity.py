@@ -9,7 +9,7 @@ from sqlalchemy import (
     Boolean, DateTime, Enum as SAEnum, ForeignKey, Integer, String, UniqueConstraint,
     false as sa_false, text as sa_text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base, TimestampMixin
@@ -23,7 +23,19 @@ class User(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable: an account created for somebody who signs in with Google has
+    # no password, and giving it a random one would leave a credential nobody
+    # knows sitting in the table.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: How this account proves who it is: "password" or "google". Advisory --
+    #: the gate is whether the credential presented actually verifies, not
+    #: what this column says.
+    auth_provider: Mapped[str] = mapped_column(
+        String(16), default="password", server_default="password", nullable=False)
+    #: Google's subject claim: stable for the life of the account, unlike the
+    #: email, which a workspace administrator can change under it.
+    google_sub: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Matches the frontend default. An account created without a preference
@@ -147,6 +159,15 @@ class Membership(Base, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[Role] = mapped_column(SAEnum(Role, name="member_role"), nullable=False)
+    #: What this membership holds *instead of* what its role's preset says,
+    #: as `{module: [action, ...]}`.
+    #:
+    #: NULL means "exactly the preset", which is what every row meant before
+    #: this column existed -- so no membership was migrated and a preset
+    #: improved in Python still reaches everybody who never departed from it.
+    #: A module missing from a stored map falls back to the preset too, so a
+    #: module added to the product later does not arrive silently denied.
+    permissions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="memberships", lazy="joined")
     workspace: Mapped[Workspace] = relationship(back_populates="memberships", lazy="joined")

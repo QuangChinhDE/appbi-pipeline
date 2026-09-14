@@ -157,6 +157,18 @@ x-backend-env: &backend-env
   SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-43200}
   SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-appbi_session}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
+
+  # How somebody proves who they are. Both can be on at once, and password is
+  # the only one by default: an administrator keeps a password so that a
+  # misconfigured Google client is an inconvenience rather than a deployment
+  # nobody can sign in to.
+  AUTH_PASSWORD_LOGIN_ENABLED: ${AUTH_PASSWORD_LOGIN_ENABLED:-true}
+  AUTH_GOOGLE_ENABLED: ${AUTH_GOOGLE_ENABLED:-false}
+  # Public by design -- the secret half of the pair is not used by this flow.
+  AUTH_GOOGLE_CLIENT_ID: ${AUTH_GOOGLE_CLIENT_ID:-}
+  # Comma-separated. Empty accepts any Google account whose email matches a
+  # user an administrator already created.
+  AUTH_GOOGLE_ALLOWED_DOMAINS: ${AUTH_GOOGLE_ALLOWED_DOMAINS:-}
   # --- the first administrator on an empty production database ---
   # `SEED_DEMO_DATA=false` makes the bootstrap refuse to start until these are
   # supplied, and names them in the message. They were absent from this list,

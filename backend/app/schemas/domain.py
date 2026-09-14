@@ -152,6 +152,21 @@ class MemberView(BaseModel):
     full_name: str
     role: str
     created_at: datetime
+    #: What this person may actually do, resolved -- preset plus whatever the
+    #: membership stores on top of it. The editor renders from this, never from
+    #: the role, so what an administrator sees is what the gate will use.
+    permissions: dict[str, list[str]] = Field(default_factory=dict)
+    #: The level naming each module's action set, or `custom` where none does.
+    #: Derived here rather than in the browser so one definition of "this is
+    #: what `edit` means" serves both.
+    levels: dict[str, str] = Field(default_factory=dict)
+    #: True once somebody has departed from the preset. Drives nothing; it is
+    #: how the list can say "Operator (edited)" instead of implying a person
+    #: holds exactly what the preset says.
+    customised: bool = False
+    #: How this account signs in: `password`, `google`, or `both` once a Google
+    #: identity has been linked to an account that also has a password.
+    auth_provider: str = "password"
 
 
 class MemberInvite(_EmailMixin, BaseModel):
@@ -162,11 +177,50 @@ class MemberInvite(_EmailMixin, BaseModel):
     # bound only stops an obviously-too-short value early; it said 8 while the
     # policy said 12, so an invite could set a password the owner of that
     # account would never be allowed to choose for themselves.
-    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=200)
+    #
+    # Optional since Google sign-in arrived: an account for somebody who will
+    # sign in with Google needs no password, and inventing one would leave a
+    # credential nobody chose sitting in the table. The route refuses to omit
+    # it unless Google sign-in is actually configured -- an account with
+    # neither is an account nobody can use.
+    password: str | None = Field(default=None, min_length=MIN_PASSWORD_LENGTH, max_length=200)
+    #: Start from the role's preset and depart from it in the same request, so
+    #: inviting somebody with tailored access is one step rather than two.
+    permissions: dict[str, list[str] | str] | None = None
 
 
 class MemberRoleUpdate(BaseModel):
-    role: str
+    """A role, a permission map, or both.
+
+    Sending only `role` re-applies that preset and clears any departure from it
+    -- which is what picking a role from a dropdown should mean. Sending
+    `permissions` stores exactly that map. Sending both applies the preset and
+    then the departures, in that order.
+    """
+
+    role: str | None = None
+    permissions: dict[str, list[str] | str] | None = None
+
+
+class GoogleLoginRequest(BaseModel):
+    #: The ID token Google Identity Services hands the page. Verified against
+    #: Google's keys and this deployment's client id on the server -- the
+    #: browser is never trusted about who it is.
+    credential: str = Field(min_length=1, max_length=8192)
+
+
+class AuthMethods(BaseModel):
+    """What the sign-in page should offer. Public: it is asked before anybody
+    has proved who they are, and it says nothing a login form does not."""
+
+    password: bool = True
+    google: bool = False
+    #: Needed by the browser to initialise Google Identity Services. A client
+    #: id is public by design -- the secret half never leaves the server.
+    google_client_id: str = ""
+    #: Shown under the button so somebody signing in with the wrong account
+    #: reads why it was refused before trying three more times.
+    google_domains: list[str] = Field(default_factory=list)
 
 
 # ── connectors ─────────────────────────────────────────────────────────────

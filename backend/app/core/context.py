@@ -10,7 +10,9 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from app.core.permissions import Action, Module, OrgRole, Role, org_require, require
+from app.core.permissions import (
+    Action, Module, OrgRole, Role, allowed, effective, org_require, require,
+)
 
 
 @dataclass(slots=True)
@@ -33,9 +35,31 @@ class RequestContext:
     user_agent: str | None = None
     timezone: str = "Asia/Bangkok"
     workspace_settings: dict = field(default_factory=dict)
+    #: What this membership stores on top of its preset, straight from the
+    #: database. Resolved once, lazily, into `_perms` -- so a request that never
+    #: asks a permission question does no work, and one that asks fifty resolves
+    #: the same answer fifty times instead of reading the row again.
+    permission_overrides: dict | None = None
+    _perms: dict | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def permissions(self) -> dict[Module, set[Action]]:
+        """This context's answer to every permission question.
+
+        One resolution, shared by the gate, the payload the browser receives and
+        the matrix an administrator edits. Keeping three readers on one function
+        is the whole point: the alternative is a menu item that appears, a page
+        that opens, and an endpoint behind it that returns 403.
+        """
+        if self._perms is None:
+            self._perms = effective(
+                self.role, self.permission_overrides,
+                is_platform_admin=self.is_platform_admin,
+            )
+        return self._perms
 
     def require(self, module: Module, action: Action) -> None:
-        require(self.role, module, action)
+        require(self.permissions, module, action, self.role)
 
     def require_org(self, action: Action) -> None:
         """Authority over the organisation itself, not over what is inside a
@@ -51,9 +75,7 @@ class RequestContext:
         return self.is_platform_admin or org_allowed(self.org_role, action)
 
     def can(self, module: Module, action: Action) -> bool:
-        from app.core.permissions import allowed
-
-        return allowed(self.role, module, action)
+        return allowed(self.permissions, module, action)
 
     @classmethod
     def system(cls, workspace_id: uuid.UUID, trace_id: str, timezone: str = "Asia/Bangkok") -> "RequestContext":

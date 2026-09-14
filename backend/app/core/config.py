@@ -53,6 +53,40 @@ class Settings(BaseSettings):
     session_cookie_name: str = "appbi_session"
     cookie_secure: bool = False
 
+    # --- how somebody proves who they are ---
+    # Both can be on at once, and by default password is the only one. An
+    # administrator keeps a password so that a misconfigured Google client --
+    # a rotated id, an expired consent screen -- is an inconvenience rather
+    # than a deployment nobody can sign in to.
+    auth_password_login_enabled: bool = True
+    auth_google_enabled: bool = False
+    #: Public by design; the secret half of the pair never leaves the server,
+    #: and this flow does not need it -- the browser gets an ID token from
+    #: Google and the server verifies it against Google's keys.
+    auth_google_client_id: str = ""
+    #: Comma-separated. Empty means any Google account whose email matches a
+    #: user an administrator already created. Setting it refuses the wrong
+    #: tenant before the email is even looked up.
+    auth_google_allowed_domains: str = ""
+
+    @property
+    def google_domains(self) -> list[str]:
+        return [
+            domain.strip().lower().lstrip("@")
+            for domain in self.auth_google_allowed_domains.split(",")
+            if domain.strip()
+        ]
+
+    @property
+    def google_login_ready(self) -> bool:
+        """Configured, not merely switched on.
+
+        A deployment with the flag set and no client id would render a sign-in
+        button that fails after the user has already chosen an account, which
+        reads as the product being broken rather than unconfigured.
+        """
+        return self.auth_google_enabled and bool(self.auth_google_client_id.strip())
+
     # --- secrets ---
     # urlsafe-base64 32-byte KEK. Data keys are generated per secret and
     # wrapped with this (envelope encryption), so rotating the KEK does not

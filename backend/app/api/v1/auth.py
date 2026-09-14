@@ -14,8 +14,10 @@ from app.api.deps import CtxDep, SessionDep, UserDep, _bearer
 from app.core.config import settings
 from app.core.db import utcnow
 from app.core.errors import ForbiddenError, RateLimitedError, UnauthorizedError, ValidationError
+from app.core import google_identity
 from app.core.permissions import (
-    ASSIGNABLE_ROLES, Action, Module, OrgRole, Role, org_permissions, permission_map,
+    ASSIGNABLE_ROLES, Action, Module, OrgRole, PRESETS, Role, ValidationErrorLike,
+    catalogue, effective, level_of, org_permissions, parse_overrides, serialise,
 )
 from app.core.security import (
     decode_session_token,
@@ -25,8 +27,9 @@ from app.models.enums import AuditResult
 from app.models.identity import Membership, Organization, User, Workspace
 from app.schemas.common import Acknowledged
 from app.schemas.domain import (
-    ChangePasswordRequest, CurrentUser, EngineCapabilities, LoginRequest, MemberInvite,
-    MemberRoleUpdate, MemberView, OrganizationSummary, WorkspaceSettingsUpdate, WorkspaceSummary,
+    AuthMethods, ChangePasswordRequest, CurrentUser, EngineCapabilities,
+    GoogleLoginRequest, LoginRequest, MemberInvite, MemberRoleUpdate, MemberView,
+    OrganizationSummary, WorkspaceSettingsUpdate, WorkspaceSummary,
 )
 from app.services import access, audit
 
@@ -59,6 +62,11 @@ def _set_cookie(response: Response, token: str) -> None:
 
 @router.post("/auth/login", response_model=CurrentUser)
 async def login(payload: LoginRequest, response: Response, session: SessionDep) -> CurrentUser:
+    if not settings.auth_password_login_enabled:
+        raise ForbiddenError(
+            "This deployment signs in with Google.",
+            code="PASSWORD_LOGIN_DISABLED",
+        )
     user = await session.scalar(select(User).where(User.email == payload.email.lower()))
     if user is None:
         # Same wording either way so the endpoint is not a user-enumeration oracle.
@@ -82,6 +90,15 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
         raise UnauthorizedError(
             "That email and password do not match an account.",
             code="CREDENTIALS_INVALID",
+        )
+
+    # An account created for somebody who signs in with Google has no password
+    # hash at all. Saying so is safe -- the caller already named an address that
+    # exists -- and it is the difference between "try again" and "use the other
+    # button", which is the whole of their problem.
+    if not user.password_hash:
+        raise UnauthorizedError(
+            "This account signs in with Google.", code="USE_GOOGLE_SIGN_IN",
         )
 
     if not verify_password(payload.password, user.password_hash):
@@ -130,6 +147,107 @@ async def login(payload: LoginRequest, response: Response, session: SessionDep) 
 async def logout(response: Response) -> Acknowledged:
     response.delete_cookie(settings.session_cookie_name, path="/")
     return Acknowledged(message="Signed out.")
+
+
+@router.get("/auth/config", response_model=AuthMethods)
+async def auth_config() -> AuthMethods:
+    """What the sign-in page should offer.
+
+    Public, and deliberately so: it is asked before anybody has proved who they
+    are, and it discloses nothing a sign-in form does not already show. The
+    alternative -- compiling the client id into the frontend bundle -- makes the
+    same value public and ties it to a rebuild.
+    """
+    return AuthMethods(
+        password=settings.auth_password_login_enabled,
+        google=settings.google_login_ready,
+        google_client_id=(
+            settings.auth_google_client_id.strip() if settings.google_login_ready else ""
+        ),
+        google_domains=settings.google_domains,
+    )
+
+
+@router.post("/auth/google", response_model=CurrentUser)
+async def google_login(
+    payload: GoogleLoginRequest, response: Response, session: SessionDep
+) -> CurrentUser:
+    """Sign in with a Google account an administrator has already provisioned.
+
+    Google proves the identity; it does not grant access. An address nobody has
+    added to a workspace is refused, so the set of people who can reach this
+    deployment stays a list an administrator wrote -- not everybody at a domain,
+    and not everybody with a Google account.
+
+    The Google subject is stored the first time an account signs in this way and
+    matched on from then on. Matching on the email alone would mean that
+    changing somebody's address in the members list hands their seat to whoever
+    later proves ownership of the old one.
+    """
+    identity = await google_identity.verify(payload.credential)
+
+    user = await session.scalar(
+        select(User).where(User.google_sub == identity.subject)
+    )
+    if user is None:
+        user = await session.scalar(
+            select(User).where(func.lower(User.email) == identity.email)
+        )
+        if user is None:
+            raise ForbiddenError(
+                "That Google account has not been added to a workspace yet. "
+                "Ask an administrator to invite this email address.",
+                code="GOOGLE_ACCOUNT_NOT_PROVISIONED",
+                details={"email": identity.email},
+            )
+        if user.google_sub and user.google_sub != identity.subject:
+            # The address matches an account already linked to a *different*
+            # Google identity. Somebody re-registered a freed address, or an
+            # administrator typed an address that was already claimed; either
+            # way, linking silently would hand over a seat.
+            raise ForbiddenError(
+                "That email belongs to an account linked to a different "
+                "Google identity.",
+                code="GOOGLE_IDENTITY_MISMATCH",
+            )
+
+    if not user.is_active:
+        raise ForbiddenError("This account has been disabled.", code="ACCOUNT_DISABLED")
+
+    first_link = user.google_sub is None
+    user.google_sub = identity.subject
+    user.auth_provider = "both" if user.password_hash else "google"
+    if identity.picture:
+        user.avatar_url = identity.picture
+    if not (user.full_name or "").strip():
+        user.full_name = identity.full_name
+    # A handover password is a credential somebody else typed. Proving the
+    # Google identity is a better proof of ownership than typing it would be,
+    # so the forced change has served its purpose and stops blocking.
+    user.password_change_required = False
+    user.failed_login_count = 0
+    user.locked_until = None
+    user.lockout_count = 0
+    user.last_login_at = utcnow()
+
+    reachable = await _reachable_ids(session, user)
+    if not reachable:
+        raise ForbiddenError(
+            "This account does not belong to a workspace yet.", code="NO_WORKSPACE",
+        )
+    workspace_id = reachable[0]
+
+    token = issue_session_token(user.id, workspace_id, user.session_version)
+    _set_cookie(response, token)
+    if first_link:
+        await audit.record(session, None, "auth.google.linked", resource_type="USER",
+                           resource_id=user.id, workspace_id=workspace_id,
+                           after={"email": identity.email})
+    await audit.record(session, None, "auth.login.succeeded", resource_type="USER",
+                       resource_id=user.id, workspace_id=workspace_id,
+                       after={"provider": "google"})
+    await session.commit()
+    return await _current_user_payload(session, user, workspace_id)
 
 
 @router.get("/auth/me", response_model=CurrentUser)
@@ -206,6 +324,7 @@ async def _current_user_payload(session, user: User, workspace_id) -> CurrentUse
     summaries: list[WorkspaceSummary] = []
     active: WorkspaceSummary | None = None
     role: Role | None = None
+    overrides: dict | None = None
     for entry in accesses:
         workspace = entry.workspace
         summary = WorkspaceSummary(
@@ -217,11 +336,21 @@ async def _current_user_payload(session, user: User, workspace_id) -> CurrentUse
         if workspace.id == workspace_id:
             active = summary
             role = entry.role
+            overrides = entry.permissions
     if active is None and summaries:
         active = summaries[0]
         role = Role(active.role)
+        overrides = next(
+            (a.permissions for a in accesses if a.workspace.id == active.id), None
+        )
 
-    effective = Role.PLATFORM_ADMIN if user.is_platform_admin else (role or Role.ANALYST)
+    role_here = Role.PLATFORM_ADMIN if user.is_platform_admin else (role or Role.ANALYST)
+    # The same resolver the gate uses. The browser being told one thing and the
+    # endpoint deciding another is the failure this replaces: a menu item that
+    # appears, a page that opens, and a 403 behind it.
+    resolved = effective(
+        role_here, overrides, is_platform_admin=user.is_platform_admin,
+    )
 
     # Prefer the organisation that owns the workspace being used; fall back to
     # the account's own, so a platform admin with no membership still sees one.
@@ -237,7 +366,7 @@ async def _current_user_payload(session, user: User, workspace_id) -> CurrentUse
     return CurrentUser(
         id=user.id, email=user.email, full_name=user.full_name, locale=user.locale,
         is_platform_admin=user.is_platform_admin, workspace=active, workspaces=summaries,
-        role=effective.value, permissions=permission_map(effective),
+        role=role_here.value, permissions=serialise(resolved),
         organization=(
             OrganizationSummary(
                 id=organization.id, name=organization.name, slug=organization.slug,
@@ -386,6 +515,66 @@ async def _assert_not_last_owner(session, workspace_id, membership_id: uuid.UUID
         )
 
 
+async def _assert_somebody_can_still_administer(
+    session, workspace_id, membership_id: uuid.UUID, prospective: dict | None,
+) -> None:
+    """Refuse a change that leaves nobody able to manage members.
+
+    `_assert_not_last_owner` counts Owners, which was enough while a role *was*
+    the permission set. It is not any more: an Owner whose stored map revokes
+    `members` is an Owner in name over a workspace whose door has locked from
+    the outside -- the role picker, the invite form and this endpoint all sit
+    behind the permission that was just removed.
+
+    So the question is asked about the thing that actually matters: after this
+    change, does anybody left hold `members: edit`. Platform administrators are
+    not counted -- they can always get in, and counting them would let a
+    workspace be left with no administrator of its own on the grounds that
+    somebody at the vendor could fix it.
+    """
+    rows = (await session.scalars(
+        select(Membership).where(Membership.workspace_id == workspace_id)
+    )).all()
+    for membership in rows:
+        overrides = prospective if membership.id == membership_id else membership.permissions
+        perms = effective(membership.role, overrides)
+        if Action.EDIT in perms.get(Module.MEMBERS, set()):
+            return
+    raise ValidationError(
+        "Somebody in this workspace has to keep permission to manage members. "
+        "Grant it to another person first.",
+        code="LAST_MEMBER_ADMIN",
+    )
+
+
+def _member_view(membership: Membership, user: User) -> MemberView:
+    """One row of the members list, with permissions already resolved.
+
+    Resolved here rather than sent as "role plus a patch" so the editor and the
+    gate cannot disagree about what a preset means -- and so the browser never
+    needs its own copy of the preset table.
+    """
+    perms = effective(membership.role, membership.permissions)
+    return MemberView(
+        id=membership.id, user_id=user.id, email=user.email,
+        full_name=user.full_name, role=membership.role.value,
+        created_at=membership.created_at,
+        permissions=serialise(perms),
+        levels={m.value: level_of(m, perms.get(m, set())) for m in Module},
+        customised=bool(membership.permissions),
+        auth_provider=user.auth_provider,
+    )
+
+
+def _validated_overrides(raw: dict | None) -> dict | None:
+    if raw is None:
+        return None
+    try:
+        return parse_overrides(raw)
+    except ValidationErrorLike as exc:
+        raise ValidationError(exc.message, code=exc.code) from None
+
+
 def _parse_assignable_role(raw: str) -> Role:
     """PLATFORM_ADMIN is an account property, not a membership: accepting it
     here wrote a role the permission matrix reads but the account never gets."""
@@ -405,6 +594,20 @@ def _parse_assignable_role(raw: str) -> Role:
     return role
 
 
+@router.get("/workspace/permission-catalog")
+async def permission_catalog(ctx: CtxDep) -> dict:
+    """Every module, the actions it can be asked to perform, and the presets.
+
+    Served rather than compiled into the frontend because the browser keeping
+    its own copy of this list is exactly how a module comes to be editable in
+    the admin screen while the backend has never heard of it -- or worse, how a
+    module the backend gates on goes missing from the editor and can never be
+    granted.
+    """
+    ctx.require(Module.MEMBERS, Action.VIEW)
+    return catalogue()
+
+
 @router.get("/workspace/members", response_model=list[MemberView])
 async def list_members(session: SessionDep, ctx: CtxDep) -> list[MemberView]:
     ctx.require(Module.MEMBERS, Action.VIEW)
@@ -416,10 +619,7 @@ async def list_members(session: SessionDep, ctx: CtxDep) -> list[MemberView]:
         user = await session.get(User, membership.user_id)
         if user is None:
             continue
-        out.append(MemberView(
-            id=membership.id, user_id=user.id, email=user.email, full_name=user.full_name,
-            role=membership.role.value, created_at=membership.created_at,
-        ))
+        out.append(_member_view(membership, user))
     out.sort(key=lambda m: m.full_name.lower())
     return out
 
@@ -428,24 +628,39 @@ async def list_members(session: SessionDep, ctx: CtxDep) -> list[MemberView]:
 async def invite_member(payload: MemberInvite, session: SessionDep, ctx: CtxDep) -> MemberView:
     ctx.require(Module.MEMBERS, Action.CREATE)
     role = _parse_assignable_role(payload.role)
+    overrides = _validated_overrides(payload.permissions)
 
-    # The same policy the account holder will face when they change it, and
-    # the same one bootstrap enforces. This route hashed whatever it was given
-    # against a schema bound of 8 characters, so the one path that creates
-    # accounts for other people was the weakest one in the product.
-    problems = password_problems(payload.password)
-    if problems:
-        raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
+    if payload.password is None and not settings.google_login_ready:
+        # An account with no password and no Google is an account nobody can
+        # sign in to. Refusing here is kinder than creating it and leaving an
+        # administrator to work out why the person they invited cannot get in.
+        raise ValidationError(
+            "Set a password for this account, or configure Google sign-in "
+            "first.",
+            code="NO_SIGN_IN_METHOD",
+        )
+    if payload.password is not None:
+        # The same policy the account holder will face when they change it, and
+        # the same one bootstrap enforces. This route hashed whatever it was
+        # given against a schema bound of 8 characters, so the one path that
+        # creates accounts for other people was the weakest in the product.
+        problems = password_problems(payload.password)
+        if problems:
+            raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
 
     email = payload.email.lower()
     user = await session.scalar(select(User).where(User.email == email))
     if user is None:
         user = User(email=email, full_name=payload.full_name,
-                    password_hash=hash_password(payload.password),
+                    password_hash=(
+                        hash_password(payload.password) if payload.password else None
+                    ),
+                    auth_provider="password" if payload.password else "google",
                     # Whoever typed this password is not the person who will
                     # use the account. It is a handover secret, not a
                     # credential, and it stops working the moment it is used.
-                    password_change_required=True)
+                    # Nothing to hand over when they sign in with Google.
+                    password_change_required=bool(payload.password))
         session.add(user)
         await session.flush()
 
@@ -460,16 +675,16 @@ async def invite_member(payload: MemberInvite, session: SessionDep, ctx: CtxDep)
             code="ALREADY_WORKSPACE_MEMBER",
         )
 
-    membership = Membership(workspace_id=ctx.workspace_id, user_id=user.id, role=role)
+    membership = Membership(workspace_id=ctx.workspace_id, user_id=user.id,
+                            role=role, permissions=overrides)
     session.add(membership)
     await session.flush()
     await audit.record(session, ctx, "member.invited", resource_type="MEMBER",
                        resource_id=user.id, resource_name=user.email,
-                       after={"role": role.value})
+                       after={"role": role.value,
+                              "permissions": serialise(effective(role, overrides))})
     await session.commit()
-    return MemberView(id=membership.id, user_id=user.id, email=user.email,
-                      full_name=user.full_name, role=role.value,
-                      created_at=membership.created_at)
+    return _member_view(membership, user)
 
 
 @router.patch("/workspace/members/{member_id}", response_model=MemberView)
@@ -477,6 +692,10 @@ async def update_member_role(
     member_id: uuid.UUID, payload: MemberRoleUpdate, session: SessionDep, ctx: CtxDep
 ) -> MemberView:
     ctx.require(Module.MEMBERS, Action.EDIT)
+    if payload.role is None and payload.permissions is None:
+        raise ValidationError(
+            "Send a role, a permission map, or both.", code="NOTHING_TO_CHANGE",
+        )
     membership = await session.scalar(
         select(Membership).where(
             Membership.id == member_id, Membership.workspace_id == ctx.workspace_id
@@ -484,20 +703,50 @@ async def update_member_role(
     )
     if membership is None:
         raise ValidationError("No such member.", code="MEMBER_NOT_FOUND")
-    role = _parse_assignable_role(payload.role)
+
+    role = _parse_assignable_role(payload.role) if payload.role else membership.role
+    # Picking a role from the dropdown and sending nothing else means "this
+    # preset, as written" -- so the departures from the old preset are cleared
+    # rather than silently re-applied on top of a role that never had them.
+    overrides = (
+        _validated_overrides(payload.permissions)
+        if payload.permissions is not None
+        else (None if payload.role else membership.permissions)
+    )
+
     if membership.role is Role.OWNER and role is not Role.OWNER:
         await _assert_not_last_owner(session, ctx.workspace_id, membership.id)
+    await _assert_somebody_can_still_administer(
+        session, ctx.workspace_id, membership.id, overrides,
+    )
 
-    before = membership.role.value
+    before_role = membership.role.value
+    before_perms = serialise(effective(membership.role, membership.permissions))
     membership.role = role
+    membership.permissions = overrides
+    after_perms = serialise(effective(role, overrides))
+
     user = await session.get(User, membership.user_id)
-    await audit.record(session, ctx, "member.role.changed", resource_type="MEMBER",
-                       resource_id=membership.user_id, resource_name=user.email if user else None,
-                       before={"role": before}, after={"role": role.value})
+    # The diff, not just the new state. "Who granted this, and what did they
+    # change it from" is the question an investigation actually asks, and the
+    # most security-relevant action in the product used to record only half of
+    # the answer.
+    moved = {
+        module: {"from": before_perms.get(module, []), "to": after_perms.get(module, [])}
+        for module in set(before_perms) | set(after_perms)
+        if before_perms.get(module, []) != after_perms.get(module, [])
+    }
+    await audit.record(
+        session, ctx, "member.permissions.changed", resource_type="MEMBER",
+        resource_id=membership.user_id,
+        resource_name=user.email if user else None,
+        before={"role": before_role, "permissions": before_perms},
+        after={"role": role.value, "permissions": after_perms,
+               "changed": moved,
+               "self_change": str(ctx.user_id) == str(membership.user_id)},
+    )
     await session.commit()
-    return MemberView(id=membership.id, user_id=user.id, email=user.email,
-                      full_name=user.full_name, role=role.value,
-                      created_at=membership.created_at)
+    return _member_view(membership, user)
 
 
 @router.delete("/workspace/members/{member_id}", status_code=204)

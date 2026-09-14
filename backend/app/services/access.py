@@ -42,6 +42,15 @@ class WorkspaceAccess:
     #: The UI says "through the organisation" instead of implying somebody was
     #: added to this workspace by hand.
     via_organization: bool
+    #: What the membership stores on top of its preset, or None when it stores
+    #: nothing. Carried here because the request context needs it in the same
+    #: breath as the role, and fetching it separately is how the two come to
+    #: describe different memberships.
+    #:
+    #: Always None when the reach came through the organisation: that grant is
+    #: OWNER over a workspace the person may have no membership row in, so
+    #: there is nothing to depart from.
+    permissions: dict | None = None
 
 
 async def org_role_of(
@@ -110,7 +119,7 @@ async def reachable(session: AsyncSession, user: User) -> list[WorkspaceAccess]:
     explanation the moment somebody suspended it.
     """
     memberships = {
-        m.workspace_id: m.role
+        m.workspace_id: m
         for m in (await session.scalars(
             select(Membership).where(Membership.user_id == user.id)
         )).all()
@@ -137,11 +146,26 @@ async def reachable(session: AsyncSession, user: User) -> list[WorkspaceAccess]:
     for workspace in workspaces.values():
         org_role = org_roles.get(workspace.organization_id)
         via_org = org_role in ORG_ROLES_WITH_WORKSPACE_ACCESS
+        membership = memberships.get(workspace.id)
         try:
-            role = effective_role(user, memberships.get(workspace.id), org_role)
+            role = effective_role(
+                user, membership.role if membership else None, org_role
+            )
         except LookupError:                                   # pragma: no cover
             continue
-        out.append(WorkspaceAccess(workspace=workspace, role=role, via_organization=via_org))
+        # A platform admin or an organisation administrator holds the workspace
+        # outright; a map stored on some membership of theirs must not narrow
+        # that, or administering a workspace would depend on never having been
+        # given a restricted seat in it.
+        overrides = (
+            membership.permissions
+            if membership and not via_org and not user.is_platform_admin
+            else None
+        )
+        out.append(WorkspaceAccess(
+            workspace=workspace, role=role, via_organization=via_org,
+            permissions=overrides,
+        ))
 
     # Active first, then by name: the switcher should open on something usable.
     out.sort(key=lambda a: (a.workspace.status is not WorkspaceStatus.ACTIVE,
