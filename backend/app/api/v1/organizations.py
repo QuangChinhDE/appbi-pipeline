@@ -17,12 +17,15 @@ from app.api.deps import CtxDep, SessionDep
 from app.core.errors import ForbiddenError, ResourceInUseError, ValidationError
 from app.core.permissions import Action, OrgRole, Role
 from app.core.security import hash_password, password_problems
-from app.models.enums import PipelineStatus, ResourceStatus, WorkspaceStatus
+from app.models.enums import PipelineStatus, ResourceStatus, RunStatus, WorkspaceStatus
 from app.models.integration import Destination, Pipeline, Source
+from app.models.run import PipelineRun
 from app.models.identity import Membership, Organization, OrganizationMembership, User, Workspace
 from app.transforms.models import TransformProject
 from app.schemas.domain import (
     MemberInvite, MemberRoleUpdate, MemberView,
+    OrganizationOverview, OrganizationPeople, PersonAcrossWorkspaces,
+    WorkspaceHealth, WorkspaceSeat,
     OrganizationSummary, OrganizationUpdate, OrgMemberInvite, OrgMemberRoleUpdate, OrgMemberView,
     WorkspaceCreate, WorkspaceSummary,
 )
@@ -107,6 +110,196 @@ async def update_organization(
         id=organization.id, name=organization.name, slug=organization.slug,
         role=ctx.org_role.value if ctx.org_role else None,
         status=organization.status.value,
+    )
+
+
+#: A run in one of these states is the pipeline's problem, not a transient.
+_BAD_RUN = (RunStatus.FAILED, RunStatus.FAILED_TO_START, RunStatus.TIMED_OUT)
+_LIVE_RUN = (RunStatus.QUEUED, RunStatus.STARTING, RunStatus.RUNNING)
+
+
+@router.get("/organization/overview", response_model=OrganizationOverview)
+async def organization_overview(session: SessionDep, ctx: CtxDep) -> OrganizationOverview:
+    """Which workspace needs somebody today.
+
+    A workspace is a wall: nothing inside one is visible from another, which is
+    the tenancy guarantee and also the reason an administrator of eight of them
+    had no way to learn that one was failing without opening all eight. This is
+    the one place that looks across, and it is gated on administering the
+    organisation rather than on any workspace permission.
+    """
+    ctx.require_org(Action.ADMIN)
+    organization_id = _org_id(ctx)
+    workspaces = (await session.scalars(
+        select(Workspace).where(Workspace.organization_id == organization_id)
+        .order_by(Workspace.name)
+    )).all()
+    ids = [w.id for w in workspaces]
+    if not ids:
+        return OrganizationOverview()
+
+    # Grouped aggregates rather than a handful of queries per workspace: this
+    # page exists because opening eight workspaces was the old way to answer
+    # it, and doing eight round trips server-side would be the same mistake
+    # indoors.
+    seats = dict((await session.execute(
+        select(Membership.workspace_id, func.count())
+        .where(Membership.workspace_id.in_(ids))
+        .group_by(Membership.workspace_id)
+    )).all())
+
+    live_pipeline = Pipeline.status.notin_(
+        (PipelineStatus.DELETED, PipelineStatus.DELETE_PENDING)
+    )
+    pipelines = dict((await session.execute(
+        select(Pipeline.workspace_id, func.count())
+        .where(Pipeline.workspace_id.in_(ids), live_pipeline)
+        .group_by(Pipeline.workspace_id)
+    )).all())
+
+    # The latest run per pipeline, then counted by outcome. A pipeline that
+    # failed last night and succeeded this morning is not failing.
+    latest = (
+        select(
+            PipelineRun.pipeline_id,
+            func.max(PipelineRun.created_at).label("at"),
+        )
+        .where(PipelineRun.workspace_id.in_(ids))
+        .group_by(PipelineRun.pipeline_id)
+        .subquery()
+    )
+    newest = (
+        select(PipelineRun.workspace_id, PipelineRun.status)
+        .join(
+            latest,
+            (PipelineRun.pipeline_id == latest.c.pipeline_id)
+            & (PipelineRun.created_at == latest.c.at),
+        )
+        .subquery()
+    )
+    failing: dict = {}
+    running: dict = {}
+    for workspace_id, status, count in (await session.execute(
+        select(newest.c.workspace_id, newest.c.status, func.count())
+        .group_by(newest.c.workspace_id, newest.c.status)
+    )).all():
+        if status in _BAD_RUN:
+            failing[workspace_id] = failing.get(workspace_id, 0) + count
+        elif status in _LIVE_RUN:
+            running[workspace_id] = running.get(workspace_id, 0) + count
+
+    last_run = dict((await session.execute(
+        select(PipelineRun.workspace_id, func.max(PipelineRun.created_at))
+        .where(PipelineRun.workspace_id.in_(ids))
+        .group_by(PipelineRun.workspace_id)
+    )).all())
+
+    mine = {
+        m.workspace_id
+        for m in (await session.scalars(
+            select(Membership).where(Membership.user_id == ctx.user_id)
+        )).all()
+    }
+    people = await session.scalar(
+        select(func.count()).select_from(OrganizationMembership)
+        .where(OrganizationMembership.organization_id == organization_id)
+    )
+
+    rows = [
+        WorkspaceHealth(
+            id=w.id, name=w.name, slug=w.slug, status=w.status.value,
+            member_count=seats.get(w.id, 0),
+            pipeline_count=pipelines.get(w.id, 0),
+            failing_count=failing.get(w.id, 0),
+            running_count=running.get(w.id, 0),
+            last_run_at=last_run.get(w.id),
+            via_organization=w.id not in mine,
+        )
+        for w in workspaces
+    ]
+    return OrganizationOverview(
+        workspaces=rows,
+        total_workspaces=len(rows),
+        total_pipelines=sum(r.pipeline_count for r in rows),
+        total_failing=sum(r.failing_count for r in rows),
+        total_people=people or 0,
+    )
+
+
+@router.get("/organization/people", response_model=OrganizationPeople)
+async def organization_people(session: SessionDep, ctx: CtxDep) -> OrganizationPeople:
+    """Everybody, and everywhere they can reach.
+
+    A workspace's member list answers "who is in here"; the organisation's
+    answers "who is in the organisation". Neither answers "where can this
+    person go", which is the question asked when somebody changes team or
+    leaves -- and answering it meant opening every workspace in turn.
+
+    Includes people who hold a workspace seat without an organisation row. They
+    exist and they can sign in, and leaving them off a page called People would
+    make it a list that quietly disagrees with who has access.
+    """
+    ctx.require_org(Action.ADMIN)
+    organization_id = _org_id(ctx)
+    workspaces = (await session.scalars(
+        select(Workspace).where(Workspace.organization_id == organization_id)
+        .order_by(Workspace.name)
+    )).all()
+    ids = [w.id for w in workspaces]
+
+    org_rows = {
+        m.user_id: m
+        for m in (await session.scalars(
+            select(OrganizationMembership)
+            .where(OrganizationMembership.organization_id == organization_id)
+        )).all()
+    }
+    memberships = list((await session.scalars(
+        select(Membership).where(Membership.workspace_id.in_(ids))
+    )).all()) if ids else []
+
+    user_ids = set(org_rows) | {m.user_id for m in memberships}
+    users = {
+        u.id: u
+        for u in (await session.scalars(
+            select(User).where(User.id.in_(user_ids))
+        )).all()
+    } if user_ids else {}
+
+    seats: dict = {}
+    for membership in memberships:
+        seats.setdefault(membership.user_id, []).append(
+            WorkspaceSeat(
+                workspace_id=membership.workspace_id,
+                membership_id=membership.id,
+                role=membership.role.value,
+                customised=bool(membership.permissions),
+            )
+        )
+
+    people = [
+        PersonAcrossWorkspaces(
+            user_id=user.id, email=user.email, full_name=user.full_name,
+            is_active=user.is_active, auth_provider=user.auth_provider,
+            org_role=(
+                org_rows[user.id].role.value if user.id in org_rows else None
+            ),
+            org_membership_id=org_rows[user.id].id if user.id in org_rows else None,
+            seats=seats.get(user.id, []),
+        )
+        for user in users.values()
+    ]
+    people.sort(key=lambda person: (person.full_name or person.email).lower())
+
+    return OrganizationPeople(
+        people=people,
+        workspaces=[
+            WorkspaceSummary(
+                id=w.id, name=w.name, slug=w.slug, timezone=w.timezone,
+                status=w.status.value,
+            )
+            for w in workspaces
+        ],
     )
 
 

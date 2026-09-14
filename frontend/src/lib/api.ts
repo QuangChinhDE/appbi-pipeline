@@ -8,6 +8,8 @@
 
 import type {
   AuthMethods,
+  OrganizationOverview,
+  OrganizationPeople,
   PermissionCatalog,
   PermissionMap,
   GenerateModelRequest, WarehouseColumns,
@@ -195,6 +197,10 @@ export const workspaceApi = {
 // ── organisation: the tenant that owns workspaces ──────────────────────────
 export const organizationApi = {
   get: () => get<OrganizationSummary>('/organization'),
+  // The two questions no workspace-scoped screen can answer: which workspace
+  // needs somebody today, and where can one person go.
+  overview: () => get<OrganizationOverview>('/organization/overview'),
+  people: () => get<OrganizationPeople>('/organization/people'),
   rename: (name: string) => patch<OrganizationSummary>('/organization', { name }),
   workspaces: () => get<WorkspaceSummary[]>('/organization/workspaces'),
   createWorkspace: (body: { name: string; slug: string; timezone?: string }) =>

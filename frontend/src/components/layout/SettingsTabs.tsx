@@ -7,32 +7,24 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { cn } from '@/lib/utils';
 
 interface SettingsTab {
-  id: 'workspace' | 'access' | 'organization' | 'engine';
+  id: 'workspace' | 'access' | 'engine';
   href: string;
   labelKey: string;
   adminOnly?: boolean;
-  /** Hidden for an account that belongs to no organisation, which is only
-   * possible on a deployment mid-upgrade. A tab that 403s is worse than one
-   * that is not there. */
-  orgOnly?: boolean;
 }
 
-// Workspace settings first, then the organisation above it: the tabs read
-// inner-to-outer, which is the order somebody looking for "who can open this"
-// actually walks.
+// Everything here is scoped to the workspace being used. The organisation sat
+// on this row too, which made "which of my workspaces is failing" a question
+// asked from inside one particular workspace; it has its own console now.
 const TABS: SettingsTab[] = [
   { id: 'workspace', href: '/settings/workspace', labelKey: 'settings.workspace' },
   { id: 'access', href: '/settings/access', labelKey: 'settings.access' },
-  {
-    id: 'organization', href: '/settings/organization',
-    labelKey: 'settings.organization', orgOnly: true,
-  },
   { id: 'engine', href: '/settings/engine', labelKey: 'settings.engine', adminOnly: true },
 ];
 
 export function SettingsTabs({ active }: { active: SettingsTab['id'] }) {
   const { t } = useI18n();
-  const { isPlatformAdmin, organization } = usePermissions();
+  const { isPlatformAdmin } = usePermissions();
 
   return (
     <nav
@@ -40,8 +32,7 @@ export function SettingsTabs({ active }: { active: SettingsTab['id'] }) {
       className="mb-4 flex items-center gap-1 border-b border-[rgb(var(--border-line))]"
     >
       {TABS
-        .filter((tab) => (!tab.adminOnly || isPlatformAdmin)
-          && (!tab.orgOnly || organization !== null))
+        .filter((tab) => !tab.adminOnly || isPlatformAdmin)
         .map((tab) => (
         <Link
           key={tab.id}

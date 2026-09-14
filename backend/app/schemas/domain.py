@@ -210,6 +210,84 @@ class MemberRoleUpdate(BaseModel):
     permissions: dict[str, list[str] | str] | None = None
 
 
+class WorkspaceHealth(BaseModel):
+    """One workspace as the organisation console sees it.
+
+    Deliberately not `WorkspaceSummary` with more fields bolted on: that type
+    answers "which workspaces may I open", and is sent to every browser on
+    every page load. This one answers "which of them needs somebody today",
+    costs several aggregates, and is asked for by one screen.
+    """
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    status: str
+    member_count: int = 0
+    pipeline_count: int = 0
+    #: Pipelines whose latest run did not succeed. The number somebody scanning
+    #: this page is actually looking for.
+    failing_count: int = 0
+    running_count: int = 0
+    last_run_at: datetime | None = None
+    #: True when the reader holds no membership row here and reaches it only by
+    #: administering the organisation.
+    via_organization: bool = False
+
+
+class OrganizationOverview(BaseModel):
+    workspaces: list[WorkspaceHealth] = Field(default_factory=list)
+    total_workspaces: int = 0
+    total_pipelines: int = 0
+    total_failing: int = 0
+    total_people: int = 0
+
+
+class WorkspaceSeat(BaseModel):
+    """One cell of the people-by-workspace grid."""
+
+    workspace_id: uuid.UUID
+    #: The membership row, which is what the seat endpoints address. Sent with
+    #: the cell rather than looked up when one changes: the grid is the only
+    #: caller, and making it fetch a workspace's whole member list to learn one
+    #: id would be a request per cell edited.
+    membership_id: uuid.UUID
+    role: str
+    #: True once the membership departs from the preset its role names, so the
+    #: grid can say the role is no longer the whole answer.
+    customised: bool = False
+
+
+class PersonAcrossWorkspaces(BaseModel):
+    """One row of the grid: a person, and everywhere they can reach.
+
+    The question no screen could answer before. A workspace's member list shows
+    who is in *it*; the organisation's member list shows who is in the
+    organisation. Neither says where one person can actually go, which is what
+    somebody asks when an employee changes team or leaves.
+    """
+
+    user_id: uuid.UUID
+    email: str
+    full_name: str
+    is_active: bool = True
+    auth_provider: str = "password"
+    #: None for somebody who holds workspace seats without an organisation row.
+    org_role: str | None = None
+    #: The organisation membership row, which is what that endpoint addresses.
+    #: None alongside a None `org_role`, and the two always travel together --
+    #: sending the user id instead was a patch aimed at a row that does not
+    #: exist, answered with "no such member".
+    org_membership_id: uuid.UUID | None = None
+    seats: list[WorkspaceSeat] = Field(default_factory=list)
+
+
+class OrganizationPeople(BaseModel):
+    people: list[PersonAcrossWorkspaces] = Field(default_factory=list)
+    #: The columns, in the order the grid should render them.
+    workspaces: list[WorkspaceSummary] = Field(default_factory=list)
+
+
 class GoogleLoginRequest(BaseModel):
     #: The ID token Google Identity Services hands the page. Verified against
     #: Google's keys and this deployment's client id on the server -- the

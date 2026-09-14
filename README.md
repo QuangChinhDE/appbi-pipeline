@@ -648,15 +648,36 @@ không cần thêm từng cái một. Đó là lý do tầng này tồn tại: t
 workspace tạo hôm nay thì quản trị viên không thấy nó cho tới khi có người thêm
 họ vào — và họ phải làm việc đó cho từng workspace.
 
-**Tạo workspace** nằm ở hai chỗ: nút trong thẻ *Workspace của tổ chức*, và ngay
-dưới bộ chuyển workspace ở góc trên bên trái — vì đó là nơi người ta thực sự đi
-tìm khi cần "một workspace khác".
+#### Console tổ chức: `/admin`
 
-**Đưa người vào một workspace khác** mà không phải chuyển sang nó: bấm **Thành
-viên** trên dòng workspace đó. Danh sách hiện ai đang ở trong, đổi được vai trò
-và gỡ được người. Email đã có tài khoản thì để trống ô mật khẩu — họ vào bằng
-đúng thông tin đăng nhập sẵn có. Muốn chỉnh quyền chi tiết từng khu vực thì vào
-chính workspace ấy, ở *Thành viên & phân quyền*.
+Việc cấp tổ chức có **nơi riêng**, không nằm trong một tab của một workspace
+nào. Lý do đơn giản: hỏi "workspace nào của tôi đang hỏng" mà vẫn đang đứng
+trong một workspace cụ thể thì khung màn hình đang nói một đằng, câu hỏi một
+nẻo. Databricks tách *account console* khỏi workspace cũng vì vậy.
+
+Vào bằng bộ chuyển workspace ở góc trên trái → **Quản trị tổ chức**. Bốn trang:
+
+| Trang | Trả lời câu hỏi |
+|---|---|
+| **Tổng quan** | Workspace nào cần người hôm nay — pipeline hỏng, đang chạy, lần chạy cuối, xuyên qua mọi workspace |
+| **Workspace** | Tạo, thêm người vào, hoặc bước vào một workspace |
+| **Con người** | *Ai có quyền ở đâu* — mỗi dòng một người, mỗi cột một workspace, đổi một ô là cấp / đổi / thu chỗ ngồi |
+| **Tổ chức** | Danh tính tổ chức và ý nghĩa ba vai trò |
+
+Bấm **Vào workspace** là chuyển phiên sang workspace đó và về trang chủ của nó
+— từ đó trở đi mọi thứ thuộc phạm vi workspace như trước, kể cả phần chỉnh
+quyền chi tiết ở *Thành viên & phân quyền*.
+
+**Phân công việc giữa hai tầng** — giống cách Airbyte chia: vai trò tổ chức
+chảy xuống mọi workspace, vai trò workspace chỉ nâng lên chứ không hạ xuống
+dưới mức tổ chức. Cụ thể ở đây:
+
+- **Console** cấp *chỗ ngồi*: người này có mặt ở workspace nào, với vai trò gì.
+- **Trong workspace** chỉnh *quyền chi tiết*: từng khu vực, từng thao tác.
+
+Đưa người vào workspace mà không phải chuyển sang nó: **Workspace → Thành
+viên**, hoặc đổi thẳng một ô trong bảng **Con người**. Email đã có tài khoản
+thì để trống ô mật khẩu — họ vào bằng đúng thông tin đăng nhập sẵn có.
 
 Hai chốt an toàn: không hạ được **Org Owner cuối cùng** của tổ chức, và không
 xoá được **workspace cuối cùng** — cả hai đều sẽ tạo ra một căn phòng khoá từ

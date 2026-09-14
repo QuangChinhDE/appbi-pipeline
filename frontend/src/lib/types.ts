@@ -1265,6 +1265,62 @@ export interface PermissionCatalog {
   presets: Record<string, PermissionMap>;
 }
 
+/**
+ * One workspace as the organisation console sees it.
+ *
+ * Deliberately not `WorkspaceSummary` with fields bolted on: that type answers
+ * "which workspaces may I open" and is sent on every page load. This one
+ * answers "which of them needs somebody today" and is asked for by one screen.
+ */
+export interface WorkspaceHealth {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  member_count: number;
+  pipeline_count: number;
+  /** Pipelines whose latest run did not succeed. */
+  failing_count: number;
+  running_count: number;
+  last_run_at: string | null;
+  via_organization: boolean;
+}
+
+export interface OrganizationOverview {
+  workspaces: WorkspaceHealth[];
+  total_workspaces: number;
+  total_pipelines: number;
+  total_failing: number;
+  total_people: number;
+}
+
+/** One cell of the people-by-workspace grid. */
+export interface WorkspaceSeat {
+  workspace_id: string;
+  /** The membership row the seat endpoints address. */
+  membership_id: string;
+  role: string;
+  customised: boolean;
+}
+
+/** One row: a person, and everywhere they can reach. */
+export interface PersonAcrossWorkspaces {
+  user_id: string;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  auth_provider: string;
+  org_role: string | null;
+  /** The organisation membership row, which is what that endpoint addresses. */
+  org_membership_id: string | null;
+  seats: WorkspaceSeat[];
+}
+
+export interface OrganizationPeople {
+  people: PersonAcrossWorkspaces[];
+  workspaces: WorkspaceSummary[];
+}
+
 /** What the sign-in page should offer. Public; asked before anybody signs in. */
 export interface AuthMethods {
   password: boolean;
