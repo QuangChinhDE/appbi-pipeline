@@ -7,7 +7,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Hammer,
   Activity, Bell, Boxes, Building2, ChevronLeft, ChevronRight, ChevronsUpDown, Check, Database,
-  GitBranch, Globe, Home, LogOut, PlayCircle, Plus, Radar, ScrollText, Settings, Warehouse, Workflow, X,
+  GitBranch, Globe, Home, LayoutGrid, LogOut, PlayCircle, Plus, Radar, ScrollText, Settings,
+  Warehouse, Workflow, X,
 } from 'lucide-react';
 
 import { authApi, opsApi, pipelineApi } from '@/lib/api';
@@ -213,7 +214,7 @@ export function Sidebar({
           {!collapsed ? (
             <div className="flex w-full items-center justify-between">
               <Link
-                href="/overview"
+                href="/workspaces"
                 className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-2"
               >
                 <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-brand text-text-inverse">
@@ -234,7 +235,7 @@ export function Sidebar({
             </div>
           ) : (
             <Link
-              href="/overview"
+              href="/workspaces"
               className="mx-auto flex h-8 w-8 items-center justify-center rounded-md bg-brand text-text-inverse"
               aria-label="AppBI Integration"
             >
@@ -264,12 +265,12 @@ export function Sidebar({
               </div>
               <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-text-quaternary" />
             </button>
-            {/* The console was reachable only by opening this dropdown, so
-                somebody who administers several workspaces had to go looking
-                for the place their day starts. */}
+            {/* Straight to the people grid: `/admin` is a signpost that
+                forwards to the workspace list, which is the page this link is
+                usually rendered next to. */}
             {user.organization_permissions?.includes('admin') && (
               <Link
-                href="/admin"
+                href="/admin/people"
                 className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-caption text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary"
               >
                 <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
@@ -282,6 +283,14 @@ export function Sidebar({
                     new workspace into the session and refresh in place, which
                     left the address unchanged -- so the back button could not
                     undo it and a second tab silently followed along. */}
+                <Link
+                  href="/workspaces"
+                  onClick={() => setWorkspaceMenuOpen(false)}
+                  className="flex w-full items-center gap-2 border-b border-[rgb(var(--border-line))] px-3 py-2 text-left text-caption text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="truncate">{t('sidebar.allWorkspaces')}</span>
+                </Link>
                 {user.workspaces.map((workspace) => (
                   <Link
                     key={workspace.id}
@@ -295,20 +304,6 @@ export function Sidebar({
                     )}
                   </Link>
                 ))}
-                {/* The switcher is where somebody looks for "another
-                    workspace", so it is where "a new one" belongs. Creating
-                    one lived only inside Settings → Organisation, three clicks
-                    away from the question that prompts it. */}
-                {user.organization_permissions?.includes('create') && (
-                  <Link
-                    href="/workspaces"
-                    onClick={() => setWorkspaceMenuOpen(false)}
-                    className="flex w-full items-center gap-2 border-t border-[rgb(var(--border-line))] px-3 py-2 text-left text-caption text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
-                  >
-                    <Plus className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span className="truncate">{t('org.addWorkspace')}</span>
-                  </Link>
-                )}
               </div>
             )}
           </div>

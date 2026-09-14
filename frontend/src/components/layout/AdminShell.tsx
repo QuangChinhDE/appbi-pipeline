@@ -20,7 +20,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Building2, Home, Users } from 'lucide-react';
+import { Building2, Home, Users } from 'lucide-react';
 
 import { organizationApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -80,22 +80,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Back into whichever workspace the session last used. Absent when
-              there is none, rather than a link to nowhere. */}
-          {user?.workspace?.id && (
-            <Link
-              href={`/workspaces/${user.workspace.id}/overview`}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[rgb(var(--border-line))] px-2.5 py-1.5 text-caption text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              {t('admin.backToProduct', { name: user.workspace.name })}
-            </Link>
-          )}
+          {/* No "back to a workspace" button. This *is* home now, and the
+              workspaces are listed on it -- a button naming whichever one the
+              session last remembered asked the reader to go where the cookie
+              wanted rather than where they were going. */}
 
           <nav
             aria-label={t('admin.title')}
             className={cn(
-              '-mb-px w-full items-center gap-1 overflow-x-auto',
+              '-mb-px ml-auto w-full items-center gap-1 overflow-x-auto',
               // A row of one is not a choice, so it is not drawn as one.
               tabs.length > 1 ? 'flex' : 'hidden',
             )}

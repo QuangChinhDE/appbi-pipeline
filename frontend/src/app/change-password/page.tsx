@@ -50,7 +50,7 @@ export default function ChangePasswordPage() {
       // this account is now invalid. Replace the cached session rather than
       // invalidating it, so the next screen does not flash a loading state.
       queryClient.setQueryData(qk.me(), user);
-      router.replace('/overview');
+      router.replace('/workspaces');
     } catch (caught) {
       setError(caught);
     } finally {

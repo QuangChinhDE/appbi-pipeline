@@ -56,9 +56,13 @@ export default function LoginPage() {
 
   const finish = React.useCallback((user: CurrentUser) => {
     queryClient.setQueryData(qk.me(), user);
-    // A bootstrapped or invited account may not enter the product yet; the
-    // API refuses every route until the temporary password is replaced.
-    router.replace(user.password_change_required ? '/change-password' : '/overview');
+    // Signing in lands on the list of workspaces, not inside one. Which
+    // workspace to open is the reader's first decision, and `/overview` made
+    // it for them -- picking whichever one the session last remembered.
+    //
+    // A bootstrapped or invited account may not enter the product yet; the API
+    // refuses every route until the temporary password is replaced.
+    router.replace(user.password_change_required ? '/change-password' : '/workspaces');
   }, [queryClient, router]);
 
   const signInWithGoogle = React.useCallback(async (credential: string) => {
