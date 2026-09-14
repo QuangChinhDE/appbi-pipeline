@@ -14,10 +14,11 @@
  */
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, UserPlus } from 'lucide-react';
 
-import { organizationApi } from '@/lib/api';
+import { authApi, organizationApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { toastError, toastSuccess } from '@/hooks/use-toast';
@@ -25,7 +26,9 @@ import { useI18n } from '@/providers/LanguageProvider';
 import { Badge } from '@/components/ui/Badge';
 import { Input, Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/layout/PageLayout';
+import { AddPersonDialog } from '@/components/settings/AddPersonDialog';
 import type { WorkspaceSeat } from '@/lib/types';
 
 const ROLE_IDS = ['OWNER', 'DATA_ADMIN', 'CONNECTOR_DEV', 'OPERATOR', 'ANALYST', 'AUDITOR'];
@@ -39,6 +42,15 @@ export default function AdminPeoplePage() {
   const queryClient = useQueryClient();
   const { data: me } = useCurrentUser();
   const [filter, setFilter] = React.useState('');
+  const [adding, setAdding] = React.useState(false);
+
+  // Whether an invited account can sign in without a password at all.
+  const authConfig = useQuery({
+    queryKey: ['auth-config'],
+    queryFn: authApi.config,
+    staleTime: Infinity,
+    retry: false,
+  });
 
   const people = useQuery({
     queryKey: ['org-people'],
@@ -115,11 +127,20 @@ export default function AdminPeoplePage() {
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-h3 font-strong text-text-primary">{t('admin.peopleTitle')}</h1>
-        <p className="mt-1 max-w-2xl text-caption text-text-tertiary">
-          {t('admin.peopleSubtitle')}
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-h3 font-strong text-text-primary">{t('admin.peopleTitle')}</h1>
+          <p className="mt-1 max-w-2xl text-caption text-text-tertiary">
+            {t('admin.peopleSubtitle')}
+          </p>
+        </div>
+        {/* Onboarding starts with a person, not with a workspace. It used to
+            start with picking a workspace, which is the wrong end of the
+            sentence an administrator is actually saying. */}
+        <Button variant="primary" onClick={() => setAdding(true)}
+                leadingIcon={<UserPlus className="h-3.5 w-3.5" />}>
+          {t('admin.addPerson')}
+        </Button>
       </header>
 
       <div className="w-full lg:max-w-xs">
@@ -151,9 +172,13 @@ export default function AdminPeoplePage() {
                   {workspaces.map((workspace) => (
                     <th key={workspace.id} scope="col"
                         className="w-48 px-3 py-2.5 font-emphasis">
-                      <span className="block truncate" title={workspace.name}>
+                      <Link
+                        href={`/admin/workspaces/${workspace.id}`}
+                        className="block truncate hover:text-brand"
+                        title={workspace.name}
+                      >
                         {workspace.name}
-                      </span>
+                      </Link>
                     </th>
                   ))}
                 </tr>
@@ -165,9 +190,12 @@ export default function AdminPeoplePage() {
                     <tr key={person.user_id} className="align-top">
                       <td className="px-4 py-2.5">
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-caption font-emphasis text-text-primary">
+                          <Link
+                            href={`/admin/people/${person.user_id}`}
+                            className="text-caption font-emphasis text-text-primary hover:text-brand"
+                          >
                             {person.full_name}
-                          </span>
+                          </Link>
                           {isMe && (
                             <Badge variant="subtle" size="xs">{t('settings.you')}</Badge>
                           )}
@@ -257,6 +285,14 @@ export default function AdminPeoplePage() {
         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
         <span className={cn('max-w-3xl')}>{t('admin.peopleFootnote')}</span>
       </p>
+
+      <AddPersonDialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        workspaces={workspaces}
+        people={people.data?.people ?? []}
+        googleAvailable={Boolean(authConfig.data?.google)}
+      />
     </div>
   );
 }

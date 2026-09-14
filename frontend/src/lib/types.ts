@@ -1316,6 +1316,36 @@ export interface PersonAcrossWorkspaces {
   seats: WorkspaceSeat[];
 }
 
+/** One workspace, one role: what a seat is, as an administrator picks it. */
+export interface SeatGrant {
+  workspace_id: string;
+  role: string;
+}
+
+/** Somebody joining, and everywhere they join at once. */
+export interface OrgPersonCreate {
+  email: string;
+  full_name: string;
+  password?: string;
+  org_role?: string;
+  seats?: SeatGrant[];
+  /** Copy every seat this person holds instead of listing them by hand. */
+  like_user_id?: string;
+}
+
+/** What actually moved, so the screen can report it rather than claim it. */
+export interface AccessChange {
+  workspace_id: string;
+  workspace_name: string;
+  action: 'granted' | 'changed' | 'removed';
+  role: string | null;
+}
+
+export interface AccessChangeReport {
+  changes: AccessChange[];
+  account_deactivated: boolean;
+}
+
 export interface OrganizationPeople {
   people: PersonAcrossWorkspaces[];
   workspaces: WorkspaceSummary[];

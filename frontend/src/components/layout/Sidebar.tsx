@@ -244,6 +244,18 @@ export function Sidebar({
               </div>
               <ChevronsUpDown className="h-3.5 w-3.5 flex-shrink-0 text-text-quaternary" />
             </button>
+            {/* The console was reachable only by opening this dropdown, so
+                somebody who administers several workspaces had to go looking
+                for the place their day starts. */}
+            {user.organization_permissions?.includes('admin') && (
+              <Link
+                href="/admin"
+                className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-caption text-text-tertiary transition-colors hover:bg-surface-2 hover:text-text-primary"
+              >
+                <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">{t('admin.open')}</span>
+              </Link>
+            )}
             {workspaceMenuOpen && (
               <div className="absolute left-2 right-2 z-50 mt-1 overflow-hidden rounded-lg border border-[rgb(var(--border-strong))] bg-surface-1 shadow-popover">
                 {user.workspaces.map((workspace) => (
@@ -266,16 +278,6 @@ export function Sidebar({
                     workspace", so it is where "a new one" belongs. Creating
                     one lived only inside Settings → Organisation, three clicks
                     away from the question that prompts it. */}
-                {user.organization_permissions?.includes('admin') && (
-                  <Link
-                    href="/admin"
-                    onClick={() => setWorkspaceMenuOpen(false)}
-                    className="flex w-full items-center gap-2 border-t border-[rgb(var(--border-line))] px-3 py-2 text-left text-caption text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
-                  >
-                    <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span className="truncate">{t('admin.open')}</span>
-                  </Link>
-                )}
                 {user.organization_permissions?.includes('create') && (
                   <Link
                     href="/settings/organization"

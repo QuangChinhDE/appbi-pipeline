@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, SlidersHorizontal, UserPlus } from 'lucide-react';
+import { Building2, ShieldCheck, SlidersHorizontal, UserPlus } from 'lucide-react';
 
 import { authApi, workspaceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
@@ -141,6 +142,20 @@ export default function AccessSettingsPage() {
       }
     >
       <SettingsTabs active="access" />
+
+      {/* Half of this job lives one level up: who is in *which* workspaces is
+          an organisation question, and somebody looking at this screen for it
+          would otherwise find only the workspace they are standing in. */}
+      {can('members', 'view') && me?.organization_permissions?.includes('admin') && (
+        <Link
+          href="/admin/people"
+          className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[rgb(var(--border-line))] bg-surface-2 px-3 py-2 text-caption text-text-secondary transition-colors hover:text-text-primary"
+        >
+          <Building2 className="h-3.5 w-3.5 flex-shrink-0 text-text-quaternary" />
+          <span className="min-w-0 flex-1">{t('settings.orgConsoleHint')}</span>
+          <span className="text-brand">{t('admin.open')} →</span>
+        </Link>
+      )}
 
       <div className="space-y-4">
         {/* Side by side once there is room for both. The members table has four

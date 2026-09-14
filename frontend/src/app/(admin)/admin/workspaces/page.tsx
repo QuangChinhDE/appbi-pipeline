@@ -10,6 +10,8 @@
  */
 
 import * as React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Plus, Users } from 'lucide-react';
 
@@ -24,8 +26,6 @@ import { Input, Label } from '@/components/ui/Input';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { Card } from '@/components/layout/PageLayout';
-import { WorkspaceMembersDialog } from '@/components/settings/WorkspaceMembersDialog';
-import type { WorkspaceSummary } from '@/lib/types';
 
 /** Lower-case, digits and dashes — what the API will accept, applied while
  *  typing so the rejection never has to happen. */
@@ -44,11 +44,11 @@ export default function AdminWorkspacesPage() {
   const queryClient = useQueryClient();
   const { canOrg } = usePermissions();
   const switchWorkspace = useWorkspaceSwitch();
+  const router = useRouter();
 
   const [creating, setCreating] = React.useState(false);
   const [draft, setDraft] = React.useState({ name: '', slug: '' });
   const [slugTouched, setSlugTouched] = React.useState(false);
-  const [seatsFor, setSeatsFor] = React.useState<WorkspaceSummary | null>(null);
   const [dropping, setDropping] = React.useState<{ id: string; name: string } | null>(null);
 
   const workspaces = useQuery({
@@ -117,9 +117,12 @@ export default function AdminWorkspacesPage() {
                   className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
                 <span className="min-w-0 flex-1 basis-56">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-small font-emphasis text-text-primary">
+                    <Link
+                      href={`/admin/workspaces/${workspace.id}`}
+                      className="truncate text-small font-emphasis text-text-primary hover:text-brand"
+                    >
                       {workspace.name}
-                    </span>
+                    </Link>
                     {workspace.status !== 'ACTIVE' && (
                       <Badge variant="warning" size="xs">{workspace.status}</Badge>
                     )}
@@ -139,14 +142,24 @@ export default function AdminWorkspacesPage() {
                 </span>
 
                 {canOrg('admin') && (
-                  <Button size="xs" variant="ghost"
-                          leadingIcon={<Users className="h-3 w-3" />}
-                          onClick={() => setSeatsFor(workspace)}>
-                    {t('org.manageSeats')}
-                  </Button>
+                  <Link href={`/admin/workspaces/${workspace.id}`}>
+                    <Button size="xs" variant="ghost"
+                            leadingIcon={<Users className="h-3 w-3" />}>
+                      {t('org.manageSeats')}
+                    </Button>
+                  </Link>
                 )}
-                <Button size="xs" variant="secondary"
-                        onClick={() => switchWorkspace(workspace.id)}>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  onClick={async () => {
+                    // Switching moves the session, not the reader. Without the
+                    // push this button changed which workspace you were in and
+                    // left you looking at the list of workspaces.
+                    await switchWorkspace(workspace.id);
+                    router.push('/overview');
+                  }}
+                >
                   {t('admin.openWorkspace')}
                   <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
@@ -210,13 +223,6 @@ export default function AdminWorkspacesPage() {
           </div>
         </div>
       </Modal>
-
-      <WorkspaceMembersDialog
-        workspace={seatsFor}
-        open={Boolean(seatsFor)}
-        onClose={() => setSeatsFor(null)}
-        onChanged={invalidate}
-      />
 
       <ConfirmDialog
         open={Boolean(dropping)}

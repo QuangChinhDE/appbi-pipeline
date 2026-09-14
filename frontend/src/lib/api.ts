@@ -7,9 +7,12 @@
  */
 
 import type {
+  AccessChangeReport,
   AuthMethods,
+  OrgPersonCreate,
   OrganizationOverview,
   OrganizationPeople,
+  PersonAcrossWorkspaces,
   PermissionCatalog,
   PermissionMap,
   GenerateModelRequest, WarehouseColumns,
@@ -201,6 +204,19 @@ export const organizationApi = {
   // needs somebody today, and where can one person go.
   overview: () => get<OrganizationOverview>('/organization/overview'),
   people: () => get<OrganizationPeople>('/organization/people'),
+  person: (userId: string) =>
+    get<PersonAcrossWorkspaces>(`/organization/people/${userId}`),
+  // Onboarding is one decision made once. Spelling it as one invitation per
+  // workspace is how the third workspace gets forgotten.
+  addPerson: (body: OrgPersonCreate) =>
+    post<PersonAcrossWorkspaces>('/organization/people', body),
+  copyAccess: (userId: string, body: { from_user_id: string; mode?: string }) =>
+    post<AccessChangeReport>(`/organization/people/${userId}/copy-access`, body),
+  /** Every seat and the organisation row, in one action, with a report of what
+   *  went — "removed" and "removed from the two places I remembered" look the
+   *  same otherwise. */
+  offboard: (userId: string) =>
+    del<AccessChangeReport>(`/organization/people/${userId}`),
   rename: (name: string) => patch<OrganizationSummary>('/organization', { name }),
   workspaces: () => get<WorkspaceSummary[]>('/organization/workspaces'),
   createWorkspace: (body: { name: string; slug: string; timezone?: string }) =>

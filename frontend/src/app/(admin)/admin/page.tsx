@@ -12,6 +12,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowRight, CheckCircle2, PlayCircle } from 'lucide-react';
 
@@ -27,6 +28,7 @@ import { CardSkeleton, EmptyState, ErrorState } from '@/components/ui/Feedback';
 export default function AdminOverviewPage() {
   const { t, locale } = useI18n();
   const switchWorkspace = useWorkspaceSwitch();
+  const router = useRouter();
 
   const overview = useQuery({
     queryKey: ['org-overview'],
@@ -35,9 +37,11 @@ export default function AdminOverviewPage() {
   });
 
   const open = async (id: string) => {
-    // Entering a workspace from here moves the session, which is the whole
-    // point of the door: everything past it is scoped to that workspace.
+    // Switching moves the session; it does not move the reader. A button that
+    // says "enter workspace" and leaves you on the page you were already on is
+    // a door painted on a wall, so the navigation is explicit here.
     await switchWorkspace(id);
+    router.push('/overview');
   };
 
   if (overview.error) {

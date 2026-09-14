@@ -660,9 +660,27 @@ Vào bằng bộ chuyển workspace ở góc trên trái → **Quản trị tổ
 | Trang | Trả lời câu hỏi |
 |---|---|
 | **Tổng quan** | Workspace nào cần người hôm nay — pipeline hỏng, đang chạy, lần chạy cuối, xuyên qua mọi workspace |
-| **Workspace** | Tạo, thêm người vào, hoặc bước vào một workspace |
-| **Con người** | *Ai có quyền ở đâu* — mỗi dòng một người, mỗi cột một workspace, đổi một ô là cấp / đổi / thu chỗ ngồi |
+| **Workspace** | Danh sách · tạo mới · bấm vào tên để mở **trang riêng của một workspace**: sức khoẻ, ai ở trong, cấp chỗ |
+| **Con người** | *Ai có quyền ở đâu* — mỗi dòng một người, mỗi cột một workspace. Bấm tên để mở **trang riêng của một người** |
 | **Tổ chức** | Danh tính tổ chức và ý nghĩa ba vai trò |
+
+**Quản trị viên tổ chức có từ 2 workspace sẽ vào thẳng `/admin`** sau khi đăng
+nhập — câu hỏi đầu ngày của họ là "cái nào cần tôi", mà không workspace nào tự
+trả lời được từ bên trong. Ai chỉ có một workspace vẫn vào thẳng làm việc.
+
+#### Ba việc thường làm với một con người
+
+- **Nhận vào** — *Con người → Thêm người*. Một lần khai, chọn luôn vào những
+  workspace nào với vai trò gì. Hoặc chọn **"quyền giống hệt ai đó"** — câu
+  người ta hay nói là *"giống như An"*, và chọn thế thì khỏi phải nhớ An đang
+  có những gì. Chia ra mời từng workspace là cách workspace thứ ba bị quên.
+- **Sao chép quyền** — ở trang riêng của một người. Đặt **bằng đúng**, không
+  phải cộng thêm: workspace nào người kia không có thì người này cũng bị gỡ.
+- **Tiễn ra** — một nút, gỡ khỏi mọi workspace và khỏi tổ chức. Nếu đây là tổ
+  chức duy nhất của họ thì tài khoản bị khoá và **mọi phiên đang mở ngừng hoạt
+  động** — xoá dòng trong bảng không tự làm được việc đó. Kết quả báo rõ đã gỡ
+  khỏi những đâu, vì *"đã gỡ"* và *"đã gỡ khỏi hai chỗ tôi nhớ ra"* trông giống
+  hệt nhau.
 
 Bấm **Vào workspace** là chuyển phiên sang workspace đó và về trang chủ của nó
 — từ đó trở đi mọi thứ thuộc phạm vi workspace như trước, kể cả phần chỉnh

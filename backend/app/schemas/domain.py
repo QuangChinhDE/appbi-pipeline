@@ -282,6 +282,57 @@ class PersonAcrossWorkspaces(BaseModel):
     seats: list[WorkspaceSeat] = Field(default_factory=list)
 
 
+class SeatGrant(BaseModel):
+    """One workspace, one role. What a seat is, as an administrator picks it."""
+
+    workspace_id: uuid.UUID
+    role: str
+
+
+class OrgPersonCreate(_EmailMixin, BaseModel):
+    """Somebody joining, and everywhere they join at once.
+
+    One call rather than one per workspace, because onboarding is one decision
+    made once -- "Minh is on the marketing team, he needs these three" -- and
+    splitting it across three screens is how the third one gets forgotten.
+    """
+
+    email: str = Field(max_length=255)
+    full_name: str = Field(min_length=1, max_length=255)
+    password: str | None = Field(default=None, min_length=MIN_PASSWORD_LENGTH, max_length=200)
+    org_role: str = "ORG_MEMBER"
+    seats: list[SeatGrant] = Field(default_factory=list)
+    #: Copy every seat this person has instead of listing them by hand. The
+    #: most common onboarding sentence is "same as somebody who already does
+    #: this job", and typing it out again is where mistakes come from.
+    like_user_id: uuid.UUID | None = None
+
+
+class CopyAccessRequest(BaseModel):
+    from_user_id: uuid.UUID
+    #: `match` leaves the target holding exactly what the source holds, seats
+    #: removed included. `add` only grants. Match is the default because "make
+    #: Minh like An" means the same, not a superset.
+    mode: str = "match"
+
+
+class AccessChange(BaseModel):
+    """What actually moved, so the interface can report it rather than claim it."""
+
+    workspace_id: uuid.UUID
+    workspace_name: str
+    action: str
+    role: str | None = None
+
+
+class AccessChangeReport(BaseModel):
+    changes: list[AccessChange] = Field(default_factory=list)
+    #: Set when the account itself was disabled -- offboarding somebody who
+    #: belongs to no other organisation should stop them signing in, and saying
+    #: so is the difference between "removed" and "removed, and locked out".
+    account_deactivated: bool = False
+
+
 class OrganizationPeople(BaseModel):
     people: list[PersonAcrossWorkspaces] = Field(default_factory=list)
     #: The columns, in the order the grid should render them.

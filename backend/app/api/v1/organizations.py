@@ -24,6 +24,7 @@ from app.models.identity import Membership, Organization, OrganizationMembership
 from app.transforms.models import TransformProject
 from app.schemas.domain import (
     MemberInvite, MemberRoleUpdate, MemberView,
+    AccessChange, AccessChangeReport, CopyAccessRequest, OrgPersonCreate,
     OrganizationOverview, OrganizationPeople, PersonAcrossWorkspaces,
     WorkspaceHealth, WorkspaceSeat,
     OrganizationSummary, OrganizationUpdate, OrgMemberInvite, OrgMemberRoleUpdate, OrgMemberView,
@@ -299,6 +300,251 @@ async def organization_people(session: SessionDep, ctx: CtxDep) -> OrganizationP
                 status=w.status.value,
             )
             for w in workspaces
+        ],
+    )
+
+
+async def _org_workspaces(session, ctx) -> list[Workspace]:
+    return list((await session.scalars(
+        select(Workspace).where(Workspace.organization_id == _org_id(ctx))
+        .order_by(Workspace.name)
+    )).all())
+
+
+async def _seats_of(session, user_id: uuid.UUID, workspace_ids) -> dict:
+    if not workspace_ids:
+        return {}
+    return {
+        m.workspace_id: m
+        for m in (await session.scalars(
+            select(Membership).where(
+                Membership.user_id == user_id,
+                Membership.workspace_id.in_(workspace_ids),
+            )
+        )).all()
+    }
+
+
+@router.post("/organization/people", response_model=PersonAcrossWorkspaces, status_code=201)
+async def add_person(
+    payload: OrgPersonCreate, session: SessionDep, ctx: CtxDep
+) -> PersonAcrossWorkspaces:
+    """Somebody joins, and lands everywhere they need to, in one call.
+
+    Onboarding is one decision -- "Minh is on the marketing team, he needs
+    these three workspaces" -- and it used to be spelled as one invitation per
+    workspace, from inside each workspace in turn. Three screens is how the
+    third one gets forgotten.
+    """
+    ctx.require_org(Action.ADMIN)
+    workspaces = {w.id: w for w in await _org_workspaces(session, ctx)}
+
+    wanted: dict[uuid.UUID, Role] = {}
+    if payload.like_user_id is not None:
+        # "Same as An" -- read An's seats rather than asking somebody to
+        # transcribe them, which is where a wrong role comes from.
+        for workspace_id, membership in (
+            await _seats_of(session, payload.like_user_id, list(workspaces))
+        ).items():
+            wanted[workspace_id] = membership.role
+    for seat in payload.seats:
+        if seat.workspace_id not in workspaces:
+            raise ValidationError("No such workspace.", code="WORKSPACE_NOT_FOUND")
+        wanted[seat.workspace_id] = member_service.parse_assignable_role(seat.role)
+
+    org_role = _parse_org_role(payload.org_role)
+    user = await member_service.ensure_user(
+        session, email=payload.email, full_name=payload.full_name,
+        password=payload.password,
+    )
+
+    existing_org = await session.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == _org_id(ctx),
+            OrganizationMembership.user_id == user.id,
+        )
+    )
+    if existing_org is None:
+        session.add(OrganizationMembership(
+            organization_id=_org_id(ctx), user_id=user.id, role=org_role,
+        ))
+    for workspace_id, role in wanted.items():
+        await member_service.grant_seat(session, ctx, workspace_id, user, role)
+
+    await audit.record(
+        session, ctx, "org.person.added", resource_type="USER",
+        resource_id=user.id, resource_name=user.email,
+        after={"org_role": org_role.value,
+               "workspaces": [workspaces[i].name for i in wanted]},
+    )
+    await session.commit()
+    return await _person_view(session, ctx, user.id)
+
+
+@router.get("/organization/people/{user_id}", response_model=PersonAcrossWorkspaces)
+async def person_detail(
+    user_id: uuid.UUID, session: SessionDep, ctx: CtxDep
+) -> PersonAcrossWorkspaces:
+    ctx.require_org(Action.ADMIN)
+    return await _person_view(session, ctx, user_id)
+
+
+@router.post(
+    "/organization/people/{user_id}/copy-access", response_model=AccessChangeReport,
+)
+async def copy_access(
+    user_id: uuid.UUID, payload: CopyAccessRequest, session: SessionDep, ctx: CtxDep
+) -> AccessChangeReport:
+    """Make one person's access match another's.
+
+    The sentence an administrator says out loud is "give Minh what An has". It
+    was previously eight dropdowns and a memory of what An had.
+    """
+    ctx.require_org(Action.ADMIN)
+    if payload.from_user_id == user_id:
+        raise ValidationError(
+            "That is the same person.", code="COPY_FROM_SELF",
+        )
+    workspaces = {w.id: w for w in await _org_workspaces(session, ctx)}
+    target = await session.get(User, user_id)
+    if target is None:
+        raise ValidationError("No such person.", code="PERSON_NOT_FOUND")
+
+    source_seats = await _seats_of(session, payload.from_user_id, list(workspaces))
+    target_seats = await _seats_of(session, user_id, list(workspaces))
+    changes: list[AccessChange] = []
+
+    for workspace_id, source in source_seats.items():
+        current = target_seats.get(workspace_id)
+        if current is None:
+            await member_service.grant_seat(
+                session, ctx, workspace_id, target, source.role, source.permissions,
+            )
+            changes.append(AccessChange(
+                workspace_id=workspace_id, workspace_name=workspaces[workspace_id].name,
+                action="granted", role=source.role.value,
+            ))
+        elif current.role != source.role or current.permissions != source.permissions:
+            current.role = source.role
+            current.permissions = source.permissions
+            changes.append(AccessChange(
+                workspace_id=workspace_id, workspace_name=workspaces[workspace_id].name,
+                action="changed", role=source.role.value,
+            ))
+
+    if payload.mode == "match":
+        for workspace_id, membership in target_seats.items():
+            if workspace_id in source_seats:
+                continue
+            await member_service.remove(session, ctx, workspace_id, membership)
+            changes.append(AccessChange(
+                workspace_id=workspace_id, workspace_name=workspaces[workspace_id].name,
+                action="removed",
+            ))
+
+    await audit.record(
+        session, ctx, "org.person.access_copied", resource_type="USER",
+        resource_id=target.id, resource_name=target.email,
+        after={"from": str(payload.from_user_id), "mode": payload.mode,
+               "changes": [c.model_dump(mode="json") for c in changes]},
+    )
+    await session.commit()
+    return AccessChangeReport(changes=changes)
+
+
+@router.delete("/organization/people/{user_id}", response_model=AccessChangeReport)
+async def offboard_person(
+    user_id: uuid.UUID, session: SessionDep, ctx: CtxDep
+) -> AccessChangeReport:
+    """Somebody leaves: every seat, and the organisation row, in one action.
+
+    Doing it seat by seat is how one gets missed, and a missed seat is an
+    account that still opens a warehouse after its owner has left. The report
+    says what actually went, because "removed" and "removed from the two places
+    I remembered" look identical otherwise.
+    """
+    ctx.require_org(Action.ADMIN)
+    if str(user_id) == str(ctx.user_id):
+        raise ValidationError(
+            "You cannot remove your own access.", code="CANNOT_REMOVE_SELF",
+        )
+    target = await session.get(User, user_id)
+    if target is None:
+        raise ValidationError("No such person.", code="PERSON_NOT_FOUND")
+
+    workspaces = {w.id: w for w in await _org_workspaces(session, ctx)}
+    seats = await _seats_of(session, user_id, list(workspaces))
+    changes: list[AccessChange] = []
+    for workspace_id, membership in seats.items():
+        await member_service.remove(session, ctx, workspace_id, membership)
+        changes.append(AccessChange(
+            workspace_id=workspace_id, workspace_name=workspaces[workspace_id].name,
+            action="removed", role=membership.role.value,
+        ))
+
+    org_membership = await session.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == _org_id(ctx),
+            OrganizationMembership.user_id == user_id,
+        )
+    )
+    if org_membership is not None:
+        if org_membership.role is OrgRole.ORG_OWNER:
+            await _assert_not_last_org_owner(session, _org_id(ctx), org_membership.id)
+        await session.delete(org_membership)
+
+    # Only when this was their last organisation. An account that still belongs
+    # somewhere else must keep working -- disabling it here would reach outside
+    # the tenant this call is scoped to.
+    elsewhere = await session.scalar(
+        select(func.count()).select_from(OrganizationMembership).where(
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.organization_id != _org_id(ctx),
+        )
+    )
+    deactivated = False
+    if not elsewhere:
+        target.is_active = False
+        # Sessions already open stop authenticating, which is the half of
+        # "removed" that a row deletion alone does not deliver.
+        target.session_version = (target.session_version or 0) + 1
+        deactivated = True
+
+    await audit.record(
+        session, ctx, "org.person.offboarded", resource_type="USER",
+        resource_id=target.id, resource_name=target.email,
+        after={"removed_from": [c.workspace_name for c in changes],
+               "account_deactivated": deactivated},
+    )
+    await session.commit()
+    return AccessChangeReport(changes=changes, account_deactivated=deactivated)
+
+
+async def _person_view(session, ctx, user_id: uuid.UUID) -> PersonAcrossWorkspaces:
+    user = await session.get(User, user_id)
+    if user is None:
+        raise ValidationError("No such person.", code="PERSON_NOT_FOUND")
+    workspaces = await _org_workspaces(session, ctx)
+    seats = await _seats_of(session, user_id, [w.id for w in workspaces])
+    org_membership = await session.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == _org_id(ctx),
+            OrganizationMembership.user_id == user_id,
+        )
+    )
+    return PersonAcrossWorkspaces(
+        user_id=user.id, email=user.email, full_name=user.full_name,
+        is_active=user.is_active, auth_provider=user.auth_provider,
+        org_role=org_membership.role.value if org_membership else None,
+        org_membership_id=org_membership.id if org_membership else None,
+        seats=[
+            WorkspaceSeat(
+                workspace_id=membership.workspace_id,
+                membership_id=membership.id,
+                role=membership.role.value,
+                customised=bool(membership.permissions),
+            )
+            for membership in seats.values()
         ],
     )
 

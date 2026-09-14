@@ -139,52 +139,57 @@ async def assert_someone_can_administer(
     )
 
 
-async def invite(
-    session: AsyncSession, ctx: RequestContext, workspace_id: uuid.UUID,
-    payload: MemberInvite,
-) -> tuple[Membership, User]:
-    """Put somebody in a workspace, creating the account if it is new."""
-    role = parse_assignable_role(payload.role)
-    overrides = validated_overrides(payload.permissions)
+async def ensure_user(
+    session: AsyncSession, *, email: str, full_name: str, password: str | None,
+) -> User:
+    """The account for this address, creating it if there is none.
 
-    email = payload.email.lower()
+    Whether a password is wanted at all depends on whether an account is being
+    created. Adding a colleague who already works here to a second workspace
+    used to demand one anyway -- which was then thrown away, because their real
+    credential already exists. Asking for a secret in order to ignore it
+    teaches people that the field does not matter.
+    """
+    email = email.strip().lower()
     user = await session.scalar(select(User).where(User.email == email))
+    if user is not None:
+        return user
 
-    # Whether a password is wanted at all depends on whether an account is
-    # being created. Adding a colleague who already works here to a second
-    # workspace used to demand one anyway -- which was then thrown away,
-    # because their real credential already exists. Asking for a secret in
-    # order to ignore it teaches people that the field does not matter.
-    if user is None:
-        if payload.password is None and not settings.google_login_ready:
-            # An account with no password and no Google is an account nobody can
-            # sign in to. Refusing here is kinder than creating it and leaving an
-            # administrator to work out why the person they invited cannot get in.
-            raise ValidationError(
-                "Set a password for this account, or configure Google sign-in first.",
-                code="NO_SIGN_IN_METHOD",
-            )
-        if payload.password is not None:
-            # The same policy the account holder will face when they change it,
-            # and the same one bootstrap enforces.
-            problems = password_problems(payload.password)
-            if problems:
-                raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
-
-    if user is None:
-        user = User(
-            email=email, full_name=payload.full_name,
-            password_hash=hash_password(payload.password) if payload.password else None,
-            auth_provider="password" if payload.password else "google",
-            # Whoever typed this password is not the person who will use the
-            # account. It is a handover secret, not a credential, and it stops
-            # working the moment it is used. Nothing to hand over when they
-            # sign in with Google.
-            password_change_required=bool(payload.password),
+    if password is None and not settings.google_login_ready:
+        # An account with no password and no Google is an account nobody can
+        # sign in to. Refusing here is kinder than creating it and leaving an
+        # administrator to work out why the person they invited cannot get in.
+        raise ValidationError(
+            "Set a password for this account, or configure Google sign-in first.",
+            code="NO_SIGN_IN_METHOD",
         )
-        session.add(user)
-        await session.flush()
+    if password is not None:
+        # The same policy the account holder will face when they change it, and
+        # the same one bootstrap enforces.
+        problems = password_problems(password)
+        if problems:
+            raise ValidationError(" ".join(problems), code="PASSWORD_REQUIREMENTS_UNMET")
 
+    user = User(
+        email=email, full_name=full_name.strip() or email.split("@")[0],
+        password_hash=hash_password(password) if password else None,
+        auth_provider="password" if password else "google",
+        # Whoever typed this password is not the person who will use the
+        # account. It is a handover secret, not a credential, and it stops
+        # working the moment it is used. Nothing to hand over when they sign in
+        # with Google.
+        password_change_required=bool(password),
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def grant_seat(
+    session: AsyncSession, ctx: RequestContext, workspace_id: uuid.UUID,
+    user: User, role: Role, overrides: dict | None = None,
+) -> Membership:
+    """A seat in one workspace for an account that already exists."""
     existing = await session.scalar(
         select(Membership).where(
             Membership.workspace_id == workspace_id, Membership.user_id == user.id
@@ -208,6 +213,25 @@ async def invite(
         after={"role": role.value,
                "permissions": serialise(effective(role, overrides))},
     )
+    return membership
+
+
+async def invite(
+    session: AsyncSession, ctx: RequestContext, workspace_id: uuid.UUID,
+    payload: MemberInvite,
+) -> tuple[Membership, User]:
+    """Put somebody in a workspace, creating the account if it is new.
+
+    The one-workspace spelling of the two calls above, kept because that is
+    what a workspace's own members screen asks for.
+    """
+    role = parse_assignable_role(payload.role)
+    overrides = validated_overrides(payload.permissions)
+    user = await ensure_user(
+        session, email=payload.email, full_name=payload.full_name,
+        password=payload.password,
+    )
+    membership = await grant_seat(session, ctx, workspace_id, user, role, overrides)
     return membership, user
 
 
