@@ -57,6 +57,22 @@ export default function AdminPersonPage() {
     queryFn: organizationApi.permissionCatalog,
     staleTime: 10 * 60 * 1000,
   });
+  // The resolved permission map lives on the workspace's member rows, not on
+  // the seat, so the editor opens with what the gate will actually use. Up
+  // here with the other hooks: below the early returns it ran in a different
+  // order on the render that returns early, which React reads as a different
+  // component.
+  const workspaceIds = (everybody.data?.workspaces ?? []).map((w) => w.id);
+  const memberLists = useQuery({
+    queryKey: ['org-member-maps', workspaceIds.join(',')],
+    enabled: workspaceIds.length > 0,
+    queryFn: async () => {
+      const pairs = await Promise.all(workspaceIds.map(async (id) => [
+        id, await organizationApi.workspaceMembers(id),
+      ] as const));
+      return Object.fromEntries(pairs);
+    },
+  });
 
   const [copyFrom, setCopyFrom] = React.useState('');
   const [copyOpen, setCopyOpen] = React.useState(false);
@@ -153,18 +169,6 @@ export default function AdminPersonPage() {
 
   const data = person.data;
   const workspaces = everybody.data?.workspaces ?? [];
-  // The resolved permission map lives on the workspace's member rows, not on
-  // the seat, so the editor is opened with what the gate will actually use.
-  const memberLists = useQuery({
-    queryKey: ['org-member-maps', workspaces.map((w) => w.id).join(',')],
-    enabled: workspaces.length > 0,
-    queryFn: async () => {
-      const pairs = await Promise.all(workspaces.map(async (workspace) => [
-        workspace.id, await organizationApi.workspaceMembers(workspace.id),
-      ] as const));
-      return Object.fromEntries(pairs);
-    },
-  });
   const members = memberLists.data ?? {};
   const models = (everybody.data?.people ?? [])
     .filter((candidate) => candidate.user_id !== userId && candidate.seats.length > 0);
