@@ -122,6 +122,10 @@ class CurrentUser(BaseModel):
     workspaces: list[WorkspaceSummary] = Field(default_factory=list)
     role: str | None = None
     permissions: dict[str, list[str]] = Field(default_factory=dict)
+    #: The level naming each module's action set, or `custom` where none does.
+    #: Sent so the browser does not keep a second, drifting idea of what `edit`
+    #: means -- it had one, and it disagreed with this one.
+    levels: dict[str, str] = Field(default_factory=dict)
     #: The organisation the active workspace belongs to.
     organization: OrganizationSummary | None = None
     #: Kept beside `permissions` rather than merged into it: organisation

@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ShieldCheck, UserPlus } from 'lucide-react';
+import { ShieldCheck, SlidersHorizontal, UserPlus } from 'lucide-react';
 
-import { workspaceApi } from '@/lib/api';
+import { authApi, workspaceApi } from '@/lib/api';
 import { qk } from '@/lib/queryKeys';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,8 @@ import { Input, Label, Select } from '@/components/ui/Input';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { Card, PageListLayout } from '@/components/layout/PageLayout';
+import { PermissionEditor } from '@/components/settings/PermissionEditor';
+import type { Member, PermissionMap } from '@/lib/types';
 import { SettingsTabs } from '@/components/layout/SettingsTabs';
 
 // Order runs from most to least authority so the picker reads as a ladder.
@@ -34,7 +36,7 @@ export default function AccessSettingsPage() {
   }));
   const workspaceId = useWorkspaceId();
   const queryClient = useQueryClient();
-  const { can, permissions } = usePermissions();
+  const { can, permissions, levels } = usePermissions();
   const { data: me } = useCurrentUser();
 
   const [inviteOpen, setInviteOpen] = React.useState(false);
@@ -55,10 +57,44 @@ export default function AccessSettingsPage() {
     enabled: canViewMembers,
   });
 
+  // Served rather than compiled in, so the editor offers exactly the modules
+  // and actions the API will accept. Only fetched for somebody who can open
+  // the editor -- it sits behind the same permission.
+  // Whether an invited account can sign in without a password at all. The
+  // API refuses to create one that could not, so the form has to know.
+  const authConfig = useQuery({
+    queryKey: ['auth-config'],
+    queryFn: authApi.config,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const googleAvailable = Boolean(authConfig.data?.google);
+
+  const catalog = useQuery({
+    queryKey: ['permission-catalog', workspaceId],
+    queryFn: workspaceApi.permissionCatalog,
+    enabled: canViewMembers,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const [editing, setEditing] = React.useState<Member | null>(null);
+  const [draft, setDraft] = React.useState<PermissionMap>({});
+  const [draftRole, setDraftRole] = React.useState('ANALYST');
+
+  const openEditor = (member: Member) => {
+    setEditing(member);
+    setDraft(member.permissions);
+    setDraftRole(member.role);
+  };
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
 
   const addMember = useMutation({
-    mutationFn: () => workspaceApi.invite(invite),
+    // An empty box means "no password", which is a real answer once Google
+    // sign-in exists -- not an empty string to hash.
+    mutationFn: () => workspaceApi.invite({
+      ...invite, password: invite.password.trim() || undefined,
+    }),
     onSuccess: () => {
       invalidate();
       setInviteOpen(false);
@@ -71,6 +107,16 @@ export default function AccessSettingsPage() {
   const changeRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: string }) => workspaceApi.updateRole(id, role),
     onSuccess: () => { invalidate(); toastSuccess(t('settings.roleUpdated')); },
+    onError: (caught) => toastError(caught),
+  });
+
+  const savePermissions = useMutation({
+    mutationFn: () => workspaceApi.updatePermissions(editing!.id, draft),
+    onSuccess: () => {
+      invalidate();
+      setEditing(null);
+      toastSuccess(t('settings.permissionsUpdated'));
+    },
     onError: (caught) => toastError(caught),
   });
 
@@ -159,11 +205,29 @@ export default function AccessSettingsPage() {
                         ) : (
                           <Badge variant="neutral" size="sm">{member.role}</Badge>
                         )}
+                        {/* A role that no longer describes what this person
+                            holds must say so, or the picker reads as the whole
+                            answer when it is only where the answer started. */}
+                        {member.customised && (
+                          <p className="mt-0.5 text-tiny text-text-quaternary">
+                            {t('settings.roleEdited')}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-caption text-text-tertiary">
                         {formatDateTime(member.created_at, locale)}
                       </td>
                       <td className="px-4 py-2.5 text-right">
+                        {can('members', 'edit') && catalog.data && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            leadingIcon={<SlidersHorizontal className="h-3 w-3" />}
+                            onClick={() => openEditor(member)}
+                          >
+                            {t('settings.editPermissions')}
+                          </Button>
+                        )}
                         {can('members', 'delete') && member.user_id !== me?.id && (
                           <Button
                             size="xs"
@@ -191,7 +255,7 @@ export default function AccessSettingsPage() {
               the list wraps into columns as the room appears. */}
           <ul className="grid gap-x-10 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-2">
             {Object.entries(permissions ?? {}).map(([module, actions]) => {
-              const { level, flags } = summarisePermissions(actions);
+              const { level, flags } = summarisePermissions(actions, levels?.[module]);
               return (
                 <li key={module}
                     className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[rgb(var(--border-line))] py-2 last:border-b-0">
@@ -268,13 +332,81 @@ export default function AccessSettingsPage() {
             </Select>
           </div>
           <div>
-            <Label htmlFor="inv-pw" required hint={t('settings.invitePasswordHint')}>
+            <Label
+              htmlFor="inv-pw"
+              required={!googleAvailable}
+              hint={googleAvailable
+                ? t('settings.invitePasswordOptional')
+                : t('settings.invitePasswordHint')}
+            >
               {t('settings.invitePassword')}
             </Label>
             <Input id="inv-pw" type="password" value={invite.password}
                    onChange={(event) => setInvite({ ...invite, password: event.target.value })} />
+            {googleAvailable && !invite.password.trim() && (
+              <p className="mt-1 text-tiny leading-relaxed text-text-quaternary">
+                {t('settings.inviteGoogleOnly')}
+              </p>
+            )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        size="xl"
+        title={t('settings.editPermissionsFor', { name: editing?.full_name ?? '' })}
+        description={t('settings.editPermissionsBody')}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="primary" size="sm" loading={savePermissions.isPending}
+                    onClick={() => savePermissions.mutate()}>
+              {t('common.save')}
+            </Button>
+          </>
+        }
+      >
+        {editing && catalog.data && (
+          <div className="space-y-3">
+            {/* Picking a preset fills the grid below rather than saving. The
+                administrator sees what the role means before committing to it,
+                which is the thing a role picker on its own never showed. */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-52">
+                <Label htmlFor="perm-preset">{t('settings.startFromRole')}</Label>
+                <Select
+                  id="perm-preset"
+                  size="sm"
+                  value={draftRole}
+                  onChange={(event) => {
+                    const chosen = event.target.value;
+                    setDraftRole(chosen);
+                    const spec = catalog.data?.presets[chosen];
+                    if (spec) setDraft(spec);
+                  }}
+                >
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>{role.label}</option>
+                  ))}
+                </Select>
+              </div>
+              <p className="flex-1 text-tiny leading-relaxed text-text-quaternary">
+                {t('settings.presetHint')}
+              </p>
+            </div>
+
+            <PermissionEditor
+              catalog={catalog.data}
+              value={draft}
+              preset={catalog.data.presets[draftRole]}
+              onChange={setDraft}
+            />
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

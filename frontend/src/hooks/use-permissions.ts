@@ -14,19 +14,10 @@ export type Module =
 export type OrgAction = 'view' | 'create' | 'edit' | 'delete' | 'admin';
 
 export type Action =
-  | 'view' | 'create' | 'edit' | 'operate' | 'delete' | 'admin'
+  | 'view' | 'create' | 'edit' | 'operate' | 'delete'
   // Split out of the four above because they are the decisions people get
   // wrong: reading rows, re-reading history, and replacing a credential.
   | 'view_data' | 'reset' | 'manage_credentials';
-
-/** Ordered least to most authority; the first match wins in the summary. */
-const LEVELS: ReadonlyArray<{ level: string; actions: Action[] }> = [
-  { level: 'full', actions: ['admin'] },
-  { level: 'manage', actions: ['create', 'delete'] },
-  { level: 'edit', actions: ['edit'] },
-  { level: 'operate', actions: ['operate'] },
-  { level: 'view', actions: ['view'] },
-];
 
 /** The three that are worth calling out on their own. */
 export const SENSITIVE_ACTIONS: Action[] = ['view_data', 'reset', 'manage_credentials'];
@@ -34,19 +25,21 @@ export const SENSITIVE_ACTIONS: Action[] = ['view_data', 'reset', 'manage_creden
 /**
  * One plain-language level per module, plus any sensitive powers.
  *
- * The screen used to print all nine action names as badges for each of ten
- * modules -- ninety chips that nobody read. A person checking their own access
- * wants one sentence per area and a flag on the parts that touch real data.
+ * The level is no longer worked out here. This file used to keep its own
+ * ladder -- with rungs called `manage` and `full` that the backend has never
+ * had, matched against an `admin` action no module can be granted -- so the
+ * same permission was described one way on this screen and another by the API
+ * that enforces it. The API sends the level now; this only decides what is
+ * worth flagging beside it.
  */
-export function summarisePermissions(actions: string[] = []): {
-  level: string;
-  flags: Action[];
-} {
+export function summarisePermissions(
+  actions: string[] = [],
+  level: string = 'none',
+): { level: string; flags: Action[] } {
   const held = new Set(actions);
-  const level = LEVELS.find((l) => l.actions.some((a) => held.has(a)))?.level ?? 'none';
-  // "Full access" already says the three sensitive powers are included, so
-  // repeating them on every row of an owner's list is thirty chips that carry
-  // no information. They matter exactly where they are not implied.
+  // "Full access" already says the sensitive powers are included, so repeating
+  // them on every row of an owner's list is thirty chips carrying no
+  // information. They matter exactly where they are not implied.
   const flags = level === 'full' ? [] : SENSITIVE_ACTIONS.filter((a) => held.has(a));
   return { level, flags };
 }
@@ -83,6 +76,7 @@ export function usePermissions() {
 
   return {
     permissions,
+    levels: data?.levels,
     can,
     canOrg,
     organization: data?.organization ?? null,

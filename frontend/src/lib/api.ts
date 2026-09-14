@@ -7,6 +7,9 @@
  */
 
 import type {
+  AuthMethods,
+  PermissionCatalog,
+  PermissionMap,
   GenerateModelRequest, WarehouseColumns,
   Actor, ActorDetail, ActorTestResult, AlertRule, AppNotification, AuditEvent,
   BuilderAIChangeResult, BuilderAIPlan, BuilderAISession, BuilderAISource,
@@ -142,8 +145,15 @@ const del = <T>(path: string, query?: Query) => request<T>('DELETE', path, { que
 
 // ── auth ───────────────────────────────────────────────────────────────────
 export const authApi = {
+  /** What this deployment offers. Asked before anybody has signed in, so the
+   *  page can show the right controls instead of guessing. */
+  config: () => get<AuthMethods>('/auth/config'),
   login: (email: string, password: string) =>
     post<CurrentUser>('/auth/login', { email, password }),
+  /** The ID token Google Identity Services hands the page. Verified on the
+   *  server against Google's keys -- the browser is not trusted about who it
+   *  is, only about passing the token along. */
+  google: (credential: string) => post<CurrentUser>('/auth/google', { credential }),
   logout: () => post<{ ok: boolean }>('/auth/logout'),
   me: () => get<CurrentUser>('/auth/me'),
   // Returns a fresh session: changing the password revokes every token issued
@@ -163,11 +173,23 @@ export const workspaceApi = {
   updateSettings: (body: Partial<WorkspaceSettings>) =>
     patch<WorkspaceSettings>('/workspace/settings', body),
   members: () => get<Member[]>('/workspace/members'),
-  invite: (body: { email: string; full_name: string; role: string; password: string }) =>
-    post<Member>('/workspace/members', body),
+  invite: (body: {
+    email: string; full_name: string; role: string;
+    // Optional since Google sign-in arrived: an account for somebody who signs
+    // in with Google needs no password.
+    password?: string;
+    permissions?: PermissionMap;
+  }) => post<Member>('/workspace/members', body),
+  /** Picking a role re-applies that preset and clears any departure from it. */
   updateRole: (memberId: string, role: string) =>
     patch<Member>(`/workspace/members/${memberId}`, { role }),
+  /** Store an exact map, leaving the role where it is. */
+  updatePermissions: (memberId: string, permissions: PermissionMap) =>
+    patch<Member>(`/workspace/members/${memberId}`, { permissions }),
   removeMember: (memberId: string) => del<void>(`/workspace/members/${memberId}`),
+  /** Modules, their actions, their levels and the presets -- served, not
+   *  compiled in, so the editor cannot drift from what the API enforces. */
+  permissionCatalog: () => get<PermissionCatalog>('/workspace/permission-catalog'),
 };
 
 // ── organisation: the tenant that owns workspaces ──────────────────────────

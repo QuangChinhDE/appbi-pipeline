@@ -367,6 +367,7 @@ async def _current_user_payload(session, user: User, workspace_id) -> CurrentUse
         id=user.id, email=user.email, full_name=user.full_name, locale=user.locale,
         is_platform_admin=user.is_platform_admin, workspace=active, workspaces=summaries,
         role=role_here.value, permissions=serialise(resolved),
+        levels={m.value: level_of(m, resolved.get(m, set())) for m in Module},
         organization=(
             OrganizationSummary(
                 id=organization.id, name=organization.name, slug=organization.slug,

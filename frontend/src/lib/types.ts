@@ -83,6 +83,14 @@ export interface CurrentUser {
   workspaces: WorkspaceSummary[];
   role: string | null;
   permissions: PermissionMap;
+  /**
+   * The level naming each module's action set, or `custom` where none does.
+   * Sent by the API rather than worked out here: this file used to carry its
+   * own ladder -- with rungs called `manage` and `full` that the backend has
+   * never had -- so the same grant was described two different ways depending
+   * on which screen you were on.
+   */
+  levels: Record<string, string>;
   organization: OrganizationSummary | null;
   /**
    * Kept beside `permissions` rather than merged into it: organisation
@@ -1223,6 +1231,40 @@ export interface Member {
   full_name: string;
   role: string;
   created_at: string;
+  /** What this person may actually do, resolved: preset plus any departure. */
+  permissions: PermissionMap;
+  /** Per module, the level naming that action set, or `custom`. */
+  levels: Record<string, string>;
+  /** True once somebody has departed from the preset named by `role`. */
+  customised: boolean;
+  /** `password`, `google`, or `both`. */
+  auth_provider: string;
+}
+
+/** One module as the permission editor should render it. */
+export interface PermissionModule {
+  module: string;
+  actions: string[];
+  levels: string[];
+  level_actions: Record<string, string[]>;
+}
+
+/**
+ * Everything the editor needs, served rather than compiled in. A second copy
+ * of this list in the browser is how a module comes to be editable here while
+ * the backend has never heard of it.
+ */
+export interface PermissionCatalog {
+  modules: PermissionModule[];
+  presets: Record<string, PermissionMap>;
+}
+
+/** What the sign-in page should offer. Public; asked before anybody signs in. */
+export interface AuthMethods {
+  password: boolean;
+  google: boolean;
+  google_client_id: string;
+  google_domains: string[];
 }
 
 export interface WorkspaceSettings {

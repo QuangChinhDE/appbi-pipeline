@@ -659,7 +659,11 @@ vẫn nằm trong kho. Xoá từng cái trước là đường đã dọn đúng
 
 ### Workspace: làm được gì bên trong
 
-Sáu vai trò, gán được cho từng thành viên của từng workspace:
+**Vai trò là điểm bắt đầu, không phải câu trả lời cuối.** Chọn một vai trò cho
+thành viên, rồi vào **Thành viên & phân quyền → Sửa quyền** chỉnh lại từng khu
+vực nếu cần. Vai trò chỉ điền sẵn bảng; cái được lưu là bảng đó.
+
+Sáu vai trò dựng sẵn:
 
 | Vai trò | Dùng cho |
 |---|---|
@@ -669,6 +673,25 @@ Sáu vai trò, gán được cho từng thành viên của từng workspace:
 | `OPERATOR` | Chạy, hủy, thử lại — không sửa cấu hình |
 | `ANALYST` | Chỉ xem, kèm xem dữ liệu Transform |
 | `AUDITOR` | Xem cấu hình và nhật ký kiểm toán, **không xem dữ liệu** |
+
+Mỗi khu vực có một **mức**, và mức chỉ là tên gọi tắt của một nhóm thao tác:
+
+`Không có quyền` → `Chỉ xem` → `Vận hành` → `Sửa cấu hình` → `Toàn quyền`
+
+Nấc đáng để ý nằm ở giữa. **`Vận hành`** tồn tại vì chạy một pipeline và sửa nó
+là hai việc khác nhau — nếu chỉ có `Chỉ xem` và `Sửa`, muốn ai đó bấm Chạy được
+thì phải cho họ đổi tên và xoá luôn. Mức nào một khu vực không phân biệt được
+thì không hiện: **Nhật ký** chỉ có một thao tác nên chỉ hiện hai lựa chọn.
+
+Mở **Chi tiết** để tick từng thao tác. Sửa tay chỗ nào thì mức chỗ đó hiện
+`Tuỳ chỉnh` — đó là sự thật chứ không phải lỗi, và có nút đưa về đúng như vai
+trò. Trong danh sách, thành viên đã chỉnh tay hiện chữ *đã chỉnh riêng* bên
+dưới vai trò, để tên vai trò không tự nhận là toàn bộ câu trả lời.
+
+Mọi thay đổi quyền đều vào **Nhật ký kiểm toán**, kèm *trước → sau* theo từng
+khu vực chứ không chỉ trạng thái mới. Và hệ thống **từ chối thay đổi khiến
+không còn ai quản trị được thành viên** — kể cả khi người đó vẫn mang danh
+Owner.
 
 Ba quyền được tách riêng vì chúng chạm tới dữ liệu thật, và gộp chung là sai:
 
@@ -691,6 +714,34 @@ python scripts/verify-permissions.py     --account owner@example.com:... --accou
 
 Nó báo cả hai chiều — `HOLE` khi endpoint cho qua thứ ma trận cấm, và
 `OVER-BLOCKED` khi ngược lại — và thoát mã 1 nên chặn được deploy.
+
+### Đăng nhập bằng Google
+
+Mật khẩu vẫn dùng được; Google là đường thứ hai chạy song song. Cứ để quản trị
+viên giữ mật khẩu — một client id bị đổi khi đó là chuyện phiền, không phải một
+bản triển khai không ai vào được.
+
+**Google chứng minh bạn là ai; nó không cấp quyền vào.** Email nào chưa được
+mời vào workspace thì bị từ chối, nên danh sách người vào được hệ thống vẫn là
+danh sách do quản trị viên viết — không phải cả một tên miền, càng không phải
+mọi người có tài khoản Google.
+
+Bật lên trong `.env`:
+
+```env
+AUTH_GOOGLE_ENABLED=1
+AUTH_GOOGLE_CLIENT_ID=<client id từ màn hình OAuth consent của Google Cloud>
+AUTH_GOOGLE_ALLOWED_DOMAINS=base.vn     # để trống là nhận mọi tên miền
+AUTH_PASSWORD_LOGIN_ENABLED=1           # tắt nếu chỉ muốn Google
+```
+
+Trong Google Cloud, thêm địa chỉ bạn mở sản phẩm (ví dụ `http://localhost:8080`)
+vào **Authorized JavaScript origins**. Không cần client secret — trình duyệt
+nhận ID token từ Google, và server tự đối chiếu với khoá công khai của Google,
+kiểm cả `aud`, `iss`, hạn dùng và `email_verified`.
+
+Mời người dùng Google: **Thêm thành viên**, nhập email và **để trống ô mật
+khẩu**. Tài khoản đó chỉ vào được bằng Google, với đúng email ấy.
 
 ---
 
