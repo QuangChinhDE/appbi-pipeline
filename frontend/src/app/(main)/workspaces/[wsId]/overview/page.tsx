@@ -284,10 +284,14 @@ export default function OverviewPage() {
                           {tf([signal.detail_code], '', signal.detail_vars)}
                         </span>
                       )}
+                      {/* A backlog is work piling up, not a component that has
+                          stopped. Painting both red made a queue look like an
+                          outage and left nothing louder for the worker that has
+                          actually gone. */}
                       <Badge
                         size="xs"
                         variant={signal.state === 'operational' || signal.state === 'normal'
-                          ? 'success' : 'danger'}
+                          ? 'success' : signal.state === 'backlog' ? 'warning' : 'danger'}
                       >
                         {t(`health.signalState.${signal.state}`)}
                       </Badge>

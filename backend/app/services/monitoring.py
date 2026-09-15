@@ -212,3 +212,85 @@ async def engine_status(
             "reconciliation_lag_seconds": round(lag, 1),
         })
     return payload
+
+
+async def platform_facts(session: AsyncSession) -> dict[str, Any]:
+    """The operational numbers the product judges the platform by.
+
+    Deliberately engine-wide rather than per-workspace: a stalled Transform
+    worker or an unresolved engine operation is not one tenant's problem, and
+    `engine_status` above is already whole-installation for the same reason.
+    Callers turn these into states; nothing here decides what is bad.
+
+    `api/metrics.py` renders the same numbers as gauges. It reads them from
+    here so the two cannot disagree about what "queued" or "alive" means.
+    """
+    # Transform lives in its own vertical slice, so the import is local -- the
+    # same shape `api/metrics.py` uses, and for the same reason.
+    from app.models.outbox import EngineOperation, EngineOperationState
+    from app.transforms.models import TransformInvocation
+
+    now = utcnow()
+    active_statuses = [s for s in RunStatus if s.is_active]
+
+    active_count, oldest_active = (await session.execute(
+        select(func.count(), func.min(TransformInvocation.started_at))
+        .where(TransformInvocation.status.in_(active_statuses))
+    )).one()
+    queued_count, oldest_queued = (await session.execute(
+        select(func.count(), func.min(TransformInvocation.created_at))
+        .where(TransformInvocation.status == RunStatus.QUEUED)
+    )).one()
+
+    # Liveness without a registration table: a worker that is running
+    # heartbeats the run it holds. One that has claimed nothing recently cannot
+    # be told apart from one that is down, so an idle deployment reports alive
+    # and a deployment with work nobody touches does not.
+    recent_heartbeat = (await session.execute(
+        select(func.count()).where(
+            TransformInvocation.status.in_(active_statuses),
+            TransformInvocation.heartbeat_at.is_not(None),
+            TransformInvocation.heartbeat_at
+            >= now - timedelta(seconds=settings.transform_stale_queue_seconds),
+        )
+    )).scalar() or 0
+    queued_age = 0.0 if oldest_queued is None else max(0.0, (now - oldest_queued).total_seconds())
+    stuck_queue = bool(queued_count) and queued_age > settings.transform_stale_queue_seconds
+    worker_alive = not stuck_queue and bool(recent_heartbeat or not active_count)
+
+    open_ops, oldest_open = (await session.execute(
+        select(func.count(), func.min(EngineOperation.updated_at))
+        .where(EngineOperation.state.in_(EngineOperationState.OPEN))
+    )).one()
+
+    # Scheduler backlog, which is the only honest liveness signal available:
+    # there is no scheduler heartbeat, but both schedulers advance
+    # `next_run_at` *before* deciding whether to run, so an ACTIVE pipeline
+    # still sitting in the past was never claimed. Being a little overdue is
+    # normal -- the loop polls every ten seconds -- so the threshold is the
+    # shortest schedule the product will accept. Past that, the scheduler has
+    # missed an entire minimum interval and something is wrong with it.
+    overdue_cutoff = now - timedelta(seconds=settings.min_schedule_interval_seconds)
+    overdue_count, oldest_due = (await session.execute(
+        select(func.count(), func.min(Pipeline.next_run_at)).where(
+            Pipeline.status == PipelineStatus.ACTIVE,
+            Pipeline.deleted_at.is_(None),
+            Pipeline.next_run_at.is_not(None),
+            Pipeline.next_run_at <= overdue_cutoff,
+        )
+    )).one()
+
+    return {
+        "transform_active": int(active_count or 0),
+        "transform_oldest_active_seconds":
+            0.0 if oldest_active is None else max(0.0, (now - oldest_active).total_seconds()),
+        "transform_queued": int(queued_count or 0),
+        "transform_oldest_queued_seconds": queued_age,
+        "transform_worker_alive": worker_alive,
+        "engine_operations_open": int(open_ops or 0),
+        "engine_operation_oldest_open_seconds":
+            0.0 if oldest_open is None else max(0.0, (now - oldest_open).total_seconds()),
+        "scheduler_overdue": int(overdue_count or 0),
+        "scheduler_oldest_overdue_seconds":
+            0.0 if oldest_due is None else max(0.0, (now - oldest_due).total_seconds()),
+    }

@@ -20,7 +20,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import RequestContext
@@ -56,6 +56,22 @@ DURATION_WARN = 2.0
 VOLUME_FLOOR = 50
 #: Fewer than this many comparable runs and there is no "usual" to compare to.
 BASELINE_RUNS = 4
+
+#: A run rate at or above this is good news rather than merely not-bad news.
+#: Used for reliability and for on-time delivery, which are both "what share of
+#: the time did this work" questions and should not answer to two bars.
+HEALTHY_RATE = 95.0
+
+#: Queue depths the product treats as a backlog rather than as being busy.
+#: Pipeline runs are short and many; a Transform build is long and few, so one
+#: waiting Transform is not yet news and twenty waiting syncs is.
+PIPELINE_QUEUE_BACKLOG = 20
+TRANSFORM_QUEUE_BACKLOG = 5
+
+#: An engine operation open longer than this is no longer "in flight". It is
+#: the same ledger the reconciler works from, and an operation it has not
+#: resolved in an hour is holding a resource that carries credentials.
+ENGINE_OPERATION_STALE_SECONDS = 3600
 
 
 def _ref(kind: str, name: str, identifier: uuid.UUID | None = None,
@@ -217,7 +233,8 @@ async def build(session: AsyncSession, ctx: RequestContext) -> DataHealth:
         volume=health.volume, duration=health.duration,
         transform_problems=transform_problems, platform=health.platform,
     )
-    health.metrics = _metrics(health, runs_7d, now)
+    health.metrics = _metrics(health, runs_7d, now, await _previous_week_rate(
+        session, workspace_id, now))
     health.status, health.headline_code, health.headline_vars = _headline(health)
     return health
 
@@ -455,27 +472,91 @@ async def _transforms(
 async def _platform(session: AsyncSession, ctx: RequestContext) -> list[PlatformSignal]:
     """Whether the machinery itself is running.
 
-    Kept to a few words on purpose. An analyst needs to know that a green
-    report is trustworthy; the queue depth is an engineer's question and lives
-    on the Monitoring page.
+    Still a few words rather than a dashboard: an analyst needs to know that a
+    green report is trustworthy, and the depth of a queue is an engineer's
+    question that lives on Monitoring. What changed is which machinery it
+    covers. It used to describe the sync engine and nothing else, so the card
+    could read "operational" while no Transform had executed for a day and the
+    tables behind every report were stale.
+
+    The facts come from `monitoring.platform_facts`, which `api/metrics.py`
+    also reads; the judgement of what counts as bad is made here, once.
     """
     signals: list[PlatformSignal] = []
     try:
         engine = await monitoring.engine_status(session, ctx, detailed=False)
     except Exception:                                             # pragma: no cover
         engine = {}
-    operational = bool(engine.get("operational", engine.get("healthy", True)))
-    signals.append(PlatformSignal(
-        key="sync_engine", state="operational" if operational else "down",
-    ))
+    try:
+        facts = await monitoring.platform_facts(session)
+    except Exception:                                             # pragma: no cover
+        facts = {}
 
-    queued = int(engine.get("queued") or 0)
+    signals.append(PlatformSignal(
+        key="sync_engine",
+        state="operational" if bool(engine.get("operational", True)) else "down",
+    ))
+    signals.extend(_platform_signals(facts, engine))
+    return signals
+
+
+def _platform_signals(facts: dict, engine: dict) -> list[PlatformSignal]:
+    """Facts to states. Pure, so the thresholds can be tested without a database."""
+    signals: list[PlatformSignal] = []
+
+    # The engine's own contract calls this `queued_runs`. Reading `queued` --
+    # a key it has never returned -- meant the card reported an empty queue
+    # however deep the real one was, which is the most reassuring way to be
+    # wrong.
+    queued = int(engine.get("queued_runs") or 0)
     signals.append(PlatformSignal(
         key="pipeline_queue",
-        state="normal" if queued < 20 else "backlog",
+        state="normal" if queued < PIPELINE_QUEUE_BACKLOG else "backlog",
         detail_code="health.platform.queued" if queued else None,
         detail_vars={"n": queued} if queued else {},
     ))
+
+    if facts:
+        # A worker that is down moves nothing, so nothing turns red on its own.
+        # This is the signal that would have paged.
+        alive = bool(facts.get("transform_worker_alive", True))
+        signals.append(PlatformSignal(
+            key="transform_worker", state="operational" if alive else "down",
+        ))
+
+        tq = int(facts.get("transform_queued") or 0)
+        signals.append(PlatformSignal(
+            key="transform_queue",
+            state="normal" if tq < TRANSFORM_QUEUE_BACKLOG else "backlog",
+            detail_code="health.platform.queued" if tq else None,
+            detail_vars={"n": tq} if tq else {},
+        ))
+
+        # No scheduler heartbeat exists, so this claims only what it can see.
+        # Both schedulers advance `next_run_at` before deciding whether to run,
+        # so a pipeline still due past a whole minimum interval was never
+        # claimed. "normal" here means no evidence of a problem -- not proof
+        # that a scheduler process is alive, which nothing here can prove.
+        overdue = int(facts.get("scheduler_overdue") or 0)
+        signals.append(PlatformSignal(
+            key="scheduler",
+            state="normal" if not overdue else "backlog",
+            detail_code="health.platform.overdue" if overdue else None,
+            detail_vars={"n": overdue} if overdue else {},
+        ))
+
+        # An open operation means the product and the engine may disagree, and
+        # the engine's side of that disagreement holds credentials. In flight
+        # is fine; unresolved for an hour is not.
+        open_ops = int(facts.get("engine_operations_open") or 0)
+        stale = float(facts.get("engine_operation_oldest_open_seconds") or 0.0)
+        signals.append(PlatformSignal(
+            key="engine_operations",
+            state="normal" if not (open_ops and stale > ENGINE_OPERATION_STALE_SECONDS)
+            else "backlog",
+            detail_code="health.platform.openOps" if open_ops else None,
+            detail_vars={"n": open_ops} if open_ops else {},
+        ))
     return signals
 
 
@@ -854,7 +935,59 @@ def _root_of(
 
 # ── the four numbers, and the sentence above them ────────────────────────────
 
-def _metrics(health: DataHealth, runs: list[PipelineRun], now: datetime) -> list[HealthMetric]:
+async def _previous_week_rate(
+    session: AsyncSession, workspace_id: uuid.UUID, now: datetime,
+) -> float | None:
+    """Success rate over [now-14d, now-7d), counted rather than loaded.
+
+    Deliberately its own query. The reliability arrow needs fourteen days, and
+    every other thing on this page -- which pipelines are failing, what they
+    have in common, what is late -- is a question about the last seven. Widening
+    the shared sample to satisfy the arrow would have quietly started reporting
+    last week's resolved incidents as current ones.
+
+    An aggregate rather than rows: nothing needs the runs themselves, and a
+    fortnight of a busy workspace is a lot of objects to build in order to
+    divide two numbers.
+    """
+    start = now - timedelta(days=14)
+    end = now - timedelta(days=7)
+    finished = (RunStatus.SUCCEEDED, *FAILED_STATUSES)
+    total, succeeded = (await session.execute(
+        select(
+            func.count(),
+            func.count().filter(PipelineRun.status == RunStatus.SUCCEEDED),
+        ).where(
+            PipelineRun.workspace_id == workspace_id,
+            PipelineRun.status.in_(finished),
+            PipelineRun.created_at >= start,
+            PipelineRun.created_at < end,
+        )
+    )).one()
+    if not total:
+        return None
+    return (succeeded or 0) / total * 100
+
+
+def _rate_tone(rate: float | None) -> str:
+    """Good, not good, or no claim -- and zero is a rate, not an absence.
+
+    `(on_time or 100) >= 95` read a perfect score out of nothing at all:
+    0% on-time is falsy, so the fallback fired and the metric was painted green
+    at the exact moment every scheduled pipeline had missed its deadline. The
+    same shape sat on reliability. Nothing numeric here may be judged by
+    truthiness again -- `None` means there was no sample to judge, and that is
+    a different statement from "none of them worked".
+    """
+    if rate is None:
+        return "neutral"
+    return "good" if rate >= HEALTHY_RATE else "warn"
+
+
+def _metrics(
+    health: DataHealth, runs: list[PipelineRun], now: datetime,
+    previous_rate: float | None = None,
+) -> list[HealthMetric]:
     """Four numbers, each with the direction it moved.
 
     A percentage on its own cannot be judged. 96% is excellent for a fleet that
@@ -862,9 +995,11 @@ def _metrics(health: DataHealth, runs: list[PipelineRun], now: datetime) -> list
     way to know which without the arrow.
     """
     week_ago = now - timedelta(days=7)
-    this_week = [r for r in runs if r.created_at >= week_ago]
 
     def rate(sample: list[PipelineRun]) -> float | None:
+        # Only finished runs can have succeeded or failed. A run still going
+        # is not a failure, and counting it as one makes every busy morning
+        # look like an outage.
         finished = [r for r in sample
                     if r.status is RunStatus.SUCCEEDED or r.status in FAILED_STATUSES]
         if not finished:
@@ -872,9 +1007,11 @@ def _metrics(health: DataHealth, runs: list[PipelineRun], now: datetime) -> list
         ok = sum(1 for r in finished if r.status is RunStatus.SUCCEEDED)
         return ok / len(finished) * 100
 
-    half = now - timedelta(days=3, hours=12)
-    current_rate = rate([r for r in this_week if r.created_at >= half])
-    previous_rate = rate([r for r in this_week if r.created_at < half])
+    # A week against the week before it. This used to cut the same seven days
+    # in half and compare the two halves, which answered a different question
+    # -- "was Thursday better than Monday" -- and answered it noisily, because
+    # three and a half days of a small fleet is a handful of runs.
+    current_rate = rate([r for r in runs if r.created_at >= week_ago])
     delta = (current_rate - previous_rate
              if current_rate is not None and previous_rate is not None else None)
 
@@ -892,7 +1029,7 @@ def _metrics(health: DataHealth, runs: list[PipelineRun], now: datetime) -> list
         HealthMetric(
             key="reliability", value=round(current_rate, 1) if current_rate is not None else None,
             unit="percent", delta=round(delta, 1) if delta is not None else None,
-            tone="good" if (current_rate or 0) >= 95 else "warn",
+            tone=_rate_tone(current_rate),
         ),
         HealthMetric(
             key="issues", value=len(health.issues), unit="count",
@@ -900,8 +1037,7 @@ def _metrics(health: DataHealth, runs: list[PipelineRun], now: datetime) -> list
         ),
         HealthMetric(
             key="freshness", value=round(on_time, 1) if on_time is not None else None,
-            unit="percent",
-            tone="good" if (on_time or 100) >= 95 else "warn",
+            unit="percent", tone=_rate_tone(on_time),
         ),
         HealthMetric(
             key="records", value=float(records), unit="records",

@@ -28,6 +28,7 @@ from app.core.db import SessionLocal
 from app.core.logging import log_event
 from app.models.enums import RunStatus
 from app.models.run import PipelineRun
+from app.services import monitoring
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,7 @@ async def _collect() -> list[str]:
         # nothing paged, and nothing showed how long it had been true.
         from app.models.outbox import EngineOperation, EngineOperationState
 
+        facts = await monitoring.platform_facts(session)
         ledger_rows = (await session.execute(
             select(EngineOperation.state, func.count())
             .group_by(EngineOperation.state)
@@ -141,33 +143,25 @@ async def _collect() -> list[str]:
         blocks.append(_render(
             "appbi_engine_operations_open",
             "Engine operations not yet resolved either way", "gauge",
-            [("", sum(by_state.get(state, 0.0)
-                      for state in EngineOperationState.OPEN))],
+            [("", float(facts["engine_operations_open"]))],
         ))
 
         # Age of the oldest unresolved one. The count alone cannot separate
         # "three sagas in flight right now", which is healthy, from "three
         # stuck since Tuesday", which is an orphaned credential.
-        oldest = (await session.execute(
-            select(func.min(EngineOperation.updated_at))
-            .where(EngineOperation.state.in_(EngineOperationState.OPEN))
-        )).scalar()
-        from app.core.db import utcnow as _utcnow
-
         blocks.append(_render(
             "appbi_engine_operation_oldest_open_seconds",
             "Age of the oldest unresolved engine operation; 0 when none",
             "gauge",
-            [("", 0.0 if oldest is None
-              else max(0.0, (_utcnow() - oldest).total_seconds()))],
+            [("", facts["engine_operation_oldest_open_seconds"])],
         ))
 
-        blocks.extend(await _transform_metrics(session))
+        blocks.extend(await _transform_metrics(session, facts))
 
     return blocks
 
 
-async def _transform_metrics(session) -> list[str]:
+async def _transform_metrics(session, facts: dict) -> list[str]:
     """The Transform queue, separately from the Pipeline one.
 
     Every metric above counts `PipelineRun`. A Transform worker that is down
@@ -175,7 +169,6 @@ async def _transform_metrics(session) -> list[str]:
     executes -- and the incident arrives as a customer saying their tables did
     not refresh. These are the numbers that would have paged instead.
     """
-    from app.core.config import settings
     from app.core.db import utcnow
     # Transform V2 names these `TransformInvocation` and `TransformProject`.
     # The metric names below deliberately do not change: dashboards and alert
@@ -219,42 +212,26 @@ async def _transform_metrics(session) -> list[str]:
 
     # Queued is the one that separates "busy" from "nothing is picking work
     # up". A backlog that never drains is a worker that is gone.
-    queued = (await session.execute(
-        select(func.count(), func.min(TransformRun.created_at))
-        .where(TransformRun.status == RunStatus.QUEUED)
-    )).one()
     blocks.append(_render(
         "appbi_transform_runs_queued", "Transform runs waiting for a worker",
-        "gauge", [("", float(queued[0] or 0))],
+        "gauge", [("", float(facts["transform_queued"]))],
     ))
     blocks.append(_render(
         "appbi_transform_oldest_queued_seconds",
         "How long the oldest queued Transform run has been waiting; 0 when none",
-        "gauge",
-        [("", 0.0 if queued[1] is None
-          else max(0.0, (now - queued[1]).total_seconds()))],
+        "gauge", [("", facts["transform_oldest_queued_seconds"])],
     ))
 
     # Liveness without a separate registration table: a worker that is running
     # heartbeats the run it holds, and one that has claimed nothing recently
     # cannot be distinguished from one that is down -- so an idle deployment
     # reports alive, and a deployment with work that nobody touches does not.
-    recent_heartbeat = (await session.execute(
-        select(func.count()).where(
-            TransformRun.status.in_(active_statuses),
-            TransformRun.heartbeat_at.is_not(None),
-            TransformRun.heartbeat_at
-            >= now - timedelta(seconds=settings.transform_stale_queue_seconds),
-        )
-    )).scalar() or 0
-    stuck_queue = bool(queued[0]) and queued[1] is not None and (
-        (now - queued[1]).total_seconds() > settings.transform_stale_queue_seconds
-    )
-    alive = 0.0 if stuck_queue else 1.0 if (recent_heartbeat or not active[0]) else 0.0
+    # The rule itself lives in `monitoring.platform_facts`, because the Overview
+    # judges the same worker by it and two definitions of "alive" would drift.
     blocks.append(_render(
         "appbi_transform_worker_alive",
         "1 while Transform work is moving, 0 when the queue has stalled",
-        "gauge", [("", alive)],
+        "gauge", [("", 1.0 if facts["transform_worker_alive"] else 0.0)],
     ))
 
     # Durations as a summary rather than a histogram: these are computed from a
