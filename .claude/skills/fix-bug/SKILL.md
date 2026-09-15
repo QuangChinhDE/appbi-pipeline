@@ -8,6 +8,10 @@ description: Diagnose and fix a defect in AppBI Pipeline. Use for bug reports, r
 Order matters: **reproduce → locate the owning layer → failing regression test
 → minimal fix → verify**.
 
+The layer that owns the defect sets its risk level, not the size of the fix: a
+one-line change in a permission check or a migration is High and takes the High
+workflow in `.claude/CLAUDE.md`, including an independent review.
+
 ## 1. Reproduce
 
 Get the defect to happen on demand before changing anything. A fix for a bug
