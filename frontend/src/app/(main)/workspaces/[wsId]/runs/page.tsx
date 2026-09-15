@@ -104,7 +104,12 @@ export default function RunsPage() {
                 aria-label={t('runs.filterCategory', { value: '' })}
                 onChange={(event) => { setCategory(event.target.value); setPage(0); }}>
           <option value="">{t('runs.filterCategory', { value: t('common.all') })}</option>
-          {ERROR_CATEGORIES.map((value) => <option key={value} value={value}>{value}</option>)}
+          {/* The cell below already translates this taxonomy; the filter used to
+              print the raw enum, so one screen offered AUTHENTICATION and named
+              the same run Authentication two columns away. */}
+          {ERROR_CATEGORIES.map((value) => (
+            <option key={value} value={value}>{tf([`errorCategory.${value}`], value)}</option>
+          ))}
         </Select>
         {(pipelineId || transformId) && (
           <Link href={ws('/runs')} className="text-caption text-brand hover:underline">
@@ -194,7 +199,8 @@ export default function RunsPage() {
                         className={cn('block truncate text-caption', run.error.category === 'CANCELLED' ? 'text-text-tertiary' : 'text-danger')}
                         title={run.error.summary
                           ? translateError(locale, run.error.code, run.error.summary)
-                          : (run.error.category ?? '')}
+                          : tf([`errorCategory.${run.error.category ?? 'UNKNOWN'}`],
+                               run.error.category ?? '')}
                       >
                         {tf([`errorCategory.${run.error.category ?? 'UNKNOWN'}`], run.error.category ?? t('errorCategory.UNKNOWN'))}
                       </span> : <span className="text-caption text-text-quaternary">-</span>}

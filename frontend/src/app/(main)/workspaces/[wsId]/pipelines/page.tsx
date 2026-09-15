@@ -14,6 +14,7 @@ import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useWorkspacePath } from '@/hooks/use-workspace-path';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
@@ -223,7 +224,19 @@ export default function PipelinesPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-caption text-text-tertiary">
-                        {pipeline.next_run_at ? formatRelative(pipeline.next_run_at, locale) : '—'}
+                        {/* A held pipeline keeps a next_run_at that has already
+                            passed, and printing it bare under "Next run" read as
+                            a scheduler bug rather than a held schedule. Monitoring
+                            already words this state correctly, so this borrows its
+                            key outright -- sharing the string is what keeps the two
+                            screens from drifting apart again. */}
+                        {!pipeline.next_run_at ? '—'
+                          : new Date(pipeline.next_run_at).getTime() < Date.now() ? (
+                            <Badge variant="warning" size="xs">
+                              {t('monitoring.overdueBy', {
+                                when: formatRelative(pipeline.next_run_at, locale) })}
+                            </Badge>
+                          ) : formatRelative(pipeline.next_run_at, locale)}
                       </td>
                       <td className="px-3 py-2.5 text-right text-caption tabular-nums text-text-secondary">
                         {pipeline.stream_count}

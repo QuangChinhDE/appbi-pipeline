@@ -330,7 +330,12 @@ async def evaluate_freshness(session: AsyncSession, pipeline: Pipeline) -> Notif
             session, pipeline.workspace_id, rule,
             event_type=AlertEventType.FRESHNESS_BREACH, severity=Severity.WARNING,
             title=f"Pipeline '{pipeline.name}' has not synced successfully in time",
-            body=f"The refresh deadline passed at {deadline.isoformat()}.",
+            # Not isoformat(). A notification body is prose somebody reads, and
+            # `2026-09-14T22:44:17.953898+00:00` in the middle of a sentence is a
+            # serialisation format, not a time. The stamp stays absolute and UTC
+            # because a notification is written by a worker that has no request
+            # and therefore no reader's timezone.
+            body=f"The refresh deadline passed at {deadline:%Y-%m-%d %H:%M} UTC.",
             dedup_key=f"{pipeline.workspace_id}:{pipeline.id}:FRESHNESS:{deadline.date()}",
             cooldown_seconds=rule.cooldown_seconds,
             resource_type=ProductResourceType.PIPELINE, resource_id=pipeline.id,

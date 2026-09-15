@@ -277,7 +277,7 @@ export function CauseBars({ causes }: { causes: CauseShare[] }) {
       {causes.map((cause) => (
         <li key={cause.cause} className="flex items-center gap-2">
           <span className="w-32 flex-shrink-0 truncate text-tiny text-text-secondary">
-            {tf([`error.category.${cause.cause}`], cause.cause)}
+            {tf([`errorCategory.${cause.cause}`], cause.cause)}
           </span>
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
             <span className="block h-full rounded-full bg-brand"
