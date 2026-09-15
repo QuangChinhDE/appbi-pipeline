@@ -14,7 +14,6 @@ import { toastError, toastSuccess } from '@/hooks/use-toast';
 import { useWorkspacePath } from '@/hooks/use-workspace-path';
 import { useI18n } from '@/providers/LanguageProvider';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Input';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback';
 import { ModuleOverview, PageListLayout } from '@/components/layout/PageLayout';
@@ -224,19 +223,22 @@ export default function PipelinesPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-caption text-text-tertiary">
-                        {/* A held pipeline keeps a next_run_at that has already
-                            passed, and printing it bare under "Next run" read as
-                            a scheduler bug rather than a held schedule. Monitoring
-                            already words this state correctly, so this borrows its
-                            key outright -- sharing the string is what keeps the two
-                            screens from drifting apart again. */}
-                        {!pipeline.next_run_at ? '—'
-                          : new Date(pipeline.next_run_at).getTime() < Date.now() ? (
-                            <Badge variant="warning" size="xs">
-                              {t('monitoring.overdueBy', {
-                                when: formatRelative(pipeline.next_run_at, locale) })}
-                            </Badge>
-                          ) : formatRelative(pipeline.next_run_at, locale)}
+                        {/* `next_run_at` is a promise only while the scheduler can
+                            act on it: worker.py claims ACTIVE pipelines whose
+                            next_run_at has passed, on a ten-second loop, so for an
+                            ACTIVE pipeline a time just gone means "due, firing now"
+                            rather than "missed".
+
+                            NEEDS_REVIEW is the one status that keeps a stale value
+                            -- pausing and deleting both null it -- because a
+                            breaking schema change holds the schedule without
+                            clearing the time it would have fired. That is the nine
+                            hours that appeared under this heading and read as a
+                            broken scheduler. There is no next run to show, so this
+                            shows none; the status beside it says why. */}
+                        {pipeline.status === 'ACTIVE' && pipeline.next_run_at
+                          ? formatRelative(pipeline.next_run_at, locale)
+                          : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right text-caption tabular-nums text-text-secondary">
                         {pipeline.stream_count}
