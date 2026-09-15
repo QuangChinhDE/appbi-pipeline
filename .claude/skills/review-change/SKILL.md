@@ -1,9 +1,24 @@
 ---
 name: review-change
-description: Independently review a diff in AppBI Pipeline before it ships. Use to review uncommitted work, a branch or a PR against this repository's architecture boundaries, engine and migration contracts, security invariants and test expectations.
+description: Independently review a diff in AppBI Pipeline against its architecture boundaries, engine and migration contracts, security invariants and test expectations. Required for high-risk work — auth, RBAC, tenant isolation, credentials, migrations, destructive data operations, the engine boundary, deployment contracts, shared API contracts — and optional elsewhere; see the risk table in CLAUDE.md. Not for copy, i18n or local styling changes.
 ---
 
 # Review a change
+
+## When this is required
+
+Required for **High** risk work, optional at **Medium** when ambiguity survives
+reading your own diff, and noise at **Low**. The risk table in
+`.claude/CLAUDE.md` says which is which.
+
+Run it in a fresh session: a reviewer already holding the author's reasoning is
+not independent of it.
+
+One pass settles a finding. Do not re-review what a previous pass accepted —
+re-open only what a concrete blocker reopens, and review the change in front of
+you rather than auditing the product around it.
+
+## How to review
 
 Review the **diff**, not the story about the diff. If you also wrote the code,
 deliberately re-derive each judgement from what the diff says rather than from

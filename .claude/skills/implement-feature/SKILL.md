@@ -5,18 +5,19 @@ description: Implement a feature or change in AppBI Pipeline. Use when adding or
 
 # Implement a feature
 
-## 1. Size the task first
+## 1. Decide the risk level first
 
-| Size | When | Artifacts |
-|---|---|---|
-| **Trivial** | a typo, a string, a local safe edit | none — just do it and verify |
-| **Small** | one layer, one or two files, clear acceptance | a short in-session plan |
-| **Medium / Large** | crosses layers, new surface, unclear acceptance | `.sdlc/features/<slug>/` from `.sdlc/templates/` |
+Low, Medium and High are defined in `.claude/CLAUDE.md`, with what each adds to
+the required workflow. Decide before editing: the level determines whether you
+plan first, whether regression coverage is required, and whether the change
+needs an independent `/review-change`.
 
-A small diff is **not** trivial if it touches any of: authentication,
-credentials, migrations, Airbyte, dbt, connector compatibility, deployment
-files, or a shared API contract. Those are at least Small, and get impact
-analysis.
+Judge it by what the change can break, not by the size of the diff: a one-line
+edit to a permission check, a migration or connector compatibility is High. So
+is a task that only turns out to touch one of those halfway through.
+
+Where the work crosses layers or the acceptance is unclear, write the plan in
+`.sdlc/features/<slug>/` from `.sdlc/templates/` rather than in the session.
 
 ## 2. Understand before proposing
 

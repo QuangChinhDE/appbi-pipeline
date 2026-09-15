@@ -104,6 +104,26 @@ diff is not evidence that a connector change is isolated.
 8. Run `python scripts/verify.py task` before claiming done.
 9. Report what was and was not verified.
 
+## How much process a change earns
+
+Those nine steps are the floor. What a change adds to them follows from what it
+can break, not from how large the diff is.
+
+| Risk | Typical work | Adds to the floor |
+|---|---|---|
+| **Low** | copy, i18n text, isolated visual polish, local styling, a rename, a local component edit with no contract change | nothing |
+| **Medium** | a shared frontend primitive, workflow or UI behaviour, query or state behaviour, formatting and scheduling presentation, cross-screen consistency | read the owning backend/frontend contract first; targeted regression or runtime evidence; CI on the PR. Independent review only if ambiguity survives your own diff read |
+| **High** | auth, RBAC, workspace/tenant isolation, credentials and secrets, migrations and persisted-data changes, destructive data operations, adapters and the engine boundary, deployment contracts, the notification/incident model, shared API contracts | a plan before code; targeted regression coverage; an independent `/review-change` in a fresh session; CI green before merge |
+
+**Escalation outranks the first guess.** A Low or Medium task becomes High the
+moment the work turns up a cross-layer contract change, a data migration, a
+security consequence, or a product invariant you cannot state with confidence.
+Re-enter at High rather than finishing at the level you started from.
+
+**One independent pass is enough.** A finding a review has already accepted is
+not re-reviewed; re-open only what a concrete blocker reopens. Local work never
+earns a full-product audit.
+
 ## Change discipline
 
 - Minimise blast radius. No unrelated cleanup, no speculative refactor.
