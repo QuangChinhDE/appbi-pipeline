@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
-from typing import Annotated, Any
+from typing import Any
 
 from fastapi import APIRouter, Response
 from pydantic import Field

@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.dto import ConfiguredStream, EngineConnectionRequest
@@ -23,9 +23,8 @@ from app.core.params import as_enum
 from app.core.permissions import Action, Module
 from app.models.engine import EngineMapping
 from app.models.enums import (
-    ACTIVE_RUN_STATUSES, DestinationSyncMode, EngineResourceType, HealthLevel, OverlapPolicy,
-    PipelineHealth, PipelineStatus, ProductResourceType, ResourceStatus, RunStatus, ScheduleType,
-    SyncMode,
+    ACTIVE_RUN_STATUSES, DestinationSyncMode, EngineResourceType, OverlapPolicy, PipelineHealth,
+    PipelineStatus, ProductResourceType, ResourceStatus, RunStatus, ScheduleType, SyncMode,
 )
 from app.models.integration import Destination, Pipeline, PipelineStream, SchemaSnapshot, Source
 from app.models.run import PipelineRun

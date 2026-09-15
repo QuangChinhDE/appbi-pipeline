@@ -17,7 +17,7 @@ from app.core.db import utcnow
 from app.core.errors import ConflictError, NotFoundError
 from app.core.permissions import Action, Module
 from app.models.enums import SchemaChangeSeverity
-from app.models.integration import Pipeline, PipelineStream, SchemaSnapshot, Source
+from app.models.integration import Pipeline, SchemaSnapshot, Source
 from app.services import actors, audit, catalog
 
 logger = logging.getLogger(__name__)

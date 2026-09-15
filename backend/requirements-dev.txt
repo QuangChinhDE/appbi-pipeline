@@ -4,4 +4,9 @@
 -r requirements-transform.txt
 pytest==8.3.4
 pytest-asyncio==0.25.0
-anyio==4.7.0
+# Pinned because httpx and pytest-asyncio both pull it and a test suite should
+# not change behaviour because a transitive resolved differently on a Tuesday.
+# The floor is not arbitrary: openai 3.6.0 requires anyio>=4.10.0, so the old
+# 4.7.0 pin made `pip install -r requirements-dev.txt` unsatisfiable the day the
+# connector builder landed, and every CI run since has died at the Install step.
+anyio==4.14.2

@@ -6,14 +6,12 @@ by accident: what the FE receives is defined in exactly one place.
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import RequestContext
 from app.models.engine import ConnectorDefinition
-from app.models.enums import PipelineHealth, ScheduleType
+from app.models.enums import PipelineHealth
 from app.models.identity import User
 from app.models.integration import Pipeline, PipelineStream
 from app.models.run import PipelineRun

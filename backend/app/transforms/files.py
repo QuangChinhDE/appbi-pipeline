@@ -30,9 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import utcnow
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.transforms.models import TransformProject, TransformProjectRevision
-from app.transforms.runtime.workspace import (
-    ProjectPath, check_file_size, check_project_size, validate_path,
-)
+from app.transforms.runtime.workspace import check_file_size, check_project_size, validate_path
 from app.transforms.storage import ObjectNotFound, ObjectStore, digest_of, object_store
 
 

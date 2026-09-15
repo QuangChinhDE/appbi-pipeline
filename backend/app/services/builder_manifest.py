@@ -11,7 +11,6 @@ exercise by first installing a Postgres driver is a rule that gets skipped.
 
 from __future__ import annotations
 
-import ipaddress
 import logging
 import re
 import uuid

@@ -8,7 +8,6 @@ adapter and is never addressable from the outside (guardrail 1, section 2.1).
 from __future__ import annotations
 
 import logging
-import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, status

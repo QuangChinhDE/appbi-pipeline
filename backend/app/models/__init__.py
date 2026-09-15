@@ -1,12 +1,27 @@
 """SQLAlchemy models. Importing this package registers every table."""
 
+import importlib
+
 from app.models.builder import (
     BuilderAIChangeSet, BuilderAIMessage, BuilderAIPlan, BuilderAISession,
     BuilderAISource, BuilderAIToolEvent, BuilderProject, BuilderTestRun,
     BuilderTestSession,
 )
 from app.models.engine import ConnectorDefinition, EngineInstance, EngineMapping
-from app.models.enums import *  # noqa: F401,F403
+# Explicit rather than `import *`. A star import tells pyflakes it can no longer
+# tell an undefined name from a star-imported one, which switches off -- for this
+# module -- the exact check CI runs the whole package through. The re-export
+# itself is kept: nothing in the tree imports these through `app.models` today,
+# but they have been part of this package's surface and narrowing it is not what
+# this change is for.
+from app.models.enums import (
+    ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES, ActorType, AlertChannel, AlertEventType,
+    AuditResult, BuilderStatus, Certification, ConnectorStatus, ConnectorType,
+    DestinationSyncMode, EngineResourceType, EngineStatus, EngineType, HealthLevel,
+    NotificationStatus, OperationKind, OperationStatus, OverlapPolicy, PipelineHealth,
+    PipelineStatus, ProductResourceType, ResourceStatus, RunStatus, ScheduleType,
+    SchemaChangeSeverity, Severity, SyncMode, TestResult, TriggerType, WorkspaceStatus,
+)
 from app.models.identity import (
     Membership, Organization, OrganizationMembership, User, Workspace,
 )
@@ -37,6 +52,16 @@ __all__ = [
     "Source", "User", "Workspace",
     "Organization",
     "OrganizationMembership", "register_transform_tables",
+    # Re-exported models that were absent from __all__ and so looked unused.
+    "OAuthGrant", "EngineOperation", "EngineOperationState",
+    # The enum surface, previously carried in by a star import.
+    "ACTIVE_RUN_STATUSES", "TERMINAL_RUN_STATUSES", "ActorType", "AlertChannel",
+    "AlertEventType", "AuditResult", "BuilderStatus", "Certification", "ConnectorStatus",
+    "ConnectorType", "DestinationSyncMode", "EngineResourceType", "EngineStatus",
+    "EngineType", "HealthLevel", "NotificationStatus", "OperationKind", "OperationStatus",
+    "OverlapPolicy", "PipelineHealth", "PipelineStatus", "ProductResourceType",
+    "ResourceStatus", "RunStatus", "ScheduleType", "SchemaChangeSeverity", "Severity",
+    "SyncMode", "TestResult", "TriggerType", "WorkspaceStatus",
 ]
 
 
@@ -47,4 +72,8 @@ def register_transform_tables() -> None:
     two places that need the complete table set. Kept as a function rather than
     a top-level import because of the cycle described above.
     """
-    from app.transforms import models as _transform_models  # noqa: F401
+    # An import purely for its side effect: binding a name that is never read
+    # is what makes a checker call load-bearing code dead, and `# noqa` does not
+    # help because pyflakes does not read it. Importing by module path says the
+    # same thing with nothing to flag.
+    importlib.import_module("app.transforms.models")

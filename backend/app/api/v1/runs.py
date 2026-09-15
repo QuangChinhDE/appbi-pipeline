@@ -21,9 +21,7 @@ from app.models.integration import Destination, Pipeline, Source
 from app.models.run import PipelineRun
 from app.transforms.models import TransformInvocation, TransformProject
 from app.schemas.common import ActorRef, PageInfo, Paginated
-from app.schemas.domain import (
-    RunAttemptView, RunDetail, RunError, RunLogPage, RunView, TransformRunNodeView,
-)
+from app.schemas.domain import RunDetail, RunError, RunLogPage, RunView, TransformRunNodeView
 from app.services import runs as run_service
 from app.transforms import executor as transform_executor
 from app.transforms import invocations as transform_service

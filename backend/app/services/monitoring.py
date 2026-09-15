@@ -15,7 +15,7 @@ from app.core.context import RequestContext
 from app.core.db import utcnow
 from app.models.engine import ConnectorDefinition
 from app.models.enums import (
-    ACTIVE_RUN_STATUSES, HealthLevel, PipelineHealth, PipelineStatus, ResourceStatus, RunStatus,
+    ACTIVE_RUN_STATUSES, HealthLevel, PipelineHealth, PipelineStatus, RunStatus,
 )
 from app.models.integration import Destination, Pipeline, Source
 from app.models.run import PipelineRun

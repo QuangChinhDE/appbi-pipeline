@@ -12,7 +12,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import func, or_, select, update as sa_update
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,11 +22,10 @@ from app.core.config import settings
 from app.core.context import RequestContext
 from app.core.db import utcnow
 from app.core.errors import (
-    AppError, EngineResourceGoneError, EngineUnavailableError, ErrorCategory,
-    NotFoundError, QuotaExceededError,
-    ValidationError, error_from_matrix,
+    AppError, EngineResourceGoneError, ErrorCategory, NotFoundError, ValidationError,
+    error_from_matrix,
 )
-from app.core.logging import log_event, new_trace_id
+from app.core.logging import log_event
 from app.core.params import as_enum
 from app.core.permissions import Action, Module
 from app.models.enums import (

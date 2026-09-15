@@ -22,7 +22,6 @@ import logging
 import os
 import socket
 import uuid
-from datetime import timedelta
 
 from sqlalchemy import select
 
@@ -33,9 +32,7 @@ from app.core.db import SessionLocal, engine as db_engine, utcnow
 from app.services import oauth as oauth_service
 from app.core.errors import AppError
 from app.core.logging import configure_logging, log_event, new_trace_id, trace_id_var
-from app.models.enums import (
-    ACTIVE_RUN_STATUSES, PipelineStatus, ResourceStatus, RunStatus, TriggerType,
-)
+from app.models.enums import PipelineStatus, ResourceStatus, RunStatus, TriggerType
 from app.models.integration import Destination, Pipeline, Source
 from app.models.run import PipelineRun
 from app.transforms.models import TransformProject, TransformProjectRevision
@@ -412,7 +409,6 @@ class Worker:
 
     async def _retry_pending_deletes(self, session) -> None:
         adapter = get_adapter()
-        from app.models.enums import EngineResourceType, ProductResourceType
         from app.models.engine import EngineMapping
         from app.services import actors as actor_service
 

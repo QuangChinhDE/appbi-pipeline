@@ -20,7 +20,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.context import RequestContext
@@ -924,7 +924,7 @@ def _headline(health: DataHealth) -> tuple[str, str | None, dict]:
         return "CRITICAL", "health.headline.critical", {
             "n": len(health.issues),
             "title_code": worst.title_code,
-            **{f"root": worst.root.name if worst.root else ""},
+            "root": worst.root.name if worst.root else "",
         }
     if health.issues:
         return "ATTENTION", "health.headline.attention", {"n": len(health.issues)}

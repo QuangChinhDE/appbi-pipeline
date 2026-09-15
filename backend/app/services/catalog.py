@@ -10,13 +10,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.dto import ConnectorDescriptor
 from app.adapters.registry import (
-    bundled_by_key, bundled_certifications, bundled_connectors, get_adapter, spec_hash,
+    bundled_certifications, bundled_connectors, get_adapter, spec_hash,
 )
 from app.core.config import settings
 from app.core.db import utcnow

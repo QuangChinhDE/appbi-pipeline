@@ -13,9 +13,19 @@ place is not silently missing from the other.
 `fast` and `task` select steps from the files changed against the merge base
 (or the working tree, if nothing is committed yet). `full` runs everything.
 
-A step whose tooling is not installed is reported as SKIPPED. At `full` a skip
-is a failure -- an unrunnable check is not a passed check. Exit code is 0 only
-if every selected step passed.
+A step whose tooling is not installed is reported as SKIPPED. What that means
+depends on the level, because the levels answer different questions:
+
+    fast   "is what I am editing still sound?" -- a skip is reported and
+           tolerated, so a missing toolchain never blocks the coding loop.
+    task   "may I tell the user this is done?" -- no. A selected step that
+           could not run is a check nobody performed, and `done` would then
+           be a claim about evidence that does not exist. A skip fails.
+    full   "is the repository releasable?"     -- the same, across everything.
+
+Exit code is 0 only when every selected step actually ran and passed -- except
+at `fast`, where a skip is allowed. Selection is unchanged by this: `fast` and
+`task` still run only what the diff touches.
 """
 
 from __future__ import annotations
@@ -24,7 +34,7 @@ import argparse
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,8 +51,6 @@ class Step:
     cwd: Path
     #: Path prefixes that make this step relevant. Empty means always relevant.
     triggers: tuple[str, ...] = ()
-    #: Lowest level at which the step runs even when the diff does not touch it.
-    always_from: str = "full"
     #: Executable that must exist for the step to be runnable at all.
     requires: str | None = None
     #: Directory that must exist (node_modules, a venv) for the step to run.
@@ -61,14 +69,12 @@ def steps() -> list[Step]:
             command=[py, "-m", "pyflakes", "app"],
             cwd=BACKEND,
             triggers=("backend/",),
-            always_from="task",
         ),
         Step(
             name="backend: migration chain has one head",
             command=[py, str(ROOT / "scripts" / "check-migration-heads.py")],
             cwd=ROOT,
             triggers=("backend/migrations/", "backend/app/models/"),
-            always_from="task",
         ),
         Step(
             name="backend: pytest",
@@ -77,21 +83,18 @@ def steps() -> list[Step]:
             # The suite includes structural tests that read frontend source, so
             # a .tsx change is a reason to run it.
             triggers=("backend/", "frontend/src/"),
-            always_from="task",
         ),
         Step(
             name="deploy: alert rules parse",
             command=[py, str(ROOT / "scripts" / "check-alert-rules.py")],
             cwd=ROOT,
             triggers=("deploy/monitoring/",),
-            always_from="task",
         ),
         Step(
             name="frontend: typecheck",
             command=["npx", "tsc", "--noEmit"],
             cwd=FRONTEND,
             triggers=("frontend/",),
-            always_from="task",
             requires="npx",
             requires_dir=FRONTEND / "node_modules",
             notes="run `npm ci` in frontend/",
@@ -107,7 +110,6 @@ def steps() -> list[Step]:
             command=["npx", "next", "lint"],
             cwd=FRONTEND,
             triggers=("frontend/",),
-            always_from="task",
             requires="npx",
             requires_dir=FRONTEND / "node_modules",
             notes="run `npm ci` in frontend/",
@@ -118,7 +120,6 @@ def steps() -> list[Step]:
             cwd=FRONTEND,
             triggers=("frontend/",),
             # Too slow for the coding loop; required before done and in CI.
-            always_from="task",
             requires="npm",
             requires_dir=FRONTEND / "node_modules",
             notes="run `npm ci` in frontend/",
@@ -174,7 +175,7 @@ def selected(level: str, changed: list[str]) -> list[Step]:
     return chosen
 
 
-def run(step: Step, level: str) -> tuple[str, str]:
+def run(step: Step) -> tuple[str, str]:
     if step.requires and not shutil.which(step.requires):
         return SKIP, f"{step.requires} not on PATH"
     if step.requires_dir and not step.requires_dir.is_dir():
@@ -203,20 +204,41 @@ def main() -> int:
 
     results: list[tuple[Step, str, str]] = []
     for step in chosen:
-        status, detail = run(step, args.level)
+        status, detail = run(step)
         results.append((step, status, detail))
 
-    print("\n" + "=" * 60)
+    # A skip is tolerated only in the coding loop. Anywhere a claim is being
+    # made -- `task` before reporting done, `full` before a release -- an
+    # unrunnable check is not a passed check.
+    skip_is_failure = args.level in ("task", "full")
+
+    print()
+    print("=" * 60)
     failed = False
+    skipped: list[Step] = []
     for step, status, detail in results:
         suffix = f"  ({detail})" if detail else ""
         print(f"  {status}  {step.name}{suffix}")
         if status == FAIL:
             failed = True
-        elif status == SKIP and args.level == "full":
-            # An unrunnable check is not a passed check.
-            failed = True
+        elif status == SKIP:
+            skipped.append(step)
+            if skip_is_failure:
+                failed = True
     print("=" * 60)
+
+    if skipped:
+        if skip_is_failure:
+            print(f"{len(skipped)} required step(s) could not run, so the "
+                  "changed subsystem is NOT verified:")
+        else:
+            print(f"{len(skipped)} step(s) skipped -- not verified here:")
+        for step in skipped:
+            print(f"  - {step.name}" + (f"  [{step.notes}]" if step.notes else ""))
+        if not skip_is_failure:
+            print("  `task` treats these as failures; fix the toolchain "
+                  "before reporting done.")
+
     print("FAILED" if failed else "OK")
     return 1 if failed else 0
 

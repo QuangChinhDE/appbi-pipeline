@@ -24,7 +24,7 @@ from app.models.builder import (
 from app.services import builder
 from app.services.builder_ai import changesets
 from app.services.builder_ai.client import OpenAIBuilderClient
-from app.services.builder_ai.parsing import deterministic_knowledge, textual_content
+from app.services.builder_ai.parsing import deterministic_knowledge
 from app.services.builder_ai.prompts import (
     AGENT_INSTRUCTIONS, KNOWLEDGE_INSTRUCTIONS, PLAN_INSTRUCTIONS, PROMPT_VERSION,
 )

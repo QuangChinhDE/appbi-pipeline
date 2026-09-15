@@ -91,6 +91,11 @@ instance from `app/adapters/registry.py`. See `.claude/rules/engine-boundary.md`
 
 ## Verification
 
-- `python -m pyflakes app` — currently red on `master`; see
-  `.claude/rules/testing.md` before assuming you broke it.
+- `python -m pyflakes app` must be clean, and is: the backlog of 76 findings was
+  cleared on 2026-09-15. It exists because a name that stopped existing after a
+  refactor shipped twice and was only found at runtime. If it goes red, you did
+  that — do not add `# noqa`, which pyflakes does not read anyway. For an import
+  that is load-bearing but unused locally, say so in a form the checker
+  understands: `__all__` for a re-export, `importlib.import_module()` for a pure
+  side effect.
 - Any behaviour change needs a test in `backend/tests/`.

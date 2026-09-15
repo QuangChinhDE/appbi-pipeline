@@ -44,21 +44,3 @@ say so.
 
 Do not run the full suite after every edit. Do not use that as a reason to skip
 `task` before reporting done.
-
-## Known red, as of 2026-09-15
-
-`python -m pyflakes app` fails on `backend/` at 76 findings, and has been
-failing on `master` — so the CI backend lane is red independently of anything
-you changed. The findings are not all cosmetic:
-
-- `app/api/v1/auth.py` defines roughly ten route handlers twice (lines ~321-560
-  are duplicated at ~569-823). Both registrations reach FastAPI; one set is dead
-  code that will drift from the other.
-- `app/bootstrap.py` and `app/models/__init__.py` flag imports that exist to
-  register SQLAlchemy tables. Those imports are load-bearing — do not delete
-  them to quiet the checker; make the checker see them instead.
-
-Do not "fix" this incidentally in an unrelated task, and do not weaken or drop
-the pyflakes gate. Clearing it is its own task. Until it is cleared,
-`scripts/verify.py full` fails on this step; say so under **Not verified**
-rather than reporting a green run.

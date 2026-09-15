@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import pathlib
-import uuid
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -21,12 +20,17 @@ from app.core.permissions import OrgRole, Role
 from email_validator import EmailNotValidError, validate_email
 
 from app.core.security import hash_password, password_problems, verify_password
-from app.models import (  # noqa: F401 - import registers every table
-    AlertRule, AuditEvent, BuilderProject, ConnectorDefinition, Destination, EngineInstance,
-    EngineMapping,
-    Membership, Notification, Operation, Organization, OrganizationMembership, Pipeline,
-    PipelineRun, PipelineStream, RunAttempt, SchemaSnapshot, SecretRecord, Source, User,
-    Workspace, register_transform_tables,
+# Importing the package is what puts every table on the shared metadata, and
+# bootstrap is the one place that needs all of them because it creates the
+# schema. That happens on the first `from app.models import ...` below --
+# `app/models/__init__.py` imports every model module -- so the names here are
+# the ones this file actually uses, nothing more. It used to list all twenty-two
+# behind a `# noqa: F401 - import registers every table`, which read as dead
+# code to every reviewer and to pyflakes, and hid the real registration
+# mechanism behind a comment.
+from app.models import (
+    EngineInstance, Membership, Organization, OrganizationMembership, User, Workspace,
+    register_transform_tables,
 )
 
 # Transform's tables register through a call rather than an import, because

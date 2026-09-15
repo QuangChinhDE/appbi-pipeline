@@ -25,7 +25,7 @@ from app.core.logging import log_event
 from app.models.builder import BuilderProject
 from app.models.engine import ConnectorDefinition
 from app.models.enums import BuilderStatus, Certification, ConnectorStatus, ConnectorType
-from app.services.builder_manifest import (  # noqa: F401 - re-exported surface
+from app.services.builder_manifest import (
     AUTH_METHODS,
     MANIFEST_VERSION,
     PAGINATION_MODES,
@@ -45,6 +45,21 @@ from app.services.builder_manifest import (  # noqa: F401 - re-exported surface
     validate,
 )
 from app.services.builder_manifest import egress
+
+# Re-exported on purpose: callers reach these through this module -- the router
+# calls `builder.connector_key_for()`, `builder.starter_definition()`,
+# `builder.definition_from_manifest()` and `builder.manifest_yaml()`, and
+# builder_ai calls `builder.connector_key_for()`. They are unused *inside* this
+# file, which is why they looked like dead imports; deleting them would have
+# turned five call sites into AttributeError at runtime. `__all__` states the
+# surface in a form the checker reads, which `# noqa` is not.
+__all__ = [
+    "AUTH_METHODS", "MANIFEST_VERSION", "PAGINATION_MODES", "RUNNER_REPOSITORY",
+    "RUNNER_VERSION", "TEST_PAGE_LIMIT", "TEST_RECORD_LIMIT", "compile_manifest",
+    "connector_key_for", "definition_from_manifest", "descriptor", "egress",
+    "infer_schema", "manifest_yaml", "outbound_urls", "slugify", "starter_definition",
+    "validate",
+]
 
 logger = logging.getLogger(__name__)
 

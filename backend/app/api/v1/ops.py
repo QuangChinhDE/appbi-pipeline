@@ -19,9 +19,7 @@ from app.core.config import settings
 from app.core.params import as_enum
 from app.core.permissions import Action, Module
 from app.models.engine import ConnectorDefinition, EngineMapping
-from app.models.enums import (
-    Certification, ConnectorStatus, PipelineHealth, ProductResourceType, RunStatus,
-)
+from app.models.enums import Certification, ConnectorStatus, PipelineHealth, RunStatus
 from app.models.identity import User
 from app.models.integration import Pipeline
 from app.models.ops import AuditEvent
@@ -29,8 +27,7 @@ from app.schemas.common import Acknowledged, PageInfo, Paginated
 from app.schemas.domain import (
     AlertRuleView, AlertRuleWrite, AuditEventView, ConnectorDetail, ConnectorView,
     EngineReconcileItem, EngineReconcileView, EngineStatusView, MonitoringPipelineRow,
-    MonitoringResponse, NotificationView, OverviewKpis,
-    OverviewResponse, PipelineView, RunView,
+    MonitoringResponse, NotificationView, OverviewKpis, OverviewResponse, RunView,
 )
 from app.services import (
     alerts as alert_service, audit, catalog, health as health_service, monitoring,
