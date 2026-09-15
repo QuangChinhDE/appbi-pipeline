@@ -174,11 +174,47 @@ def degraded_platform() -> OverviewResponse:
     return _envelope(health, DONE)
 
 
+def many_incidents() -> OverviewResponse:
+    """More incidents than the card shows at once.
+
+    A bad morning is exactly when the page must not become a scroll: the reader
+    who most needs the reliability trend is the one least likely to reach it
+    past six cards. The card folds, and the fold says how many are behind it.
+    """
+    def issue(n: int, severity: str) -> HealthIssue:
+        return HealthIssue(
+            key=f"fail:{n}", severity=severity, kind="pipeline",
+            title_code="health.issue.unknown", title_vars={"name": f"Pipeline {n}"},
+            cause_code="health.cause.unknown",
+            impact_code="health.impact.pipelines", impact_vars={"n": 1},
+            affected_total=1, action_href="/monitoring",
+        )
+
+    health = DataHealth(
+        generated_at=NOW, status="CRITICAL", headline_code="health.headline.critical",
+        headline_vars={"n": 6, "root": "Pipeline 1"},
+        metrics=[
+            HealthMetric(key="reliability", value=42.0, unit="percent", tone="warn"),
+            HealthMetric(key="issues", value=6, unit="count", tone="bad"),
+            HealthMetric(key="freshness", value=20.0, unit="percent", tone="warn"),
+            HealthMetric(key="records", value=12, unit="records", tone="neutral"),
+        ],
+        # Severity-ordered, as the service sorts them, so the fold can cut the
+        # tail without hiding anything more urgent than what it shows.
+        issues=[issue(n, "CRITICAL" if n <= 2 else "WARNING") for n in range(1, 7)],
+        reliability=_week(4, 6),
+        stages=[StageHealth(stage="pipelines", total=8, healthy=2, problem=6)],
+        platform=_platform(),
+    )
+    return _envelope(health, DONE)
+
+
 SCENARIOS = {
     "empty-workspace": empty_workspace,
     "healthy-morning": healthy_morning,
     "root-cause-incident": root_cause_incident,
     "degraded-platform": degraded_platform,
+    "many-incidents": many_incidents,
 }
 
 

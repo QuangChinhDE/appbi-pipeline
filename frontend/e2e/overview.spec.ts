@@ -126,6 +126,29 @@ test.describe('Overview — golden flows', () => {
         'href', new RegExp(`/workspaces/${WS}/sources/${SOURCE}`));
     });
 
+  test('a long list of incidents folds instead of becoming a scroll',
+    async ({ page }) => {
+      await openOverview(page, 'many-incidents');
+
+      // Six incidents, four shown. The most severe come first, because the
+      // server sorts them, so the fold never hides something more urgent than
+      // what it leaves visible.
+      const cards = page.locator('#issues').getByText(/Pipeline \d is failing/);
+      await expect(cards).toHaveCount(4);
+
+      // The fold says how many are behind it rather than just "more".
+      const more = page.getByRole('button', { name: 'Show 2 more' });
+      await expect(more).toBeVisible();
+
+      await more.click();
+      await expect(cards).toHaveCount(6);
+      await expect(page.getByRole('button', { name: 'Show less' })).toBeVisible();
+
+      // And the trend sections are still reachable rather than pushed off by
+      // the list, which is the reason the fold exists.
+      await expect(page.getByText('Reliability, 7 days')).toBeVisible();
+    });
+
   test('a bad number is never painted as good, and a stalled worker is visible',
     async ({ page }) => {
       await openOverview(page, 'degraded-platform');

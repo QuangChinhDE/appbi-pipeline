@@ -43,6 +43,11 @@ import {
 } from '@/components/overview/HealthCards';
 import { OnboardingChecklist } from '@/components/overview/OnboardingChecklist';
 
+//: How many incidents the card shows before folding. Four fits the column
+//: beside the supporting cards at 1440 without pushing the trend sections off
+//: the first screen, which is the whole reason the fold exists.
+const ISSUES_BEFORE_FOLD = 4;
+
 const STAGE_ICON: Record<string, React.ReactNode> = {
   sources: <Database className="h-3.5 w-3.5" />,
   pipelines: <GitBranch className="h-3.5 w-3.5" />,
@@ -61,6 +66,11 @@ export default function OverviewPage() {
     refetchInterval: 60_000,
   });
 
+  // Above the error return on purpose: a hook after an early return is called
+  // in a different order on the render that errors, which is a crash rather
+  // than a lint opinion.
+  const [allIssues, setAllIssues] = React.useState(false);
+
   if (overview.error) {
     return (
       <PageListLayout title={t('health.title')} searchable={false}>
@@ -77,6 +87,25 @@ export default function OverviewPage() {
   const health = data?.health;
   const issues = health?.issues ?? [];
   const critical = issues.filter((issue) => issue.severity === 'CRITICAL');
+
+  /**
+   * The list is bounded, because a bad morning is exactly when it should not
+   * be a scroll. Five incidents pushed everything below them off the screen,
+   * and the reader who most needs the reliability trend and the freshness list
+   * is the reader least likely to reach them.
+   *
+   * Safe to cut because the server sorts by severity and then by how many
+   * pipelines each one touches, so the first four are the four to act on. The
+   * rest are one click away and the count says how many there are.
+   */
+  // Folds at four, every time. An earlier version skipped the fold when it
+  // would hide only one card, which spared a nearly-pointless control and cost
+  // the thing the fold is for: with five incidents the card was unbounded
+  // again and the column ran 227px past the one beside it. A card that is
+  // always four tall is worth more than never showing "Show 1 more".
+  const folds = issues.length > ISSUES_BEFORE_FOLD;
+  const shownIssues = allIssues || !folds ? issues : issues.slice(0, ISSUES_BEFORE_FOLD);
+  const hiddenIssues = issues.length - shownIssues.length;
   // A workspace with nothing in it yet is not a healthy workspace; it is an
   // empty one, and what it needs is the four steps, not a green tick.
   const onboarding = data?.onboarding ?? {};
@@ -161,7 +190,15 @@ export default function OverviewPage() {
             ))}
           </div>
 
-          {/* ── What is wrong, what is late, and where it is going ───── */}
+          {/* ── What is wrong, and the state of everything else ──────────
+               Left: the incidents, and whether things are trending better or
+               worse. Right: the status of each part at a glance.
+
+               Split this way because the left column is the only one that
+               grows without bound, and a column that grows beside three fixed
+               ones leaves a hole. Freshness sits on the right because it is a
+               status list like the three below it, not because it matters
+               less. */}
           <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <div className="space-y-3">
               {/* The anchor the banner's button jumps to. Card takes no id,
@@ -175,15 +212,30 @@ export default function OverviewPage() {
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {issues.map((issue) => <IssueCard key={issue.key} issue={issue} />)}
+                      {shownIssues.map((issue) => <IssueCard key={issue.key} issue={issue} />)}
+                      {/* Shown whenever the list folds, not only while it is
+                          folded -- gating on the hidden count made expanding a
+                          one-way door, because expanding is what takes the
+                          count to zero. */}
+                      {folds && (
+                        <button
+                          type="button"
+                          onClick={() => setAllIssues((open) => !open)}
+                          aria-expanded={allIssues}
+                          className="w-full rounded-md border border-dashed border-[rgb(var(--border-line))]
+                                     py-2 text-caption text-text-tertiary transition-colors
+                                     hover:border-[rgb(var(--border-strong))] hover:text-text-primary"
+                        >
+                          {allIssues
+                            ? t('health.issues.showLess')
+                            : t('health.issues.showMore', { n: hiddenIssues })}
+                        </button>
+                      )}
                     </div>
                   )}
                 </Card>
               </div>
 
-              <Card title={t('health.freshness')} description={t('health.freshnessHint')}>
-                <FreshnessList rows={health.freshness} />
-              </Card>
               <Card title={t('health.reliability')} description={t('health.reliabilityHint')}>
                 <ReliabilityChart days={health.reliability} />
                 <div className="mt-3 border-t border-[rgb(var(--border-line))] pt-3">
@@ -207,6 +259,9 @@ export default function OverviewPage() {
             </div>
 
             <div className="space-y-3">
+              <Card title={t('health.freshness')} description={t('health.freshnessHint')}>
+                <FreshnessList rows={health.freshness} />
+              </Card>
               <Card title={t('health.journey')} description={t('health.journeyHint')}>
                 <ul className="space-y-1.5">
                   {health.stages.map((stage) => (
