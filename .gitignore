@@ -106,3 +106,24 @@ evidence/
 # Written by scripts/demo/build_actors.py: the discovered stream catalogue,
 # which is a cache of what the source answered and not a source file.
 scripts/demo/catalogue.json
+
+# ── AI development governance: tracked on purpose ──────────────────────────
+#
+# The `*.md` rule above keeps local documentation out of the repository. The
+# project's Claude Code instructions are not local documentation: they are the
+# rules a fresh clone needs in order to change this code without breaking an
+# engine boundary, a migration chain or a deployment contract. A rule that
+# lives only on one machine is a rule the next contributor does not have, so
+# these specific paths are negated -- and only these.
+!/.claude/CLAUDE.md
+!/.claude/rules/
+!/.claude/rules/**/*.md
+!/.claude/skills/
+!/.claude/skills/**/SKILL.md
+!/.claude/settings.json
+!/.sdlc/
+!/.sdlc/**/*.md
+
+# Personal overrides and session state stay on the machine.
+/.claude/settings.local.json
+/.claude/state/

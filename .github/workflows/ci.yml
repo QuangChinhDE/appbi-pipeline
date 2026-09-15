@@ -43,24 +43,10 @@ jobs:
         working-directory: backend
         run: python -m pyflakes app
 
+      # Same script the local `python scripts/verify.py` run executes, so a
+      # green local check and a green CI lane mean the same thing.
       - name: Migrations have one head
-        working-directory: backend
-        run: |
-          python - <<'PY'
-          import pathlib, re
-          revs, downs = set(), set()
-          for path in pathlib.Path("migrations/versions").glob("*.py"):
-              text = path.read_text(encoding="utf-8")
-              match = re.search(r'^revision(?::\s*\w+)?\s*=\s*"([^"]+)"', text, re.M)
-              if match:
-                  revs.add(match.group(1))
-              for down in re.findall(r'"([0-9a-f]{12})"', text.split("down_revision")[1][:200]
-                                     if "down_revision" in text else ""):
-                  downs.add(down)
-          heads = revs - downs
-          print("heads:", sorted(heads))
-          assert len(heads) == 1, f"expected one migration head, found {sorted(heads)}"
-          PY
+        run: python scripts/check-migration-heads.py
 
       - name: Tests
         working-directory: backend
@@ -102,14 +88,4 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install pyyaml
       - name: Every rule has an expression and a for
-        run: |
-          python - <<'PY'
-          import yaml
-          spec = yaml.safe_load(open("deploy/monitoring/alerts.yaml", encoding="utf-8"))
-          for group in spec["groups"]:
-              for rule in group["rules"]:
-                  assert rule.get("expr"), rule
-                  # Without a `for`, a routine restart pages someone at 3am.
-                  assert rule.get("for"), f"{rule.get('alert')} has no for:"
-          print(sum(len(g["rules"]) for g in spec["groups"]), "rules checked")
-          PY
+        run: python scripts/check-alert-rules.py
