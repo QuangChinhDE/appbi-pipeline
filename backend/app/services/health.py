@@ -63,6 +63,106 @@ def _ref(kind: str, name: str, identifier: uuid.UUID | None = None,
     return HealthResource(type=kind, id=identifier, name=name, href=href)
 
 
+# Which earlier pass already covers each kind of alert.
+#
+# The alert engine and the passes above are two routes to the same incident:
+# the engine notices it when it happens, the passes notice it by reading the
+# state it left behind. When both arrive, the pass wins -- it knows the root
+# cause, which pipelines are affected and what to do, where the notification
+# knows only that something happened. Without this, one expired credential is
+# reported once as "Legacy ERP can no longer sign in, 3 pipelines affected"
+# and again, underneath, as "1 source cannot sign in".
+COVERED_BY: dict[AlertEventType, frozenset[str]] = {
+    AlertEventType.RUN_FAILED: frozenset({"source", "destination", "pipeline"}),
+    AlertEventType.CONSECUTIVE_FAILURES: frozenset({"source", "destination", "pipeline"}),
+    AlertEventType.SOURCE_AUTH_ERROR: frozenset({"source"}),
+    AlertEventType.DESTINATION_ERROR: frozenset({"destination"}),
+    AlertEventType.SCHEMA_BREAKING_CHANGE: frozenset({"source", "pipeline"}),
+    AlertEventType.FRESHNESS_BREACH: frozenset({"freshness"}),
+    AlertEventType.ENGINE_DEGRADED: frozenset({"platform"}),
+}
+
+
+# What kind of problem a connection's own health code describes.
+#
+# These are the codes the connection check writes when it fails, and they map
+# onto the same vocabulary the run failures use, so one broken warehouse reads
+# the same whether a pipeline tripped over it or the check found it first.
+_CATEGORY_OF_CODE = {
+    "SOURCE_AUTHENTICATION_FAILED": "authentication",
+    "DESTINATION_AUTHENTICATION_FAILED": "authentication",
+    "SOURCE_PERMISSION_DENIED": "permission",
+    "DESTINATION_PERMISSION_DENIED": "permission",
+    "SOURCE_UNREACHABLE": "network",
+    "DESTINATION_UNREACHABLE": "network",
+    "DESTINATION_STAGING_CONFLICT": "configuration",
+    "DESTINATION_WRITE_FAILED": "destination_write",
+    "SOURCE_READ_FAILED": "source_read",
+}
+
+
+# Why a Transform project is not building, in a sentence rather than a state.
+#
+# The state -- "build failed" -- is what the Transform card shows beside the
+# project's name, where the project name supplies the context. On an issue card
+# the title has already said the project cannot build its tables, so repeating
+# the state there spends a line and tells the reader nothing.
+_TRANSFORM_CAUSE = {
+    "health.transform.parseFailed": "health.cause.transform.parse",
+    "health.transform.buildFailed": "health.cause.transform.build",
+    "health.transform.warning": "health.cause.transform.warning",
+}
+
+
+def _live_failures(
+    sources: dict[uuid.UUID, Source], destinations: dict[uuid.UUID, Destination],
+    rows: list[dict[str, Any]],
+) -> set[uuid.UUID]:
+    """Connections whose recorded failure is still true.
+
+    `health_status` is written when a check fails and is not cleared by the
+    thing quietly starting to work again, so on its own it answers "has this
+    ever failed", and the page is asking "is this failing". A success carried
+    through the same connection afterwards settles it.
+    """
+    broken: set[uuid.UUID] = set()
+    for actor in (*sources.values(), *destinations.values()):
+        if actor.status is not ResourceStatus.ACTIVE:
+            continue
+        if actor.health_status is not HealthLevel.ERROR:
+            continue
+        if _recovered_since(actor.updated_at, actor.id, rows):
+            continue
+        broken.add(actor.id)
+    return broken
+
+
+def _recovered_since(
+    marked_at: datetime | None, actor_id: uuid.UUID, rows: list[dict[str, Any]],
+) -> bool:
+    """Has anything succeeded through this connection since it was marked bad?
+
+    Every stored failure -- an actor's health, an open notification, a run's
+    error -- is a record of a moment, and the page is asked a question about
+    now. A success through the same connection afterwards is the strongest
+    evidence available that the moment has passed.
+    """
+    if marked_at is None:
+        return False
+    for row in rows:
+        pipeline = row["pipeline"]
+        if not _uses(pipeline, actor_id):
+            continue
+        if pipeline.last_success_at and pipeline.last_success_at > marked_at:
+            return True
+    return False
+
+
+def _uses(pipeline: Pipeline, actor_id: uuid.UUID) -> bool:
+    """Does this pipeline read from, or write to, that connection?"""
+    return actor_id in (pipeline.source_id, pipeline.destination_id)
+
+
 async def build(session: AsyncSession, ctx: RequestContext) -> DataHealth:
     now = utcnow()
     workspace_id = ctx.workspace_id
@@ -98,17 +198,22 @@ async def build(session: AsyncSession, ctx: RequestContext) -> DataHealth:
     )).all())
 
     health = DataHealth(generated_at=now)
+    # Which connections are failing *now*, as opposed to carrying a record of
+    # having failed once. Everything below reads this rather than re-deriving
+    # it, so the cards cannot disagree with each other.
+    broken = _live_failures(sources, destinations, rows)
     health.freshness = _freshness(rows, now)
     health.reliability, health.failure_causes = _reliability(runs_7d, now)
     health.volume, health.duration = await _anomalies(session, workspace_id, by_id, now)
     health.transforms, transform_problems = await _transforms(session, workspace_id)
-    health.stages = _stages(sources, destinations, rows, health_counts, health.transforms)
+    health.stages = _stages(sources, destinations, rows, health_counts,
+                            health.transforms, broken)
     health.platform = await _platform(session, ctx)
 
     health.issues = await _issues(
         session, ctx, now,
         rows=rows, by_id=by_id, sources=sources, destinations=destinations,
-        runs_7d=runs_7d, freshness=health.freshness,
+        runs_7d=runs_7d, freshness=health.freshness, broken=broken,
         volume=health.volume, duration=health.duration,
         transform_problems=transform_problems, platform=health.platform,
     )
@@ -253,7 +358,7 @@ async def _anomalies(
 def _stages(
     sources: dict[uuid.UUID, Source], destinations: dict[uuid.UUID, Destination],
     rows: list[dict[str, Any]], health_counts: dict[str, int],
-    transforms: list[TransformRow],
+    transforms: list[TransformRow], broken: set[uuid.UUID],
 ) -> list[StageHealth]:
     """Where in the journey the trouble is, in four numbers per stage.
 
@@ -262,7 +367,18 @@ def _stages(
     decides who picks the problem up.
     """
     def actor_counts(items) -> tuple[int, int]:
-        healthy = sum(1 for item in items if item.status == ResourceStatus.ACTIVE)
+        """Healthy means nothing is wrong with it now.
+
+        Not "is it switched on" -- that is configuration, and counting it as
+        health showed "Sources 11/11" with a green tick while the banner above
+        said an expired credential on one of those sources had stopped three
+        pipelines. And not "has it ever failed" either: `broken` has already
+        discounted the connections that have carried data since.
+        """
+        healthy = sum(
+            1 for item in items
+            if item.status == ResourceStatus.ACTIVE and item.id not in broken
+        )
         return len(items), healthy
 
     source_total, source_ok = actor_counts(list(sources.values()))
@@ -369,7 +485,7 @@ async def _issues(
     session: AsyncSession, ctx: RequestContext, now: datetime, *,
     rows: list[dict[str, Any]], by_id: dict[uuid.UUID, Pipeline],
     sources: dict[uuid.UUID, Source], destinations: dict[uuid.UUID, Destination],
-    runs_7d: list[PipelineRun], freshness: list[FreshnessRow],
+    runs_7d: list[PipelineRun], freshness: list[FreshnessRow], broken: set[uuid.UUID],
     volume: list[AnomalyRow], duration: list[AnomalyRow],
     transform_problems: list[TransformRow], platform: list[PlatformSignal],
 ) -> list[HealthIssue]:
@@ -435,8 +551,82 @@ async def _issues(
             action_href=root_ref.href,
         ))
 
+    # 1b. Connections that are already broken, before anything has run on them.
+    #
+    # A pipeline failing is how most faults are noticed, but it is not how they
+    # start: a warehouse whose staging area has changed under it is broken from
+    # that moment, and stays quiet until the next load lands on it. Reporting it
+    # while everything is idle is the whole value -- by the time a run fails, the
+    # report it feeds is already late.
+    #
+    # Anything already named as the root of a failure above is skipped, so this
+    # adds a card only for the faults nothing has tripped over yet.
+    already = {issue.root.id for issue in issues if issue.root is not None}
+    for actor, kind, path in [
+        *((s, "source", "sources") for s in sources.values()),
+        *((d, "destination", "destinations") for d in destinations.values()),
+    ]:
+        if actor.id in already or actor.id not in broken:
+            continue
+        code = (actor.health_code or "UNKNOWN").lower()
+        category = _CATEGORY_OF_CODE.get(actor.health_code or "", "configuration")
+        users = [p for p in rows if _uses(p["pipeline"], actor.id)]
+        ref = _ref(kind, actor.name, actor.id, f"/{path}/{actor.id}")
+        issues.append(HealthIssue(
+            key=f"actor:{actor.id}:{code}",
+            # Nothing is failing yet, so this is a warning -- but everything
+            # downstream of it will fail on its next run, which is why it is on
+            # the page at all rather than only on the connection's own screen.
+            severity="WARNING",
+            kind=kind,
+            title_code=f"health.issue.{category}",
+            title_vars={"name": actor.name},
+            cause_code=f"health.cause.{category}",
+            cause_vars={"name": actor.name},
+            impact_code="health.impact.willFail" if users else "health.impact.idle",
+            impact_vars={"n": len(users)} if users else {},
+            evidence_code="health.evidence.actorCheck",
+            evidence_vars={"code": actor.health_code or "UNKNOWN"},
+            root=ref,
+            affected=[
+                _ref("pipeline", p["pipeline"].name, p["pipeline"].id,
+                     f"/pipelines/{p['pipeline'].id}?tab=status")
+                for p in users[:NAMED_AFFECTED]
+            ],
+            affected_total=len(users),
+            started_at=actor.updated_at,
+            last_seen_at=actor.updated_at,
+            action_code="OPEN_CONFIGURATION",
+            action_href=ref.href,
+        ))
+
     # 2. Data that missed the time it promised, whether or not anything failed.
-    late = [row for row in rows if row.get("freshness_breached")]
+    #
+    # Only where nothing above already accounts for it. A pipeline that cannot
+    # authenticate is late as a matter of course, and saying so in a second card
+    # asks the reader to work out, from two lists of the same pipeline names,
+    # that there is only one thing to fix. Where the lateness *is* a consequence
+    # it is folded into the card that caused it instead -- worth more there,
+    # because "3 pipelines affected" is abstract and "the data is 2h behind" is
+    # what somebody downstream is about to notice.
+    claimed: dict[uuid.UUID, HealthIssue] = {}
+    for issue in issues:
+        for resource in issue.affected:
+            if resource.id is not None:
+                claimed.setdefault(resource.id, issue)
+
+    all_late = [row for row in rows if row.get("freshness_breached")]
+    for row in all_late:
+        owner = claimed.get(row["pipeline"].id)
+        if owner is None:
+            continue
+        behind = (now - row["freshness_deadline"]).total_seconds()
+        worst_so_far = owner.impact_vars.get("seconds", 0) if owner.impact_vars else 0
+        if behind > worst_so_far and owner.impact_code == "health.impact.pipelines":
+            owner.impact_code = "health.impact.pipelinesStale"
+            owner.impact_vars = {**owner.impact_vars, "seconds": int(behind)}
+
+    late = [row for row in all_late if row["pipeline"].id not in claimed]
     if late:
         worst = max(late, key=lambda row: (now - row["freshness_deadline"]).total_seconds())
         behind = (now - worst["freshness_deadline"]).total_seconds()
@@ -473,7 +663,10 @@ async def _issues(
             kind="volume",
             title_code="health.issue.volume",
             title_vars={"name": anomaly.name},
-            cause_code=None,
+            # Nothing failed, so there is no error to quote -- but the fact that
+            # it succeeded is itself the finding, and it is the half of the
+            # system the reader can stop looking at.
+            cause_code="health.cause.volume",
             impact_code="health.impact.volume",
             impact_vars={"percent": round(abs(anomaly.change) * 100)},
             evidence_code="health.evidence.volume",
@@ -493,6 +686,7 @@ async def _issues(
             kind="duration",
             title_code="health.issue.duration",
             title_vars={"name": anomaly.name},
+            cause_code="health.cause.duration",
             impact_code="health.impact.duration",
             impact_vars={"percent": round(anomaly.change * 100)},
             evidence_code="health.evidence.duration",
@@ -513,8 +707,9 @@ async def _issues(
             kind="transform",
             title_code="health.issue.transform",
             title_vars={"name": row.name},
-            cause_code=row.detail_code,
+            cause_code=_TRANSFORM_CAUSE.get(row.detail_code or ""),
             impact_code="health.impact.transform",
+            evidence_code=row.detail_code,
             root=_ref("transform", row.name, row.project_id, f"/transforms/{row.project_id}"),
             affected_total=1,
             last_seen_at=now,
@@ -561,13 +756,20 @@ async def _issues(
     )).all())
 
     late_now = {row.pipeline_id for row in freshness if row.state == "late"}
+    # Everything any card above has already put in front of the reader. An
+    # alert about one of these is the same incident arriving by its other
+    # route, whatever the alert happens to be called.
+    spoken_for = {
+        resource.id for issue in issues for resource in issue.affected
+        if resource.id is not None
+    } | {issue.root.id for issue in issues if issue.root is not None}
+
     grouped: dict[str, list[Notification]] = defaultdict(list)
     for note in notifications:
         kind = note.event_type.value.lower()
-        if kind in ("run_failed", "consecutive_failures") and {"source", "destination",
-                                                               "pipeline"} & known:
+        if note.resource_id is not None and note.resource_id in spoken_for:
             continue
-        if kind == "freshness_breach" and "freshness" in known:
+        if COVERED_BY.get(note.event_type, frozenset()) & known:
             continue
         if _has_recovered(note, by_id, late_now):
             continue

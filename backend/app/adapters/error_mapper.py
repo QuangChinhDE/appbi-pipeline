@@ -91,6 +91,22 @@ _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
     # somebody to inspect a source that had not changed, for a collision in
     # the destination. Observed four times in thirty-six scheduled runs
     # against a live tenant.
+    # A Transform view standing on the table the loader needs to rebuild.
+    #
+    # Above the staging rule because the two produce similar-looking destination
+    # errors and the advice is completely different: the staging conflict is two
+    # pipelines colliding, this one is the product blocking itself. Observed on
+    # "Web events to warehouse" the first time an approved column change forced
+    # a soft reset of a table a dbt model had a view on -- three consecutive
+    # runs, deterministic, and reported as "unclassified" every time.
+    #
+    # Postgres words it as below; `dependent objects still exist` is the same
+    # condition (SQLSTATE 2BP01) as other tools phrase it.
+    (r"because other objects depend on it|dependent objects still exist"
+     r"|cannot drop table [^ ]+ because",
+     ErrorCategory.DESTINATION_WRITE, "DESTINATION_TABLE_HAS_DEPENDENTS",
+     "VIEW_DEPENDENCIES"),
+
     (r"_airbyte_tmp|_airbyte_raw|airbyte_internal",
      ErrorCategory.DESTINATION_WRITE, "DESTINATION_STAGING_CONFLICT",
      "VIEW_TECHNICAL_DETAILS"),
@@ -142,6 +158,11 @@ _CATEGORY_SUMMARY: dict[ErrorCategory, str] = {
 #: internal problem" sends somebody to read logs; naming memory sends them to
 #: the one setting that fixes it.
 _CODE_SUMMARY: dict[str, str] = {
+    "DESTINATION_TABLE_HAS_DEPENDENTS":
+        "A Transform model has a view built directly on the table this pipeline "
+        "writes, so the warehouse will not let the loader rebuild it. Materialise "
+        "that model as a table instead of a view, or drop the view and let the "
+        "next run recreate it.",
     "DESTINATION_STAGING_CONFLICT":
         "The fault is in the destination's staging table, not at the source. "
         "It usually means two pipelines write identically-named streams into "

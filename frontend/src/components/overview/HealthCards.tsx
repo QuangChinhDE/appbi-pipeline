@@ -218,9 +218,20 @@ export function ReliabilityChart({ days }: { days: ReliabilityDay[] }) {
     return total ? day.succeeded / total : null;
   });
   const known = rates.filter((r): r is number => r !== null);
-  // Anchored at 90%, not at 0: on a 0-100 axis the difference between a good
-  // week and a bad one is four pixels, and that difference is the whole point.
-  const floor = known.length ? Math.min(0.9, Math.min(...known)) : 0.9;
+  /**
+   * Where the axis starts, as a decision rather than a calculation.
+   *
+   * Zoom in only when there is nothing to see. A fleet that ran between 97 and
+   * 100 all week is flat on a 0-100 axis, and the variation is the reason
+   * anyone opened the chart -- so that week is drawn 90-100.
+   *
+   * The moment any day falls below 90 the axis goes back to zero and the shape
+   * is the honest one. The earlier version took the minimum of the data
+   * itself, which pinned the worst day of the week to no height at all: a drop
+   * to 69% drew as a five-pixel stub, the smallest mark on a chart whose
+   * entire job is to show when things turned.
+   */
+  const floor = known.length && Math.min(...known) < 0.9 ? 0 : 0.9;
   const PLOT = 76;
 
   return (
