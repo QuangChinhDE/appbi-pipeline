@@ -1,0 +1,40 @@
+{
+  "attention_pipelines": [],
+  "connector_updates": [],
+  "health": {
+    "duration": [],
+    "failure_causes": [],
+    "freshness": [],
+    "generated_at": "2026-09-15T08:00:00Z",
+    "headline_code": null,
+    "headline_vars": {},
+    "issues": [],
+    "metrics": [],
+    "platform": [],
+    "reliability": [],
+    "stages": [],
+    "status": "HEALTHY",
+    "transforms": [],
+    "volume": []
+  },
+  "kpis": {
+    "active_pipelines": 8,
+    "destinations_needing_attention": 0,
+    "failed_last_24h": 0,
+    "records_synced_24h": 0,
+    "running_now": 0,
+    "sources_needing_attention": 0,
+    "success_rate_7d": null,
+    "total_destinations": 1,
+    "total_sources": 5
+  },
+  "onboarding": {
+    "has_destination": false,
+    "has_pipeline": false,
+    "has_source": false,
+    "has_successful_run": false
+  },
+  "recent_failures": [],
+  "recent_successes": [],
+  "running": []
+}

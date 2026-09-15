@@ -1,0 +1,171 @@
+{
+  "attention_pipelines": [],
+  "connector_updates": [],
+  "health": {
+    "duration": [],
+    "failure_causes": [],
+    "freshness": [
+      {
+        "deadline": null,
+        "late_seconds": null,
+        "name": "Shop orders to warehouse",
+        "pipeline_id": "c25eb1b9-3b5c-4173-a877-ff639880a535",
+        "state": "on_time"
+      }
+    ],
+    "generated_at": "2026-09-15T08:00:00Z",
+    "headline_code": "health.headline.healthy",
+    "headline_vars": {},
+    "issues": [],
+    "metrics": [
+      {
+        "delta": 1.4,
+        "key": "reliability",
+        "tone": "good",
+        "unit": "percent",
+        "value": 99.2
+      },
+      {
+        "delta": null,
+        "key": "issues",
+        "tone": "good",
+        "unit": "count",
+        "value": 0.0
+      },
+      {
+        "delta": null,
+        "key": "freshness",
+        "tone": "good",
+        "unit": "percent",
+        "value": 100.0
+      },
+      {
+        "delta": null,
+        "key": "records",
+        "tone": "neutral",
+        "unit": "records",
+        "value": 29716.0
+      }
+    ],
+    "platform": [
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "sync_engine",
+        "state": "operational"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "pipeline_queue",
+        "state": "normal"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "transform_worker",
+        "state": "operational"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "transform_queue",
+        "state": "normal"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "scheduler",
+        "state": "normal"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "engine_operations",
+        "state": "normal"
+      }
+    ],
+    "reliability": [
+      {
+        "date": "2026-09-09",
+        "failed": 0,
+        "succeeded": 12
+      },
+      {
+        "date": "2026-09-10",
+        "failed": 0,
+        "succeeded": 12
+      },
+      {
+        "date": "2026-09-11",
+        "failed": 0,
+        "succeeded": 12
+      },
+      {
+        "date": "2026-09-12",
+        "failed": 0,
+        "succeeded": 12
+      },
+      {
+        "date": "2026-09-13",
+        "failed": 0,
+        "succeeded": 12
+      },
+      {
+        "date": "2026-09-14",
+        "failed": 0,
+        "succeeded": 12
+      },
+      {
+        "date": "2026-09-15",
+        "failed": 0,
+        "succeeded": 12
+      }
+    ],
+    "stages": [
+      {
+        "healthy": 5,
+        "problem": 0,
+        "stage": "sources",
+        "total": 5
+      },
+      {
+        "healthy": 8,
+        "problem": 0,
+        "stage": "pipelines",
+        "total": 8
+      }
+    ],
+    "status": "HEALTHY",
+    "transforms": [
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "name": "Warehouse marts",
+        "project_id": "c25eb1b9-3b5c-4173-a877-ff639880a535",
+        "state": "healthy"
+      }
+    ],
+    "volume": []
+  },
+  "kpis": {
+    "active_pipelines": 8,
+    "destinations_needing_attention": 0,
+    "failed_last_24h": 0,
+    "records_synced_24h": 0,
+    "running_now": 0,
+    "sources_needing_attention": 0,
+    "success_rate_7d": null,
+    "total_destinations": 1,
+    "total_sources": 5
+  },
+  "onboarding": {
+    "has_destination": true,
+    "has_pipeline": true,
+    "has_source": true,
+    "has_successful_run": true
+  },
+  "recent_failures": [],
+  "recent_successes": [],
+  "running": []
+}

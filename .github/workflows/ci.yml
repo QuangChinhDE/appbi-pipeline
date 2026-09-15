@@ -79,6 +79,49 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  # Separate from Frontend on purpose. It installs a browser, which is slow and
+  # is the one dependency here that can fail for reasons unrelated to the diff;
+  # a flaky download should not take typecheck and lint down with it.
+  #
+  # It needs no database and no engine: the Overview flows serve payloads
+  # generated from `OverviewResponse`, and `backend/tests/test_overview_e2e_fixtures.py`
+  # fails if those payloads stop matching the contract. So this runs on every
+  # pull request rather than on somebody's laptop with a prepared workspace.
+  e2e:
+    name: Overview golden flows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Overview golden flows
+        working-directory: frontend
+        run: npm run test:e2e:overview
+
+      - name: Keep the trace of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overview-e2e-trace
+          path: frontend/test-results/
+          retention-days: 7
+
   alerts:
     name: Alert rules parse
     runs-on: ubuntu-latest

@@ -1,0 +1,243 @@
+{
+  "attention_pipelines": [],
+  "connector_updates": [],
+  "health": {
+    "duration": [],
+    "failure_causes": [
+      {
+        "cause": "AUTHENTICATION",
+        "count": 17,
+        "share": 0.85
+      }
+    ],
+    "freshness": [
+      {
+        "deadline": null,
+        "late_seconds": 7380.0,
+        "name": "ERP purchase orders to warehouse",
+        "pipeline_id": "c25eb1b9-3b5c-4173-a877-ff639880a535",
+        "state": "late"
+      },
+      {
+        "deadline": null,
+        "late_seconds": null,
+        "name": "Shop orders to warehouse",
+        "pipeline_id": "203a2d53-58d0-4189-8cca-9545de39f3cd",
+        "state": "on_time"
+      }
+    ],
+    "generated_at": "2026-09-15T08:00:00Z",
+    "headline_code": "health.headline.critical",
+    "headline_vars": {
+      "n": 1,
+      "root": "Legacy ERP"
+    },
+    "issues": [
+      {
+        "action_code": "UPDATE_CREDENTIALS",
+        "action_href": "/sources/203a2d53-58d0-4189-8cca-9545de39f3cd",
+        "affected": [
+          {
+            "href": null,
+            "id": null,
+            "name": "ERP purchase orders to warehouse",
+            "type": "pipeline"
+          },
+          {
+            "href": null,
+            "id": null,
+            "name": "ERP stock movements to warehouse",
+            "type": "pipeline"
+          },
+          {
+            "href": null,
+            "id": null,
+            "name": "ERP suppliers to warehouse",
+            "type": "pipeline"
+          }
+        ],
+        "affected_total": 3,
+        "cause_code": "health.cause.authentication",
+        "cause_vars": {
+          "name": "Legacy ERP"
+        },
+        "evidence_code": "health.evidence.failures",
+        "evidence_vars": {
+          "code": "SOURCE_AUTHENTICATION_FAILED",
+          "n": 17
+        },
+        "impact_code": "health.impact.pipelinesStale",
+        "impact_vars": {
+          "n": 3,
+          "seconds": 7380
+        },
+        "key": "fail:AUTHENTICATION:legacy-erp",
+        "kind": "source",
+        "last_seen_at": null,
+        "occurrence_count": 17,
+        "root": {
+          "href": "/sources/203a2d53-58d0-4189-8cca-9545de39f3cd",
+          "id": "203a2d53-58d0-4189-8cca-9545de39f3cd",
+          "name": "Legacy ERP",
+          "type": "source"
+        },
+        "severity": "CRITICAL",
+        "started_at": null,
+        "title_code": "health.issue.authentication",
+        "title_vars": {
+          "name": "Legacy ERP"
+        }
+      }
+    ],
+    "metrics": [
+      {
+        "delta": -24.0,
+        "key": "reliability",
+        "tone": "warn",
+        "unit": "percent",
+        "value": 71.0
+      },
+      {
+        "delta": null,
+        "key": "issues",
+        "tone": "bad",
+        "unit": "count",
+        "value": 1.0
+      },
+      {
+        "delta": null,
+        "key": "freshness",
+        "tone": "warn",
+        "unit": "percent",
+        "value": 62.5
+      },
+      {
+        "delta": null,
+        "key": "records",
+        "tone": "neutral",
+        "unit": "records",
+        "value": 1204.0
+      }
+    ],
+    "platform": [
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "sync_engine",
+        "state": "operational"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "pipeline_queue",
+        "state": "normal"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "transform_worker",
+        "state": "operational"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "transform_queue",
+        "state": "normal"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "scheduler",
+        "state": "normal"
+      },
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "key": "engine_operations",
+        "state": "normal"
+      }
+    ],
+    "reliability": [
+      {
+        "date": "2026-09-09",
+        "failed": 4,
+        "succeeded": 8
+      },
+      {
+        "date": "2026-09-10",
+        "failed": 4,
+        "succeeded": 8
+      },
+      {
+        "date": "2026-09-11",
+        "failed": 4,
+        "succeeded": 8
+      },
+      {
+        "date": "2026-09-12",
+        "failed": 4,
+        "succeeded": 8
+      },
+      {
+        "date": "2026-09-13",
+        "failed": 4,
+        "succeeded": 8
+      },
+      {
+        "date": "2026-09-14",
+        "failed": 4,
+        "succeeded": 8
+      },
+      {
+        "date": "2026-09-15",
+        "failed": 4,
+        "succeeded": 8
+      }
+    ],
+    "stages": [
+      {
+        "healthy": 4,
+        "problem": 1,
+        "stage": "sources",
+        "total": 5
+      },
+      {
+        "healthy": 5,
+        "problem": 3,
+        "stage": "pipelines",
+        "total": 8
+      }
+    ],
+    "status": "CRITICAL",
+    "transforms": [
+      {
+        "detail_code": null,
+        "detail_vars": {},
+        "name": "Warehouse marts",
+        "project_id": "c25eb1b9-3b5c-4173-a877-ff639880a535",
+        "state": "healthy"
+      }
+    ],
+    "volume": []
+  },
+  "kpis": {
+    "active_pipelines": 8,
+    "destinations_needing_attention": 0,
+    "failed_last_24h": 0,
+    "records_synced_24h": 0,
+    "running_now": 0,
+    "sources_needing_attention": 0,
+    "success_rate_7d": null,
+    "total_destinations": 1,
+    "total_sources": 5
+  },
+  "onboarding": {
+    "has_destination": true,
+    "has_pipeline": true,
+    "has_source": true,
+    "has_successful_run": true
+  },
+  "recent_failures": [],
+  "recent_successes": [],
+  "running": []
+}

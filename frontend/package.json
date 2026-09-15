@@ -8,7 +8,9 @@
     "start": "next start -H 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "check:i18n": "python -m pytest ../backend/tests/test_i18n_coverage.py -q",
-    "lint": "next lint --max-warnings 0"
+    "lint": "next lint --max-warnings 0",
+    "test:e2e:overview": "playwright test e2e/overview.spec.ts",
+    "e2e:server": "node -e \"const{cpSync,existsSync}=require('fs');cpSync('.next/static','.next/standalone/.next/static',{recursive:true});if(existsSync('public'))cpSync('public','.next/standalone/public',{recursive:true});\" && node .next/standalone/server.js"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -29,6 +31,7 @@
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.51.1",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",

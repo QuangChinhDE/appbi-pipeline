@@ -127,3 +127,9 @@ scripts/demo/catalogue.json
 # Personal overrides and session state stay on the machine.
 /.claude/settings.local.json
 /.claude/state/
+
+# Playwright: the browser suite writes traces and reports on failure. Both are
+# diagnostic output for one run, not artefacts of the project.
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
