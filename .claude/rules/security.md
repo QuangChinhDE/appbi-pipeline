@@ -28,10 +28,15 @@ Product entities never hold plaintext — they hold a `secret_ref`
 (`app/core/secrets.py`). The store uses envelope encryption: a fresh AES data
 key per secret, wrapped with the KEK from `SECRET_ENCRYPTION_KEY`.
 
-- Never write a credential into `configuration_json` or any model column. Use
-  the split between config and secret, and make sure it recurses — nested specs
-  such as `loading_method.credential.hmac_key_secret` are exactly how plaintext
-  leaked before (`scripts/scan-plaintext-secrets.py` exists to clean that up).
+- Never write a credential into `configuration_json` or any model column.
+  `split_configuration()` in `app/services/catalog.py:626` separates config from
+  secret by walking the connector spec. It must **recurse**: it once descended
+  one level through one `oneOf`, so nested specs such as
+  `loading_method.credential.hmac_key_secret` (destination-bigquery) landed in
+  `configuration_json` as plain text — readable in the database, copied into the
+  audit trail, returned to any VIEW role. `backend/tests/test_nested_secrets.py`
+  is the regression test; `scripts/scan-plaintext-secrets.py` cleans rows already
+  written that way.
 - `SecretStore` is a Protocol. Add a backend by implementing it, not by
   reaching around it from a service.
 - **Never regenerate or overwrite `SECRET_ENCRYPTION_KEY` or `JWT_SECRET`.**
@@ -55,8 +60,14 @@ error responses, test fixtures, committed evidence, screenshots, or source.
   Never inline a role comparison in a router or a component.
 - Every tenant-scoped query filters by workspace. The frontend hiding a control
   is not authorization.
-- Admin/bootstrap credentials (`app/bootstrap.py`) must keep the forced
-  password-change behaviour; there is a regression test for it.
+- Admin/bootstrap credentials (`app/bootstrap.py`):
+  `backend/tests/test_admin_credentials.py` asserts three things — the published
+  default password appears nowhere in the tree, the sign-in page reads no
+  credential, and the frontend build carries no credential variables. Keep all
+  three true.
+  Note: the forced password-change behaviour itself has **no tracked test** —
+  its old one lived in the deleted `qa/` tree. Touching that flow means writing
+  the test first.
 
 ## Repository hygiene
 

@@ -37,8 +37,16 @@ sessions directly.
 Rules that must not be broken casually:
 
 - Business logic belongs in `services/` (or `transforms/`), not in a router.
-- Only `adapters/` may know an engine exists. A service imports
-  `IntegrationEngineAdapter` from `app/adapters/base.py` and nothing else.
+- **The router owns the transaction boundary**: it authorizes with
+  `ctx.require(...)`, calls the service, then commits. Services on a request
+  path mutate and return; they do not commit.
+- Only `adapters/` may know an engine exists. A service depends on the
+  `IntegrationEngineAdapter` Protocol in `app/adapters/base.py` and gets an
+  instance from `adapters/registry.py::get_adapter()`.
+- There are **three** engine implementations, not two: `AIRBYTE_EMBEDDED`,
+  `AIRBYTE_API`, and `SQL_DIRECT` — which is not Airbyte at all and exists to
+  prove the adapter interface abstracts an engine rather than abstracting
+  Airbyte. It is the check on whether a change respects the boundary.
 - Transform's router lives in `app/transforms/api.py`, not `api/v1/`. That is
   deliberate; leave it there.
 - The frontend never calls an engine and never reaches a database.

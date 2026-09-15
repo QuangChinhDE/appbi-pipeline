@@ -29,7 +29,9 @@ Alembic, with 25 revisions under `backend/migrations/versions/`.
   an in-place rename.
 - **Destructive changes require explicit approval.** Dropping a column or table,
   narrowing a type, or deleting rows — ask first, with the data loss stated.
-- `downgrade()` must actually work, or say plainly why it cannot.
+- `downgrade()` must actually work. All 24 revisions define one and only a
+  single revision is a no-op, so an empty `pass` is the outlier here, not the
+  norm — if yours cannot be reversed, say why in the docstring.
 - Never edit a revision that has already shipped. Add a new one.
 
 ## Verification

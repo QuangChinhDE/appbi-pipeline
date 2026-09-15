@@ -37,15 +37,30 @@ Airbyte already persists.
 ## The single boundary
 
 `app/adapters/base.py::IntegrationEngineAdapter` is the only interface a domain
-service may use. Two implementations satisfy it, per `compatibility.yaml`:
+service may use. **Three** implementations satisfy it (`EngineType` in
+`app/models/enums.py`, selected by `get_adapter()` in `adapters/registry.py`):
 
 - `AIRBYTE_EMBEDDED` → `app.adapters.airbyte_protocol` — runs official connector
   images on the host Docker daemon over the Airbyte Protocol. Default.
 - `AIRBYTE_API` → `app.adapters.airbyte_api` — delegates to an existing
   self-managed Airbyte.
+- `SQL_DIRECT` → `app.adapters.sql_direct` — **not Airbyte at all.** Postgres to
+  Postgres over a database connection, in-process: no connector images, no
+  protocol, no spec/check/discover/read, no server-side connection object, no
+  job service.
 
-A change to one adapter is a change to the contract both must satisfy. Check
-the other before you call it done.
+`sql_direct` is the load-bearing one for this rule. It exists precisely because
+an interface with only Airbyte-shaped implementations behind it has not been
+proven to abstract anything. **It is the test of whether your change respects
+the boundary**: if a service you touched now assumes a connector image, a
+catalog shape, a job id or any other Airbyte vocabulary, `sql_direct` cannot
+satisfy it and the abstraction has quietly become an Airbyte façade. Before
+calling an adapter change done, ask what `sql_direct` would do with it.
+
+Note `compatibility.yaml` lists only the two Airbyte implementations — it
+records what the *product* is certified to ship, and `sql_direct` is an
+interface probe, not a shipped engine. Both facts are true; do not "fix" either
+to match the other.
 
 ## Protected contracts
 
