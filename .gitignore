@@ -102,3 +102,7 @@ evidence/
 *.md
 *.mdx
 *.rst
+
+# Written by scripts/demo/build_actors.py: the discovered stream catalogue,
+# which is a cache of what the source answered and not a source file.
+scripts/demo/catalogue.json
