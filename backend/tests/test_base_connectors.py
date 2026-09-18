@@ -191,3 +191,75 @@ def test_all_connectors_run_on_the_stock_airbyte_runner() -> None:
     for entry in catalogue_entries():
         assert entry["docker_repository"] == RUNNER_REPOSITORY
         assert entry["declarative_manifest"]["type"] == "DeclarativeSource"
+
+
+# ── a scope that is the only way in ────────────────────────────────────────
+
+@pytest.mark.parametrize("connector", ALL, ids=IDS)
+def test_a_required_scope_cannot_be_satisfied_by_an_empty_list(connector) -> None:
+    """Base Table has no "read everything" route and no endpoint that lists the
+    tables an account can see, so its ids are supplied by the workspace or the
+    stream cannot run at all.
+
+    `required` alone does not say that: JSON Schema is satisfied by the `[]`
+    the form sends for a field nobody filled in, and that configuration is
+    accepted and then syncs nothing, once per schedule, reporting a failure
+    that names a missing parameter rather than a missing answer. `minItems`
+    is what turns it into a refusal at configuration time.
+    """
+    spec = connection_specification(connector)
+    for stream in connector.streams:
+        if not (stream.scope and stream.scope.required):
+            continue
+        key = stream.scope.config_key
+        assert key in spec["required"], f"{connector.app}.{stream.name}"
+        assert spec["properties"][key].get("minItems") == 1, key
+        assert "default" not in spec["properties"][key], key
+
+
+def test_base_table_reads_records_per_named_table() -> None:
+    """The reviewed builder manifest hardcoded `table.base.vn` and its recorded
+    success came from that installation. A `base.com.vn` token probed against
+    it answers `access_token_v2_invalid_3` -- which reads as an expired token
+    and is not -- while the same token on `base.com.vn` is accepted. So the
+    host has to stay templated, like every other connector here."""
+    from app.connectors.base_vn import TABLE
+
+    manifest = compile_manifest(TABLE)
+    stream = manifest["definitions"]["streams"]["record"]
+    requester = stream["retriever"]["requester"]
+    assert "{{ config['domain']" in requester["url_base"]
+    assert requester["url_base"].startswith("https://table.")
+    assert requester["path"] == "records"
+    # `page`, which every other older Base app uses, is accepted here and
+    # ignored: the paginator would then re-read page zero until the sync is
+    # stopped rather than finishing.
+    paginator = stream["retriever"]["paginator"]
+    assert paginator["page_token_option"]["field_name"] == "page_id"
+    assert stream["retriever"]["record_selector"]["extractor"]["field_path"] == ["data"]
+    assert manifest["metadata"]["appbi_scopes"]["record"] == {
+        "config_key": "table_ids", "field": "table_id",
+    }
+
+
+def test_base_table_deduplicates_per_table_not_per_installation() -> None:
+    """Every named table lands in one destination table, so the key has to
+    survive two sheets that number their rows independently.
+
+    Measured on base.com.vn tables 307, 295 and 294: 129 rows, 129 distinct
+    ids, no overlap -- Base draws them from one installation-wide sequence. But
+    that is an observation about three tables, not a promise, and a bare `id`
+    that turns out to be per-table deduplicates one sheet's rows away using
+    another's. `table_id` is on every row and constant within a partition, so
+    the composite costs nothing."""
+    from app.connectors.base_vn import TABLE
+
+    stream = TABLE.stream("record")
+    assert stream.primary_key == ("table_id", "id")
+    schema = compile_manifest(TABLE)["definitions"]["streams"]["record"]
+    properties = schema["schema_loader"]["schema"]["properties"]
+    for key in ("table_id", "id", "last_update"):
+        assert key in properties, key
+    # Open, because `vals` and `form` hold user-defined columns that differ per
+    # sheet -- 14 keys on one of the measured tables, 11 on another.
+    assert schema["schema_loader"]["schema"]["additionalProperties"] is True

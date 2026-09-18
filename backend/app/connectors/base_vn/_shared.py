@@ -116,6 +116,17 @@ class Scope:
     description: str = ""
     description_vi: str = ""
     examples: tuple[str, ...] = ()
+    #: Whether the workspace *must* name ids, rather than merely being allowed
+    #: to. Off for every scope that narrows an otherwise complete stream.
+    #:
+    #: On for Base Table, which is the one application with no "read all"
+    #: route: `table/records` without a `table_id` answers `INVALID_DATA`, and
+    #: there is no endpoint that lists the tables an account can see -- eleven
+    #: plausible spellings all return `File Not Found`. So the ids cannot be
+    #: discovered and cannot be defaulted; the only honest thing is to refuse
+    #: the configuration until they are supplied, instead of accepting it and
+    #: failing once per sync.
+    required: bool = False
 
 
 @dataclass(frozen=True)
@@ -923,11 +934,18 @@ def connection_specification(connector: BaseConnector) -> JsonSchema:
             "title_vi": scope.title_vi,
             "description": scope.description,
             "description_vi": scope.description_vi,
-            "default": [],
             "order": 5 + offset,
         }
         if scope.examples:
             properties[scope.config_key]["examples"] = list(scope.examples)
+        if scope.required:
+            # `required` alone would be satisfied by `[]`, which is exactly the
+            # value the form sends for a field nobody filled in -- and an empty
+            # list is the configuration that syncs nothing.
+            properties[scope.config_key]["minItems"] = 1
+            required.append(scope.config_key)
+        else:
+            properties[scope.config_key]["default"] = []
 
     scope_count = sum(1 for s in connector.streams if s.scope)
     for index, extra in enumerate(connector.config, start=5 + scope_count):

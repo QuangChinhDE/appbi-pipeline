@@ -55,6 +55,8 @@ from .crm import CRM
 from .crm_leads import CRM_LEADS
 from .finance import INCOME
 from .hr import HIRING, HRM
+from .schedule import SCHEDULE
+from .table import TABLE
 from .work import PAYROLL, SERVICE, WEWORK
 
 #: Every Base connector, in the order the catalogue should show them.
@@ -64,6 +66,7 @@ CONNECTORS: tuple[BaseConnector, ...] = (
     HIRING,
     WORKFLOW,
     REQUEST,
+    SCHEDULE,
     SERVICE,
     WEWORK,
     TIMEOFF,
@@ -71,6 +74,7 @@ CONNECTORS: tuple[BaseConnector, ...] = (
     INCOME,
     CRM,
     CRM_LEADS,
+    TABLE,
 )
 
 # Checked at import, so a broken definition fails the process rather than
@@ -176,7 +180,7 @@ PROVIDER = ConnectorProvider(
 
 __all__ = [
     "ACCOUNT", "BY_KEY", "CONNECTORS", "CRM", "CRM_LEADS", "HIRING", "HRM",
-    "INCOME", "PAYROLL", "PROVIDER",
+    "INCOME", "PAYROLL", "PROVIDER", "SCHEDULE", "TABLE",
     "REQUEST", "SERVICE", "TIMEOFF", "WEWORK", "WORKFLOW",
     "BaseConnector", "ConfigField", "Incremental", "Parent", "Stream",
     "RUNNER_REPOSITORY", "RUNNER_VERSION", "TOKEN_FIELD",
