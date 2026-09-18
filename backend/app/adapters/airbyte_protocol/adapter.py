@@ -401,6 +401,11 @@ class EmbeddedAirbyteAdapter:
         # declared at runtime.
         consumed = {ap.PAGE_SIZE_CONFIG_KEY, *ap.scoped_config_keys(manifest)}
         forwarded = {k: v for k, v in configuration.items() if k not in consumed}
+        # ...and the spec the runner validates that config against has to agree
+        # that they are gone. A key the catalogue marks required so the form
+        # demands it, withheld here on purpose, otherwise fails every check
+        # naming a field the reader did fill in.
+        manifest = ap.without_consumed_requirements(manifest, consumed)
         return {**forwarded, self.MANIFEST_CONFIG_KEY: manifest}
 
     async def test_declarative_read(

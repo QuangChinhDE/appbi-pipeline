@@ -30,6 +30,7 @@ import pytest
 from app.adapters.airbyte_protocol.protocol import (
     scoped_config_keys,
     with_scoped_partitions,
+    without_consumed_requirements,
 )
 
 #: The shape `compile_manifest` produces for these three streams.
@@ -199,3 +200,51 @@ def test_the_scope_keys_are_named_for_removal() -> None:
 def test_a_manifest_without_scopes_names_none() -> None:
     assert scoped_config_keys({"definitions": {}}) == set()
     assert scoped_config_keys(None) == set()
+
+
+# ── and the spec stops demanding what was removed ────────────────────────
+
+def test_a_consumed_key_is_not_still_required_at_runtime() -> None:
+    """The regression this exists to stop.
+
+    Base Table cannot read anything until the workspace names a table, so the
+    catalogue's spec marks `table_ids` required and the form refuses an empty
+    list. The adapter then spends that key building a partition router and
+    withholds it from the runner -- and the runner validates the config it did
+    receive against the spec travelling inside the same manifest.
+
+    Required there, absent here: every `check` failed with
+    `'table_ids' is a required property`, telling the reader a field was
+    missing that they had in fact filled in. One table id or ten, identically.
+    """
+    manifest = {
+        **copy.deepcopy(MANIFEST),
+        "spec": {
+            "type": "Spec",
+            "connection_specification": {
+                "type": "object",
+                "required": ["access_token_v2", "service_ids"],
+                "properties": {
+                    "access_token_v2": {"type": "string"},
+                    "service_ids": {"type": "array", "minItems": 1},
+                },
+            },
+        },
+    }
+    consumed = scoped_config_keys(manifest)
+    out = without_consumed_requirements(manifest, consumed)
+    required = out["spec"]["connection_specification"]["required"]
+    assert required == ["access_token_v2"]
+    # The property stays: describing a field that will not arrive costs
+    # nothing, and the form is drawn from the catalogue's copy, not this one.
+    assert "service_ids" in out["spec"]["connection_specification"]["properties"]
+    # The definition the catalogue holds must not be edited in place.
+    assert manifest["spec"]["connection_specification"]["required"] == [
+        "access_token_v2", "service_ids"]
+
+
+def test_a_spec_with_nothing_consumed_is_returned_untouched() -> None:
+    manifest = {"spec": {"connection_specification": {"required": ["access_token_v2"]}}}
+    assert without_consumed_requirements(manifest, {"service_ids"}) is manifest
+    assert without_consumed_requirements({"definitions": {}}, {"x"}) == {"definitions": {}}
+    assert without_consumed_requirements(None, {"x"}) is None

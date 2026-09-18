@@ -577,12 +577,24 @@ def _error_handler() -> dict[str, Any]:
                 "type": "HttpResponseFilter",
                 "action": "FAIL",
                 "predicate": "{{ 'message' in response and response.get('code') == 0 }}",
+                # The advice is conditional, and it has to be, for a reason
+                # that is not about tone. `adapters/error_mapper.py` classifies
+                # a failure by grepping its text for `access_token_v2_invalid`
+                # -- and this sentence used to contain that string
+                # unconditionally, so it matched its own advice. Every `code: 0`
+                # refusal came back as SOURCE_AUTHENTICATION_FAILED with
+                # "update your credentials", including `INVALID_DATA`, which is
+                # a wrong or missing id and has nothing to do with the token.
+                # On Base Table, where naming the wrong table is the likeliest
+                # mistake a reader can make, the product answered it by telling
+                # them to replace a token that was working.
                 "error_message": (
                     "Base rejected this request: "
-                    "{{ response.get('message', 'unknown') }}. "
-                    "An `access_token_v2_invalid` message means the token is "
-                    "not accepted for this application — issue a new one in "
-                    "the Base admin console."
+                    "{{ response.get('message', 'unknown') }}."
+                    "{% if 'access_token' in (response.get('message') or '') %}"
+                    " The token is not accepted for this application — issue a "
+                    "new one in the Base admin console."
+                    "{% endif %}"
                 ),
             },
             # Rate limiting, when Base signals it at all, is a 429.

@@ -407,6 +407,40 @@ def scoped_config_keys(manifest: dict[str, Any] | None) -> set[str]:
     return {entry.get("config_key") for entry in scopes.values() if entry.get("config_key")}
 
 
+def without_consumed_requirements(
+    manifest: dict[str, Any] | None, consumed: set[str]
+) -> dict[str, Any] | None:
+    """Drop keys the product consumed from the spec the runner validates against.
+
+    A scope key is answered by the workspace and then spent here: it becomes a
+    `ListPartitionRouter` and never reaches the source. The catalogue's copy of
+    the spec still has to demand it, because that spec is what draws the form,
+    and a connector like Base Table cannot read anything until the workspace
+    names a table.
+
+    Those two truths collide in one field. The manifest travels to the runner
+    with its spec attached, the CDK validates the forwarded config against that
+    spec, and a key that is `required` there but deliberately withheld here
+    fails every `check` with `'table_ids' is a required property` -- a message
+    that accuses the reader of leaving a field blank they actually filled in.
+
+    So the runtime spec is made to match what is actually sent. The form keeps
+    its requirement; the runner is only told about fields it will receive.
+    Properties are left alone: declaring a field that is absent costs nothing,
+    while demanding it costs every sync.
+    """
+    spec = ((manifest or {}).get("spec") or {}).get("connection_specification") or {}
+    required = spec.get("required")
+    if not manifest or not isinstance(required, list):
+        return manifest
+    remaining = [key for key in required if key not in consumed]
+    if remaining == required:
+        return manifest
+    out = copy.deepcopy(manifest)
+    out["spec"]["connection_specification"]["required"] = remaining
+    return out
+
+
 def with_scoped_partitions(
     manifest: dict[str, Any] | None, configuration: dict[str, Any]
 ) -> dict[str, Any] | None:

@@ -263,3 +263,34 @@ def test_base_table_deduplicates_per_table_not_per_installation() -> None:
     # Open, because `vals` and `form` hold user-defined columns that differ per
     # sheet -- 14 keys on one of the measured tables, 11 on another.
     assert schema["schema_loader"]["schema"]["additionalProperties"] is True
+
+
+def test_the_token_advice_cannot_classify_a_non_token_failure() -> None:
+    """`adapters/error_mapper.py` reads a failure's text to categorise it, and
+    the pattern it looks for is `access_token_v2_invalid`. The FAIL handler used
+    to print that string as advice on every `code: 0` refusal, so it matched
+    itself: `INVALID_DATA` -- a wrong or missing id -- came back as
+    SOURCE_AUTHENTICATION_FAILED, telling the reader to replace a token that
+    was working. On Base Table, naming the wrong table is the likeliest mistake
+    there is, so that was the answer to the most common question."""
+    import re
+
+    from app.adapters.error_mapper import classify
+    from app.connectors.base_vn._shared import _error_handler
+
+    fail = next(f for f in _error_handler()["response_filters"]
+                if f.get("action") == "FAIL")
+    message = fail["error_message"]
+    # The trigger word may appear, but only inside a conditional that tests the
+    # response's own message -- never as unconditional prose.
+    assert "{% if" in message and "access_token" in message
+    unconditional = re.sub(r"\{%\s*if.*?\{%\s*endif\s*%\}", "", message, flags=re.S)
+    assert "access_token" not in unconditional, unconditional
+
+    # And the rendered result still classifies a real token refusal correctly.
+    assert classify("Base rejected this request: access_token_v2_invalid_3."
+                    " The token is not accepted for this application.").code == (
+        "SOURCE_AUTHENTICATION_FAILED")
+    assert classify(
+        "Base rejected this request: INVALID_DATA."
+    ).code != "SOURCE_AUTHENTICATION_FAILED"
