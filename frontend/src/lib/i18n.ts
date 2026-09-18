@@ -2461,7 +2461,9 @@ const en: Catalog = {
   'docs.required': 'required',
   'docs.noDescription': 'No description for this field.',
   'docs.streamCount': '{n} tables. You choose which ones to sync in the next step.',
+  'docs.streamCount.one': '{n} table. You choose whether to sync it in the next step.',
   'docs.streamCountShort': '{n} tables',
+  'docs.streamCountShort.one': '{n} table',
   'docs.base.step1': 'Sign in to Base as an administrator of that application.',
   'docs.base.step2': "Open that application's admin area, find API / Integrations, and create an access token.",
   'docs.base.step3': 'Copy the token into the Access token field. Each application needs its own.',
@@ -2523,6 +2525,7 @@ const en: Catalog = {
   'sources.lastDiscovered': 'Schema last read',
   'sources.schemaRefreshed': 'Schema refreshed',
   'sources.streamCount': '{n} streams',
+  'sources.streamCount.one': '{n} stream',
 
   'destinations.title': 'Destinations',
   'destinations.subtitle': 'Where data is written to.',
