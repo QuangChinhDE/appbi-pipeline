@@ -240,3 +240,26 @@ def test_base_table_reads_records_per_named_table() -> None:
     assert manifest["metadata"]["appbi_scopes"]["record"] == {
         "config_key": "table_ids", "field": "table_id",
     }
+
+
+def test_base_table_deduplicates_per_table_not_per_installation() -> None:
+    """Every named table lands in one destination table, so the key has to
+    survive two sheets that number their rows independently.
+
+    Measured on base.com.vn tables 307, 295 and 294: 129 rows, 129 distinct
+    ids, no overlap -- Base draws them from one installation-wide sequence. But
+    that is an observation about three tables, not a promise, and a bare `id`
+    that turns out to be per-table deduplicates one sheet's rows away using
+    another's. `table_id` is on every row and constant within a partition, so
+    the composite costs nothing."""
+    from app.connectors.base_vn import TABLE
+
+    stream = TABLE.stream("record")
+    assert stream.primary_key == ("table_id", "id")
+    schema = compile_manifest(TABLE)["definitions"]["streams"]["record"]
+    properties = schema["schema_loader"]["schema"]["properties"]
+    for key in ("table_id", "id", "last_update"):
+        assert key in properties, key
+    # Open, because `vals` and `form` hold user-defined columns that differ per
+    # sheet -- 14 keys on one of the measured tables, 11 on another.
+    assert schema["schema_loader"]["schema"]["additionalProperties"] is True
