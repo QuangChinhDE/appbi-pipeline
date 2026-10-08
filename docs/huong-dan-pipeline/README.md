@@ -2,8 +2,7 @@
 
 Tài liệu dành cho người cài đặt, người vận hành và người sử dụng AppBI Pipeline. Thực hiện theo thứ tự: chuẩn bị máy, lấy source, khởi chạy, kiểm tra, tạo Nguồn và Đích, tạo Pipeline, chạy thử, sau đó mới bật lịch tự động.
 
-Phiên bản đối chiếu: source `3937ef9` trên nhánh `master`. Ngày biên soạn: **08 tháng 10 năm 2026**, múi giờ UTC+7. Lệnh Windows trong tài liệu dùng **PowerShell**, chạy tại thư mục gốc repository, trừ khi có chỉ dẫn khác. Bản HTML đi kèm có mục lục và nhúng ảnh, có thể mở độc lập bằng trình duyệt.
-
+Phiên bản đối chiếu: source `3937ef9` trên nhánh `master`. Ngày biên soạn: **08 tháng 10 năm 2026**, múi giờ UTC+7. Lệnh Windows trong tài liệu dùng **PowerShell**, chạy tại thư mục gốc repository, trừ khi có chỉ dẫn khác.
 ## 1 Bắt đầu nhanh
 
 ### Máy hiện tại
@@ -686,7 +685,7 @@ Script nhận giá trị mới, không ghi mặc định đè trở lại. Boots
 
 Sao lưu metadata DB **và khóa `SECRET_ENCRYPTION_KEY` tương ứng**. Với Transform dùng storage local, giữ cả volume `transform_objects`; chỉ sao lưu PostgreSQL không chứa toàn bộ nội dung project và artifact. Với S3, sao lưu/versioning bucket theo cấu hình kho đó. Dữ liệu warehouse và database của Airbyte riêng cũng cần chính sách backup riêng.
 
-Không commit `.env`, file backup hay log có credential. `.env.backups` là lớp dự phòng cục bộ, không thay thế bản sao ngoài máy. `docs/` và `*.md` đang bị `.gitignore` loại trừ trong repository này; tài liệu cũng cần được lưu hoặc bàn giao riêng.
+Không commit `.env`, file backup hay log có credential. `.env.backups` là lớp dự phòng cục bộ, không thay thế bản sao ngoài máy.
 
 ### 10.2 Sao lưu metadata bằng script của dự án
 
@@ -834,7 +833,7 @@ Script init PostgreSQL không chạy lại trên volume đã có dữ liệu. Ki
 
 ### 11.13 Không thấy tài liệu sau khi clone
 
-Repository cố ý ignore `docs/`, `*.md` và `*.mdx`, nên tài liệu trên máy không tự đi theo `git pull`. Sao chép cả thư mục `docs/huong-dan-pipeline`, hoặc chỉ bàn giao bản HTML đã nhúng ảnh. Nếu đội muốn quản lý docs trên Git, cần thay chính sách ignore và đưa các file đã chọn vào version control có chủ đích.
+Repository chỉ theo dõi hướng dẫn này (`docs/huong-dan-pipeline/README.md` và thư mục `images/`); các tài liệu nội bộ khác trong `docs/` không đi theo `git pull`. Nếu không thấy file này sau khi clone, kiểm tra đang ở nhánh `master` và đã `git pull` bản mới nhất.
 
 ### 11.14 Thu thập thông tin khi cần hỗ trợ
 
@@ -875,4 +874,4 @@ Nếu dùng overlay production, đọc các giá trị bị ghi đè trong file:
 | Backup | `scripts/backup.py` |
 | Dữ liệu demo | `docker/postgres/init`, `scripts/demo` |
 
-Khi thay một luồng, cập nhật câu lệnh, kết quả mong đợi, tình huống lỗi và ảnh liên quan trong cùng lần sửa tài liệu. Tránh viết dựa vào comment đơn lẻ khi phần triển khai thực tế đã khác. Biên bản kiểm chứng của lần chạy này nằm trong `kiem-chung.md` cùng thư mục.
+Khi thay một luồng, cập nhật câu lệnh, kết quả mong đợi, tình huống lỗi và ảnh liên quan trong cùng lần sửa tài liệu. Tránh viết dựa vào comment đơn lẻ khi phần triển khai thực tế đã khác.
