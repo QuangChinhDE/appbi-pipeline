@@ -59,13 +59,14 @@ AppBI làm phần gom ấy thành một sản phẩm có giao diện:
 
 ## Kết nối được những gì
 
-**Hệ thống Base.vn** — 12 connector do đội Data Base.vn viết và bảo trì:
+**Hệ thống Base.vn** — 14 connector do đội Data Base.vn viết và bảo trì:
 
 | | |
 |---|---|
 | Nhân sự | HRM, Tuyển dụng, Chấm công, Nghỉ phép, Lương |
 | Vận hành | Quy trình, Yêu cầu, Dịch vụ, WeWork, Tài khoản |
 | Kinh doanh | CRM Deals, CRM Leads |
+| Dữ liệu | Base Table, Base Schedule |
 
 > **Base có hai bản cài, và token của bản này bị bản kia từ chối.** `base.vn` và
 > `base.com.vn` là hai hệ thống riêng, tài khoản riêng — chỉ khách hàng biết
@@ -78,7 +79,7 @@ AppBI làm phần gom ấy thành một sản phẩm có giao diện:
 > Mỗi ứng dụng Base cần **token riêng của nó** — token của Workflow không đọc
 > được HRM.
 >
-> Mười hai connector này được đánh dấu **beta**: chúng do đội Data viết và
+> Mười bốn connector này được đánh dấu **beta**: chúng do đội Data viết và
 > chạy được với tài khoản thật, nhưng con số đo đạc cho từng ứng dụng chưa đủ
 > để gọi là đã chứng nhận. Nhãn sẽ lên khi có số đo, không lên khi code viết
 > xong.
@@ -124,7 +125,7 @@ và các script vận hành trong `scripts/`.)*
 > **RAM 4 GB thì chạy được không?** Được, nhưng phải chọn đúng cấu hình — xem
 > [Chọn cấu hình phù hợp](#chọn-cấu-hình-phù-hợp-với-máy-của-bạn) bên dưới. Bản
 > thân AppBI chỉ dùng khoảng **510 MB** lúc rảnh và **650–780 MB** khi đang chạy
-> dbt; thứ nặng là Airbyte platform
+> dbt; thứ nặng là engine connector dành cho môi trường production đầy đủ
 > (**~1,9 GB**), và bạn không bắt buộc phải dùng nó.
 
 ### Ba bước
@@ -139,9 +140,11 @@ Trên PowerShell (Windows) thì dùng `.\run.ps1` thay cho `./run.sh`.
 
 Một lệnh là xong. **Không cần sửa gì trong `.env` trước khi chạy.** Nó tự làm:
 
-1. Tạo `.env` từ `.env.example`, rồi **sinh `SECRET_ENCRYPTION_KEY` và
-   `JWT_SECRET` riêng cho máy này**. Hai khoá này để trống trong
-   `.env.example` là có chủ đích — chúng phải khác nhau ở mỗi bản triển khai.
+1. Tạo `.env` từ `.env.example`, điền tài khoản local mặc định
+   `admin@appbi.local` / `AppBI@123456`, rồi **sinh
+   `SECRET_ENCRYPTION_KEY` và `JWT_SECRET` riêng cho máy này**. Hai khoá này để
+   trống trong `.env.example` là có chủ đích — chúng phải khác nhau ở mỗi bản
+   triển khai.
 2. Kiểm tra trước khi build: cổng có ai chiếm không, RAM có đủ cho số lần chạy
    song song đang đặt không. Cả hai đều báo *trước* khi build, kèm tên container
    đang giữ cổng và biến cần sửa.
@@ -162,20 +165,20 @@ hơn nhiều vì Docker dùng lại cache.
 > (`API_PORT`, `PROXY_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`) rồi chạy lại.
 > Chưa có gì được build nên không mất thời gian.
 
-Xong thì mở **http://localhost:8080** và đăng nhập bằng tài khoản
-`admin@appbi.local`.
+Xong thì mở **http://localhost:8080** và đăng nhập bằng:
 
-**Mật khẩu do `run.sh` sinh riêng cho máy bạn và in ra một lần, ngay cuối lần
-chạy đầu tiên.** Chép lại ngay. Sau đó nó nằm trong `.env`:
+- Email: `admin@appbi.local`
+- Mật khẩu: `AppBI@123456`
+
+Hai giá trị nằm trong `.env`:
 
 ```bash
 grep SEED_ADMIN_PASSWORD .env
 ```
 
-> Trước đây mật khẩu là `Admin@123456`, ghi sẵn trong `.env.example` và **in
-> thẳng lên trang đăng nhập** cùng bốn tài khoản khác dùng chung nó. Ai mở được
-> trang đó là có một tài khoản quản trị. Giao diện giờ không hiển thị bất kỳ
-> thông tin đăng nhập nào, dưới bất kỳ cấu hình nào.
+Đây là tài khoản tiện dụng cho bản local/demo. Giao diện không nhúng hoặc hiển
+thị thông tin đăng nhập; script chỉ in mặc định khi nó vừa phải điền giá trị
+trống. Trước khi mở hệ thống cho người khác truy cập, sửa cả email và mật khẩu.
 
 Muốn đổi mật khẩu thì sửa `SEED_ADMIN_PASSWORD` trong `.env` rồi chạy lại
 `./run.sh` — cơ sở dữ liệu được cập nhật theo. Đổi `SEED_ADMIN_EMAIL` thì tài
@@ -196,7 +199,7 @@ chạy lại `./run.sh` (cần dựng lại image, không chỉ khởi động l
 |---|---|---|
 | **Gọn nhất** — chỉ Pipeline, không Transform | `docker-compose.yml:docker-compose.embedded.yml` | ~560 MB |
 | **Mặc định** — Pipeline + Transform | `docker-compose.yml:docker-compose.embedded.yml:docker-compose.transform.yml` | ~780 MB |
-| **Đầy đủ Airbyte** — cần khi dùng Airbyte platform riêng | thêm `:docker-compose.airbyte.yml` | **+1,9 GB** |
+| **Engine production đầy đủ** — khi kết nối tới engine đã dựng sẵn ở nơi khác | thêm `:docker-compose.airbyte.yml` | **+1,9 GB** |
 
 #### `WITH_TRANSFORM` — có cài dbt vào image không
 
@@ -216,8 +219,8 @@ hẳn.
 
 | Giá trị | Nghĩa | Phù hợp với |
 |---|---|---|
-| `AIRBYTE_EMBEDDED` | AppBI tự chạy connector qua Docker | máy nhỏ, môi trường phát triển *(mặc định)* |
-| `AIRBYTE_API` | trỏ tới một Airbyte đã dựng sẵn ở nơi khác | production có sẵn Airbyte |
+| `AIRBYTE_EMBEDDED` | AppBI tự chạy connector trực tiếp trên máy này | máy nhỏ, môi trường phát triển *(mặc định)* |
+| `AIRBYTE_API` | kết nối tới engine đã dựng sẵn ở nơi khác | production có sẵn engine riêng |
 
 > ⚠️ **Cảnh báo bảo mật cho `AIRBYTE_EMBEDDED`:** chế độ này cần gắn Docker
 > socket vào container. Container nào nói chuyện được với Docker daemon thì có
@@ -269,7 +272,7 @@ Với 2 nhân thì chạy song song **không** nhanh hơn — nó chỉ nhân RA
 > hành, mà nó có thể chọn `api` hoặc `worker` làm nạn nhân thay vì chính
 > connector đó. Khi ấy lỗi hiện ra không liên quan gì tới nguyên nhân.
 
-Destination BigQuery, Postgres và MSSQL của Airbyte chạy trên JVM và lấy heap
+Connector đích BigQuery, Postgres và MSSQL chạy trên JVM và lấy heap
 theo **tỷ lệ của trần container**. JVM mặc định chỉ lấy 25%, tức 256 MB với trần
 1 GB — không đủ. `CONNECTOR_JAVA_OPTS=-XX:MaxRAMPercentage=75.0` là thứ làm cho
 cái trần dùng được; đổi trần thì không phải đổi gì thêm.
@@ -303,9 +306,8 @@ Có hai cách tách, dùng cách nào cũng được:
 | **Tiền tố bảng** (`stream_prefix`) | Pipeline → Cài đặt → Cấu hình nâng cao | `service_stage` và `workflow_stage` trong cùng một schema |
 | **Schema riêng** | Đích dữ liệu → `schema` | `base_service.stage` và `base_workflow.stage` |
 
-**Tiền tố hoạt động ở cả hai engine.** Airbyte làm việc này ở tầng nền
-(`NamespacingMapper` trong replication worker, không phải trong connector), và
-`AIRBYTE_EMBEDDED` làm đúng như vậy: dựng **hai catalog** cho mỗi lần chạy —
+**Tiền tố hoạt động ở cả hai engine.** Engine xử lý việc này ở tầng điều phối,
+không phải trong từng connector, bằng cách dựng **hai catalog** cho mỗi lần chạy —
 Nguồn nhận tên nó đã phát hiện, Đích nhận tên mà bảng cần mang — rồi đổi tên
 stream trên từng bản ghi đi qua.
 
@@ -315,11 +317,11 @@ lần chạy sau sẽ đưa cho Nguồn một con trỏ mang tên stream mà nó
 phát ra.
 
 `namespace_format` cũng hoạt động, với `${SOURCE_NAMESPACE}` là chỗ thay thế
-namespace của Nguồn — giống hệt cú pháp của Airbyte.
+namespace của Nguồn.
 
-> Trước đây `stream_prefix` bị lưu rồi **bỏ qua trong im lặng** ở chế độ
-> `AIRBYTE_EMBEDDED`. Base Service và Base Workflow đã được đặt tiền tố đúng để
-> khỏi đụng nhau, rồi vẫn ghi chung một bảng: 4 lần hỏng trong 36 lần chạy.
+> Trước đây `stream_prefix` bị lưu rồi **bỏ qua trong im lặng**. Base Service và
+> Base Workflow đã được đặt tiền tố đúng để khỏi đụng nhau, rồi vẫn ghi chung
+> một bảng: 4 lần hỏng trong 36 lần chạy.
 
 #### Ví dụ: VM 2 CPU / 4 GB RAM
 
@@ -616,8 +618,8 @@ một dòng lỗi kỹ thuật.
 **Ngôn ngữ.** Giao diện mặc định tiếng Anh, chuyển sang tiếng Việt trong phần
 tài khoản. Lỗi cũng đổi theo: mỗi lỗi mang một mã ổn định, và câu chữ được chọn
 lúc **đọc** chứ không phải lúc xảy ra — nên một lần chạy hỏng từ tháng trước vẫn
-hiện đúng ngôn ngữ bạn đang dùng. Log do Airbyte sinh ra thì giữ nguyên: đó là
-lời của engine, không phải của sản phẩm.
+hiện đúng ngôn ngữ bạn đang dùng. Log kỹ thuật nội bộ từ connector thì giữ
+nguyên: đó là lời của engine, không phải của sản phẩm.
 
 ---
 
@@ -686,9 +688,9 @@ Bấm **Vào workspace** là chuyển phiên sang workspace đó và về trang 
 — từ đó trở đi mọi thứ thuộc phạm vi workspace như trước, kể cả phần chỉnh
 quyền chi tiết ở *Thành viên & phân quyền*.
 
-**Phân công việc giữa hai tầng** — giống cách Airbyte chia: vai trò tổ chức
-chảy xuống mọi workspace, vai trò workspace chỉ nâng lên chứ không hạ xuống
-dưới mức tổ chức. Cụ thể ở đây:
+**Phân công việc giữa hai tầng** — vai trò tổ chức chảy xuống mọi workspace,
+vai trò workspace chỉ nâng lên chứ không hạ xuống dưới mức tổ chức.
+Cụ thể ở đây:
 
 - **Console** cấp *chỗ ngồi*: người này có mặt ở workspace nào, với vai trò gì.
 - **Trong workspace** chỉnh *quyền chi tiết*: từng khu vực, từng thao tác.
@@ -703,8 +705,8 @@ bên ngoài, vì mọi màn hình đều dựng bối cảnh từ một workspac
 
 Xoá workspace **bị từ chối khi nó còn pipeline, nguồn, đích hay dự án
 Transform**, kèm danh sách cụ thể. Xoá thẳng dòng workspace sẽ cascade mất
-chúng mà không dọn tài nguyên phía engine — connection Airbyte vẫn chạy, secret
-vẫn nằm trong kho. Xoá từng cái trước là đường đã dọn đúng.
+chúng mà không dọn tài nguyên phía engine — connection đang chạy và secret
+vẫn còn nằm trong kho engine. Xoá từng cái trước là đường đã dọn đúng.
 
 ### Workspace: làm được gì bên trong
 
@@ -990,7 +992,7 @@ trong `.env` quyết định dùng mảnh nào:
 | `docker-compose.yml` | phần lõi: API, worker, giao diện, cơ sở dữ liệu *(luôn cần)* |
 | `docker-compose.embedded.yml` | chạy connector ngay trên máy này |
 | `docker-compose.transform.yml` | tiến trình chạy dbt |
-| `docker-compose.airbyte.yml` | Airbyte platform đầy đủ |
+| `docker-compose.airbyte.yml` | Engine connector production đầy đủ |
 | `docker-compose.storage.yml` | MinIO, để thử lưu trữ S3 tại chỗ |
 
 ---
