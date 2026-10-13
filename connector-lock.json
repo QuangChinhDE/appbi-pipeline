@@ -1,6 +1,6 @@
 {
   "product_version": "1.0.0",
-  "generated_at": "2026-08-26T17:59:18Z",
+  "generated_at": "2026-10-13T10:38:29Z",
   "connectors": [
     {
       "connector_key": "destination-bigquery",
@@ -35,6 +35,13 @@
       "image": "airbyte/source-google-sheets:0.12.35",
       "digest": "sha256:9469df5d9e24e966dbc34b25bf484414f6846483d2732df278c06efbcb195568",
       "spec_hash": "6ebd0c6a278f8157cb5fdf24c5eac045",
+      "certification": "SUPPORTED"
+    },
+    {
+      "connector_key": "source-mongodb-v2",
+      "image": "airbyte/source-mongodb-v2:2.0.7",
+      "digest": "sha256:bc568fb75240a158f88b4fc151c5e7eff1f79dd8d4db1169b9754cc341139745",
+      "spec_hash": "aa720f7790cf285cb73a5db44116b1ee",
       "certification": "SUPPORTED"
     },
     {

@@ -277,6 +277,21 @@ connectors:
       check: true          # SQL Server 2022, sa auth, unencrypted
       discover: true       # dbo schema, table + primary key detected
       full_refresh: true   # 3 records read and delivered
+  # Run 2026-10-13 against mongo:7.0 as a single-node replica set, read-only
+  # user (`read` on the database + `clusterMonitor`), connection string
+  # `...?replicaSet=rs0&tls=false`. Without `tls=false` check, discover and
+  # full refresh still pass and only the incremental read fails, on an SSL
+  # handshake -- see the curated entry in build-connector-registry.py.
+  source-mongodb-v2:
+    image: airbyte/source-mongodb-v2
+    pinned_version: "2.0.7"
+    certification: SUPPORTED
+    verified:
+      check: true            # SUCCEEDED
+      discover: true         # 2 collections, pk _id, full_refresh + incremental
+      full_refresh: true     # 620 records (500 + 120)
+      incremental: true      # first pass 622; second pass with state read
+                             # exactly the 2 changes (1 insert, 1 update)
   destination-mssql:
     image: airbyte/destination-mssql
     pinned_version: "2.2.20"

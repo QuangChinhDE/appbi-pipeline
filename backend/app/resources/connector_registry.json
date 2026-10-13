@@ -989,6 +989,267 @@
    "description_vi": "Đọc bảng từ Microsoft SQL Server; hỗ trợ full refresh và incremental theo cursor."
   },
   {
+   "connector_key": "source-mongodb-v2",
+   "display_name": "MongoDb",
+   "connector_type": "SOURCE",
+   "category": "Database",
+   "icon": "mongodb",
+   "icon_url": "https://connectors.airbyte.com/files/metadata/airbyte/source-mongodb-v2/latest/icon.svg",
+   "documentation_url": "https://docs.airbyte.com/integrations/sources/mongodb-v2",
+   "description": "Reads collections from MongoDB (replica set or Atlas); full refresh and incremental via change streams. For a server without TLS add tls=false to the connection string.",
+   "docker_repository": "airbyte/source-mongodb-v2",
+   "version": "2.0.7",
+   "release_stage": "generally_available",
+   "support_level": "certified",
+   "certification": "SUPPORTED",
+   "supports_oauth": false,
+   "supports_incremental": true,
+   "supports_cdc": false,
+   "supports_namespaces": false,
+   "supported_destination_sync_modes": [],
+   "spec_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "additionalProperties": true,
+    "groups": [
+     {
+      "id": "connection"
+     },
+     {
+      "id": "advanced",
+      "title": "Advanced"
+     }
+    ],
+    "properties": {
+     "database_config": {
+      "description": "Configures the MongoDB cluster type.",
+      "display_type": "radio",
+      "group": "connection",
+      "oneOf": [
+       {
+        "additionalProperties": true,
+        "description": "MongoDB Atlas-hosted cluster configured as a replica set",
+        "properties": {
+         "auth_source": {
+          "default": "admin",
+          "description": "The authentication source where the user information is stored.  See https://www.mongodb.com/docs/manual/reference/connection-string/#mongodb-urioption-urioption.authSource for more details.",
+          "examples": [
+           "admin"
+          ],
+          "order": 6,
+          "title": "Authentication Source",
+          "type": "string"
+         },
+         "cluster_type": {
+          "const": "ATLAS_REPLICA_SET",
+          "order": 1,
+          "type": "string"
+         },
+         "connection_string": {
+          "description": "The connection string of the cluster that you want to replicate.",
+          "examples": [
+           "mongodb+srv://cluster0.abcd1.mongodb.net/"
+          ],
+          "order": 2,
+          "title": "Connection String",
+          "type": "string"
+         },
+         "databases": {
+          "description": "The names of the MongoDB databases that contain the collection(s) to replicate.",
+          "items": {
+           "type": "string"
+          },
+          "order": 3,
+          "title": "Database Names",
+          "type": "array"
+         },
+         "password": {
+          "airbyte_secret": true,
+          "description": "The password associated with this username.",
+          "order": 5,
+          "title": "Password",
+          "type": "string"
+         },
+         "schema_enforced": {
+          "always_show": true,
+          "default": true,
+          "description": "When enabled, syncs will validate and structure records against the stream's schema.",
+          "order": 7,
+          "title": "Schema Enforced",
+          "type": "boolean"
+         },
+         "username": {
+          "description": "The username which is used to access the database.",
+          "order": 4,
+          "title": "Username",
+          "type": "string"
+         }
+        },
+        "required": [
+         "cluster_type",
+         "connection_string",
+         "databases",
+         "username",
+         "password",
+         "auth_source"
+        ],
+        "title": "MongoDB Atlas Replica Set"
+       },
+       {
+        "additionalProperties": true,
+        "description": "MongoDB self-hosted cluster configured as a replica set",
+        "properties": {
+         "auth_source": {
+          "default": "admin",
+          "description": "The authentication source where the user information is stored.",
+          "examples": [
+           "admin"
+          ],
+          "order": 6,
+          "title": "Authentication Source",
+          "type": "string"
+         },
+         "cluster_type": {
+          "const": "SELF_MANAGED_REPLICA_SET",
+          "order": 1,
+          "type": "string"
+         },
+         "connection_string": {
+          "description": "The connection string of the cluster that you want to replicate.  https://www.mongodb.com/docs/manual/reference/connection-string/#find-your-self-hosted-deployment-s-connection-string for more information.",
+          "examples": [
+           "mongodb://example1.host.com:27017,example2.host.com:27017,example3.host.com:27017/",
+           "mongodb://example.host.com:27017/"
+          ],
+          "order": 2,
+          "title": "Connection String",
+          "type": "string"
+         },
+         "databases": {
+          "description": "The names of the MongoDB databases that contain the collection(s) to replicate.",
+          "items": {
+           "type": "string"
+          },
+          "order": 3,
+          "title": "Database Names",
+          "type": "array"
+         },
+         "password": {
+          "airbyte_secret": true,
+          "description": "The password associated with this username.",
+          "order": 5,
+          "title": "Password",
+          "type": "string"
+         },
+         "schema_enforced": {
+          "always_show": true,
+          "default": true,
+          "description": "When enabled, syncs will validate and structure records against the stream's schema.",
+          "order": 7,
+          "title": "Schema Enforced",
+          "type": "boolean"
+         },
+         "username": {
+          "description": "The username which is used to access the database.",
+          "order": 4,
+          "title": "Username",
+          "type": "string"
+         }
+        },
+        "required": [
+         "cluster_type",
+         "connection_string",
+         "databases"
+        ],
+        "title": "Self-Managed Replica Set"
+       }
+      ],
+      "order": 1,
+      "title": "Cluster Type",
+      "type": "object"
+     },
+     "discover_sample_size": {
+      "default": 10000,
+      "description": "The maximum number of documents to sample when attempting to discover the unique fields for a collection.",
+      "group": "advanced",
+      "maximum": 100000,
+      "minimum": 10,
+      "order": 10,
+      "title": "Document discovery sample size (Advanced)",
+      "type": "integer"
+     },
+     "discover_timeout_seconds": {
+      "default": 600,
+      "description": "The amount of time the connector will wait when it discovers a document. Defaults to 600 seconds. Valid range: 5 seconds to 1200 seconds.",
+      "group": "advanced",
+      "maximum": 1200,
+      "minimum": 5,
+      "order": 11,
+      "title": "Document discovery timeout in seconds (Advanced)",
+      "type": "integer"
+     },
+     "initial_load_timeout_hours": {
+      "default": 8,
+      "description": "The amount of time an initial load is allowed to continue for before catching up on CDC logs.",
+      "group": "advanced",
+      "max": 24,
+      "min": 4,
+      "order": 14,
+      "title": "Initial Load Timeout in Hours (Advanced)",
+      "type": "integer"
+     },
+     "initial_waiting_seconds": {
+      "default": 300,
+      "description": "The amount of time the connector will wait when it launches to determine if there is new data to sync or not. Defaults to 300 seconds. Valid range: 120 seconds to 1200 seconds.",
+      "group": "advanced",
+      "max": 1200,
+      "min": 120,
+      "order": 8,
+      "title": "Initial Waiting Time in Seconds (Advanced)",
+      "type": "integer"
+     },
+     "invalid_cdc_cursor_position_behavior": {
+      "default": "Fail sync",
+      "description": "Determines whether Airbyte should fail or re-sync data in case of an stale/invalid cursor value into the WAL. If 'Fail sync' is chosen, a user will have to manually reset the connection before being able to continue syncing data. If 'Re-sync data' is chosen, Airbyte will automatically trigger a refresh but could lead to higher cloud costs and data loss.",
+      "enum": [
+       "Fail sync",
+       "Re-sync data"
+      ],
+      "group": "advanced",
+      "order": 12,
+      "title": "Invalid CDC position behavior (Advanced)",
+      "type": "string"
+     },
+     "queue_size": {
+      "default": 10000,
+      "description": "The size of the internal queue. This may interfere with memory consumption and efficiency of the connector, please be careful.",
+      "group": "advanced",
+      "max": 10000,
+      "min": 1000,
+      "order": 9,
+      "title": "Size of the queue (Advanced)",
+      "type": "integer"
+     },
+     "update_capture_mode": {
+      "default": "Lookup",
+      "description": "Determines how Airbyte looks up the value of an updated document. If 'Lookup' is chosen, the current value of the document will be read. If 'Post Image' is chosen, then the version of the document immediately after an update will be read. WARNING : Severe data loss will occur if this option is chosen and the appropriate settings are not set on your Mongo instance : https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre-and-post-images.",
+      "enum": [
+       "Lookup",
+       "Post Image"
+      ],
+      "group": "advanced",
+      "order": 13,
+      "title": "Capture mode (Advanced)",
+      "type": "string"
+     }
+    },
+    "required": [
+     "database_config"
+    ],
+    "title": "MongoDb Source Spec",
+    "type": "object"
+   },
+   "description_vi": "Đọc collection từ MongoDB (replica set hoặc Atlas); hỗ trợ full refresh và incremental qua change stream. Máy chủ không bật TLS cần thêm tls=false vào connection string."
+  },
+  {
    "connector_key": "source-postgres",
    "display_name": "Postgres",
    "connector_type": "SOURCE",

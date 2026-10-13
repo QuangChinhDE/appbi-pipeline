@@ -164,6 +164,26 @@ CURATED: dict[str, dict] = {
                        "mà không cần hệ thống ngoài.",
         "icon": "faker",
     },
+    "source-mongodb-v2": {
+        # Pinned to the tag that was run, and to the tag the cached registry
+        # describes, so the bundled form matches the image. Incremental is
+        # change streams (Debezium), which needs a replica set -- a standalone
+        # mongod cannot be read incrementally by this connector at all.
+        #
+        # The CDC phase negotiates TLS by default even when the initial
+        # snapshot did not. Against a server without TLS the incremental read
+        # fails with an SSL handshake error while Test and full refresh pass,
+        # so `tls=false` in the connection string is part of the setup, not a
+        # workaround.
+        "version": "2.0.7",
+        "description": "Reads collections from MongoDB (replica set or Atlas); "
+                       "full refresh and incremental via change streams. For a "
+                       "server without TLS add tls=false to the connection string.",
+        "description_vi": "Đọc collection từ MongoDB (replica set hoặc Atlas); hỗ "
+                          "trợ full refresh và incremental qua change stream. Máy "
+                          "chủ không bật TLS cần thêm tls=false vào connection string.",
+        "icon": "mongodb",
+    },
 
     # ── advertising platforms ────────────────────────────────────────────
     # Deliberately unpinned, unlike everything above: `version` is omitted so
