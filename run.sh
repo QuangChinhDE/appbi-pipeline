@@ -150,39 +150,32 @@ ensure_secret() {
     fi
 }
 
-# A password is not a key: it is typed by a person, so it is shorter and
-# avoids the characters that are easy to lose across a copy and paste.
-generate_password() {
-    local raw
-    if raw="$(generate_key 2>/dev/null)"; then
-        printf '%s' "$raw" | tr -d '=+/' | cut -c1-20
-        return 0
-    fi
-    return 1
+# A fresh local/demo install must be usable without copying a random password
+# out of terminal history. These values are written only when the corresponding
+# .env entry is empty or still a placeholder. A real value always wins, so an
+# operator can change either field and rerun this script to reconcile the
+# database account on the next bootstrap.
+DEFAULT_ADMIN_EMAIL='admin@appbi.local'
+DEFAULT_ADMIN_PASSWORD='AppBI@123456'
+ADMIN_EMAIL_DEFAULTED=0
+ADMIN_PASSWORD_DEFAULTED=0
+
+ensure_admin_email() {
+    local current
+    current="$(env_value SEED_ADMIN_EMAIL)"
+    is_placeholder "$current" || return 0
+    set_env_value SEED_ADMIN_EMAIL "$DEFAULT_ADMIN_EMAIL"
+    ADMIN_EMAIL_DEFAULTED=1
+    ok "set default SEED_ADMIN_EMAIL"
 }
 
-# The administrator's password, generated per deployment rather than shipped.
-#
-# It used to be `Admin@123456`, written in .env.example, seeded by every
-# install, and printed on the sign-in page along with four other accounts that
-# shared it. Anybody who could open the page had a platform administrator.
 ensure_admin_password() {
-    local current generated
+    local current
     current="$(env_value SEED_ADMIN_PASSWORD)"
-    if [ -n "$current" ] && ! is_placeholder "$current"; then
-        ADMIN_PASSWORD_SOURCE="da co trong .env"
-        return 0
-    fi
-    if generated="$(generate_password)"; then
-        set_env_value SEED_ADMIN_PASSWORD "$generated"
-        ADMIN_PASSWORD_GENERATED="$generated"
-        ADMIN_PASSWORD_SOURCE="vua sinh"
-        ok "generated SEED_ADMIN_PASSWORD"
-    else
-        fail "cannot generate SEED_ADMIN_PASSWORD: this machine has no openssl,
-    no readable /dev/urandom and no working python. Put one in .env by hand:
-        SEED_ADMIN_PASSWORD=<a password you choose>"
-    fi
+    is_placeholder "$current" || return 0
+    set_env_value SEED_ADMIN_PASSWORD "$DEFAULT_ADMIN_PASSWORD"
+    ADMIN_PASSWORD_DEFAULTED=1
+    ok "set default SEED_ADMIN_PASSWORD"
 }
 
 if [ ! -f .env ]; then
@@ -219,6 +212,7 @@ sync_env_keys() {
 }
 sync_env_keys
 
+ensure_admin_email
 ensure_admin_password
 ensure_secret SECRET_ENCRYPTION_KEY 'SECRET_ENCRYPTION_KEY=<44 ký tự urlsafe-base64>'
 # Signs session cookies. Shipped as one fixed string, so anybody holding this
@@ -508,18 +502,19 @@ info "web UI    http://localhost:${PROXY_PORT}"
 info "API       http://localhost:${API_PORT}"
 info "engine    ${ENGINE_TYPE}"
 info "sign in   ${ADMIN_EMAIL}"
-if [ -n "${ADMIN_PASSWORD_GENERATED:-}" ]; then
-    # Printed once, on the run that created it, and never again -- and never
-    # in the web UI. After this it lives in .env, which is gitignored.
+if [ "$ADMIN_EMAIL_DEFAULTED" = 1 ] || [ "$ADMIN_PASSWORD_DEFAULTED" = 1 ]; then
+    # Printed on the first local/demo setup so the operator can sign in. The
+    # web UI never embeds these values. After editing .env, the branch above
+    # preserves the replacement and bootstrap reconciles the database to it.
     printf '\n%s' "$BOLD"
-    info "mat khau quan tri vua duoc sinh cho ban cai nay:"
-    info "    ${ADMIN_PASSWORD_GENERATED}"
+    info "tai khoan local mac dinh:"
+    info "    ${DEFAULT_ADMIN_EMAIL}"
+    info "    ${DEFAULT_ADMIN_PASSWORD}"
     printf '%s' "$RESET"
-    info "luu lai ngay. Lan chay sau se khong in nua; no nam trong .env"
-    info "o khoa SEED_ADMIN_PASSWORD. Doi gia tri do roi chay lai ./run.sh"
-    info "thi mat khau trong co so du lieu doi theo."
+    info "doi SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD trong .env neu can,"
+    info "sau do chay lai ./run.sh de cap nhat tai khoan trong co so du lieu."
 else
-    info "mat khau   xem SEED_ADMIN_PASSWORD trong .env"
+    info "mat khau   doc SEED_ADMIN_PASSWORD trong .env"
 fi
 printf '\n%s' "$DIM"
 info "./run.sh --status      what is running"

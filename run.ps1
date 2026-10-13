@@ -127,28 +127,32 @@ function New-RandomKey {
     return [Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_')
 }
 
-# A password is typed by a person, so it is shorter than a key and avoids the
-# characters that get lost across a copy and paste.
-function New-RandomPassword {
-    $raw = (New-RandomKey) -replace '[=+/_-]', ''
-    return $raw.Substring(0, [Math]::Min(20, $raw.Length))
+# A fresh local/demo install gets one simple account. Existing non-placeholder
+# values are never overwritten: edit either line in .env and rerun this script
+# to reconcile the database account on the next bootstrap.
+$script:DefaultAdminEmail = 'admin@appbi.local'
+$script:DefaultAdminPassword = 'AppBI@123456'
+$script:AdminEmailDefaulted = $false
+$script:AdminPasswordDefaulted = $false
+
+function Set-AdminEmailIfUnset {
+    $current = Get-EnvValue 'SEED_ADMIN_EMAIL'
+    $unset = ($current -eq '') -or ($current -like 'REPLACE_ME*') -or
+             ($current -like '*change-me*') -or ($current -like '*changeme*')
+    if (-not $unset) { return }
+    Set-EnvValue 'SEED_ADMIN_EMAIL' $script:DefaultAdminEmail
+    $script:AdminEmailDefaulted = $true
+    Write-Ok 'set default SEED_ADMIN_EMAIL'
 }
 
-# The administrator's password, generated per deployment rather than shipped.
-#
-# It used to be `Admin@123456`, written in .env.example, seeded by every
-# install, and printed on the sign-in page beside four other accounts that
-# shared it. Anybody who could open that page had a platform administrator.
-$script:AdminPasswordGenerated = ''
 function Set-AdminPasswordIfUnset {
     $current = Get-EnvValue 'SEED_ADMIN_PASSWORD'
     $unset = ($current -eq '') -or ($current -like 'REPLACE_ME*') -or
              ($current -like '*change-me*') -or ($current -like '*changeme*')
     if (-not $unset) { return }
-    $generated = New-RandomPassword
-    Set-EnvValue 'SEED_ADMIN_PASSWORD' $generated
-    $script:AdminPasswordGenerated = $generated
-    Write-Ok 'generated SEED_ADMIN_PASSWORD'
+    Set-EnvValue 'SEED_ADMIN_PASSWORD' $script:DefaultAdminPassword
+    $script:AdminPasswordDefaulted = $true
+    Write-Ok 'set default SEED_ADMIN_PASSWORD'
 }
 
 function Set-SecretIfUnset {
@@ -182,6 +186,7 @@ if (Test-Path .env.example) {
     }
 }
 
+Set-AdminEmailIfUnset
 Set-AdminPasswordIfUnset
 Set-SecretIfUnset 'SECRET_ENCRYPTION_KEY'
 Set-SecretIfUnset 'JWT_SECRET'
@@ -322,17 +327,19 @@ function Get-HttpStatus {
 }
 
 $deadline = (Get-Date).AddMinutes(5)
-$status = 0
+# PowerShell variable names are case-insensitive: $status would overwrite the
+# [switch]$Status parameter and fail when assigned an integer HTTP status.
+$apiHttpStatus = 0
 while ((Get-Date) -lt $deadline) {
-    $status = Get-HttpStatus "http://127.0.0.1:$apiPort/readyz"
-    if ($status -ne 0) { break }
+    $apiHttpStatus = Get-HttpStatus "http://127.0.0.1:$apiPort/readyz"
+    if ($apiHttpStatus -ne 0) { break }
     Start-Sleep -Seconds 3
 }
 
-if ($status -eq 200) {
+if ($apiHttpStatus -eq 200) {
     Write-Ok 'API is ready'
-} elseif ($status -ne 0) {
-    Write-Warn "the API is up but /readyz answered $status; a dependency is degraded"
+} elseif ($apiHttpStatus -ne 0) {
+    Write-Warn "the API is up but /readyz answered $apiHttpStatus; a dependency is degraded"
     Write-Warn "detail: curl http://127.0.0.1:$apiPort/readyz?deep=1"
 } else {
     Write-Warn 'the API did not answer within 5 minutes'
@@ -356,17 +363,17 @@ Write-Info "web UI    http://localhost:$proxyPort"
 Write-Info "API       http://localhost:$apiPort"
 Write-Info "engine    $engineType"
 Write-Info "sign in   $adminEmail"
-if ($script:AdminPasswordGenerated) {
-    # Printed once, on the run that created it, and never again -- and never
-    # in the web UI. After this it lives in .env, which is gitignored.
+if ($script:AdminEmailDefaulted -or $script:AdminPasswordDefaulted) {
+    # Printed on first local/demo setup. The web UI never embeds these values.
+    # A later value from .env is preserved and reconciled into the database.
     Write-Host ''
-    Write-Info 'mat khau quan tri vua duoc sinh cho ban cai nay:'
-    Write-Info "    $($script:AdminPasswordGenerated)"
-    Write-Info 'luu lai ngay. Lan chay sau se khong in nua; no nam trong .env'
-    Write-Info 'o khoa SEED_ADMIN_PASSWORD. Doi gia tri do roi chay lai run.ps1'
-    Write-Info 'thi mat khau trong co so du lieu doi theo.'
+    Write-Info 'tai khoan local mac dinh:'
+    Write-Info "    $($script:DefaultAdminEmail)"
+    Write-Info "    $($script:DefaultAdminPassword)"
+    Write-Info 'doi SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD trong .env neu can,'
+    Write-Info 'sau do chay lai run.ps1 de cap nhat tai khoan trong co so du lieu.'
 } else {
-    Write-Info 'mat khau   xem SEED_ADMIN_PASSWORD trong .env'
+    Write-Info 'mat khau   doc SEED_ADMIN_PASSWORD trong .env'
 }
 Write-Host ''
 Write-Info '.\run.ps1 -Status      what is running'

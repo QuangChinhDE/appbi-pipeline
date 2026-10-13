@@ -1,22 +1,10 @@
-"""Where the administrator's password comes from, and where it must not appear.
+"""Where the local/demo administrator credentials come from.
 
-Two faults, reported together from a running install.
-
-The sign-in page printed a working credential. `.env.example` shipped
-NEXT_PUBLIC_DEMO_EMAIL=admin@appbi.local and NEXT_PUBLIC_DEMO_PASSWORD=
-Admin@123456, Next inlined them at build time, and the page prefilled both
-boxes and displayed the pair underneath -- plus a line naming four more
-accounts that shared the password. Every install that followed the documented
-path served a platform-administrator credential to anyone who could reach it.
-The render was already guarded by a flag; the shipped default defeated the
-guard. So the mechanism is gone, not re-defaulted.
-
-And .env could not change it. SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD existed
-in the settings and were absent from the compose environment, so a deployment
-that set them got the built-in values anyway -- the same "the setting exists
-and cannot be set" fault that hid WORKER_MAX_PARALLEL_SYNCS. Worse, the seed
-created the account once and never looked again, so even a reachable setting
-would not have moved an account that already existed.
+The launchers create a simple first-login account in a new `.env`, as requested
+for local installations. The browser bundle and sign-in page still receive no
+credential. `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` must reach the
+containers, and bootstrap must reconcile an existing account so editing `.env`
+and rerunning the launcher actually changes the login.
 """
 
 from __future__ import annotations
@@ -61,7 +49,7 @@ def _read(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8")
 
 
-# ── nothing publishes a password any more ────────────────────────────────
+# ── the browser bundle and sign-in page publish no credential ────────────
 
 #: How a comment begins, in every file this checks.
 _COMMENT_STARTS = ("#", "//", "*", '"""', "'''")
@@ -136,24 +124,35 @@ def test_the_admin_settings_are_documented_in_env_example(key: str) -> None:
 
 # ── run.sh fills the password in, once ───────────────────────────────────
 
-def test_run_sh_generates_a_password_when_env_has_none() -> None:
+def test_run_sh_sets_the_documented_local_defaults_when_env_has_none() -> None:
     script = _read("run.sh")
+    assert "DEFAULT_ADMIN_EMAIL='admin@appbi.local'" in script
+    assert "DEFAULT_ADMIN_PASSWORD='AppBI@123456'" in script
+    assert "ensure_admin_email" in script
     assert "ensure_admin_password" in script
-    assert "generate_password" in script
+    assert "generate_password" not in script
 
 
-def test_run_sh_prints_it_once_and_says_where_it_lives() -> None:
-    """Printed on the run that created it and never again -- and never in the
-    web UI. Somebody has to be able to sign in afterwards."""
+def test_run_sh_preserves_credentials_that_the_operator_changed() -> None:
+    """A non-placeholder value returns before Set-EnvValue, so rerunning the
+    launcher cannot put the local default back over an operator's value."""
     script = _read("run.sh")
-    assert "ADMIN_PASSWORD_GENERATED" in script
-    assert "SEED_ADMIN_PASSWORD" in script
+    for function_name in ("ensure_admin_email", "ensure_admin_password"):
+        match = re.search(
+            rf"{function_name}\(\) \{{(?P<body>.*?)\n\}}", script, re.S
+        )
+        assert match is not None
+        body = match.group("body")
+        assert 'is_placeholder "$current" || return 0' in body
+        assert "set_env_value" in body
 
 
 def test_the_windows_script_does_the_same() -> None:
-    """A Windows install that still shipped the published password would be
-    the same hole with a different entry point."""
+    """PowerShell and Bash must create the same first-login account."""
     script = _read("run.ps1")
+    assert "$script:DefaultAdminEmail = 'admin@appbi.local'" in script
+    assert "$script:DefaultAdminPassword = 'AppBI@123456'" in script
+    assert "Set-AdminEmailIfUnset" in script
     assert "Set-AdminPasswordIfUnset" in script
     assert "NEXT_PUBLIC_DEMO" not in script
 
