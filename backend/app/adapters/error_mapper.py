@@ -76,6 +76,24 @@ _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
      r"|no pg_hba\.conf entry .{0,80}\bno encryption\b",
      ErrorCategory.CONFIGURATION, "SOURCE_SSL_MODE_MISMATCH", "OPEN_CONFIGURATION"),
 
+    # MongoDB, measured against source-mongodb-v2 2.0.7. The connector's
+    # `message` for all three is "Something went wrong in the connector";
+    # these strings come from `internal_message` or the check status.
+    #
+    # A wrong password at discover: only the internal message says so.
+    (r"exception authenticating mongocredential|mongosecurityexception",
+     ErrorCategory.AUTHENTICATION, "SOURCE_AUTHENTICATION_FAILED", "UPDATE_CREDENTIALS"),
+    # `docker run mongo` with no --replSet. The connector reads change
+    # streams, which a standalone server does not have.
+    (r"not a replica set cluster",
+     ErrorCategory.CONFIGURATION, "SOURCE_MONGODB_NOT_REPLICA_SET", "OPEN_CONFIGURATION"),
+    # The seed host answered and handed back member addresses the connector
+    # cannot reach -- `rs.initiate()` run with `localhost:27017` or a container
+    # name. It says "Timed out", which the timeout rule below would take and
+    # tell the user to try again later; trying again never helps.
+    (r"client view of cluster state is \{type=replica_set",
+     ErrorCategory.NETWORK, "SOURCE_MONGODB_MEMBER_UNREACHABLE", "CHECK_NETWORK"),
+
     # PostgreSQL's JDBC driver puts the address in the middle -- "Connection to
     # 127.0.0.1:5432 refused." -- which `connection refused` never matched, so
     # the commonest misconfiguration of all (localhost inside a container)
@@ -174,13 +192,22 @@ _CATEGORY_SUMMARY: dict[ErrorCategory, str] = {
     ErrorCategory.TIMEOUT: "The operation took longer than it is allowed to.",
     ErrorCategory.CANCELLED: "The run was cancelled.",
     ErrorCategory.ENGINE: "The sync engine hit an internal problem.",
-    ErrorCategory.UNKNOWN: "The sync failed, and the reason has not been classified.",
+    ErrorCategory.UNKNOWN: "The connector failed, and the reason has not been classified. The technical details below carry the message from the connector itself.",
 }
 
 #: Where the category's sentence is too vague to act on. "The engine hit an
 #: internal problem" sends somebody to read logs; naming memory sends them to
 #: the one setting that fixes it.
 _CODE_SUMMARY: dict[str, str] = {
+    "SOURCE_MONGODB_NOT_REPLICA_SET":
+        "This MongoDB server is standalone. The connector reads only a replica "
+        "set or Atlas: start mongod with --replSet, run rs.initiate() once, and "
+        "test again. A single-node replica set is enough.",
+    "SOURCE_MONGODB_MEMBER_UNREACHABLE":
+        "MongoDB answered, but listed its replica-set members under addresses "
+        "the connector cannot reach (often localhost or a container name). "
+        "Reconfigure the member host to an address reachable from the "
+        "connector, or add directConnection=true to the connection string.",
     "SOURCE_SSL_MODE_MISMATCH":
         "The server was reached but refused the SSL mode in the configuration. "
         "Change SSL mode to match the server -- 'disable' or 'prefer' for a "

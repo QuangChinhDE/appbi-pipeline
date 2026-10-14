@@ -71,6 +71,25 @@ def log_text(message: AirbyteMessage) -> str | None:
     return None
 
 
+def error_text(error: dict[str, Any]) -> str | None:
+    """Both halves of a TRACE error, because the useful one is usually second.
+
+    Java connectors put the same sentence in `message` for every failure --
+    "Something went wrong in the connector. See the logs for more details." --
+    and the actual cause in `internal_message`. Reading `message or
+    internal_message` kept the sentence and dropped the cause, so a MongoDB
+    discover that failed for a specific reason reached the screen as
+    UNKNOWN_ENGINE_FAILURE with nothing to act on.
+    """
+    message = str(error.get("message") or "").strip()
+    internal = str(error.get("internal_message") or "").strip()
+    if not internal or internal in message:
+        return message or None
+    if not message or message in internal:
+        return internal
+    return f"{message} | {internal}"
+
+
 def trace_error(message: AirbyteMessage) -> dict[str, Any] | None:
     if message.type != TYPE_TRACE:
         return None

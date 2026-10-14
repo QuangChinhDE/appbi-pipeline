@@ -339,7 +339,7 @@ class EmbeddedAirbyteAdapter:
                     succeeded, message = ap.connection_status(parsed.payload)
                 error = ap.trace_error(parsed)
                 if error:
-                    trace_message = error.get("message") or error.get("internal_message")
+                    trace_message = ap.error_text(error)
 
             if succeeded is True:
                 return ConnectionCheckResult(succeeded=True, message=message, duration_ms=elapsed)
@@ -486,7 +486,7 @@ class EmbeddedAirbyteAdapter:
                         logs.append(text[:500])
                 error = ap.trace_error(parsed)
                 if error:
-                    failure = error.get("message") or error.get("internal_message")
+                    failure = ap.error_text(error)
 
             if failure is None and result.exit_code not in (0, None):
                 stderr = (result.stderr or b"").decode(errors="replace").strip()
@@ -554,7 +554,7 @@ class EmbeddedAirbyteAdapter:
                     streams = ap.parse_catalog(parsed.payload)
                 error = ap.trace_error(parsed)
                 if error:
-                    trace_message = error.get("message") or error.get("internal_message")
+                    trace_message = ap.error_text(error)
 
             if streams is None:
                 raw = trace_message or (result.stderr or b"").decode(errors="replace")[-1500:]
@@ -778,7 +778,7 @@ class EmbeddedAirbyteAdapter:
                         error = ap.trace_error(message)
                         if error:
                             source_errors.append(
-                                error.get("message") or error.get("internal_message") or ""
+                                ap.error_text(error) or ""
                             )
                         text = ap.log_text(message)
                         if text:
@@ -814,7 +814,7 @@ class EmbeddedAirbyteAdapter:
                         error = ap.trace_error(message)
                         if error:
                             dest_errors.append(
-                                error.get("message") or error.get("internal_message") or ""
+                                ap.error_text(error) or ""
                             )
                         text = ap.log_text(message)
                         if text:
