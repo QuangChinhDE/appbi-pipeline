@@ -458,13 +458,47 @@ function orderOf(schema: JsonSchema): number {
   return typeof schema.order === 'number' ? schema.order : 999;
 }
 
+/**
+ * A bare string where the spec has a `oneOf` of objects, made into the branch
+ * it names; `undefined` when it names none.
+ *
+ * source-postgres gives its `ssl_mode` oneOf `"default": "require"`. Taken as
+ * written, the picker could not find a branch in a string and showed the first
+ * one, "disable", while the payload carried `"require"` -- which the connector
+ * cannot map, so Test failed with an error that names no field. Mirrors
+ * `_fit_to_shape` in backend/app/services/catalog.py.
+ */
+function fitToBranch(prop: JsonSchema, value: unknown): unknown {
+  const branches = prop.oneOf ?? [];
+  if (branches.length === 0 || value === null || typeof value === 'object') return value;
+  for (const branch of branches) {
+    for (const [key, field] of Object.entries(branch.properties ?? {})) {
+      if (constValueOf(field) !== value) continue;
+      const seed: Record<string, unknown> = {};
+      for (const [name, sub] of Object.entries(branch.properties ?? {})) {
+        if (sub.default !== undefined) seed[name] = sub.default;
+      }
+      seed[key] = value;
+      return seed;
+    }
+  }
+  return undefined;
+}
+
 export function applyDefaults(spec: JsonSchema, current: FormValues = {}): FormValues {
   const out: FormValues = { ...current };
   const required = new Set(spec.required ?? []);
   for (const [key, prop] of Object.entries(spec.properties ?? {})) {
-    if (out[key] !== undefined) continue;
+    if (out[key] !== undefined) {
+      // A config saved before this fix may hold the bare string; repair it so
+      // the picker shows what will actually be sent.
+      const fitted = fitToBranch(prop, out[key]);
+      if (fitted !== undefined) out[key] = fitted;
+      continue;
+    }
     if (prop.default !== undefined) {
-      out[key] = prop.default;
+      const fitted = fitToBranch(prop, prop.default);
+      if (fitted !== undefined) out[key] = fitted;
       continue;
     }
     // A checkbox always shows a definite state, so the payload must carry one

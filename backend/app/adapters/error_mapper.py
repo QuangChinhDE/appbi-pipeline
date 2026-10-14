@@ -58,7 +58,30 @@ _PATTERNS: list[tuple[str, ErrorCategory, str, str]] = [
      r"|must be owner of|access to table .* denied",
      ErrorCategory.PERMISSION, "SOURCE_PERMISSION_DENIED", "GRANT_PERMISSION"),
 
-    (r"could not connect|connection refused|connection timed out|no route to host"
+    # A Java connector that cannot map its config onto its own spec class says
+    # only this, naming no field -- `schemas: "public"` where source-postgres
+    # wants `["public"]` is the case seen in the field. It sits above the
+    # network rule because the same failure output can carry connection
+    # wording from the connector's own startup, and the user was sent to check
+    # a network that a direct psql had already proven reachable.
+    (r"failed to map valid json to class",
+     ErrorCategory.CONFIGURATION, "SOURCE_CONFIGURATION_INVALID", "OPEN_CONFIGURATION"),
+
+    # The server answered, and refused the SSL mode it was asked for. Postgres
+    # wraps that in "Could not connect", so the network rule would claim it --
+    # and send somebody whose server is reachable to go and check a firewall.
+    # Now that an untouched form asks for `require` (the connector's own
+    # default), a server without SSL is the commonest way to land here.
+    (r"server does not support ssl|ssl is not enabled on the server"
+     r"|no pg_hba\.conf entry .{0,80}\bno encryption\b",
+     ErrorCategory.CONFIGURATION, "SOURCE_SSL_MODE_MISMATCH", "OPEN_CONFIGURATION"),
+
+    # PostgreSQL's JDBC driver puts the address in the middle -- "Connection to
+    # 127.0.0.1:5432 refused." -- which `connection refused` never matched, so
+    # the commonest misconfiguration of all (localhost inside a container)
+    # reached the screen as an unclassified failure.
+    (r"could not connect|connection refused|connection to \S+ refused"
+     r"|connection timed out|no route to host"
      r"|name or service not known|temporary failure in name resolution|unknownhostexception"
      r"|econnrefused|network is unreachable|ssl.*handshake|connect timed out",
      ErrorCategory.NETWORK, "SOURCE_NETWORK_UNREACHABLE", "CHECK_NETWORK"),
@@ -158,6 +181,14 @@ _CATEGORY_SUMMARY: dict[ErrorCategory, str] = {
 #: internal problem" sends somebody to read logs; naming memory sends them to
 #: the one setting that fixes it.
 _CODE_SUMMARY: dict[str, str] = {
+    "SOURCE_SSL_MODE_MISMATCH":
+        "The server was reached but refused the SSL mode in the configuration. "
+        "Change SSL mode to match the server -- 'disable' or 'prefer' for a "
+        "server without SSL.",
+    "DESTINATION_SSL_MODE_MISMATCH":
+        "The server was reached but refused the SSL mode in the configuration. "
+        "Change SSL mode to match the server -- 'disable' or 'prefer' for a "
+        "server without SSL.",
     "DESTINATION_TABLE_HAS_DEPENDENTS":
         "A Transform model has a view built directly on the table this pipeline "
         "writes, so the warehouse will not let the loader rebuild it. Materialise "

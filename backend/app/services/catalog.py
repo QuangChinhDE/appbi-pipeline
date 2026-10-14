@@ -675,10 +675,43 @@ def apply_spec_defaults(spec: dict, configuration: dict) -> dict:
     out = dict(configuration or {})
     for key, prop in ((spec or {}).get("properties") or {}).items():
         if key in out and out[key] not in (None, ""):
+            out[key] = _fit_to_shape(prop, out[key])
             continue
         if "default" in prop:
-            out[key] = prop["default"]
+            fitted = _fit_to_shape(prop, prop["default"])
+            if _shape_errors(prop, fitted):
+                continue
+            out[key] = fitted
     return out
+
+
+def _fit_to_shape(prop: dict, value: Any) -> Any:
+    """A bare string where the spec has a `oneOf` of objects, made into the
+    branch it names.
+
+    source-postgres declares `ssl_mode` as a oneOf of `{"mode": ...}` objects
+    and then gives it `"default": "require"` -- a string. Applied as written,
+    every source whose form left SSL alone reached the connector as
+    `ssl_mode: "require"` and failed with "failed to map valid json", which
+    the product then reported as a network fault. `{"mode": "require"}` is
+    what that default means, and it is also what the connector picks when the
+    key is absent, so the conversion changes no behaviour. A string that names
+    no branch (source-mssql's `"required"`) is left alone, and the default is
+    then not applied at all.
+    """
+    branches = prop.get("oneOf") or prop.get("anyOf")
+    if not branches or isinstance(value, (dict, list)) or value is None:
+        return value
+    for branch in branches:
+        for key, field in (branch.get("properties") or {}).items():
+            constant = _branch_constant(field)
+            if constant is not None and constant == value:
+                seeded = {name: sub["default"]
+                          for name, sub in (branch.get("properties") or {}).items()
+                          if isinstance(sub, dict) and "default" in sub}
+                seeded[key] = constant
+                return seeded
+    return value
 
 
 def validate_against_spec(spec: dict, configuration: dict) -> None:
@@ -696,3 +729,74 @@ def validate_against_spec(spec: dict, configuration: dict) -> None:
             code="REQUIRED_FIELDS_MISSING",
             details={"fields": ", ".join(labels), "missing_fields": missing},
         )
+
+    wrong = _shape_errors(spec or {}, configuration)
+    if wrong:
+        labels = [label for _, label in wrong]
+        raise ValidationError(
+            "These fields have the wrong format: " + ", ".join(labels),
+            code="CONFIGURATION_FIELD_WRONG_TYPE",
+            details={"fields": ", ".join(labels),
+                     "wrong_type_fields": [path for path, _ in wrong]},
+        )
+
+
+def _types(schema: dict) -> set[str]:
+    declared = schema.get("type")
+    if isinstance(declared, list):
+        return set(declared)
+    return {declared} if declared else set()
+
+
+def _shape_errors(schema: dict, value: Any, path: str = "") -> list[tuple[str, str]]:
+    """Fields whose value is a scalar where the spec wants a list or an object.
+
+    Only those two. A Java connector maps its config with Jackson, which
+    coerces "5432" to 5432 and "true" to true, so a loose scalar still works;
+    a scalar where a list or object belongs cannot be mapped at all and the
+    connector answers only "failed to map valid json to class ...", naming no
+    field. `schemas: "public"` for source-postgres is exactly that. Checking
+    scalars too would refuse configs that run today.
+    """
+    if value is None:
+        return []
+    label = schema.get("title") or path.rsplit(".", 1)[-1] or path
+    branches = schema.get("oneOf") or schema.get("anyOf")
+    if branches:
+        if not isinstance(value, dict):
+            if all("object" in _types(b) or "properties" in b for b in branches):
+                return [(path, f"{label} (expected an object)")]
+            return []
+        chosen = _chosen_branch(branches, value)
+        return _shape_errors(chosen, value, path) if chosen else []
+
+    types = _types(schema)
+    if "array" in types and not isinstance(value, list) and types <= {"array", "null"}:
+        return [(path, f"{label} (expected a list)")]
+    if "object" in types and not isinstance(value, dict) and types <= {"object", "null"}:
+        return [(path, f"{label} (expected an object)")]
+    if isinstance(value, dict):
+        found: list[tuple[str, str]] = []
+        for key, prop in (schema.get("properties") or {}).items():
+            if key in value and isinstance(prop, dict):
+                found += _shape_errors(prop, value[key], f"{path}.{key}" if path else key)
+        return found
+    return []
+
+
+def _branch_constant(field: Any) -> Any:
+    """The fixed value a `oneOf` branch is told apart by, if this field is one."""
+    if not isinstance(field, dict):
+        return None
+    enum = field.get("enum") or []
+    return field.get("const", enum[0] if len(enum) == 1 else None)
+
+
+def _chosen_branch(branches: list, value: dict) -> dict | None:
+    """The `oneOf` branch whose discriminator constant this value carries."""
+    for branch in branches:
+        for key, prop in (branch.get("properties") or {}).items():
+            constant = _branch_constant(prop)
+            if constant is not None and value.get(key) == constant:
+                return branch
+    return None
