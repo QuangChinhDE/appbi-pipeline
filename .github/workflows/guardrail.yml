@@ -1,0 +1,53 @@
+# The change guardrail, judged by code the pull request cannot edit.
+#
+# `pull_request_target` runs the workflow *as defined on the base branch*, so a
+# PR that edits this file, or the guardrail script, changes nothing about how
+# it is judged. (A job in ci.yml runs from the PR's own copy of the workflow:
+# a PR could add `exit 0` to it, or set the approval variable itself.)
+#
+# Safe use of pull_request_target: the checkout is the base commit, the PR head
+# is fetched as git objects only and read with `git show`/`git diff` -- nothing
+# from the PR is installed, imported or executed -- and the token is read-only.
+#
+# A BLOCK is lifted only by the repository variable
+# APPBI_PROTECTION_APPROVAL_SHA equal to the exact PR head SHA. Only a repo
+# admin can set it; any further push changes the head and voids it.
+name: Guardrail
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardrail-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guardrail:
+    name: Change guardrail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Fetch the PR head as data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+      - name: Diff judged by the base revision's guardrail
+        env:
+          APPBI_PROTECTION_APPROVAL_SHA: ${{ vars.APPBI_PROTECTION_APPROVAL_SHA }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          test "$(git rev-parse refs/remotes/pr/head)" = "$PR_HEAD"
+          BASE="$(git merge-base "$PR_BASE" "$PR_HEAD")"
+          python scripts/guardrail.py --repo . --base "$BASE" --head "$PR_HEAD"
