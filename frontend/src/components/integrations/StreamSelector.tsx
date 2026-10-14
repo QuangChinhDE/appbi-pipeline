@@ -289,14 +289,33 @@ export function StreamSelector({
                                   n: selectedFields.length, total: stream.fields.length,
                                 })}
                               </span>
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                disabled={selection.selected_fields === null}
-                                onClick={() => setStream(key, { selected_fields: null })}
-                              >
-                                {t('stream.selectAllFields')}
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  disabled={!selection.selected
+                                    || selectedFields.length === requiredFields.size}
+                                  onClick={() => {
+                                    // Cursor and primary key stay: the backend
+                                    // refuses a selection without them, and their
+                                    // checkboxes are locked for the same reason.
+                                    const kept = allFieldNames.filter((name) => requiredFields.has(name));
+                                    setStream(key, {
+                                      selected_fields: kept.length === allFieldNames.length ? null : kept,
+                                    });
+                                  }}
+                                >
+                                  {t('stream.deselectAllFields')}
+                                </Button>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  disabled={selection.selected_fields === null}
+                                  onClick={() => setStream(key, { selected_fields: null })}
+                                >
+                                  {t('stream.selectAllFields')}
+                                </Button>
+                              </div>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                               {stream.fields.map((field) => (
