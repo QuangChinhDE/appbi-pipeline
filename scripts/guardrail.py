@@ -52,6 +52,14 @@ PASS, BLOCK, UNVERIFIED = "PASS", "BLOCK", "UNVERIFIED"
 EXIT = {PASS: 0, BLOCK: 1, UNVERIFIED: 2}
 RISK_ORDER = {"Low": 0, "Medium": 1, "High": 2}
 
+#: What AGENTS.md requires written down at each level.
+DOCS_REQUIRED = {
+    "Low": "none",
+    "Medium": "a plan in the task or PR description: files, tests, regression surface",
+    "High": "docs/features/<slug>/{intent,spec,plan}.md from docs/features/_TEMPLATE/ before code, "
+            "and an independent review",
+}
+
 # --------------------------------------------------------------------------
 # Policy. Read from the base revision in CI, so a PR cannot loosen it.
 # --------------------------------------------------------------------------
@@ -98,7 +106,7 @@ AREAS = [
       "backend/tests/test_agent_config.py", "backend/tests/test_guardrail.py",
       "backend/tests/test_claude_guard.py", "backend/tests/test_verify.py",
       "backend/tests/test_architecture_boundaries.py", "backend/tests/test_layering_debt.py",
-      "backend/tests/governance_support.py"),
+      "backend/tests/governance_support.py", "backend/tests/test_sdlc_pilot.py"),
      ("backend/tests/test_agent_config.py", "backend/tests/test_guardrail.py",
       "backend/tests/test_claude_guard.py", "backend/tests/test_verify.py")),
     ("shared API contract", "High",
@@ -107,6 +115,11 @@ AREAS = [
     ("domain services", "Medium",
      ("backend/app/services/**", "backend/app/*.py"),
      ()),
+    # Before "shared frontend": translated text is Low (AGENTS.md) even though
+    # the catalogue lives in src/lib/.
+    ("i18n text", "Low",
+     ("frontend/src/lib/i18n.ts",),
+     ("backend/tests/test_i18n_coverage.py",)),
     ("shared frontend", "Medium",
      ("frontend/src/components/ui/**", "frontend/src/lib/**", "frontend/src/hooks/**"),
      ("backend/tests/test_architecture_boundaries.py",)),
@@ -133,7 +146,7 @@ PROTECTION_CRITICAL = (
     "backend/tests/test_architecture_boundaries.py", "backend/tests/test_agent_config.py",
     "backend/tests/test_guardrail.py", "backend/tests/test_claude_guard.py",
     "backend/tests/test_verify.py", "backend/tests/test_layering_debt.py",
-    "backend/tests/test_permissions.py",
+    "backend/tests/test_permissions.py", "backend/tests/test_sdlc_pilot.py",
 )
 
 #: CI jobs that must keep existing and keep their commands.
@@ -528,6 +541,7 @@ def render(result: Result) -> str:
         f"  base {result.base}",
         f"  head {result.head}",
         f"  risk {result.risk}  ({', '.join(result.areas) or 'no mapped area'})",
+        f"  docs {DOCS_REQUIRED[result.risk]}",
         f"  {len(result.changed)} changed path(s)",
     ]
     if result.required_tests:
@@ -540,8 +554,6 @@ def render(result: Result) -> str:
             lines.append(f"    {state}  [{f.rule}] {f.path}: {f.reason}")
             lines.append(f"             -> {f.remediation}")
     lines.append(f"  owner approval: {result.approval}")
-    if result.risk == "High":
-        lines.append("  High risk: plan before code, targeted regression tests, independent review (AGENTS.md).")
     return "\n".join(lines)
 
 
@@ -565,6 +577,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         payload = asdict(result)
         payload["verdict"] = result.verdict
+        payload["docs_required"] = DOCS_REQUIRED[result.risk]
         print(json.dumps(payload, indent=2))
     else:
         print(render(result))
