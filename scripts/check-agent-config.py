@@ -32,7 +32,6 @@ import fnmatch
 import json
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 #: Codex and similar agents truncate AGENTS.md beyond this size.

@@ -23,15 +23,17 @@ files in your diff — the table in `AGENTS.md` lists them.
 ## Hooks
 
 `.claude/settings.json` wires `scripts/claude_guard.py` as PreToolUse hooks.
-They are local defence-in-depth, not a security boundary: they catch the
-common forms of an irreversible command or a hand-edit of a protected contract
-at the moment it is attempted. Server-side branch rules and CI are the
+They are local defence-in-depth, not a security boundary: they match command
+text, so they catch the common forms of an irreversible command or a hand-edit
+of a protected contract at the moment it is attempted, and an indirect enough
+command gets past them. They err toward blocking -- a heredoc that merely
+quotes a dangerous command is refused; write such text with the Write tool. Server-side branch rules and CI are the
 enforcement; the hook only makes the mistake visible earlier.
 
 | Hook | Blocks |
 |---|---|
-| `bash` (matcher `Bash`) | `git reset --hard`, discarding checkouts/restores, `git clean -f`, force push, `branch -D`, `docker compose down -v`, `docker volume rm/prune`, `run.* --clean` |
-| `contracts` (matcher `Write\|Edit`) | edits to `engine-lock.json`, `connector-lock.json`, `compatibility.yaml` |
+| `bash` (matcher `Bash\|PowerShell`) | `git reset --hard`, discarding checkouts/restores, `git clean -f`, force push, `branch -D`, `docker compose down -v`, `docker volume rm/prune`, `run.* --clean`, KEK rotation, lock regeneration, and any shell command that names a lock file, `.env` or `secrets/` and also writes (`>`, `sed -i`, `tee`, `cp`/`mv`/`rm`, `Set-Content`, ...) |
+| `contracts` (matcher `Write\|Edit\|MultiEdit\|NotebookEdit`) | edits to `engine-lock.json`, `connector-lock.json`, `compatibility.yaml`, `.env*` (not the examples) and `secrets/` |
 
 If a hook blocks something the user explicitly asked for, say so and let the
 user run it themselves. Never edit the hook or its settings to get past it.

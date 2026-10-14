@@ -25,7 +25,8 @@ REAL_CONTENT_PREFIXES = (
     "AGENTS.md", ".claude/", "docs/features/", "scripts/", ".github/",
     "engine-lock.json", "connector-lock.json", "compatibility.yaml",
     "backend/app/adapters/", "backend/app/services/", "backend/app/api/",
-    "backend/app/transforms/",
+    "backend/app/transforms/", "backend/app/models/", "backend/app/core/",
+    "backend/migrations/", "backend/tests/", "frontend/src/lib/",
 )
 
 

@@ -18,7 +18,54 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Nothing here writes to the repository; the token gets read access only.
+permissions:
+  contents: read
+
 jobs:
+  # Judges the pull request's diff with the guardrail *as it exists at the
+  # merge base*. The head copy is never executed, so a PR that edits the
+  # guardrail cannot change the rules it is judged by (backend/tests/
+  # test_guardrail.py::test_a_pr_cannot_approve_its_own_weakening).
+  #
+  # A BLOCK is lifted only by the repository variable
+  # APPBI_PROTECTION_APPROVAL_SHA equal to the exact head commit. Only a repo
+  # admin can set it, and any further push changes the head and voids it.
+  #
+  # Pull requests only: on a push to master the change has already been judged
+  # on its PR head, which is the commit the approval named.
+  guardrail:
+    name: Change guardrail
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Diff judged by the base revision's guardrail
+        env:
+          APPBI_PROTECTION_APPROVAL_SHA: ${{ vars.APPBI_PROTECTION_APPROVAL_SHA }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          BASE="$(git merge-base "$PR_BASE" "$PR_HEAD")"
+          TRUSTED="$RUNNER_TEMP/guardrail.py"
+          if ! git show "$BASE:scripts/guardrail.py" > "$TRUSTED" 2>/dev/null; then
+            # Introducing the guardrail is itself a protection change: there is
+            # no trusted copy to judge it with, so it needs owner approval.
+            if [ "${APPBI_PROTECTION_APPROVAL_SHA:-}" != "$PR_HEAD" ]; then
+              echo "::error::scripts/guardrail.py does not exist at the merge base $BASE. Introducing it requires APPBI_PROTECTION_APPROVAL_SHA=$PR_HEAD."
+              exit 1
+            fi
+            echo "::notice::Bootstrap approved by the owner for $PR_HEAD; using the head copy once."
+            git show "$PR_HEAD:scripts/guardrail.py" > "$TRUSTED"
+          fi
+          python "$TRUSTED" --repo . --base "$BASE" --head "$PR_HEAD"
+
+
   backend:
     name: Backend
     runs-on: ubuntu-latest
