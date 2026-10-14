@@ -91,6 +91,13 @@ def steps() -> list[Step]:
             triggers=("deploy/monitoring/",),
         ),
         Step(
+            name="governance: agent config",
+            command=[py, str(ROOT / "scripts" / "check-agent-config.py")],
+            cwd=ROOT,
+            triggers=("AGENTS.md", ".claude/", "docs/features/", "scripts/",
+                      ".github/", ".gitignore"),
+        ),
+        Step(
             name="frontend: typecheck",
             command=["npx", "tsc", "--noEmit"],
             cwd=FRONTEND,
