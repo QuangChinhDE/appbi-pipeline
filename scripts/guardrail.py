@@ -141,13 +141,20 @@ PROTECTED_CONTRACTS = ("engine-lock.json", "connector-lock.json", "compatibility
 PROTECTION_CRITICAL = (
     "scripts/verify.py", "scripts/guardrail.py", "scripts/claude_guard.py",
     "scripts/check-agent-config.py", "scripts/check-migration-heads.py",
-    "scripts/check-alert-rules.py", ".github/workflows/ci.yml",
+    "scripts/check-alert-rules.py", ".github/workflows/ci.yml", ".github/workflows/guardrail.yml",
     ".claude/settings.json", "AGENTS.md", ".claude/CLAUDE.md",
     "backend/tests/test_architecture_boundaries.py", "backend/tests/test_agent_config.py",
     "backend/tests/test_guardrail.py", "backend/tests/test_claude_guard.py",
     "backend/tests/test_verify.py", "backend/tests/test_layering_debt.py",
     "backend/tests/test_permissions.py", "backend/tests/test_sdlc_pilot.py",
 )
+
+#: Files that decide which tests run and how; any change is a gate change.
+TEST_CONFIG = ("pytest.ini", "backend/pytest.ini", "setup.cfg", "pyproject.toml",
+               "backend/pyproject.toml", "frontend/playwright.config.ts", "frontend/package.json")
+
+#: Paths the test runners actually collect.
+COLLECTED = re.compile(r"^(backend/tests/(.+/)?test_[^/]+\.py|frontend/e2e/(.+/)?[^/]+\.spec\.ts)$")
 
 #: CI jobs that must keep existing and keep their commands.
 CI_WORKFLOW = ".github/workflows/ci.yml"
@@ -163,12 +170,13 @@ DEBT_REGISTER = ("backend/tests/test_layering_debt.py", "DEBT")
 #: key -- so a test that merely *mentions* one in a string is not flagged.
 SKIP_MARKERS = {
     "tests": re.compile(
-        r"^\s*@pytest\.mark\.(skip|skipif|xfail)\b|^\s*pytest\.(skip|xfail)\("
+        r"^\s*@\w+\.mark\.(skip|skipif|xfail)\b|^\s*\w+\.(skip|xfail)\(|^\s*(skip|xfail)\("
+        r"|^\s*from\s+pytest\s+import\b.*\b(skip|xfail)\b|^\s*collect_ignore"
         r"|^\s*(test|it|describe)(\.describe)?\.(skip|fixme|only)\("
         r"|^\s*pytestmark\s*=.*\b(skip|xfail)"
     ),
     "workflows": re.compile(
-        r"^\s*continue-on-error:\s*true|^\s*if:\s*(false|\$\{\{\s*false\s*\}\})\s*$"
+        r"^\s*continue-on-error:\s*(?!false\s*$)\S|^\s*if:.*\bfalse\b"
     ),
 }
 
@@ -447,6 +455,22 @@ def evaluate(repo: Repo, base: str, head: str, approval_sha: str | None) -> Resu
                 block("test-removed", path,
                       f"{len(lost)} test(s) removed: {', '.join(lost[:5])}{' ...' if len(lost) > 5 else ''}",
                       "a test is removed only with the behaviour it asserts; get owner approval")
+            # A rename that keeps every `def test_` but leaves the collected set
+            # (pytest only collects backend/tests/test_*.py) silences them all.
+            elif status == "R" and not COLLECTED.match(path):
+                block("test-uncollected", path, f"{old} renamed to a path the runner does not collect",
+                      "keep test files under backend/tests/test_*.py or frontend/e2e/*.spec.ts")
+
+        # 4b. Workflows, test-runner configuration: judged by the base, but a
+        # change here can re-scope, skip or neutralise any gate in ways no
+        # line-level check reliably sees (exit 0, an `if:`, an env override,
+        # --deselect). So any change needs the owner's approval for the commit.
+        for p in filter(None, (path, old)):
+            if p.startswith(".github/workflows/") or p in TEST_CONFIG or p.endswith("/conftest.py"):
+                block("gate-config-changed", p,
+                      "a workflow or test-runner configuration changed; it decides which gates run",
+                      "get owner approval for this exact commit (APPBI_PROTECTION_APPROVAL_SHA)")
+                break
 
         # 5. New skip/xfail/only/continue-on-error/if:false in tests and workflows.
         kind = "workflows" if path.startswith(".github/") else \

@@ -234,6 +234,78 @@ def test_an_unresolvable_base_is_unverified(repo):
     assert code == 2
 
 
+# ---------------------------------------------------------------- review bypasses
+# Each of these got past the first version of the guardrail; found by the
+# independent review of the change that introduced it.
+
+@pytest.mark.parametrize("mutate", [
+    # an early exit: every old command is still there, so nothing is "removed"
+    lambda s: s.replace("        run: python -m pytest tests -q",
+                        "        run: |\n          exit 0\n          python -m pytest tests -q"),
+    # an `if:` that is not literally `false`
+    lambda s: s.replace("    name: Backend\n", "    name: Backend\n    if: github.event_name == 'push'\n", 1),
+    # an env override nothing parsed
+    lambda s: s.replace("    name: Backend\n", "    name: Backend\n    env:\n      PYTEST_ADDOPTS: -k nothing\n", 1),
+])
+def test_any_workflow_edit_needs_owner_approval(repo, mutate):
+    base = head(repo)
+    edit(repo, ".github/workflows/ci.yml", mutate)
+    commit(repo)
+    result = judge(repo, base)
+    assert result.verdict == "BLOCK" and "gate-config-changed" in rules(result), guardrail.render(result)
+
+
+def test_editing_the_trusted_guardrail_workflow_is_blocked(repo):
+    base = head(repo)
+    edit(repo, ".github/workflows/guardrail.yml", lambda s: s.replace(
+        "${{ vars.APPBI_PROTECTION_APPROVAL_SHA }}", "${{ github.event.pull_request.head.sha }}"))
+    commit(repo)
+    assert "gate-config-changed" in rules(judge(repo, base))
+
+
+def test_a_new_workflow_is_blocked(repo):
+    base = head(repo)
+    (repo / ".github/workflows/fake.yml").write_text("name: x\n", encoding="utf-8")
+    commit(repo)
+    assert "gate-config-changed" in rules(judge(repo, base))
+
+
+@pytest.mark.parametrize("target", ["backend/tests/claude_guard_cases.py", "backend/scratch/test_claude_guard.py"])
+def test_renaming_a_test_file_out_of_collection_is_blocked(repo, target):
+    base = head(repo)
+    (repo / target).parent.mkdir(parents=True, exist_ok=True)
+    git(repo, "mv", "backend/tests/test_claude_guard.py", target)
+    commit(repo)
+    assert "test-uncollected" in rules(judge(repo, base))
+
+
+def test_renaming_a_test_file_within_collection_is_allowed(repo):
+    base = head(repo)
+    git(repo, "mv", "backend/tests/test_claude_guard.py", "backend/tests/test_hook_guard.py")
+    commit(repo)
+    assert not {"test-uncollected", "test-removed"} & rules(judge(repo, base))
+
+
+@pytest.mark.parametrize("path, text", [
+    ("pytest.ini", "addopts = -q --deselect backend/tests/test_permissions.py\n"),
+    ("backend/tests/conftest.py", "collect_ignore = ['test_permissions.py']\n"),
+])
+def test_test_runner_configuration_changes_are_blocked(repo, path, text):
+    base = head(repo)
+    p = repo / path
+    p.write_text((p.read_text(encoding="utf-8") if p.exists() else "") + text, encoding="utf-8")
+    commit(repo)
+    assert "gate-config-changed" in rules(judge(repo, base))
+
+
+@pytest.mark.parametrize("line", ["    p.skip('later')", "    skip('later')", "from pytest import skip"])
+def test_aliased_skips_are_blocked(repo, line):
+    base = head(repo)
+    edit(repo, "backend/tests/test_claude_guard.py", lambda s: s + "\n" + line + "\n")
+    commit(repo)
+    assert "gate-weakened" in rules(judge(repo, base))
+
+
 # ---------------------------------------------------------------- trust
 
 def test_a_pr_cannot_approve_its_own_weakening(repo, tmp_path):

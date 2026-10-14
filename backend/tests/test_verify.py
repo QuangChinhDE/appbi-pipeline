@@ -54,11 +54,22 @@ def test_verify_runs_the_guardrail_on_every_selection():
     assert step.triggers == () and step.exit_states == {1: "BLOCKED", 2: "UNVERIFIED"}
 
 
-def test_the_ci_guardrail_job_runs_from_the_merge_base():
+def test_the_guardrail_workflow_is_defined_by_the_base_branch():
+    """`pull_request_target` takes the workflow from the base branch, so a PR
+    cannot add `exit 0` to the job or set the approval variable itself; and it
+    checks out the base commit, so no PR code is ever executed."""
+    wf = (ROOT / ".github/workflows/guardrail.yml").read_text(encoding="utf-8")
+    assert re.search(r"^on:\s*\n\s+pull_request_target:", wf, re.M)
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in wf
+    assert "persist-credentials: false" in wf
+    assert re.search(r"^permissions:\s*\n\s+contents: read\s*$", wf, re.M)
+    assert "APPBI_PROTECTION_APPROVAL_SHA: ${{ vars.APPBI_PROTECTION_APPROVAL_SHA }}" in wf
+    assert "python scripts/guardrail.py" in wf
+    for unsafe in ("pip install", "npm ", "pr/head:scripts", "github.event.pull_request.title",
+                   "github.event.pull_request.body", "github.head_ref"):
+        assert unsafe not in wf, unsafe
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert re.search(r'git show "\$BASE:scripts/guardrail\.py"', ci), \
-        "the guardrail must be loaded from the base revision, not the PR head"
-    assert "APPBI_PROTECTION_APPROVAL_SHA: ${{ vars.APPBI_PROTECTION_APPROVAL_SHA }}" in ci
+    assert "Change guardrail" not in ci, "a PR-controlled job must not carry the required check's name"
 
 
 @pytest.mark.parametrize("path", [

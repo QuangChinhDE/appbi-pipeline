@@ -22,7 +22,7 @@ These files are the protection system. A change to them is **High** risk, and
 | Control | Kind | Where |
 |---|---|---|
 | Rules, skills, hooks and tracked files are consistent | executable | `scripts/check-agent-config.py`, CI job *Agent config*, `backend/tests/test_agent_config.py` |
-| A diff may not weaken a gate or touch a protected contract | executable, from the merge base | `scripts/guardrail.py`, CI job *Change guardrail*, `backend/tests/test_guardrail.py` |
+| A diff may not weaken a gate or touch a protected contract | executable, base-defined | `scripts/guardrail.py`, run by `.github/workflows/guardrail.yml` (`pull_request_target`: the workflow and the script both come from the base branch), `backend/tests/test_guardrail.py` |
 | `task` never reports OK with nothing run, a skipped step, or an uncovered path | executable | `scripts/verify.py`, `backend/tests/test_verify.py` |
 | CI and `verify.py full` run the same checks | executable | `backend/tests/test_verify.py::test_every_ci_check_has_a_verify_step` |
 | Layering debt can shrink but not grow | executable ratchet | `backend/tests/test_layering_debt.py`, and the guardrail refuses a raised allowance |
@@ -32,6 +32,13 @@ These files are the protection system. A change to them is **High** risk, and
 
 The hook matches command text and can be bypassed by an indirect command. It
 is not the boundary; the rulesets and the CI guardrail are.
+
+Any change under `.github/workflows/`, to `pytest.ini`, a `conftest.py`, or
+the Playwright config is a BLOCK: those files decide which gates run, in ways
+no line-level diff check reliably reads. Residual limit: GitHub matches a
+required check by name, so a PR-defined job could also report a run named
+*Change guardrail*. Such a PR edits a workflow, which the trusted run blocks,
+and only the owner can merge -- review the checks list before merging.
 
 ## Owner approval for a protection change
 
@@ -44,7 +51,9 @@ commit (Settings → Secrets and variables → Actions → Variables). The appro
 - names one commit; pushing anything else voids it;
 - cannot be set from inside a pull request -- only a repository admin can
   write repository variables;
-- is never honoured locally, where there is no commit to bind it to.
+- is never honoured locally, where there is no commit to bind it to;
+- is blanket for that commit: it lifts every BLOCK the guardrail prints for
+  it, so read the whole list in the *Change guardrail* log before setting it.
 
 An agent never sets this variable. It reports the BLOCK and the SHA, and the
 owner decides.
