@@ -89,11 +89,14 @@ PROTECTED_FILES = re.compile(
     r"|(?<![\w-])secrets[/\\]"
 )
 
-#: Ways a shell command writes, moves or deletes a file. Matched anywhere in the
-#: command once a protected file is named in it -- deliberately coarse.
+#: A shell redirect and its target. Judged by the target, so `> /dev/null` or
+#: `2>/tmp/err` in a command that merely *reads* a lock file is not a write.
+REDIRECT = re.compile(r"(?<![<>=!-])\d?>{1,2}(?!&)\s*['\"]?([^\s;|&<>'\"]+)")
+
+#: Other ways a shell command writes, moves or deletes a file. Matched anywhere
+#: in the command once a protected file is named in it -- deliberately coarse.
 WRITES = re.compile(
-    r"(?<![<>=!-])>{1,2}(?![=&])"
-    r"|\bsed\b[^|;&]*\s-\w*i|\bperl\b[^|;&]*\s-\w*i|\byq\b[^|;&]*\s-i\b|\btee\b"
+    r"\bsed\b[^|;&]*\s-\w*i|\bperl\b[^|;&]*\s-\w*i|\byq\b[^|;&]*\s-i\b|\btee\b"
     r"|\b(cp|mv|rm|truncate|dd|install|ln|touch)\s"
     r"|\b(Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|New-Item|Clear-Content|Rename-Item)\b"
     r"|\[(System\.)?IO\.File\]::(Write|Append|Delete|Move|Copy)"
@@ -148,8 +151,11 @@ def guard_bash(data: dict) -> int:
                 file=sys.stderr,
             )
             return BLOCK
-    target = PROTECTED_FILES.search(command)
-    if target and WRITES.search(command):
+    target = next((PROTECTED_FILES.search(t) for t in REDIRECT.findall(command)
+                   if PROTECTED_FILES.search(t)), None)
+    if target is None and WRITES.search(command):
+        target = PROTECTED_FILES.search(command)
+    if target:
         name = target.group(0).rstrip("/\\")
         message = CONTRACT_MESSAGE if name in CONTRACTS else SECRET_MESSAGE
         print(message.format(name=name) + "\n\n(The command names this file and "

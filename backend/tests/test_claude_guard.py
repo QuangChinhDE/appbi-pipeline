@@ -93,6 +93,10 @@ def test_shell_writes_to_protected_files_are_blocked(command):
     "sed -i 's/a/b/' frontend/src/lib/format.ts",
     "cp .env.example /tmp/review.txt",
     "ls secrets",
+    # Reads that redirect their *output* somewhere harmless.
+    "git diff --stat HEAD -- engine-lock.json compatibility.yaml > /tmp/diff.txt",
+    "docker compose -f docker-compose.yml config -q >/dev/null 2>/tmp/err; cat connector-lock.json",
+    "grep version engine-lock.json 2>&1 | head",
 ])
 def test_ordinary_commands_are_allowed(command):
     assert guard("bash", {"command": command}) == 0, command
