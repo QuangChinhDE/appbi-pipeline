@@ -95,12 +95,18 @@ vendor/engine/*.tar
 # exported artefacts) that is regenerated rather than reviewed.
 evidence/
 
-# Project-level tool configuration — contains secrets, tokens and local paths.
-.claude/
+# Agent tool configuration. Shared governance is tracked through an explicit
+# allow-list; everything else under .claude/ -- settings.local.json, worktrees,
+# session state -- is personal and stays local. The `.claude/*` form (not
+# `.claude/`) is what lets the negations below work: git cannot re-include a
+# file whose parent directory is itself ignored.
+.claude/*
 .sdlc/
 
-# All of docs/ stays local except the user-facing installation guide.
-docs/
+# All of docs/ stays local except the user-facing installation guide and the
+# feature-document templates. `docs/*`, not `docs/`, for the same reason.
+docs/*
+docs/features/*
 
 # Documentation other than docs/ stays with the local working copy.
 *.md
@@ -109,8 +115,31 @@ docs/
 
 # Un-ignore only the user guide and the screenshots it embeds. Generated
 # exports (HTML/DOCX/PDF), their build scripts and the verification log stay local.
+# Known: because docs/huong-dan-pipeline/ itself is ignored by `docs/*`, these
+# two negations do not re-include anything; the guide's files are tracked
+# because they were added explicitly. Left as-is so an untracked local export
+# does not start appearing in `git status`.
 !docs/huong-dan-pipeline/README.md
 !docs/huong-dan-pipeline/images/*.png
+
+# Shared agent governance. Checked by scripts/check-agent-config.py, which
+# fails if anything outside this list under .claude/ is ever tracked.
+!AGENTS.md
+!.claude/CLAUDE.md
+!.claude/settings.json
+!.claude/rules/
+.claude/rules/*
+!.claude/rules/*.md
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/*/
+.claude/skills/*/*
+!.claude/skills/*/SKILL.md
+!docs/features/
+!docs/features/README.md
+!docs/features/_TEMPLATE/
+docs/features/_TEMPLATE/*
+!docs/features/_TEMPLATE/*.md
 
 # Written by scripts/demo/build_actors.py: the discovered stream catalogue,
 # which is a cache of what the source answered and not a source file.
