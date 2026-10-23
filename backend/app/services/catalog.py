@@ -109,6 +109,14 @@ async def seed_catalog(session: AsyncSession) -> SeedOutcome:
             existing.documentation_url = metadata.documentation_url
             existing.support_level = metadata.support_level
             existing.release_stage = metadata.release_stage
+            # Capabilities come from the same bundled definition as the spec.
+            # Left out, a connector that gained incremental kept advertising
+            # `supports_incremental=False` from its first seed forever.
+            existing.supports_oauth = metadata.supports_oauth
+            existing.supports_incremental = metadata.supports_incremental
+            existing.supports_cdc = metadata.supports_cdc
+            existing.supports_namespaces = metadata.supports_namespaces
+            existing.supported_destination_sync_modes = metadata.supported_destination_sync_modes
             existing.certification = Certification(
                 certifications.get(metadata.connector_key, existing.certification.value)
             )
