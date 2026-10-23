@@ -389,6 +389,27 @@ class Worker:
                 log_event(logger, logging.ERROR, "outbox.error", error=str(exc))
             await self._sleep(60)
 
+    async def dictionary_loop(self) -> None:
+        """Define fields nothing defines yet, from their names and types only.
+
+        Off the sync path and isolated like the other housekeeping loops:
+        every failure is caught here, because an exception escaping a loop
+        would end `asyncio.gather` and with it every other loop.
+        """
+        from app.services import dictionary as dictionary_service
+
+        while not self.stopping.is_set():
+            try:
+                async with SessionLocal() as session:
+                    written = await dictionary_service.fill_with_ai(session)
+                    if written:
+                        log_event(logger, logging.INFO, "dictionary.pass",
+                                  defined=written)
+            except Exception as exc:  # noqa: BLE001
+                log_event(logger, logging.WARNING, "dictionary.error",
+                          error=str(exc)[:300])
+            await self._sleep(300)
+
     async def janitor_loop(self) -> None:
         while not self.stopping.is_set():
             try:
@@ -505,6 +526,7 @@ class Worker:
             asyncio.create_task(self.catalog_loop(), name="catalog"),
             asyncio.create_task(self.janitor_loop(), name="janitor"),
             asyncio.create_task(self.outbox_loop(), name="outbox"),
+            asyncio.create_task(self.dictionary_loop(), name="dictionary"),
         ]
         try:
             await asyncio.gather(*tasks)

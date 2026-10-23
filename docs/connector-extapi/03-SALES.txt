@@ -1,0 +1,234 @@
+SOURCE: source-base-sales (Base Sales Public API)
+
+DESCRIPTION:
+Reads pipelines, stages, segments, logs, deals, accounts, contacts and feed from the Sales Public API (extapis.base.vn/sales/v1). Not the legacy "Base CRM - Deals" connector.
+
+IMPLEMENTED STREAMS:
+- pipeline | POST pipeline/all | full refresh, incremental (client-side)
+- pipeline_stage | POST pipeline/get.stages | full refresh, incremental (client-side)
+- pipeline_segment | POST segment/pipeline.segments | full refresh, incremental (client-side)
+- pipeline_log | POST pipeline/get.logs (before, 200/call) | full refresh, incremental (server stime)
+- deal | POST pipeline/deals (page, limit 1000) | full refresh, incremental (server last_update_stime+etime)
+- account_service | POST account/service/all | full refresh, incremental (client-side)
+- account_segment | POST segment/account.segments | full refresh, incremental (client-side)
+- account | POST account/list (page, limit 1000) | full refresh, incremental (server last_update_stime+etime)
+- contact_service | POST contact/service/all | full refresh, incremental (client-side)
+- contact_segment | POST segment/contact.segments | full refresh, incremental (client-side)
+- contact | POST contact/list (status active + disabled, page 1000) | full refresh, incremental (server last_update_stime+etime)
+- feed | POST feed/list (page, limit 200) | full refresh, incremental (server updated_from)
+
+APIS NOT YET CONVERTED TO STREAMS:
+- deal/get.forecasts | returned empty for all deals tested; one call per deal
+- pipeline/get.forecasts | needs forecast_service_id (source undocumented)
+- deal/get, account/get, contact/get, pipeline/get | same fields as list APIs
+- deal/get.activities, account/get.activities, contact/get.activities | covered by feed; two are DEPRECATED
+- pipeline/get.segments, account/service/get.segments, contact/service/get.segments | duplicated by segment/*.segments
+- ping, sysinfo | technical
+- 23 write APIs | out of scope
+
+CURRENT STREAM LIMITATIONS:
+- deal / account / contact | server page pagination loses records (996/999 at 100/page) | possible data loss above 1000 rows per list
+- pipeline_log | max 200 per call; exclusive `before` | overlapping second re-read (dedup needed); >200 logs in one second truncated
+- *_segment | active only, max 500 | inactive segments missing
+- pipeline_stage | active stages only | deleted stages missing
+- feed | 200/page | pagination loss risk on large workspaces (not measured)
+
+GENERAL LIMITATIONS:
+- Rate limit 200 requests / 10 min per key, 1000 / hour per workspace.
+- Custom fields stay in form[] array, not columns.
+
+NOTES:
+- Auth: X-API-TOKEN header (extapis.<domain>/{app}/v1, POST JSON). Body status=0 fails the sync.
+- Incremental cursor is always chosen by the user; no default cursor.
+- Detailed Vietnamese notes, test runs (2026-10-22) and API-team requests follow below.
+
+======================================================================
+
+CONNECTOR SALES (source-base-sales): STREAM, HẠN CHẾ, API CHƯA DÙNG
+==================================================================
+File code: backend/app/connectors/base_vn/sales.py
+Host thật: https://extapis.base.vn/sales/v1/
+  Tài liệu ghi https://api-v3.{domain}, nhưng api-v3.base.vn trả
+  INVALID_SYS_PATH_4.
+Tài liệu gốc: https://rework-crm-public-apis-standard.dev.rework.site/
+  (nhóm Sales: 49 API = 26 API đọc + 23 API ghi).
+Không phải connector "Base CRM - Deals" (crm.py): crm.py đọc API cũ
+  apis.base.vn/sales bằng token và mật khẩu trong body.
+Giới hạn tốc độ của API: 200 request / 10 phút cho mỗi key, 1000 request /
+  giờ cho mỗi workspace.
+
+
+1. STREAM HIỆN CÓ (12)
+---------------------
+Mọi stream đều có full refresh và incremental. Cursor do người dùng chọn.
+
+Stream            API                          Phân trang                Lọc incremental             Cursor được chọn
+pipeline          pipeline/all                 không cần                 phía client                 created_at/updated_at
+pipeline_stage    pipeline/get.stages          không cần                 phía client                 created_at/updated_at
+pipeline_segment  segment/pipeline.segments    không cần                 phía client                 created_at/updated_at
+pipeline_log      pipeline/get.logs            lùi theo before, 200/lần  server: stime               created_at
+deal              pipeline/deals               page/limit=1000           server: last_update_s/etime created_at/updated_at/stage_start
+account_service   account/service/all          không cần                 phía client                 created_at/updated_at
+account_segment   segment/account.segments     không cần                 phía client                 created_at/updated_at
+account           account/list                 page/limit=1000           server: last_update_s/etime created_at/updated_at
+contact_service   contact/service/all          không cần                 phía client                 created_at/updated_at
+contact_segment   segment/contact.segments     không cần                 phía client                 created_at/updated_at
+contact           contact/list (gọi 2 lần:     page/limit=1000           server: last_update_s/etime created_at/updated_at
+                  status active + disabled)
+feed              feed/list                    page/limit=200            server: updated_from        since/last_update
+
+Kiểm chứng (CDK, key thật):
+  - Full refresh khớp tổng do API báo: 1512 deal, 1021 account, 1023 contact,
+    242 feed.
+  - pipeline_log: đọc đủ 1885/1885 log (so với tự đi hết các trang); có 45
+    dòng trùng do chồng 1 giây giữa các trang, khử bằng khóa chính.
+  - Incremental lần 2 chỉ đọc lại các bản ghi tại mốc cursor.
+
+
+2. HẠN CHẾ CỦA TỪNG STREAM
+-------------------------
+pipeline
+  - API không có bộ lọc: incremental lọc phía client nên mỗi lần sync vẫn
+    đọc toàn bộ (số lượng nhỏ).
+pipeline_stage
+  - Gọi một lần cho mỗi pipeline. Chỉ trả stage ĐANG HOẠT ĐỘNG; stage đã
+    xóa hoặc tắt không xuất hiện.
+  - Mọi stage của một pipeline có cùng updated_at, nên incremental luôn đọc
+    lại cả pipeline (vài dòng).
+pipeline_segment / account_segment / contact_segment
+  - Chỉ trả segment đang hoạt động, TỐI ĐA 500 segment.
+pipeline_log
+  - Mỗi lần trả TỐI ĐA 200 log, dù tài liệu ghi limit tối đa 1000.
+  - Phân trang bằng before (lùi theo created_at). before loại hẳn giây làm
+    mốc, mà rất nhiều log trùng giây (141/200). Connector gửi before = log cũ
+    nhất + 1 nên đọc lại giây đó, tạo vài dòng trùng. Cần ghi bằng
+    Append + Deduped.
+  - Nếu hơn 200 log rơi cùng một giây (ví dụ import hàng loạt), phần vượt
+    quá 200 của giây đó sẽ bị bỏ: connector dừng để không lặp vô hạn.
+deal
+  !!! Phân trang theo page của server LÀM MẤT BẢN GHI. Lấy 999 deal với 100
+      bản ghi mỗi trang chỉ được 996 deal khác nhau; với 37 bản ghi mỗi trang
+      còn 987. Lấy cả 1000 trong một trang thì đủ. Connector dùng limit=1000,
+      nên pipeline có HƠN 1000 deal vẫn có thể thiếu.
+  - Phải gửi đủ last_update_stime và last_update_etime; gửi một mốc thì
+    server bỏ qua bộ lọc (connector đã gửi đủ).
+  - Kết quả trả theo thứ tự bảng Kanban, không theo thời gian. Tối đa
+    10.000 trang.
+  - Cột closed_at, expected_close, last_activity_ts gần như luôn bằng 0 nên
+    không dùng làm cursor.
+account
+  !!! Cùng lỗi phân trang như deal, khi một service có hơn 1000 account.
+  - address là object; segments là map {segment_id: giá trị}.
+contact
+  !!! Cùng lỗi phân trang như deal, khi một service có hơn 1000 contact.
+  - API mặc định chỉ trả contact đang hoạt động; connector gọi thêm với
+    status=disabled để lấy contact bị chặn.
+feed
+  - Tối đa 200 bản ghi mỗi trang nên lỗi phân trang dễ gặp hơn ở workspace
+    lớn (chưa đo được vì mới có 242 bản ghi).
+  - Không truyền user_id nên không có mail của người dùng khác.
+Chung cho mọi stream
+  - Giá trị custom field nằm trong form[] dạng mảng, không tách thành cột.
+  - Giới hạn 200 request / 10 phút cho mỗi key.
+
+
+3. API TRONG TÀI LIỆU CHƯA THÀNH STREAM
+--------------------------------------
+26 API đọc: 12 đã thành stream (11 stream dùng 1 API mỗi stream; contact gọi
+contact/list 2 lần); 14 chưa dùng:
+
+  A. Có dữ liệu nhưng chưa làm stream (2):
+     deal/get.forecasts      Dự báo doanh thu của từng deal. Cả 25 deal đã
+                             thử đều trả rỗng, nên chưa có mẫu để xác định
+                             khóa chính và schema. Phải gọi cho từng deal
+                             (khoảng 1500 request mỗi lần sync).
+     pipeline/get.forecasts  Bắt buộc có forecast_service_id (tài liệu không
+                             nói cách lấy) và user_id.
+
+  B. Đã kiểm tra: không có dữ liệu mới, không cần làm stream (12):
+     ping, sysinfo           API kỹ thuật.
+     deal/get, account/get, contact/get, pipeline/get
+                             Đọc từng bản ghi; đã so sánh: field GIỐNG HỆT API
+                             danh sách.
+     deal/get.activities     Mọi hoạt động đã kiểm tra (10/10) đều có trong
+                             stream feed. Mỗi deal chỉ trả tối đa 100, và gọi
+                             cho từng deal sẽ vượt giới hạn tốc độ.
+     account/get.activities, contact/get.activities
+                             Tài liệu đánh dấu DEPRECATED; dữ liệu đã có trong feed.
+     pipeline/get.segments, account/service/get.segments,
+     contact/service/get.segments
+                             Trùng với segment/*.segments (lấy toàn workspace
+                             trong một lần gọi).
+
+  API ghi (23, không dùng): deal/create, edit.basic, edit.basic.field,
+     edit.cfield, edit.owner, edit.status, move, remove; account/create, edit,
+     edit.cfield, edit.followers, edit.owner, remove; contact/create, edit,
+     edit.cfield, edit.owner, edit.status; feed/create/calllog, meetinglog,
+     note, quicklog.
+
+
+3b. KIỂM THỬ TRÊN PIPELINE THẬT
+-------------------------------
+Cách kiểm thử chung (áp dụng cho mọi lượt dưới đây):
+  - Chạy pipeline qua app (destination BigQuery), lấy log của lần chạy, số
+    bản ghi từng stream (pipeline_stream_stats), state và Dictionary.
+  - Đếm tổng trực tiếp trên API ngay sau khi chạy để đối chiếu full refresh.
+  - Với incremental: lưu state ngay TRƯỚC lượt chạy, đếm trên API các bản ghi
+    có cursor >= mốc của từng partition, rồi so với số bản ghi lượt chạy đọc.
+  - Mục nào chưa kiểm chứng được ghi rõ "CHƯA KIỂM CHỨNG".
+
+[2026-10-22] Lượt 1, 2 (pipeline "sales", người dùng đã cấu hình Incremental +
+  Append + Deduped, khóa chính id cho cả 11 stream)
+  - Lượt 1 SUCCEEDED 72 bản ghi; lượt 2 SUCCEEDED 55 bản ghi (~260 giây).
+  - Incremental đọc đúng ở cả 11 stream (lượt 2): account 4/4,
+    account_segment 1/1, account_service 1/1, contact 7/7, contact_segment
+    1/1, contact_service 1/1, deal 5/5, feed 1/1, pipeline 1/1,
+    pipeline_segment 1/1, pipeline_stage 32/32.
+    Contact được đối chiếu theo từng cặp (service, active/disabled).
+  - Log: không có lỗi; 4 cảnh báo cursor rỗng khi đọc stream cha; 1 cảnh báo
+    "Parent state handling is not supported for CartesianProductStreamSlicer"
+    (stream contact = cha x status; connector không dùng parent state nên
+    không ảnh hưởng).
+  - VẤN ĐỀ: pipeline vẫn dùng schema discover ngày 20/10, nên:
+      * Dictionary 147 field, tất cả "chưa có định nghĩa", không đổi sau sync;
+      * chưa có stream pipeline_log;
+      * còn kiểu cũ của account.address / segments.
+    Sync không tự discover lại.
+  - VẤN ĐỀ: khai báo sai kiểu, đối chiếu với toàn bộ dữ liệu thật:
+      account.form, contact.form khai báo array; API trả {} (object rỗng)
+        khi bản ghi không có custom field (1018/1021 account, 1020/1023 contact);
+      pipeline_stage.lc_status khai báo string; thực tế integer (32/32);
+      pipeline_log.created_at là chuỗi số ở một số log.
+    Log không có lỗi; ảnh hưởng trong BigQuery CHƯA KIỂM CHỨNG.
+
+[2026-10-22] Điều chỉnh
+  - Connector: form -> ["array","object"]; lc_status -> integer;
+    pipeline_log.created_at giữ integer (chuỗi số vẫn ép kiểu được, còn kiểu
+    hợp nhất với string sẽ biến cả cột thành STRING).
+  - Pipeline: làm mới schema; duyệt 5 thay đổi BREAKING (lc_status, segments,
+    address); thêm stream pipeline_log (Incremental, cursor created_at,
+    Append + Deduped, khóa chính id).
+
+[2026-10-22] Lượt 3, 4 (sau điều chỉnh)
+  - Lượt 3 SUCCEEDED 1985 bản ghi (gồm lần đồng bộ đầu của pipeline_log:
+    1930 dòng cho 1885 log; 45 dòng trùng do chồng 1 giây giữa các trang,
+    khử được theo khóa chính). Lượt 4 SUCCEEDED 65 bản ghi.
+  - Incremental đọc đúng ở cả 12 stream; pipeline_log lượt 4 đọc 10/10.
+  - Log: không có lỗi, KHÔNG CÒN cảnh báo cursor rỗng (còn cảnh báo
+    CartesianProductStreamSlicer, không ảnh hưởng).
+  - Dictionary: 216 field có mô tả, 0 field chưa có định nghĩa.
+  - Phân trang làm mất bản ghi khi danh sách vượt 1000: CHƯA KIỂM CHỨNG lại
+    trong đợt này (lượt incremental chỉ đọc vài bản ghi mỗi partition).
+
+4. LỖI / ĐỀ NGHỊ GỬI TEAM SALES
+------------------------------
+  - (CAO) Phân trang theo page làm mất bản ghi ở pipeline/deals,
+    account/list, contact/list (số liệu ở mục 2).
+  - pipeline/get.logs chỉ trả 200 log mỗi lần dù tài liệu ghi 1000; before
+    loại hẳn giây làm mốc trong khi nhiều log trùng giây. Đề nghị thêm cursor
+    theo id.
+  - Bộ lọc *_stime bị bỏ qua nếu không kèm *_etime (tài liệu không ghi).
+  - contact/list mặc định chỉ trả contact đang hoạt động (tài liệu có ghi
+    nhưng dễ bỏ sót).
+  - Tài liệu ghi host api-v3.{domain}, không dùng được với installation base.vn.
+  - Tài liệu không mô tả field của deal, account, contact và các object khác.

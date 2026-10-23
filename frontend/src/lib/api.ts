@@ -20,7 +20,8 @@ import type {
   BuilderAIChangeResult, BuilderAIPlan, BuilderAISession, BuilderAISource,
   BuilderDefinition, BuilderIconKey, BuilderProject, BuilderProjectDetail, BuilderTestResult, Connector,
   ConnectorDetail, CurrentUser, EngineStatus, Member, MonitoringResponse, Overview, Paginated,
-  ConnectionStateView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage, SchemaDiff,
+  ConnectionStateView, DictionaryView, Pipeline, PipelineDetail, Run, RunDetail, RunLogPage,
+  SchemaDiff,
   SchemaSnapshot, ScheduleConfig, WorkspaceSettings, WorkspaceSummary,
   OrganizationSummary, OrgMember,
   // Transform V2: a project of dbt files, its artifacts, and its Git binding.
@@ -512,6 +513,12 @@ export const pipelineApi = {
   remove: (id: string) => del<void>(`/pipelines/${id}`),
   rediscover: (id: string) => post<SchemaSnapshot>(`/pipelines/${id}/rediscover`),
   schemaDiff: (id: string) => get<SchemaDiff>(`/pipelines/${id}/schema-diff`),
+  dictionary: (id: string) => get<DictionaryView>(`/pipelines/${id}/dictionary`),
+  /** Only the meaning is editable; an empty description reverts the field. */
+  editDictionary: (id: string, body: { stream_id: string; path: string; description: string }) =>
+    put<DictionaryView>(`/pipelines/${id}/dictionary`, body),
+  dictionaryExportUrl: (id: string, format: 'csv' | 'xlsx', locale: string) =>
+    `${BASE}/pipelines/${id}/dictionary/export?format=${format}&locale=${locale === 'vi' ? 'vi' : 'en'}`,
   // Lazy on purpose: the answer comes from the engine, and the settings page
   // has to render whether or not the engine is reachable.
   state: (id: string) => get<ConnectionStateView>(`/pipelines/${id}/state`),

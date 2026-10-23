@@ -84,6 +84,7 @@ export const qk = {
   // part of the pipeline payload, so it must not be invalidated with it.
   pipelineState: (id: string) => ['pipeline-state', id] as const,
   schemaDiff: (ws: string, id: string) => ['workspace', ws, 'pipeline', id, 'schema-diff'] as const,
+  dictionary: (ws: string, id: string) => ['workspace', ws, 'pipeline', id, 'dictionary'] as const,
   runs: (ws: string, filters?: unknown) => ['workspace', ws, 'runs', filters] as const,
   run: (ws: string, id: string) => ['workspace', ws, 'run', id] as const,
   runLogs: (ws: string, id: string) => ['workspace', ws, 'run', id, 'logs'] as const,

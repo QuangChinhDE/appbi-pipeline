@@ -24,9 +24,11 @@ from app.schemas.domain import (
     ConnectionStateUpdate, ConnectionStateView, SchemaDiffView, SchemaSnapshotView, ScheduleConfig,
     StreamSyncState,
 )
+from app.core.config import settings
+from app.schemas.dictionary import DictionaryEdit, DictionaryView
 from app.services import (
-    actors as actor_service, pipelines as pipeline_service, runs as run_service, scheduling,
-    schema_service,
+    actors as actor_service, dictionary as dictionary_service, pipelines as pipeline_service,
+    runs as run_service, scheduling, schema_service,
 )
 
 router = APIRouter(prefix="/pipelines", tags=["pipelines"])
@@ -275,6 +277,57 @@ async def schema_approve(
     await session.commit()
     await session.refresh(pipeline)
     return await _detail(session, ctx, pipeline)
+
+
+@router.get("/{pipeline_id}/dictionary", response_model=DictionaryView)
+async def dictionary(pipeline_id: uuid.UUID, session: SessionDep, ctx: CtxDep) -> DictionaryView:
+    """Every field of every stream, with what it means and where that came from."""
+    ctx.require(Module.PIPELINES, Action.VIEW)
+    pipeline = await pipeline_service.get(session, ctx, pipeline_id)
+    return DictionaryView(
+        pipeline_id=pipeline.id,
+        ai_enabled=bool(settings.openai_api_key.strip()),
+        streams=await dictionary_service.build(session, pipeline),
+    )
+
+
+@router.put("/{pipeline_id}/dictionary", response_model=DictionaryView)
+async def edit_dictionary(
+    pipeline_id: uuid.UUID, payload: DictionaryEdit, session: SessionDep, ctx: CtxDep,
+) -> DictionaryView:
+    """Set one field's definition. Only the meaning; path and type are the schema's."""
+    ctx.require(Module.PIPELINES, Action.EDIT)
+    pipeline = await pipeline_service.get(session, ctx, pipeline_id)
+    await dictionary_service.set_description(
+        session, ctx, pipeline, payload.stream_id, payload.path, payload.description)
+    await session.commit()
+    return DictionaryView(
+        pipeline_id=pipeline.id,
+        ai_enabled=bool(settings.openai_api_key.strip()),
+        streams=await dictionary_service.build(session, pipeline),
+    )
+
+
+@router.get("/{pipeline_id}/dictionary/export")
+async def export_dictionary(
+    pipeline_id: uuid.UUID, session: SessionDep, ctx: CtxDep,
+    format: Annotated[str, Query(pattern="^(csv|xlsx)$")] = "csv",
+    locale: Annotated[str, Query(pattern="^(en|vi)$")] = "en",
+) -> Response:
+    ctx.require(Module.PIPELINES, Action.VIEW)
+    pipeline = await pipeline_service.get(session, ctx, pipeline_id)
+    rows = dictionary_service.export_rows(
+        await dictionary_service.build(session, pipeline), locale)
+    stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in pipeline.name) or "pipeline"
+    if format == "xlsx":
+        body, media = dictionary_service.to_xlsx(rows), (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        body, media = dictionary_service.to_csv(rows), "text/csv; charset=utf-8"
+    return Response(
+        content=body, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{stem}-dictionary.{format}"'},
+    )
 
 
 @router.post("/{pipeline_id}/runs", response_model=RunView, status_code=202)

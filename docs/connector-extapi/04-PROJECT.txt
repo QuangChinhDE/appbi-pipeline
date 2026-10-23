@@ -1,0 +1,211 @@
+SOURCE: source-base-project (Base Project Public API)
+
+DESCRIPTION:
+Reads services, service metadata, projects, boards, groups, tasks and task activity from extapis.base.vn/project/v1. Requires an acting user (user_id: numeric id or username without @).
+
+IMPLEMENTED STREAMS:
+- service | POST service/all (page, 200) | full refresh, incremental (client-side)
+- service_field | POST service/get.fields | full refresh
+- service_item_type | POST service/get.itemtypes | full refresh
+- service_stage | POST service/get.stages | full refresh
+- project | POST project/list (page, 200) | full refresh, incremental (server updated_from)
+- project_board | POST project/get.boards | full refresh, incremental (client-side)
+- project_group | POST project/get.groups | full refresh
+- task | POST task/list (per project, include_archived) | full refresh, incremental (client-side)
+- task_activity | POST task/get.activity (per task, keyset before, 100) | full refresh, incremental (client-side, global cursor)
+
+APIS NOT YET CONVERTED TO STREAMS:
+- task/get.comments | no sample data in test workspace (32/32 empty)
+- project/get, service/get, task/get | same fields as list APIs
+- ping, sysinfo | technical
+- 8 write APIs | out of scope
+
+CURRENT STREAM LIMITATIONS:
+- all | data limited to what user_id can see | changing user_id changes results
+- task | task/list has no updated filter | every sync reads all projects' tasks
+- task_activity | one call per task; no event id (composite key) | request volume; same-second identical events merge
+- task_activity | full refresh config logs "Could not find cursor field" warnings | warning only, data complete
+
+GENERAL LIMITATIONS:
+- Documented host api-v3.{domain} does not work on base.vn; extapis is used.
+
+NOTES:
+- Auth: X-API-TOKEN header (extapis.<domain>/{app}/v1, POST JSON). Body status=0 fails the sync.
+- Incremental cursor is always chosen by the user; no default cursor.
+- Detailed Vietnamese notes, test runs (2026-10-22) and API-team requests follow below.
+
+======================================================================
+
+CONNECTOR PROJECT (source-base-project): STREAM, HẠN CHẾ, API CHƯA DÙNG
+======================================================================
+File code: backend/app/connectors/base_vn/project.py
+Host thật: https://extapis.base.vn/project/v1/
+  Tài liệu ghi https://api-v3.{domain}; giống Sales, installation base.vn
+  chạy trên extapis.
+Tài liệu gốc:
+  https://rework-crm-public-apis-standard.dev.rework.site/doc/project-getting-started
+  (nhóm Project: 21 API = 13 API đọc + 8 API ghi)
+
+!!! Mọi API (trừ ping/sysinfo) BẮT BUỘC có user tác động (acting user), và
+    chỉ trả dữ liệu user đó được xem. Đo được: một user thấy 5 service /
+    6 project, trong khi admin thấy 9 / 12.
+    Đúng như tài liệu, trường user_id nhận user id dạng số HOẶC username (đã
+    test: 104171 và mytest01 trả cùng 12 project). Không nhận dạng có @
+    (@mytest01), và user phải đang hoạt động trong workspace; nếu không, API
+    báo "No active user with this username in this workspace".
+    -> Form tạo source có trường bắt buộc "user_id" (id hoặc username).
+       Nên dùng tài khoản admin.
+
+
+1. STREAM HIỆN CÓ (9)
+--------------------
+Stream             API                         Phân trang            Incremental                        Khóa chính
+service            service/all                 page/limit=200        có, lọc client: created/updated_at id
+service_field      service/get.fields          không cần             không (không có cột thời gian)     service_id + id
+service_item_type  service/get.itemtypes       không cần             không                              service_id + id
+service_stage      service/get.stages          không cần             không                              service_id + id
+project            project/list                page/limit=200        có, lọc server updated_from;       id
+                                                                     cursor: created_at/updated_at
+project_board      project/get.boards          không cần             có, lọc client: created/updated_at id
+project_group      project/get.groups          không cần             không                              id
+task               task/list (mỗi project)     page/limit=200        có, lọc client;                    id
+                                                                     cursor: created_at/updated_at/finished_at
+task_activity      task/get.activity (mỗi task) keyset next_cursor.before, có, lọc client; cursor: at   task_id + at + action + user_id
+                                               100/lần
+
+Kiểm chứng (CDK, key thật, user admin 104171):
+  - Full refresh khớp đúng tổng đếm trực tiếp từ API ở cả 9 stream:
+    9 / 6 / 6 / 6 / 12 / 21 / 7 / 32 / 73.
+  - Check: key sai -> FAILED; thiếu user_id -> lỗi cấu hình.
+  - Incremental lần 2: service 1, project 1, task_activity 1, project_board 18,
+    task 9. Board và task đọc lại nhiều hơn vì mỗi project có nhiều bản ghi
+    cùng giây tại mốc cursor (hành vi "giao ít nhất một lần" của CDK). Cần ghi
+    bằng Append + Deduped.
+
+
+2. HẠN CHẾ CỦA TỪNG STREAM
+-------------------------
+Chung
+  - Dữ liệu và giá trị custom field (cfields) phụ thuộc quyền của user_id.
+    Đổi user_id có thể làm thiếu hoặc thừa dữ liệu.
+  - Phân trang page/limit (tối đa 200): đã đo 20 task với 3 task mỗi trang,
+    không trùng, không sót. Chưa thấy lỗi mất bản ghi như Sales, nhưng dữ liệu
+    test còn nhỏ.
+service
+  - API không có bộ lọc: incremental lọc phía client, mỗi lần sync đọc lại
+    toàn bộ (số lượng nhỏ).
+service_field / service_item_type / service_stage
+  - Gọi một lần cho mỗi service; không có cột thời gian nên chỉ full refresh.
+  - service_field.options là array; chưa có mẫu để khai báo cấu trúc phần tử.
+project
+  - Lọc server bằng updated_from (gửi một mốc là đủ). Giữ thứ tự mặc định
+    (mới tạo trước), KHÔNG dùng sort_by=updated&sort_order=asc như tài liệu
+    gợi ý. Lý do: với phân trang theo page, sắp theo thời gian cập nhật làm
+    record vừa sửa trong lúc sync dời ra cuối, đẩy các record khác lùi một vị
+    trí và làm sót bản ghi.
+  - Project đã lưu trữ (status -1) đã có sẵn trong danh sách mặc định.
+  - start_date và deadline thường bằng 0 nên không dùng làm cursor.
+project_board
+  - Lọc phía client; board được tạo cùng lúc với project nên trùng giây,
+    incremental đọc lại nhiều.
+project_group
+  - Không có cột thời gian; chỉ full refresh.
+task
+  !!! task/list KHÔNG lọc được theo thời gian cập nhật (đã thử updated_from,
+      updated_at_from, last_update_from; đều bị bỏ qua). created_from lọc được
+      nhưng không bao trùm khi cursor là updated_at hoặc finished_at, nên chỉ
+      lọc phía client: mỗi lần sync vẫn gọi task/list cho mọi project.
+  - Gửi include_archived=true để lấy cả task đã lưu trữ (mặc định API bỏ qua).
+task_activity
+  - Gọi một lần cho MỖI TASK ở mỗi lần sync (API không có bộ lọc thời gian).
+    Workspace nhiều task sẽ tốn nhiều request.
+  - Event không có id; khóa chính ghép (task_id, at, action, user_id). Chưa
+    gặp trùng trong 73 event, nhưng về lý thuyết hai thao tác giống nhau trong
+    cùng giây sẽ bị gộp làm một.
+  - Dùng một cursor chung cho cả stream, state lưu dạng ISO (giống
+    job_detail của BPM).
+
+
+3. API TRONG TÀI LIỆU CHƯA THÀNH STREAM
+--------------------------------------
+13 API đọc: 9 đã thành stream; 4 chưa dùng:
+  task/get.comments     CÓ DỮ LIỆU THẬT nhưng workspace test không có comment
+                        nào (32/32 task trả rỗng), nên chưa xác định được khóa
+                        chính và cấu trúc. Thêm được ngay khi có dữ liệu mẫu.
+                        Phân trang giống task_activity (next_cursor.before).
+  project/get, service/get, task/get
+                        Đọc từng bản ghi; đã so sánh: field GIỐNG HỆT API danh
+                        sách, không cần làm stream.
+  ping, sysinfo         API kỹ thuật.
+API ghi (8, không dùng): project/create, project/edit, task/create,
+  task/edit, task/assign, task/comment, task/set-status, task/remove.
+
+
+3b. KIỂM THỬ TRÊN PIPELINE THẬT
+-------------------------------
+Cách kiểm thử chung (áp dụng cho mọi lượt dưới đây):
+  - Chạy pipeline qua app (destination BigQuery), lấy log của lần chạy, số
+    bản ghi từng stream (pipeline_stream_stats), state và Dictionary.
+  - Đếm tổng trực tiếp trên API ngay sau khi chạy để đối chiếu full refresh.
+  - Với incremental: lưu state ngay TRƯỚC lượt chạy, đếm trên API các bản ghi
+    có cursor >= mốc của từng partition, rồi so với số bản ghi lượt chạy đọc.
+  - Mục nào chưa kiểm chứng được ghi rõ "CHƯA KIỂM CHỨNG".
+
+[2026-10-22] Lượt 1, 2 (cấu hình người dùng tạo: project, project_board,
+  service, task Incremental + Append không khóa chính; task_activity Full
+  refresh + Append + Deduped; user_id = mytest01)
+  - SUCCEEDED 127 bản ghi mỗi lượt (~230 giây).
+  - Full refresh khớp API: project_group 7/7, service_field 6/6,
+    service_item_type 6/6, service_stage 6/6, task_activity 73/73.
+  - Incremental đọc đúng: project 1/1, project_board 18/18, service 1/1,
+    task 9/9.
+  - LỖI (có trong log cả 2 lượt): destination BigQuery báo
+      [ERROR] TypeAndDedupeTransaction ... stream project task ...
+      Query error: Bad int64 value: false
+    Nguyên nhân: task.in_review khai báo integer + boolean, API trả boolean
+    (32/32). Destination tự chạy lại ở chế độ xử lý lỗi nên lần chạy vẫn
+    SUCCEEDED; giá trị cột có thể là NULL (CHƯA KIỂM CHỨNG trong BigQuery).
+  - Khai báo sai kiểu khác: task.review (khai báo object, thực tế integer),
+    task.workload (khai báo number + object, nên cột thành JSON; thực tế number).
+  - Log: 86 cảnh báo cursor rỗng (task_activity 73, task 6, project 4, service 3).
+  - VẤN ĐỀ: các stream incremental ghi Append không có khóa chính, nên bản
+    ghi đọc lại tại mốc được ghi thành dòng mới (số dòng trùng thực tế
+    CHƯA KIỂM CHỨNG).
+  - Dictionary: 148 field có mô tả từ connector.
+
+[2026-10-22] Điều chỉnh lần 1
+  - Connector: in_review -> ["boolean","integer"] (đặt boolean đứng đầu).
+  - Pipeline: làm mới schema, duyệt thay đổi BREAKING; service, project,
+    project_board, task -> Append + Deduped, khóa chính id.
+  - Kết quả lượt 3: lỗi "Bad int64 value: false" VẪN CÒN, kể cả sau khi
+    destination soft reset bảng task. Kết luận rút ra: destination chọn kiểu
+    cột của kiểu hợp nhất theo ƯU TIÊN (array > object > string > number >
+    integer > boolean), không theo thứ tự khai báo (xem 00-TONG-QUAN.txt).
+
+[2026-10-22] Điều chỉnh lần 2
+  - Connector: in_review -> boolean; review -> integer; workload -> number
+    (mỗi field một kiểu, khớp toàn bộ dữ liệu thật).
+  - Làm mới schema: app báo 0 thay đổi vì bộ so sánh chỉ nhìn kiểu đầu tiên,
+    nhưng pipeline vẫn nhận schema mới nhờ tự chấp nhận (đã kiểm tra trực
+    tiếp pipeline_streams.json_schema).
+
+[2026-10-22] Lượt 4 (sau điều chỉnh lần 2)
+  - SUCCEEDED 127 bản ghi. Lỗi BigQuery KHÔNG CÒN (0 dòng ERROR).
+  - Incremental đọc đúng 4/4 stream; full refresh khớp API.
+  - Cảnh báo cursor rỗng khi đọc stream cha: KHÔNG CÒN.
+  - CÒN LẠI: 73 cảnh báo "Could not find cursor field ``" của chính stream
+    task_activity, do pipeline chọn Full refresh trong khi connector khai báo
+    incremental với cursor trống. Dữ liệu đủ 73/73. Muốn hết thì chuyển
+    task_activity sang Incremental (cursor at) + Append + Deduped (chưa đổi
+    vì là lựa chọn cấu hình của người dùng).
+  - Dictionary: 148 field có mô tả, 0 field chưa có định nghĩa.
+
+4. ĐỀ NGHỊ GỬI TEAM PROJECT
+--------------------------
+  - Bổ sung bộ lọc updated_from cho task/list (hiện chỉ có created_* và
+    deadline_*), để incremental của task lọc được ở server.
+  - Bổ sung id cho event của task/get.activity.
+  - Tài liệu ghi host api-v3.{domain}, không dùng được với installation base.vn.
+  - Tài liệu gợi ý sync incremental bằng sort_by=updated + sort_order=asc với
+    phân trang theo page; cách này có thể sót bản ghi khi dữ liệu thay đổi
+    trong lúc sync. Nên có cursor theo id.

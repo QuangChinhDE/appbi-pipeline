@@ -1,0 +1,149 @@
+SOURCE: source-base-bpm (Base BPM)
+
+DESCRIPTION:
+Reads BPM master data (services, start-step fields, stages) and jobs from the Base BPM Public API v1. Key needs scopes services:read + job:read; optional X-API-PASSWORD.
+
+IMPLEMENTED STREAMS:
+- service | POST services | full refresh
+- field | POST service/fields (per service) | full refresh
+- stage | POST service/stages (per service) | full refresh
+- job | POST job/list (sort_by=updated, keyset next_cursor, 100/page) | full refresh, incremental (server updated_at_from; cursor created_at / finished_at / id)
+- job_detail | POST job/get (per job) | full refresh, incremental (client-side, global cursor)
+
+APIS NOT YET CONVERTED TO STREAMS:
+- sysinfo | technical, used only for key check
+- job/list `fields` parameter | not used; custom field values need a per-service allowlist
+- write APIs (job/create, edit.*, move.*, followers.add) | out of scope for a read connector
+
+CURRENT STREAM LIMITATIONS:
+- service | only active services, no timestamp | full refresh only
+- field | only Start-step fields | later-step fields not listed
+- stage | id changes on redesign; key is block_key | joins must use block_key
+- job | no last_update in records | edits to old jobs are not caught by any cursor
+- job_detail | one request per job every sync; current step changes not caught by cursor | use full refresh + overwrite for latest state
+
+GENERAL LIMITATIONS:
+- Documented host apis.rework.com/bpm does not work for this workspace; extapis.base.vn/bpm is used.
+
+NOTES:
+- Auth: X-API-TOKEN header (extapis.<domain>/{app}/v1, POST JSON). Body status=0 fails the sync.
+- Incremental cursor is always chosen by the user; no default cursor.
+- Detailed Vietnamese notes, test runs (2026-10-22) and API-team requests follow below.
+
+======================================================================
+
+CONNECTOR BPM (source-base-bpm): STREAM, HẠN CHẾ, API CHƯA DÙNG
+===============================================================
+File code: backend/app/connectors/base_vn/bpm.py
+Host thật: https://extapis.base.vn/bpm/v1/
+  Tài liệu ghi apis.rework.com/bpm, nhưng host đó trả APP_bpm_IS_NOT_EXISTED
+  với workspace này.
+Key cần 2 scope: services:read và job:read. Thiếu scope thì API trả
+  403 scope_required.
+Tài liệu gốc: collection Postman "BPM Public API (v1)" (16 request).
+
+
+1. STREAM HIỆN CÓ (5)
+--------------------
+Stream       API                       Phân trang           Incremental                     Khóa chính
+service      services                  không cần (1 lần)    không                           id
+field        service/fields            không cần            không                           service_id + key
+stage        service/stages            không cần            không                           service_id + block_key
+job          job/list                  keyset next_cursor   có, lọc server updated_at_from  id
+                                       (100 job mỗi trang)  cursor: created_at/finished_at/id
+job_detail   job/get (mỗi job 1 lần)   không cần            có, lọc client; cursor như job  id
+
+Kiểm chứng (CDK, key thật): full refresh 11 service / 31 field / 61 stage /
+60 job / 60 job_detail, không lỗi. Incremental lần 2 chỉ đọc lại các bản ghi
+tại mốc cursor.
+
+
+2. HẠN CHẾ CỦA TỪNG STREAM
+-------------------------
+service
+  - Chỉ trả service đang hoạt động; service đã tắt không xuất hiện.
+  - Không có cột thời gian nên chỉ có full refresh.
+field
+  - Chỉ có field của bước Start. Field của các bước sau không có API danh mục;
+    giá trị của chúng chỉ đọc được qua job/list kèm tham số fields.
+  - Không có cột thời gian nên chỉ có full refresh.
+stage
+  - Cột id đổi khi service được thiết kế lại; khóa ổn định là block_key.
+  - Không có cột thời gian nên chỉ có full refresh.
+job
+  - Record KHÔNG có last_update. Server lọc và sắp xếp theo last_update nội
+    bộ; giá trị này chỉ xuất hiện trong next_cursor.
+    -> Không cursor nào bắt được job cũ vừa sửa nội dung: created_at và id chỉ
+       bắt job mới; finished_at chỉ bắt job vừa kết thúc.
+  - Bắt buộc gửi sort_by="updated" (đã cấu hình). Nếu không, trang đầu sắp
+    theo ngày tạo, các trang sau sắp theo ngày cập nhật, và sẽ sót job
+    (đo được: thiếu 1/30 job khi lấy 3 job mỗi trang).
+  - Không có giá trị custom field (data) cho tới khi manager tick allowlist
+    trong Service settings > Public API (mặc định trống).
+job_detail
+  - Gọi job/get cho từng job ở mỗi lần sync, kể cả khi chạy incremental
+    (API không có tham số lọc). Service nhiều job sẽ tốn nhiều request.
+  - current_steps / active_steps thay đổi khi job chuyển bước, nhưng không
+    cursor nào bắt được thay đổi này. Muốn luôn có trạng thái mới nhất thì
+    dùng Full refresh | Overwrite.
+  - Dùng một cursor chung cho cả stream, state lưu dạng ISO, để tránh lỗi so
+    sánh chuỗi của CDK 7.28.2 (đã ghi trong code).
+
+
+3. API TRONG TÀI LIỆU CHƯA THÀNH STREAM
+--------------------------------------
+API đọc (9 request trong thư mục "Look something up"):
+  sysinfo                  Không phải dữ liệu; dùng để kiểm tra key.
+  job/list (request 7-9)   Cùng một API với stream job; 3 request này chỉ
+                           minh họa các bộ lọc khác nhau.
+  job/list với fields      CHƯA DÙNG tham số fields để lấy giá trị custom field.
+                           Có thể thêm một trường cấu hình cho connector khi
+                           service bật allowlist.
+  job/list với as_user     Không dùng: chỉ dùng khi cần giới hạn theo quyền
+                           của một người.
+API ghi (7): job/create, edit.info, edit.by.keys, move.next, move.back,
+  followers.add -> không dùng cho connector đọc dữ liệu.
+
+
+3b. KIỂM THỬ TRÊN PIPELINE THẬT
+-------------------------------
+Cách kiểm thử chung (áp dụng cho mọi lượt dưới đây):
+  - Chạy pipeline qua app (destination BigQuery), lấy log của lần chạy, số
+    bản ghi từng stream (pipeline_stream_stats), state và Dictionary.
+  - Đếm tổng trực tiếp trên API ngay sau khi chạy để đối chiếu full refresh.
+  - Với incremental: lưu state ngay TRƯỚC lượt chạy, đếm trên API các bản ghi
+    có cursor >= mốc của từng partition, rồi so với số bản ghi lượt chạy đọc.
+  - Mục nào chưa kiểm chứng được ghi rõ "CHƯA KIỂM CHỨNG".
+
+[2026-10-22] Lượt 1, 2 (cấu hình người dùng tạo: job/job_detail Incremental +
+  Append, cursor created_at, không có khóa chính)
+  - Lượt 1 SUCCEEDED 177 bản ghi; lượt 2 SUCCEEDED 110 bản ghi (140 giây mỗi lượt).
+  - Full refresh khớp API: service 11/11, field 31/31, stage 61/61.
+  - Incremental đọc đúng: job 6/6, job_detail 1/1 (so với state trước lượt 2).
+  - Log: không có lỗi; 6 cảnh báo "Could not find cursor field ``" khi đọc job
+    làm stream cha cho job_detail (không ảnh hưởng dữ liệu).
+  - VẤN ĐỀ: job, job_detail ghi Append không có khóa chính, nên các bản ghi
+    đọc lại tại mốc cursor được ghi thành dòng mới. Số dòng trùng thực tế
+    trong BigQuery CHƯA KIỂM CHỨNG.
+  - Dictionary: 63 field, đủ mô tả từ connector (schema được discover sau
+    21/10).
+
+[2026-10-22] Điều chỉnh
+  - Pipeline: job, job_detail -> Incremental + Append + Deduped, khóa chính id.
+  - Connector: stream cha được đọc không qua cursor (_as_parent trong _extapi.py).
+  - Làm mới schema: không có thay đổi (connector BPM không đổi khai báo kiểu).
+
+[2026-10-22] Lượt 3, 4 (sau điều chỉnh)
+  - SUCCEEDED 110 bản ghi mỗi lượt. State được giữ nguyên sau khi đổi chế độ
+    ghi (không đọc lại từ đầu).
+  - Incremental đọc đúng: job 6/6, job_detail 1/1. Full refresh khớp API.
+  - Log: không có lỗi, KHÔNG CÒN cảnh báo cursor rỗng.
+  - Dictionary: 63 field có mô tả, 0 field chưa có định nghĩa.
+
+4. LỖI / ĐỀ NGHỊ GỬI TEAM BPM
+----------------------------
+  - Thêm last_update vào record của job/list và job/get.
+  - Trang đầu của job/list mặc định sắp khác các trang sau theo cursor
+    (newest và updated), làm sót bản ghi nếu không gửi sort_by.
+  - Tài liệu ghi host apis.rework.com/bpm không dùng được với installation
+    base.vn.

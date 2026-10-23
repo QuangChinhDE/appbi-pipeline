@@ -353,6 +353,36 @@ export interface PipelineStreamView {
   last_sync: StreamSyncState | null;
 }
 
+/** Where a field's definition came from; null while nothing defines it. */
+export type DictionaryOrigin = 'USER' | 'CONNECTOR' | 'AI' | null;
+
+export interface DictionaryField {
+  path: string;
+  name: string;
+  depth: number;
+  type: string;
+  nullable: boolean;
+  is_cursor: boolean;
+  is_primary_key: boolean;
+  description: string | null;
+  description_vi: string | null;
+  origin: DictionaryOrigin;
+}
+
+export interface DictionaryStream {
+  stream_id: string;
+  name: string;
+  namespace: string | null;
+  selected: boolean;
+  fields: DictionaryField[];
+}
+
+export interface DictionaryView {
+  pipeline_id: string;
+  ai_enabled: boolean;
+  streams: DictionaryStream[];
+}
+
 export interface StreamSyncState {
   status: string;
   records_loaded: number;

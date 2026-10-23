@@ -1,0 +1,218 @@
+CONNECTOR BASE TRÊN GATEWAY EXTAPIS: TỔNG QUAN VÀ VIỆC CẦN XỬ LÝ
+================================================================
+Người thực hiện: thanh.dang@base.vn (nhánh thanhdang)
+Cập nhật: 2026-10-22
+Đối tượng đọc: owner của repo appbi-pipeline, để review và giao người xử lý
+các mục còn mở.
+
+Các file trong thư mục này:
+  00-TONG-QUAN.txt   File này: kiến trúc, rule, thay đổi ở phần chung của app,
+                     danh sách việc cần xử lý.
+  01-BPM.txt         Connector BPM: stream, hạn chế từng stream, API chưa dùng.
+  02-DATASET.txt     Connector Dataset.
+  03-SALES.txt       Connector Sales.
+  04-PROJECT.txt     Connector Project.
+  05-LEAD.txt        Connector Lead.
+Mỗi file connector có mục "3b. KIỂM THỬ TRÊN PIPELINE THẬT": ngày test, trường
+hợp test, kết quả, và điều chỉnh đã làm.
+
+
+1. KIẾN TRÚC
+------------
+Gateway extapis dùng chung một kiểu gọi API:
+  - Host: https://extapis.{domain}/{app}/v1/ ; domain là base.vn hoặc base.com.vn.
+  - Xác thực: header X-API-TOKEN (thêm X-API-PASSWORD nếu key được cấp kèm mật khẩu).
+  - Gọi API: POST, body JSON.
+  - Envelope: {"status":1} khi thành công; {"status":0,"error":...} khi lỗi,
+    có trường hợp vẫn trả HTTP 200.
+  - Mỗi app cần một key riêng; key của app khác sẽ bị 401.
+Kiểu gọi này khác các app Base cũ (form body, access_token_v2 trong body),
+nên có bộ biên dịch riêng.
+
+  backend/app/connectors/base_vn/
+    _extapi.py   Bộ biên dịch dùng chung (tương tự _shared.py của các app cũ).
+                 Gồm ExtapiConnector, ExtapiStream, Parent, Split, Incremental,
+                 BodyField (trường cấu hình gửi kèm mọi request, ví dụ user_id
+                 của Project và Lead; nhận id hoặc username) và 4 kiểu phân
+                 trang: keyset (gửi lại cả next_cursor thành một trường),
+                 Keyset (gửi từng giá trị trong next_cursor thành các trường
+                 cùng tên), PageNumber (page/limit), Before (lùi theo mốc
+                 thời gian).
+    bpm.py, dataset.py, sales.py, project.py, lead.py
+                 Mỗi file chỉ khai báo connector, không tự dựng manifest.
+    __init__.py  EXTAPI_CONNECTORS = (BPM, DATASET, SALES, PROJECT, LEAD). Đăng ký giống các
+                 connector Base khác: BY_KEY, manifests(), catalogue_entries(),
+                 stream_inventory(). Hiển thị trong nhóm "Base.vn".
+  Icon:  backend/app/resources/connector_icons/source-base-{bpm,dataset,sales,project,lead}.svg
+  Test:  backend/tests/test_extapi_connectors.py (30 test, đều đạt)
+
+Rule bắt buộc với mọi connector extapis. Bộ biên dịch tự kiểm tra lúc khởi
+động app, và có test riêng cho các rule này:
+  a) Chỉ có incremental khi record có cột thời gian hoặc cột id thật.
+     Không được tự sinh cột cursor.
+  b) Người dùng tự chọn cursor trong pipeline: allow_catalog_defined_cursor_field,
+     không đặt cursor mặc định.
+  c) API có tham số lọc thời gian thì stream bắt buộc phải có incremental.
+  d) Stream nào cũng phải khai báo khóa chính.
+  e) Mọi field, kể cả field lồng nhau, phải có mô tả tiếng Anh và tiếng Việt
+     (hiển thị ở tab Dictionary).
+
+Hành vi chung của incremental (đến từ CDK, không phải lỗi): khi đọc tiếp từ
+state, CDK bao gồm cả mốc cursor ("start <= giá trị"), nên luôn đọc lại các
+bản ghi nằm đúng tại mốc. Stream incremental phải ghi bằng Append + Deduped
+với khóa chính. Ghi Append thường sẽ tạo dòng trùng.
+
+
+2. THAY ĐỔI Ở PHẦN CHUNG CỦA APP (ẢNH HƯỞNG MỌI CONNECTOR, CẦN REVIEW KỸ)
+------------------------------------------------------------------------
+2.1 backend/app/services/catalog.py
+    Khi seed lại catalogue, giờ cập nhật thêm các cờ supports_incremental,
+    supports_oauth, supports_cdc, supports_namespaces và
+    supported_destination_sync_modes. Lỗi cũ: connector thêm incremental sau
+    lần seed đầu vẫn bị báo supports_incremental=False mãi mãi.
+
+2.2 backend/app/adapters/airbyte_protocol/protocol.py
+    backend/app/adapters/airbyte_api/adapter.py
+    Bỏ các tên cursor rỗng trong default_cursor_field. Lý do: CDK báo "người
+    dùng tự chọn cursor" bằng [""], và UI hiểu nhầm là đã có cursor nên cho lưu
+    pipeline incremental với cursor rỗng.
+
+2.3 Tính năng mới: tab "Dictionary" trong pipeline (từ điển dữ liệu)
+    - Migration d9e4a6b13f70 (down_revision c3a58f1d97e4): CHỈ THÊM bảng
+      data_dictionary_entries. Không phần nào của sync, schedule hay engine
+      đọc bảng này.
+    - backend/app/models/dictionary.py, services/dictionary.py, schemas/dictionary.py
+    - API: GET/PUT /pipelines/{id}/dictionary và
+           GET /pipelines/{id}/dictionary/export?format=csv|xlsx
+      PUT chỉ sửa được định nghĩa, cần quyền pipelines:edit, và có ghi audit.
+    - services/schema_service.py, hàm field_tree(): array hiển thị kiểu phần
+      tử (array<integer>); đi sâu vào phần tử array (đường dẫn form[].code);
+      đọc description/description_vi trong schema.
+    - worker.py: vòng lặp "dictionary" chạy 5 phút một lần. AI định nghĩa các
+      field chưa có định nghĩa, CHỈ gửi tên connector, tên stream, đường dẫn và
+      kiểu field. Vòng lặp bắt mọi lỗi; không có OPENAI_API_KEY thì tự tắt.
+    - Định nghĩa của AI dùng chung giữa các workspace. Định nghĩa người dùng
+      sửa lưu riêng theo source, AI không bao giờ ghi đè.
+    - Frontend: pipelines/[id]/DictionaryTab.tsx và page.tsx;
+      lib/api.ts, lib/types.ts, lib/queryKeys.ts, lib/i18n.ts (vi + en).
+
+
+3. KIỂM CHỨNG
+-------------
+- Test bằng airbyte-cdk 7.28.2 (cùng phiên bản với runner của app) với key
+  thật trên workspace "Base Ha Noi" (system_id 79). Kết quả chi tiết nằm
+  trong file của từng connector.
+- 35/35 test trong test_extapi_connectors.py đạt (2026-10-22).
+- scripts/check-extapi-types.py: so kiểu khai báo với toàn bộ dữ liệu thật
+  của 5 connector, theo đúng cách destination chọn kiểu cột. Kết quả ngày
+  2026-10-22: 0 field không khớp. Cần key thật nên không chạy trong CI.
+- Đã build lại stack bằng run.ps1; frontend build có kiểm tra TypeScript.
+- Đã chạy thử 4 pipeline thật (BPM, sales, Project, Lead), mỗi pipeline 4 lượt,
+  ngày 2026-10-22. Kết quả lượt cuối: cả 4 SUCCEEDED, incremental đọc đúng
+  21/21 stream, full refresh khớp API, log không còn lỗi, Dictionary đủ mô tả.
+  Chi tiết từng lượt nằm ở mục 3b của file từng connector.
+- CHƯA chạy CI đầy đủ (pyflakes, pytest toàn bộ, e2e) vì máy dev thiếu
+  dependency của backend. Cần chạy trên CI trước khi merge.
+
+
+3a. PHÁT HIỆN CHUNG KHI KIỂM THỬ PIPELINE (2026-10-22)
+-----------------------------------------------------
+Áp dụng cho mọi connector extapis, không riêng connector nào.
+
+(1) Destination chọn kiểu cột của kiểu hợp nhất theo ƯU TIÊN, không theo thứ
+    tự khai báo.
+    Trường hợp test: Project task.in_review (API trả boolean) khai báo
+    ["boolean","integer"], boolean đứng đầu. Sau khi destination soft reset,
+    BigQuery vẫn báo "Bad int64 value: false". Thứ tự ưu tiên quan sát được:
+    array > object > string > number > integer > boolean.
+    -> QUY TẮC cho mọi connector: dữ liệu thật chỉ có một kiểu thì khai báo
+       đúng MỘT kiểu. Chỉ dùng kiểu hợp nhất khi dữ liệu thật có nhiều kiểu, và
+       kiểu được ưu tiên phải chứa được mọi giá trị. Trước khi phát hành, chạy
+       scripts/check-extapi-types.py.
+    Nguyên nhân gốc của các khai báo sai: lúc dò cấu trúc, script đã bỏ qua
+    giá trị false/0 (coi là rỗng) và chỉ xem vài bản ghi đầu.
+
+(2) Sync KHÔNG cập nhật schema và Dictionary.
+    Trường hợp test: pipeline sales có schema discover ngày 20/10, trước khi
+    connector có mô tả field (21/10) và stream pipeline_log (22/10). Chạy sync
+    2 lượt: Dictionary vẫn 147 field "chưa có định nghĩa", chưa có
+    pipeline_log. Phải làm mới schema (rediscover) thì mới nhận.
+    -> Sau mỗi lần deploy có thay đổi connector, phải làm mới schema các
+       pipeline cũ. App nên tự làm hoặc báo cho người dùng.
+
+(3) Bộ so sánh schema của app không thấy thay đổi trong kiểu hợp nhất.
+    Trường hợp test: đổi in_review từ ["null","boolean","integer"] sang
+    ["null","boolean"], schema-diff báo 0 thay đổi, vì field_types trong
+    schema_service.py chỉ so kiểu không-null đầu tiên. Pipeline vẫn nhận
+    schema mới nhờ tự chấp nhận (đã kiểm tra pipeline_streams.json_schema),
+    nhưng người dùng không được báo là kiểu cột thay đổi.
+
+(4) Cảnh báo "Could not find cursor field ``" khi đọc stream cha.
+    Trường hợp test: lượt 1–2, có 96 cảnh báo trên 3 pipeline. Nguyên nhân:
+    stream con đọc stream cha qua chính định nghĩa có cursor cố ý để trống.
+    Không ảnh hưởng dữ liệu. ĐÃ SỬA: stream con đọc bản sao stream cha không
+    có incremental (_as_parent trong _extapi.py); lượt 3–4 không còn.
+    Lưu ý: nếu pipeline chọn Full refresh cho một stream mà connector khai báo
+    incremental, chính stream đó vẫn có cảnh báo này (dữ liệu vẫn đủ).
+
+(5) Chuyển chế độ ghi Append -> Append + Deduped GIỮ NGUYÊN state.
+    Trường hợp test: BPM, Project, Lead sau khi đổi chế độ ghi; lượt kế đọc
+    tiếp từ mốc cũ. Destination tự soft reset và dedupe lại bảng.
+
+(6) Cảnh báo chung không ảnh hưởng dữ liệu, có ở mọi lần chạy:
+    - BigQuery: "The standard upload mode is not performant ... use GCS
+      staging" (khuyến nghị hiệu năng, thuộc cấu hình destination).
+    - Destination: "Unknown keyword airbyte_secret / order / group ..." (cảnh
+      báo về spec).
+
+
+4. VIỆC CẦN XỬ LÝ (owner chỉ định người)
+---------------------------------------
+[ ] 1. Team Dataset: dataset/records chỉ trả 50 record, cần tham số phân trang
+       và bộ lọc theo last_update/since. Chi tiết: 02-DATASET.txt.
+                                                        (CAO, đang mất dữ liệu)
+[ ] 2. Team Sales: phân trang theo page làm mất bản ghi; lọc thời gian cần đủ
+       2 mốc; get.logs chỉ trả 200 log mỗi lần dù tài liệu ghi 1000; tài liệu
+       ghi sai host. Chi tiết: 03-SALES.txt.            (CAO)
+[ ] 3. Team BPM: thêm last_update vào record của job/list và job/get; tài liệu
+       ghi sai host. Chi tiết: 01-BPM.txt.              (TRUNG BÌNH)
+[ ] 3b. Team Project: bổ sung updated_from cho task/list và id cho event của
+       task/get.activity; tài liệu ghi sai host. Chi tiết: 04-PROJECT.txt.
+                                                        (TRUNG BÌNH)
+[ ] 3c. Team Lead: phân trang theo page làm mất bản ghi ở lead/list;
+       service/all không trả service loại events nếu không truyền metatype;
+       tài liệu ghi sai host. Chi tiết: 05-LEAD.txt.    (CAO)
+[ ] 4. Hướng dẫn người dùng ghi stream incremental bằng Append + Deduped. Cân
+       nhắc chặn "Incremental + Append" ở backend/UI khi stream có khóa chính
+       (đã gặp dòng trùng ở pipeline BPM test).         (TRUNG BÌNH)
+[ ] 5. Thêm OPENAI_API_KEY cho môi trường cần AI định nghĩa field.  (THẤP)
+[ ] 6. Các connector Base cũ (_shared.py, 14 app) và KiotViet vẫn để connector
+       tự quyết định cursor, chưa theo rule b). Chuyển sang thì pipeline đang
+       chạy phải chọn lại cursor.                       (CẦN QUYẾT ĐỊNH)
+[ ] 7. Pipeline Sales tạo trước bản này: lần discover tới sẽ báo đổi kiểu
+       account.address và segments, cần duyệt. Đây là sửa khai báo sai: trước
+       đây destination ghi null cho các cột này.        (THẤP)
+[ ] 8. Chạy CI đầy đủ trước khi merge.                  (BẮT BUỘC)
+
+Phát sinh từ đợt chạy thử ngày 2026-10-22 (chi tiết: mục 3a ở trên và mục 3b
+của file từng connector):
+[x] 9. ĐÃ SỬA: khai báo kiểu sai (in_review, review, workload, form, segments,
+       lc_status, pipeline_log.created_at, old_stage). Lỗi BigQuery
+       "Bad int64 value: false" không còn. Thêm scripts/check-extapi-types.py
+       (cần key thật nên không chạy trong CI).
+[x] 10. ĐÃ LÀM: các stream incremental của pipeline BPM, Project, Lead đã
+       chuyển sang Append + Deduped với khóa chính.
+[x] 11. ĐÃ LÀM: làm mới schema pipeline sales; đã có Dictionary và stream
+       pipeline_log. [ ] Vẫn nên cho app tự rediscover hoặc thông báo sau khi
+       connector thay đổi, vì sync không tự làm việc này.   (TRUNG BÌNH)
+[x] 12. ĐÃ SỬA: hết cảnh báo cursor rỗng khi đọc stream cha.
+[ ] 13. Bộ so sánh schema của app (schema_service.field_types) chỉ nhìn kiểu
+       không-null đầu tiên, nên không phát hiện thay đổi trong kiểu hợp nhất.
+                                                        (TRUNG BÌNH)
+[ ] 14. Quy tắc mới cho mọi connector: chỉ dùng kiểu hợp nhất khi dữ liệu thật
+       có nhiều kiểu. Destination chọn kiểu cột theo ưu tiên array > object >
+       string > number > integer > boolean, không theo thứ tự khai báo.
+                                                        (ÁP DỤNG KHI VIẾT CONNECTOR)
+[ ] 15. Pipeline Project: chuyển task_activity sang Incremental (cursor at) +
+       Append + Deduped để hết 73 cảnh báo mỗi lần chạy.    (THẤP)
+

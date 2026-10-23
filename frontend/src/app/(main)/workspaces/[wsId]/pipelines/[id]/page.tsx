@@ -23,14 +23,17 @@ import type { PipelineStreamView, StreamSelection } from '@/lib/types';
 import { useWorkspacePath } from '@/hooks/use-workspace-path';
 import { useI18n } from '@/providers/LanguageProvider';
 
+import { usePermissions } from '@/hooks/use-permissions';
+
 import { ConnectionHeader } from './ConnectionHeader';
+import { DictionaryTab } from './DictionaryTab';
 import { JobHistoryTab, OUTCOMES, type JobOutcomeFilter } from './JobHistoryTab';
 import { SchemaTab } from './SchemaTab';
 import { SettingsTab } from './SettingsTab';
 import { StatusTab } from './StatusTab';
 import { StreamDetailModal } from './StreamDetailModal';
 
-const TABS = ['status', 'jobs', 'schema', 'settings'] as const;
+const TABS = ['status', 'jobs', 'schema', 'dictionary', 'settings'] as const;
 
 export default function PipelineDetailPage() {
   const params = useParams<{ id: string }>();
@@ -82,6 +85,22 @@ export default function PipelineDetailPage() {
     queryKey: qk.schemaDiff(workspaceId, pipelineId),
     queryFn: () => pipelineApi.schemaDiff(pipelineId),
     enabled: tab === 'schema',
+  });
+
+  const { can } = usePermissions();
+  const dictionary = useQuery({
+    queryKey: qk.dictionary(workspaceId, pipelineId),
+    queryFn: () => pipelineApi.dictionary(pipelineId),
+    enabled: tab === 'dictionary',
+  });
+  const editDictionary = useMutation({
+    mutationFn: (body: { stream_id: string; path: string; description: string }) =>
+      pipelineApi.editDictionary(pipelineId, body),
+    onSuccess: (next) => {
+      queryClient.setQueryData(qk.dictionary(workspaceId, pipelineId), next);
+      toastSuccess(t('pipelines.dictionary.saved'));
+    },
+    onError: (caught) => toastError(caught),
   });
 
   const invalidate = () =>
@@ -193,6 +212,10 @@ export default function PipelineDetailPage() {
               href: hrefForQuery({ tab: 'schema', stream: null }),
             },
             {
+              id: 'dictionary', label: t('pipelines.tab.dictionary'),
+              href: hrefForQuery({ tab: 'dictionary', stream: null }),
+            },
+            {
               id: 'settings', label: t('pipelines.tab.settings'),
               href: hrefForQuery({ tab: 'settings', stream: null }),
             },
@@ -284,6 +307,18 @@ export default function PipelineDetailPage() {
               refreshing={rediscover.isPending}
             />
           </div>
+        )}
+
+        {tab === 'dictionary' && (
+          <DictionaryTab
+            data={dictionary.data}
+            isLoading={dictionary.isLoading}
+            canEdit={can('pipelines', 'edit')}
+            saving={editDictionary.isPending}
+            onSave={(streamId, path, description) =>
+              editDictionary.mutateAsync({ stream_id: streamId, path, description })}
+            exportUrl={(format) => pipelineApi.dictionaryExportUrl(pipelineId, format, locale)}
+          />
         )}
 
         {tab === 'settings' && (

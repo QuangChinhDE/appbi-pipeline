@@ -7,6 +7,7 @@ from app.models.builder import (
     BuilderAISource, BuilderAIToolEvent, BuilderProject, BuilderTestRun,
     BuilderTestSession,
 )
+from app.models.dictionary import DataDictionaryEntry
 from app.models.engine import ConnectorDefinition, EngineInstance, EngineMapping
 # Explicit rather than `import *`. A star import tells pyflakes it can no longer
 # tell an undefined name from a star-imported one, which switches off -- for this
@@ -46,7 +47,8 @@ from app.models.run import PipelineRun, RunAttempt
 __all__ = [
     "AlertRule", "AuditEvent", "BuilderAIChangeSet", "BuilderAIMessage", "BuilderAIPlan",
     "BuilderAISession", "BuilderAISource", "BuilderAIToolEvent", "BuilderProject",
-    "BuilderTestRun", "BuilderTestSession", "ConnectorDefinition", "Destination", "EngineInstance",
+    "BuilderTestRun", "BuilderTestSession", "ConnectorDefinition", "DataDictionaryEntry",
+    "Destination", "EngineInstance",
     "EngineMapping", "Membership", "Notification", "Operation", "Pipeline", "PipelineRun",
     "PipelineStream", "PipelineStreamStat", "RunAttempt", "SchemaSnapshot", "SecretRecord",
     "Source", "User", "Workspace",

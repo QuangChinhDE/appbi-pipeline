@@ -98,28 +98,59 @@ def field_tree(json_schema: dict[str, Any]) -> list[dict[str, Any]]:
 
             if depth + 1 > MAX_FIELD_DEPTH:
                 continue
-            nested = prop.get("properties")
-            if not nested and prop.get("type") == "array":
-                items = prop.get("items")
-                nested = items.get("properties") if isinstance(items, dict) else None
-            if isinstance(nested, dict):
-                walk(nested, f"{path}.", depth + 1)
+            nested, child_prefix = _children(prop, path)
+            if nested:
+                walk(nested, child_prefix, depth + 1)
 
     walk((json_schema or {}).get("properties") or {}, "", 0)
     return rows
 
 
-def _field_row(name: str, prop: dict[str, Any]) -> dict[str, Any]:
+def _primary_type(prop: dict[str, Any]) -> str:
     raw_type = prop.get("type")
     if isinstance(raw_type, list):
-        type_name = next((t for t in raw_type if t != "null"), "unknown")
-        nullable = "null" in raw_type
-    else:
-        type_name = raw_type or "unknown"
-        nullable = False
+        return next((t for t in raw_type if t != "null"), "unknown")
+    return raw_type or "unknown"
+
+
+def _children(prop: dict[str, Any], path: str) -> tuple[dict[str, Any] | None, str]:
+    """The properties nested under a field, and the path prefix they take.
+
+    An object's children are `parent.child`. An array's are its items' --
+    `parent[].child` -- because a reader of `form.code` would take it for one
+    value when it is one per element. Arrays of arrays are followed through
+    to the innermost items, each level adding its own `[]`.
+    """
+    if isinstance(prop.get("properties"), dict):
+        return prop["properties"], f"{path}."
+    if _primary_type(prop) != "array":
+        return None, ""
+    items, suffix = prop.get("items"), "[]"
+    while isinstance(items, dict) and _primary_type(items) == "array":
+        items, suffix = items.get("items"), suffix + "[]"
+    if isinstance(items, dict) and isinstance(items.get("properties"), dict):
+        return items["properties"], f"{path}{suffix}."
+    return None, ""
+
+
+def _field_row(name: str, prop: dict[str, Any]) -> dict[str, Any]:
+    raw_type = prop.get("type")
+    nullable = isinstance(raw_type, list) and "null" in raw_type
+    type_name = _primary_type(prop)
+    if type_name == "array":
+        # `array<integer>`, `array<object>`, `array<array<string>>`: the
+        # element type is the part of an array a reader actually needs.
+        items = prop.get("items")
+        if isinstance(items, dict) and items:
+            type_name = f"array<{_field_row('', items)['type']}>"
     if prop.get("format"):
         type_name = f"{type_name} ({prop['format']})"
-    return {"name": name, "type": type_name, "nullable": nullable}
+    return {
+        "name": name, "type": type_name, "nullable": nullable,
+        # What the connector itself says the field means, when it says.
+        "description": prop.get("description") or None,
+        "description_vi": prop.get("description_vi") or None,
+    }
 
 
 def field_types(json_schema: dict[str, Any]) -> dict[str, str]:

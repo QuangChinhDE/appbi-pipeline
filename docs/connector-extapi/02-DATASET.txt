@@ -1,0 +1,110 @@
+SOURCE: source-base-dataset (Base Dataset)
+
+DESCRIPTION:
+Reads datasets, their fields and records from the Base Dataset API v1. Full refresh only (by request).
+
+IMPLEMENTED STREAMS:
+- dataset | POST datasets/get | full refresh
+- dataset_field | POST dataset/get (per dataset) | full refresh
+- record | POST dataset/records (per dataset) | full refresh
+
+APIS NOT YET CONVERTED TO STREAMS:
+- record/get | single record; same data as dataset/records
+- records/get | records by id list; no API returns the id list
+- write APIs (record/create, record/edit.by.keys, record/delete, records/delete) | out of scope
+
+CURRENT STREAM LIMITATIONS:
+- record | API returns at most 50 records per dataset, no working pagination parameter found | DATA LOSS on datasets with >50 records (measured 50/5505)
+- record | no server time filter | full refresh only
+- record | custom values in dynamic form_<field_id> keys | not shown in Dictionary, still written
+- dataset_field | select options not returned | records hold option codes only
+
+GENERAL LIMITATIONS:
+- No pipeline test yet (only CDK reads and type check).
+
+NOTES:
+- Auth: X-API-TOKEN header (extapis.<domain>/{app}/v1, POST JSON). Body status=0 fails the sync.
+- Incremental cursor is always chosen by the user; no default cursor.
+- Detailed Vietnamese notes, test runs (2026-10-22) and API-team requests follow below.
+
+======================================================================
+
+CONNECTOR DATASET (source-base-dataset): STREAM, HẠN CHẾ, API CHƯA DÙNG
+======================================================================
+File code: backend/app/connectors/base_vn/dataset.py
+Host: https://extapis.base.vn/dataset/v1/
+Tài liệu gốc: collection Postman "BPM + Dataset Public API (All-in-one)",
+  thư mục "Dataset API" (9 request). Tài liệu không nhắc tới phân trang
+  hay bộ lọc.
+Theo yêu cầu: tạm thời chỉ chạy full refresh.
+
+
+1. STREAM HIỆN CÓ (3)
+--------------------
+Stream         API                          Phân trang    Incremental   Khóa chính
+dataset        datasets/get                 không cần     không         id
+dataset_field  dataset/get (mỗi dataset)    không cần     không         dataset_id + id
+record         dataset/records              KHÔNG CÓ      không         id
+
+Kiểm chứng (CDK, key thật): 10 dataset / 46 field / 136 record, không lỗi.
+Có 2 dataset chỉ lấy được 50 record (xem mục 2).
+
+
+2. HẠN CHẾ CỦA TỪNG STREAM
+-------------------------
+dataset
+  - Có cột thời gian thật (since, last_update) nhưng API không có tham số
+    lọc. Đang full refresh theo yêu cầu; có thể bật incremental lọc phía
+    client như Sales nếu cần.
+dataset_field
+  - Gọi dataset/get cho từng dataset. Dữ liệu trùng với form[] của stream
+    dataset, nhưng tách ra mỗi field một dòng.
+  - API không trả danh sách option của field kiểu select, nên giá trị select
+    trong record chỉ là mã option (ví dụ olk1l5ue7w).
+record
+  !!! CHỈ LẤY ĐƯỢC TỐI ĐA 50 RECORD MỖI DATASET -> ĐANG MẤT DỮ LIỆU.
+      Đo được: ImPORT 50/5505, Galenicals 50/89 (tổng thật nằm trong
+      num_items / summary.total_count).
+      Đã thử hơn 20 tên tham số phân trang (page, page_id, offset, limit,
+      per_page, cursor, skip, size...) qua body JSON, form body và query
+      string; không tham số nào có tác dụng. Đã thử 11 endpoint khác
+      (records/list...) đều 404.
+  - Không lọc được theo thời gian: đã thử 6 tên tham số, server bỏ qua hết.
+  - Giá trị custom field nằm ở các key động form_<field_id>. Các key này
+    không có trong schema nên không hiện trong tab Dictionary, nhưng vẫn
+    được ghi xuống destination (schema để mở).
+
+
+3. API TRONG TÀI LIỆU CHƯA THÀNH STREAM
+--------------------------------------
+  record/get (theo id)       Đọc một record; trùng dữ liệu với dataset/records.
+                             Chưa kiểm tra có thêm field nào không.
+  records/get (theo nhiều id) Đọc nhiều record theo danh sách id. Có thể dùng
+                             để lấy đủ record nếu có API trả danh sách id, nhưng
+                             hiện không có API nào như vậy.
+API ghi (4): record/create, record/edit.by.keys, record/delete, records/delete
+  -> không dùng.
+
+
+3b. KIỂM THỬ TRÊN PIPELINE THẬT
+-------------------------------
+Cách kiểm thử chung (áp dụng cho mọi lượt dưới đây):
+  - Chạy pipeline qua app (destination BigQuery), lấy log của lần chạy, số
+    bản ghi từng stream (pipeline_stream_stats), state và Dictionary.
+  - Đếm tổng trực tiếp trên API ngay sau khi chạy để đối chiếu full refresh.
+  - Với incremental: lưu state ngay TRƯỚC lượt chạy, đếm trên API các bản ghi
+    có cursor >= mốc của từng partition, rồi so với số bản ghi lượt chạy đọc.
+  - Mục nào chưa kiểm chứng được ghi rõ "CHƯA KIỂM CHỨNG".
+
+[2026-10-22] Chưa có pipeline Dataset nào, nên connector Dataset KHÔNG nằm
+  trong đợt chạy thử pipeline. Lỗi chỉ lấy được 50 record mỗi dataset chưa
+  được kiểm tra lại.
+  - Kiểm tra kiểu khai báo bằng scripts/check-extapi-types.py (đọc toàn bộ
+    bản ghi thật của 3 stream): 0 field không khớp.
+
+4. ĐỀ NGHỊ GỬI TEAM DATASET (ƯU TIÊN CAO)
+----------------------------------------
+  - Cho biết tham số phân trang của dataset/records, hoặc bổ sung.
+  - Bổ sung bộ lọc theo last_update / since. Khi có thì stream record được
+    thêm incremental ngay (cột thời gian đã có sẵn trong record).
+  - Bổ sung danh sách option của field select vào dataset/get.

@@ -1,0 +1,185 @@
+SOURCE: source-base-lead (Base Lead Public API)
+
+DESCRIPTION:
+Reads lead services (leads + events), fields, stages, sources, leads and lead feed from extapis.base.vn/lead/v1. Not the legacy "Base CRM - Leads" connector. Acting user_id required.
+
+IMPLEMENTED STREAMS:
+- service | POST service/all (metatype leads + events, page 200) | full refresh, incremental (client-side)
+- service_field | POST service/get.fields -> fields | full refresh
+- service_system_field | POST service/get.fields -> system_fields | full refresh
+- service_stage | POST service/get.stages | full refresh
+- service_source | POST service/get.sources (page 200) | full refresh
+- lead | POST lead/list (per service, page 200) | full refresh, incremental (server updated_from)
+- lead_feed | POST lead/feed/list (per lead, keyset before_ts+before_id, 100) | full refresh, incremental (client-side, global cursor)
+
+APIS NOT YET CONVERTED TO STREAMS:
+- service/get.labels, service/get.segments, service/get.statuses | empty in test workspace; schema unknown
+- service/get, lead/get | same fields as list APIs
+- ping, sysinfo | technical
+- write APIs (lead/edit*, lead/remove, lead/feed/create/*) | out of scope
+
+CURRENT STREAM LIMITATIONS:
+- lead | server page pagination loses records (103/111 at 7/page) | possible data loss above 200 leads per service
+- lead_feed | one call per lead every sync | request volume
+- lead_feed | mail visible only to user_id | missing emails
+
+GENERAL LIMITATIONS:
+- Documented host api-v3.{domain} does not work on base.vn; extapis is used.
+
+NOTES:
+- Auth: X-API-TOKEN header (extapis.<domain>/{app}/v1, POST JSON). Body status=0 fails the sync.
+- Incremental cursor is always chosen by the user; no default cursor.
+- Detailed Vietnamese notes, test runs (2026-10-22) and API-team requests follow below.
+
+======================================================================
+
+CONNECTOR LEAD (source-base-lead): STREAM, HẠN CHẾ, API CHƯA DÙNG
+================================================================
+File code: backend/app/connectors/base_vn/lead.py
+Host thật: https://extapis.base.vn/lead/v1/
+  Tài liệu ghi https://api-v3.{domain}; installation base.vn chạy trên extapis.
+Tài liệu gốc: https://rework-crm-public-apis-standard.dev.rework.site/category/lead
+  (nhóm Lead: 21 API = 13 API đọc + 8 API ghi)
+Không phải connector "Base CRM - Leads" (crm_leads.py). crm_leads.py đọc API
+  cũ apis.base.vn/leads; Lead Public API là API khác với key riêng (tài liệu
+  ghi: token cấp cho "leads" không dùng được ở đây).
+
+User tác động (acting user): trường user_id trên form, nhận user id dạng số
+  hoặc username (không có @). Đã test với mytest01. Bắt buộc với
+  service/get.fields và service/get.stages; lead/feed/list chỉ trả email của
+  user này.
+
+
+1. STREAM HIỆN CÓ (7)
+--------------------
+Stream                API                                Phân trang                  Incremental                     Khóa chính
+service               service/all (gọi 2 lần:            page/limit=200              có, lọc client: created/updated id
+                      metatype leads và events)
+service_field         service/get.fields -> fields       không cần                   không (không có cột thời gian)  service_id + id
+service_system_field  service/get.fields -> system_fields không cần                  không                           service_id + id
+service_stage         service/get.stages                 không cần                   không                           service_id + id
+service_source        service/get.sources                page/limit=200              không                           service_id + id
+lead                  lead/list (mỗi service)            page/limit=200              có, lọc server updated_from;    id
+                                                                                     cursor: created_at / updated_at /
+                                                                                     last_update_stage / last_update_status
+lead_feed             lead/feed/list (mỗi lead)          keyset next_cursor          có, lọc client;                 id
+                                                         (before_ts + before_id),    cursor: since / last_update
+                                                         100/lần
+
+Kiểm chứng (CDK, key thật, user mytest01):
+  - Full refresh khớp đúng tổng đếm trực tiếp từ API ở cả 7 stream:
+    3 service / 6 field / 216 system field / 12 stage / 20 source / 126 lead /
+    46 hoạt động.
+  - Check: key sai -> FAILED.
+  - Incremental lần 2: service 2, lead 2, lead_feed 3 (chỉ các bản ghi tại mốc
+    cursor). Cần ghi bằng Append + Deduped.
+  - Phân trang keyset chạy thử với 1 bản ghi mỗi trang: đọc đủ 46/46.
+
+
+2. HẠN CHẾ CỦA TỪNG STREAM
+-------------------------
+service
+  - service/all mặc định CHỈ trả service loại leads; service loại events phải
+    gọi thêm với metatype=events (connector đã gọi cả hai).
+  - API không có bộ lọc: incremental lọc phía client (số lượng nhỏ).
+  - Đã kèm sẵn fields / system_fields / stages / statuses dạng mảng; các mảng
+    này cũng được tách thành stream riêng bên dưới.
+service_field / service_system_field
+  - Hai stream cùng gọi service/get.fields, nên mỗi service tốn 2 request.
+  - Không có cột thời gian; chỉ full refresh.
+  - system_fields là định nghĩa trường hệ thống, giống nhau giữa các service
+    cùng loại (86 trường cho service leads, 44 cho service events).
+service_stage / service_source
+  - Không có cột thời gian; chỉ full refresh.
+  - Service loại events không có stage.
+lead
+  !!! Phân trang theo page LÀM MẤT BẢN GHI (giống Sales): lấy 111 lead với 7
+      lead mỗi trang chỉ được 103 lead khác nhau; sắp theo updated còn 99.
+      Lấy cả 200 trong một trang thì đủ. Connector dùng limit=200, nên service
+      có HƠN 200 lead vẫn có thể thiếu.
+  - Bộ lọc thời gian chạy đúng ở server (updated_from, created_from,
+    stage_updated_from, status_updated_from; gửi một mốc là đủ). updated_at
+    luôn lớn hơn hoặc bằng 3 cột thời gian còn lại (126/126 lead), nên
+    connector gửi giá trị cursor làm updated_from cho mọi cursor người dùng chọn.
+  - Giữ thứ tự mặc định, KHÔNG dùng sort_by=updated&sort_order=asc như tài
+    liệu gợi ý: sắp theo thời gian cập nhật làm mất nhiều bản ghi hơn khi
+    phân trang (99/111 so với 103/111).
+  - mql_at, last_activity_time, next_activity_time đều bằng 0 ở workspace
+    test nên không dùng làm cursor.
+  - Service loại events không có lead nào ở workspace test.
+lead_feed
+  - Gọi một lần cho MỖI LEAD ở mỗi lần sync (không lọc được theo lead đã đổi).
+    Workspace nhiều lead sẽ tốn nhiều request.
+  - Email (mail) chỉ có khi user_id là người có quyền xem email đó.
+  - Dùng một cursor chung cho cả stream, state lưu dạng ISO (giống
+    job_detail của BPM và task_activity của Project).
+
+
+3. API TRONG TÀI LIỆU CHƯA THÀNH STREAM
+--------------------------------------
+13 API đọc: 7 API đã dùng (service/all, service/get.fields dùng cho 2 stream,
+service/get.stages, service/get.sources, lead/list, lead/feed/list); 6 chưa dùng:
+
+  A. Chưa đủ điều kiện (không có dữ liệu mẫu để xác định khóa chính và cấu trúc):
+     service/get.labels     Trả rỗng ở cả 3 service.
+     service/get.segments   Trả rỗng ở cả 3 service.
+     service/get.statuses   Trả rỗng ở cả 3 service (mảng statuses kèm trong
+                            service cũng rỗng).
+     -> Thêm được ngay khi workspace có dữ liệu.
+
+  B. Không hợp lý để làm stream:
+     service/get            Đọc từng service; field giống hệt service/all.
+     lead/get               Đọc từng lead; đã so sánh: field GIỐNG HỆT lead/list.
+     ping, sysinfo          API kỹ thuật.
+
+API ghi (8, không dùng): lead/edit, lead/edit.blacklist, lead/edit.cfield,
+  lead/edit.owner, lead/edit.stage, lead/edit.status, lead/remove,
+  lead/feed/create/{calllog, meetinglog, note, quicklog}.
+Lead mới được tạo qua webhook (incoming/{source_token}/lead), không qua API.
+
+
+3b. KIỂM THỬ TRÊN PIPELINE THẬT
+-------------------------------
+Cách kiểm thử chung (áp dụng cho mọi lượt dưới đây):
+  - Chạy pipeline qua app (destination BigQuery), lấy log của lần chạy, số
+    bản ghi từng stream (pipeline_stream_stats), state và Dictionary.
+  - Đếm tổng trực tiếp trên API ngay sau khi chạy để đối chiếu full refresh.
+  - Với incremental: lưu state ngay TRƯỚC lượt chạy, đếm trên API các bản ghi
+    có cursor >= mốc của từng partition, rồi so với số bản ghi lượt chạy đọc.
+  - Mục nào chưa kiểm chứng được ghi rõ "CHƯA KIỂM CHỨNG".
+
+[2026-10-22] Lượt 1, 2 (người dùng chạy; cấu hình: service, lead, lead_feed
+  Incremental + Append không khóa chính; user_id = mytest01)
+  - Lượt 1 SUCCEEDED 429 bản ghi: khớp API ở cả 7 stream (3 / 6 / 216 / 12 /
+    20 / 126 / 46).
+  - Lượt 2 SUCCEEDED 261 bản ghi: lead 2, service 2, lead_feed 3; đối chiếu
+    API: không có bản ghi nào mới hơn mốc, nên đây hoàn toàn là phần đọc lại.
+    lead_feed đọc thêm 2 bản ghi cách mốc 2 giây do CDK tự lùi một khoảng
+    lookback_window (bằng thời gian lần sync trước) khi dùng một cursor chung.
+  - VẤN ĐỀ: ghi Append không khóa chính, nên sau 2 lượt có 7 dòng trùng
+    (đã xác nhận bằng đối chiếu với API).
+  - Log: cảnh báo cursor rỗng khi đọc stream cha.
+  - Khai báo sai kiểu (đối chiếu dữ liệu thật): lead.segments khai báo array,
+    API trả {} (126/126); lead.old_stage khai báo string, thực tế là id giai
+    đoạn hoặc 0.
+
+[2026-10-22] Điều chỉnh
+  - Connector: segments -> ["object","array"]; old_stage -> ["string","integer"].
+  - Pipeline: làm mới schema, duyệt 1 thay đổi BREAKING (segments); service,
+    lead, lead_feed -> Append + Deduped, khóa chính id.
+
+[2026-10-22] Lượt 3, 4 (sau điều chỉnh)
+  - SUCCEEDED 261 bản ghi mỗi lượt. Incremental đọc đúng: lead 2/2,
+    service 2/2, lead_feed 3/3 (tính cả khoảng lookback). Full refresh khớp API.
+  - Log: không có lỗi, KHÔNG CÒN cảnh báo cursor rỗng.
+  - Dictionary: 126 field có mô tả, 0 field chưa có định nghĩa.
+
+4. ĐỀ NGHỊ GỬI TEAM LEAD
+-----------------------
+  - (CAO) Phân trang theo page làm mất bản ghi ở lead/list (số liệu ở mục 2).
+    Đề nghị cursor theo id.
+  - Tài liệu gợi ý sync incremental bằng sort_by=updated + sort_order=asc;
+    cách này mất nhiều bản ghi hơn khi phân trang.
+  - service/all nên trả cả service loại events, hoặc tài liệu ghi rõ phải
+    truyền metatype.
+  - Tài liệu ghi host api-v3.{domain}, không dùng được với installation base.vn.

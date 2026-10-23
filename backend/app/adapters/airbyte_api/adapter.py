@@ -977,9 +977,12 @@ class AirbyteApiAdapter:
                     source_defined_cursor=bool(
                         stream.get("sourceDefinedCursor") or stream.get("source_defined_cursor")
                     ),
-                    default_cursor_field=list(
-                        stream.get("defaultCursorField") or stream.get("default_cursor_field") or []
-                    ),
+                    # `[""]` means "the user picks"; see airbyte_protocol/protocol.py.
+                    default_cursor_field=[
+                        f for f in (
+                            stream.get("defaultCursorField") or stream.get("default_cursor_field") or []
+                        ) if f
+                    ],
                     source_defined_primary_key=[
                         list(pk) for pk in (
                             stream.get("sourceDefinedPrimaryKey")

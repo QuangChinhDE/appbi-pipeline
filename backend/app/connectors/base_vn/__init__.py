@@ -45,16 +45,23 @@ from typing import Any
 
 from app.connectors import ConnectorProvider
 
+from . import _extapi
+from ._extapi import ExtapiConnector
 from ._shared import (
     RUNNER_REPOSITORY, RUNNER_VERSION, TOKEN_FIELD, BaseConnector,
     ConfigField, Incremental, Parent, Stream, compile_manifest,
     connection_specification,
 )
+from .bpm import BPM
 from .core import ACCOUNT, REQUEST, TIMEOFF, WORKFLOW
+from .dataset import DATASET
 from .crm import CRM
 from .crm_leads import CRM_LEADS
 from .finance import INCOME
 from .hr import HIRING, HRM
+from .lead import LEAD
+from .project import PROJECT
+from .sales import SALES
 from .schedule import SCHEDULE
 from .table import TABLE
 from .work import PAYROLL, SERVICE, WEWORK
@@ -77,17 +84,34 @@ CONNECTORS: tuple[BaseConnector, ...] = (
     TABLE,
 )
 
+#: The Base applications on the extapis gateway, compiled by `_extapi.py`
+#: rather than `_shared.py` because they speak a different dialect (JSON body,
+#: X-API-TOKEN header, `status` envelope). Same group, same catalogue heading,
+#: listed after the others.
+EXTAPI_CONNECTORS: tuple[ExtapiConnector, ...] = (
+    BPM,
+    DATASET,
+    SALES,
+    PROJECT,
+    LEAD,
+)
+
 # Checked at import, so a broken definition fails the process rather than
 # reaching a customer's catalogue and failing at sync time.
-for _connector in CONNECTORS:
+for _connector in (*CONNECTORS, *EXTAPI_CONNECTORS):
     _connector.validate()
 
-BY_KEY: dict[str, BaseConnector] = {c.connector_key: c for c in CONNECTORS}
+BY_KEY: dict[str, BaseConnector | ExtapiConnector] = {
+    c.connector_key: c for c in (*CONNECTORS, *EXTAPI_CONNECTORS)
+}
 
 
 def manifests() -> dict[str, dict[str, Any]]:
     """Compiled manifest per connector key."""
-    return {c.connector_key: compile_manifest(c) for c in CONNECTORS}
+    return {
+        **{c.connector_key: compile_manifest(c) for c in CONNECTORS},
+        **{c.connector_key: _extapi.compile_manifest(c) for c in EXTAPI_CONNECTORS},
+    }
 
 
 def catalogue_entries() -> list[dict[str, Any]]:
@@ -139,6 +163,9 @@ def catalogue_entries() -> list[dict[str, Any]]:
             "certification": connector.certification,
             "stream_count": len(streams),
         })
+    for connector in EXTAPI_CONNECTORS:
+        entries.append(
+            _extapi.catalogue_entry(connector, RUNNER_REPOSITORY, RUNNER_VERSION))
     return entries
 
 
@@ -165,6 +192,26 @@ def stream_inventory() -> list[dict[str, Any]]:
                 "parent_field": stream.parent.inject if stream.parent else None,
                 "note": stream.note,
             })
+    for connector in EXTAPI_CONNECTORS:
+        for stream in connector.streams:
+            rows.append({
+                "connector": connector.connector_key,
+                "app": connector.app,
+                "stream": stream.name,
+                "endpoint": connector.url_base + stream.path,
+                "collection": ".".join(stream.extract),
+                "primary_key": list(stream.primary_key),
+                # The workspace picks the cursor; these are what it may pick.
+                "incremental": (
+                    list(stream.incremental.candidates) if stream.incremental else None),
+                "filter_param": (
+                    stream.incremental.request_param if stream.incremental else None),
+                "paginated": (stream.paginate or stream.pages is not None
+                              or stream.before is not None or stream.keyset is not None),
+                "parent": stream.parent.stream if stream.parent else None,
+                "parent_field": stream.parent.partition_field if stream.parent else None,
+                "note": "",
+            })
     return rows
 
 
@@ -179,7 +226,8 @@ PROVIDER = ConnectorProvider(
 
 
 __all__ = [
-    "ACCOUNT", "BY_KEY", "CONNECTORS", "CRM", "CRM_LEADS", "HIRING", "HRM",
+    "ACCOUNT", "BPM", "BY_KEY", "CONNECTORS", "CRM", "CRM_LEADS", "DATASET",
+    "EXTAPI_CONNECTORS", "ExtapiConnector", "HIRING", "HRM", "LEAD", "PROJECT", "SALES",
     "INCOME", "PAYROLL", "PROVIDER", "SCHEDULE", "TABLE",
     "REQUEST", "SERVICE", "TIMEOFF", "WEWORK", "WORKFLOW",
     "BaseConnector", "ConfigField", "Incremental", "Parent", "Stream",
