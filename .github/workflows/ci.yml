@@ -18,6 +18,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Nothing here writes to the repository; the token gets read access only.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend
@@ -121,6 +125,19 @@ jobs:
           name: overview-e2e-trace
           path: frontend/test-results/
           retention-days: 7
+
+  # Agent instructions, rules, skills and hook wiring are tracked; a broken
+  # reference or a malformed settings.json fails no product test, so it fails
+  # here. Same script `python scripts/verify.py` runs locally.
+  governance:
+    name: Agent config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Rules, skills, hooks and tracked files are consistent
+        run: python scripts/check-agent-config.py
 
   alerts:
     name: Alert rules parse
