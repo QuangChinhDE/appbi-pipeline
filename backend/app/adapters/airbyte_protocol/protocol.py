@@ -122,7 +122,10 @@ def parse_catalog(payload: dict[str, Any]) -> list[DiscoveredStream]:
                 json_schema=raw.get("json_schema") or {},
                 supported_sync_modes=list(raw.get("supported_sync_modes") or ["full_refresh"]),
                 source_defined_cursor=bool(raw.get("source_defined_cursor")),
-                default_cursor_field=list(raw.get("default_cursor_field") or []),
+                # A declarative stream whose cursor the user picks reports
+                # `[""]`; read literally, the form would treat that as a cursor
+                # already chosen and let the pipeline save without one.
+                default_cursor_field=[f for f in (raw.get("default_cursor_field") or []) if f],
                 source_defined_primary_key=[list(pk) for pk in (raw.get("source_defined_primary_key") or [])],
                 is_resumable=raw.get("is_resumable"),
             )
